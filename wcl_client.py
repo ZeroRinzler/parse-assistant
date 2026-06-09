@@ -35,6 +35,16 @@ query GetReport($code: String!) {
 }
 """
 
+PLAYER_DETAILS_QUERY = """
+query GetPlayerDetails($code: String!, $fightIDs: [Int]!) {
+  reportData {
+    report(code: $code) {
+      playerDetails(fightIDs: $fightIDs)
+    }
+  }
+}
+"""
+
 EVENTS_QUERY = """
 query GetEvents(
   $code: String!
@@ -105,6 +115,9 @@ class WCLClient:
 
     async def get_report(self, code: str) -> dict:
         return await self.query(REPORT_QUERY, {"code": code})
+
+    async def get_player_details(self, code: str, fight_id: int) -> dict:
+        return await self.query(PLAYER_DETAILS_QUERY, {"code": code, "fightIDs": [fight_id]})
 
     async def get_all_events(
         self,

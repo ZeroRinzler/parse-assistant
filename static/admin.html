@@ -180,7 +180,7 @@
         <div class="form-row">
           <div class="form-group" style="flex:3">
             <label>Encounter</label>
-            <select id="encounter-select"><option value="">— load encounters first —</option></select>
+            <select id="encounter-select"><option value="">— loading encounters… —</option></select>
           </div>
           <div class="form-group" style="flex:1">
             <label>Count</label>
@@ -190,7 +190,6 @@
               <option value="20">Top 20</option>
             </select>
           </div>
-          <button class="btn btn-ghost btn-sm" id="btn-load-enc" onclick="loadEncounters()">Load Encounters</button>
           <button class="btn btn-ghost btn-sm" id="btn-fetch-ranks" onclick="fetchRankings()">Fetch Rankings</button>
           <button class="btn btn-sm" id="btn-deep" onclick="deepAnalyze()">🔍 Deep Analyze</button>
         </div>
@@ -252,7 +251,7 @@ const ALL_SPECS = [
   "UnholyDeathKnight","VengeanceDemonHunter","WindwalkerMonk",
 ];
 
-let currentSpec = ALL_SPECS[0];
+let currentSpec = "SubtletyRogue";
 let currentTab = 'guides';
 // Keep rankings state for the parses tab
 let _rankingsCache = null;
@@ -267,12 +266,29 @@ function toast(msg, dur=3500){
   el._t=setTimeout(()=>el.style.display='none', dur);
 }
 
+function syncAdminURL(){
+  const p=new URLSearchParams();
+  p.set('spec',currentSpec);
+  p.set('tab',currentTab);
+  history.replaceState({},'',`?${p}`);
+}
+
 window.onload=()=>{
+  const p=new URLSearchParams(location.search);
+  const specParam=p.get('spec');
+  const tabParam=p.get('tab');
+
+  if(specParam && ALL_SPECS.includes(specParam)) currentSpec=specParam;
+
   const sel=document.getElementById('spec-select');
   ALL_SPECS.forEach(s=>{
     const o=document.createElement('option'); o.value=s; o.textContent=fmtSpec(s); sel.appendChild(o);
   });
+  sel.value=currentSpec;
   onSpecChange();
+
+  if(tabParam && ['guides','parses','rulebook'].includes(tabParam)) showTab(tabParam);
+  loadEncounters();
 };
 
 function onSpecChange(){
@@ -281,6 +297,7 @@ function onSpecChange(){
   document.getElementById('rulebook-spec-label').textContent=fmtSpec(currentSpec);
   loadGuides();
   if(currentTab==='rulebook') loadRulebook();
+  syncAdminURL();
 }
 
 function showTab(name){
@@ -290,6 +307,7 @@ function showTab(name){
   });
   currentTab=name;
   if(name==='rulebook') loadRulebook();
+  syncAdminURL();
 }
 
 // ── Progress helpers ────────────────────────────────────────────────────────
@@ -471,28 +489,31 @@ async function generateRulebook(){
 
 // ── Encounters ──────────────────────────────────────────────────────────────
 async function loadEncounters(){
-  const btn=document.getElementById('btn-load-enc');
-  btn.disabled=true; btn.textContent='Loading…';
   const data=await apiFetch('/api/admin/encounters');
-  btn.disabled=false; btn.textContent='Load Encounters';
   if(!data) return;
 
+  const EXCLUDE = /beta|ptr|mythic\+|complete raids|delves|torghast/i;
+  const live = data.encounters.filter(e => !EXCLUDE.test(e.zone));
+
+  // WCL returns expansions newest-first — take the first unique expansion name
+  const currentExp = live.map(e => e.expansion).find(Boolean);
+  const filtered = live.filter(e => e.expansion === currentExp);
+
   const groups={};
-  data.encounters.forEach(e=>{
-    const k=`${e.expansion} — ${e.zone}`;
-    (groups[k]||(groups[k]=[])).push(e);
+  filtered.forEach(e=>{
+    (groups[e.zone]||(groups[e.zone]=[])).push(e);
   });
+
   const sel=document.getElementById('encounter-select');
   sel.innerHTML='<option value="">— select encounter —</option>';
-  Object.entries(groups).reverse().forEach(([label,encs])=>{
-    const og=document.createElement('optgroup'); og.label=label;
+  Object.entries(groups).forEach(([zone,encs])=>{
+    const og=document.createElement('optgroup'); og.label=zone;
     encs.forEach(e=>{
       const opt=document.createElement('option'); opt.value=e.id; opt.textContent=e.name;
       og.appendChild(opt);
     });
     sel.appendChild(og);
   });
-  toast('Encounters loaded.');
 }
 
 async function fetchRankings(){

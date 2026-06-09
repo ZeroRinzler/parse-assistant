@@ -4,6 +4,7 @@ Fetch top WCL parses for a spec+encounter and extract cooldown timing patterns.
 import json
 from typing import Optional
 
+import db
 from rulebook import BLOODLUST_SPELL_IDS, SPEC_COOLDOWNS
 from wcl_client import WCLClient
 
@@ -160,6 +161,7 @@ async def analyze_parse(
     spec: str,
     report_code: str,
     fight_id: int,
+    player_name: Optional[str] = None,
 ) -> Optional[dict]:
     """
     For a single top-parse entry, fetch the player's cast events and return
@@ -178,14 +180,14 @@ async def analyze_parse(
     if not fight:
         return None
 
-    player = next(
-        (
-            a
-            for a in report["masterData"]["actors"]
-            if a.get("subType") == spec
-        ),
-        None,
-    )
+    actors = report["masterData"]["actors"]
+    # Match by name first (rankings give us the exact player name), fall back to first subType match
+    if player_name:
+        player = next((a for a in actors if a.get("name") == player_name), None)
+        if player is None:
+            player = next((a for a in actors if a.get("subType") == spec), None)
+    else:
+        player = next((a for a in actors if a.get("subType") == spec), None)
     if not player:
         return None
 
@@ -210,7 +212,7 @@ async def analyze_parse(
             bl_time_s = (e["timestamp"] - start) / 1000
             break
 
-    spec_cds = SPEC_COOLDOWNS.get(spec, [])
+    spec_cds = db.get_spec_cooldowns(spec) or []
     cd_summary: list[dict] = []
 
     for cd in spec_cds:

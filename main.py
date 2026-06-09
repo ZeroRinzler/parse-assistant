@@ -35,6 +35,28 @@ def _extract_code(url_or_code: str) -> str:
     return m.group(1) if m else url_or_code.strip()
 
 
+def _build_spec_map(report: dict) -> dict[int, str]:
+    """Build {actor_id: 'SubtletyRogue'} from playerDetails.
+    WCL changed actor.subType to class-only in Midnight; playerDetails still has full spec info.
+    Response shape: playerDetails → JSON string → {data: {playerDetails: {dps/healers/tanks: [...]}}}"""
+    spec_map: dict[int, str] = {}
+    raw = report.get("playerDetails")
+    if not raw:
+        return spec_map
+    outer = json.loads(raw) if isinstance(raw, str) else raw
+    # Unwrap the nested data.playerDetails layer
+    details = (outer.get("data") or {}).get("playerDetails") or outer
+    for role in ("dps", "healers", "tanks", "unknown"):
+        for p in (details.get(role) or []):
+            specs = p.get("specs") or []
+            cls = (p.get("type") or "").replace(" ", "")
+            if specs and cls:
+                spec_name = (specs[0].get("spec") or "").replace(" ", "")
+                if spec_name:
+                    spec_map[p["id"]] = spec_name + cls
+    return spec_map
+
+
 # ── Frontend ──────────────────────────────────────────────────────────────────
 
 @app.get("/", include_in_schema=False)
@@ -48,6 +70,19 @@ async def admin_frontend():
 
 
 # ── Player analysis API ───────────────────────────────────────────────────────
+
+@app.get("/api/debug/report/{code}/fight/{fight_id}")
+async def debug_report(code: str, fight_id: int):
+    """Return actor list + resolved spec map for a specific fight."""
+    data = await wcl.get_report(_extract_code(code))
+    report = data["reportData"]["report"]
+    pd_data = await wcl.get_player_details(_extract_code(code), fight_id)
+    spec_map = _build_spec_map(pd_data["reportData"]["report"])
+    return {
+        "actors": report["masterData"]["actors"],
+        "spec_map": spec_map,
+    }
+
 
 @app.get("/api/report/{code}")
 async def get_report(code: str):
@@ -76,12 +111,13 @@ async def get_report(code: str):
         ],
         key=lambda x: x["startTime"],
     )
+    spec_map = _build_spec_map(report)
     players = sorted(
         [
             {
                 "id": a["id"],
                 "name": a["name"],
-                "spec": a.get("subType") or "Unknown",
+                "spec": spec_map.get(a["id"]) or a.get("subType") or "Unknown",
                 "server": a.get("server") or "",
             }
             for a in report["masterData"]["actors"]
@@ -124,11 +160,16 @@ async def analyze(req: AnalyzeRequest):
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Event fetch failed: {exc}")
 
-    # Use dynamic rulebook when available (falls back to static inside analyze_player)
-    spec = player.get("subType", "Unknown")
+    # playerDetails gives proper spec+class (WCL changed subType to class-only in Midnight)
+    try:
+        pd_data = await wcl.get_player_details(code, req.fight_id)
+        spec_map = _build_spec_map(pd_data["reportData"]["report"])
+    except Exception:
+        spec_map = {}
+    spec = spec_map.get(req.player_id) or player.get("subType", "Unknown")
     spec_cds = db.get_spec_cooldowns(spec)
 
-    return analyze_player(
+    result = analyze_player(
         player=player,
         fight_start=start,
         fight_end=end,
@@ -136,6 +177,43 @@ async def analyze(req: AnalyzeRequest):
         buff_events=buff_events,
         spec_cds_override=spec_cds,
     )
+
+    # Attach parse comparison if we have top-parse samples for this encounter
+    encounter_id = fight.get("encounterID")
+    if encounter_id and spec_cds:
+        samples = await db.get_parse_samples(spec, encounter_id)
+        if samples:
+            from collections import defaultdict
+            agg: dict[str, list] = defaultdict(list)
+            for s in samples:
+                for cd in (s.get("cooldown_data") or {}).get("cooldowns", []):
+                    agg[cd["name"]].append(cd)
+
+            comparison = []
+            for cd in spec_cds:
+                cd_casts = [
+                    c for c in cast_events
+                    if c.get("type") == "cast" and c.get("abilityGameID") == cd["spell_id"]
+                ]
+                player_first = round((cd_casts[0]["timestamp"] - start) / 1000, 1) if cd_casts else None
+                top = agg.get(cd["name"], [])
+                if not top:
+                    continue
+                top_uses = [e["total_uses"] for e in top]
+                top_first = [e["first_cast_s"] for e in top if e.get("first_cast_s") is not None]
+                top_bl = sum(1 for e in top if e.get("bl_aligned"))
+                comparison.append({
+                    "name": cd["name"],
+                    "player_uses": len(cd_casts),
+                    "player_first_cast_s": player_first,
+                    "top_avg_uses": round(sum(top_uses) / len(top_uses), 1),
+                    "top_avg_first_cast_s": round(sum(top_first) / len(top_first), 1) if top_first else None,
+                    "top_bl_pct": round(top_bl / len(top) * 100),
+                    "sample_count": len(top),
+                })
+            result["parse_comparison"] = comparison
+
+    return result
 
 
 # ── Admin — Guides ────────────────────────────────────────────────────────────
@@ -360,7 +438,7 @@ async def analyze_parses_stream(req: FetchParsesRequest):
             if not code or not fight_id:
                 yield _evt({"type": "parse_skip", "step": i + 1, "player": ranking.get("player")})
                 continue
-            summary = await analyze_parse(wcl, req.spec, code, fight_id)
+            summary = await analyze_parse(wcl, req.spec, code, fight_id, player_name=ranking.get("player"))
             if summary:
                 await db.save_parse_sample(
                     spec=req.spec,

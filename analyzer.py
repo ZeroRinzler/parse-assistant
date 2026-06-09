@@ -62,17 +62,19 @@ def analyze_player(
             spell_id = cd["spell_id"]
             cd_name = cd["name"]
             cooldown_s = cd["cooldown"]
+            wants_bl = cd.get("align_with_bloodlust", True)
 
             cd_casts = [
                 c for c in completed_casts if c.get("abilityGameID") == spell_id
             ]
             actual_uses = len(cd_casts)
-
-            # Expected uses: 1 initial + however many times the CD resets
             expected_uses = 1 + math.floor(fight_duration_s / cooldown_s)
 
+            cd_issues: list[dict] = []
+
+            # Lost casts
             if actual_uses == 0:
-                findings.append({
+                cd_issues.append({
                     "severity": "critical",
                     "category": "lost_cooldown",
                     "timestamp_ms": None,
@@ -84,7 +86,7 @@ def analyze_player(
                 })
             elif actual_uses < expected_uses:
                 lost = expected_uses - actual_uses
-                findings.append({
+                cd_issues.append({
                     "severity": "critical",
                     "category": "lost_cooldown",
                     "timestamp_ms": None,
@@ -99,7 +101,7 @@ def analyze_player(
             if cd_casts:
                 first_s = rel(cd_casts[0]["timestamp"]) / 1000
                 if first_s > 30:
-                    findings.append({
+                    cd_issues.append({
                         "severity": "warning",
                         "category": "cooldown_delay",
                         "timestamp_ms": int(rel(cd_casts[0]["timestamp"])),
@@ -110,18 +112,17 @@ def analyze_player(
                     })
 
             # Bloodlust alignment
+            bl_aligned = False
             if bl_time_s is not None and cd_casts:
                 bl_window_start_s = bl_time_s - 30
                 bl_window_end_s = bl_time_s + BLOODLUST_DURATION_S + 15
-
                 bl_aligned = any(
                     bl_window_start_s <= rel(c["timestamp"]) / 1000 <= bl_window_end_s
                     for c in cd_casts
                 )
-
-                if not bl_aligned:
+                if not bl_aligned and wants_bl:
                     first_cast_s = rel(cd_casts[0]["timestamp"]) / 1000
-                    findings.append({
+                    cd_issues.append({
                         "severity": "critical",
                         "category": "cooldown_alignment",
                         "timestamp_ms": int(rel(cd_casts[0]["timestamp"])),
@@ -132,15 +133,14 @@ def analyze_player(
                         ),
                     })
 
-            # Gaps between consecutive CD casts (missing a reset)
+            # Gaps between consecutive CD casts
             for i in range(1, len(cd_casts)):
                 prev_s = rel(cd_casts[i - 1]["timestamp"]) / 1000
                 curr_s = rel(cd_casts[i]["timestamp"]) / 1000
                 actual_gap = curr_s - prev_s
-                # Flag if player waited 20%+ longer than the cooldown
                 if actual_gap > cooldown_s * 1.2:
                     delay = actual_gap - cooldown_s
-                    findings.append({
+                    cd_issues.append({
                         "severity": "warning",
                         "category": "cooldown_delay",
                         "timestamp_ms": int(rel(cd_casts[i]["timestamp"])),
@@ -150,6 +150,19 @@ def analyze_player(
                             "Holding cooldowns unnecessarily loses damage."
                         ),
                     })
+
+            if cd_issues:
+                findings.extend(cd_issues)
+            elif actual_uses > 0:
+                parts = [f"{actual_uses}/{expected_uses} casts on cooldown"]
+                if bl_time_s is not None and wants_bl:
+                    parts.append("BL-aligned" if bl_aligned else "note: no BL overlap")
+                findings.append({
+                    "severity": "success",
+                    "category": "cooldown_usage",
+                    "timestamp_ms": None,
+                    "message": f"{cd_name} — {', '.join(parts)}.",
+                })
 
     # ── Cast efficiency ───────────────────────────────────────────────────────
     if len(completed_casts) >= 2:
