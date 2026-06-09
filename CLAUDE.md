@@ -193,10 +193,51 @@ These values are static and should eventually be derived from top-parse data per
 
 **Fix pattern**: for each threshold, compute the relevant statistic (mean ± stddev, or a percentile) across the saved `parse_samples` during analysis and pass it alongside `top_efficiency_pct`. The rulebook could also carry per-CD expected timing from parse data.
 
-## What's not yet built (from design doc)
-- PostgreSQL migration (currently SQLite)
-- VOD synchronization (Workflow 3)
-- Discord webhook output
-- Frontend Next.js migration
-- Within-CD-window rotational rules (e.g. verify GCDs inside Shadow Dance)
-- Encounter-specific phase context
+## Gap analysis vs original design documents
+
+Source: `design-doc.md` (architecture blueprint) + `intial-research.md` (research brief).
+
+### Built — core vision delivered
+
+| Original goal | Status | Notes |
+|---|---|---|
+| Guide ingestion: scrape URLs → LLM → JSON rulebook | ✅ Done | Web + YouTube, streaming progress UI |
+| Deterministic rules engine evaluating rulebook | ✅ Done | `cast_without_prior`, `hold_cooldown_for_anchor`; more kinds needed |
+| Cooldown analysis: lost casts, BL alignment, opener delay, held CDs | ✅ Done | All four checks live |
+| Top-parse comparison with kill-time normalization | ✅ Done | Uses/min replaces raw count |
+| Cast efficiency benchmarked from real top-parse data | ✅ Done | Previously hardcoded at 95%, now sourced from samples |
+| Prescriptive coaching output (not just raw data) | ✅ Done | Rule `action` field surfaces as remedy text in UI |
+| Admin ingestion pipeline with URL persistence and encounter filter | ✅ Done | |
+
+### Gaps — from design-doc.md
+
+| Original goal | Status | Notes |
+|---|---|---|
+| **Frontend**: Next.js + Tailwind | ❌ Not started | Currently vanilla JS in a single HTML file |
+| **Database**: PostgreSQL | ❌ Not started | Currently SQLite; functional but not production-grade |
+| **Positional data**: X/Y coordinates from WCL events | ❌ Not started | WCL does provide coordinates; would enable "died 15 yards from safe zone" checks |
+| **Data pipeline**: DuckDB + dbt for analytical processing | ❌ Not started | Direct Python dict processing; fine at this scale |
+| **Workflow 3**: VOD synchronization (Warcraft Recorder timestamps) | ❌ Not started | Design doc's primary differentiator — click a finding → scrub to that moment in VOD |
+| **Discord webhook output**: post-pull summaries to a channel | ❌ Not started | |
+| **In-game export**: MRT/NSRT notes with personalized cooldown scripts | ❌ Not started | |
+
+### Gaps — from intial-research.md
+
+| Research claim | Status | Notes |
+|---|---|---|
+| **Defensive cooldown audit**: flag deaths with unused defensives | ⏸ Skipped | Explicitly deferred by user; would need Damage Taken + inventory state events |
+| **Healing efficiency**: raid cooldown timing vs incoming damage spikes | ❌ Not started | Healer-specific; needs raid-wide damage event aggregation |
+| **Resource capping**: flag combo point / mana waste | ❌ Not started | Would need Resource events from WCL; highly spec-specific |
+| **Roster composition suggestions**: flag suboptimal spec for encounter | ❌ Not started | Out of scope for single-player tooling |
+| **WeakAura suggestions**: detect slow debuff reaction → suggest import | ❌ Not started | Research doc specific, very complex |
+| **Encounter-phase context**: different CD expectations per phase | ⏸ Skipped | Deferred by user; needs fight-phase timeline from WCL |
+| **Side-by-side VOD vs rank-1 player** | ❌ Not started | Depends on VOD sync (Workflow 3) |
+| **Kill-time-adjusted personal cooldown script** (Lorrgs-style) | ⬜ Partial | Comparison table shows top-parse timing; a full scripted timeline is not generated |
+
+### Architecture delta
+
+The implementation diverged from the design doc in one deliberate place: the research doc assumed the LLM would generate **natural language feedback** from raw anomalies. Instead, the current design uses the LLM only at ingestion time (guide → rulebook) and the analyzer produces all feedback deterministically from the rulebook's `action` field. This is strictly better — output is reproducible, auditable, and fast.
+
+Everything else not yet built falls into two buckets:
+1. **Infrastructure** (Next.js, PostgreSQL, DuckDB/dbt) — won't change product behaviour, defer until scale demands it.
+2. **New data sources** (positional data, damage taken, resource events, VOD sync) — each unlocks a new class of findings. VOD sync is the single highest-leverage unbuilt feature from the original vision.
