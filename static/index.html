@@ -165,31 +165,6 @@
       font-size: 18px;
       font-weight: 700;
       color: var(--gold);
-      margin-bottom: 8px;
-    }
-
-    .meta {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-    }
-
-    .meta span {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      padding: 3px 10px;
-      font-size: 12px;
-      color: var(--muted);
-    }
-
-    .bl-badge {
-      border-color: #5b8de8 !important;
-      color: #5b8de8 !important;
-    }
-
-    .no-bl-badge {
-      border-color: var(--muted) !important;
     }
 
     .findings { display: flex; flex-direction: column; gap: 12px; }
@@ -347,11 +322,6 @@
 </head>
 <body>
 <div class="container">
-  <header>
-    <h1>⚔ WoW Progression Analyzer</h1>
-    <p>Prescriptive combat analysis for Mythic raiders — find the real causes of wipes</p>
-  </header>
-
   <div class="card">
     <h2>Load Report</h2>
     <div class="form-group">
@@ -537,10 +507,6 @@
   function renderResults(data) {
     const el = document.getElementById('results');
 
-    const blBadge = data.bloodlust_time
-      ? `<span class="bl-badge">⚡ Bloodlust at ${data.bloodlust_time}</span>`
-      : `<span class="no-bl-badge">No Bloodlust detected</span>`;
-
     const improvements = data.findings.filter(f => f.severity === 'critical' || f.severity === 'warning');
     const successes    = data.findings.filter(f => f.severity === 'success');
     const info         = data.findings.filter(f => f.severity === 'info');
@@ -560,13 +526,6 @@
     el.innerHTML = `
       <div class="result-header">
         <h2>${data.player} — ${formatSpec(data.spec)}</h2>
-        <div class="meta">
-          <span>Duration: ${formatDuration(data.fight_duration_s)}</span>
-          ${blBadge}
-          <span>Total Casts: ${data.total_casts}</span>
-          <span>${improvements.filter(f=>f.severity==='critical').length} Critical &nbsp;
-                ${improvements.filter(f=>f.severity==='warning').length} Warnings</span>
-        </div>
       </div>
       ${findingsHtml}
       ${compHtml}

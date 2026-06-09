@@ -64,6 +64,11 @@ def _evaluate_rules(
                             exempted = any(0 <= cast_t - ct <= ctx_window for ct in ctx_casts)
                         else:
                             exempted = any(0 <= ct - cast_t <= ctx_window for ct in ctx_casts)
+                        # Also exempt if context spell is cast within look_ahead_s AFTER this cast
+                        # (player is holding the required spell for an upcoming anchor window)
+                        look_ahead = exception.get("also_look_ahead_s")
+                        if look_ahead and not exempted:
+                            exempted = any(0 < ct - cast_t <= look_ahead for ct in ctx_casts)
                         if exempted:
                             continue
                     violations.append(cast_t)
@@ -268,7 +273,11 @@ def analyze_player(
             if cd_issues:
                 findings.extend(cd_issues)
             elif actual_uses > 0:
-                parts = [f"{actual_uses}/{expected_uses} casts on cooldown"]
+                if actual_uses <= expected_uses:
+                    uses_str = f"{actual_uses}/{expected_uses} casts on cooldown"
+                else:
+                    uses_str = f"{actual_uses} casts"
+                parts = [uses_str]
                 if bl_time_s is not None and wants_bl:
                     parts.append("BL-aligned" if bl_aligned else "note: no BL overlap")
                 findings.append({
