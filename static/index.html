@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WoW Progression Analyzer</title>
+  <style>
+    :root {
+      --bg: #0a0c10;
+      --surface: #13161e;
+      --surface2: #1c202c;
+      --border: #2a2f3d;
+      --gold: #c8a64f;
+      --gold-light: #e8c86a;
+      --text: #dde1ec;
+      --muted: #7b82a0;
+      --critical: #e05252;
+      --warning: #e8a93a;
+      --info: #5b8de8;
+      --success: #4caf7a;
+      --radius: 8px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 14px;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 32px 20px 64px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 36px;
+    }
+
+    header h1 {
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--gold);
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+
+    header p {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+
+    .card h2 {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--gold);
+      margin-bottom: 16px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .form-group {
+      margin-bottom: 14px;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 6px;
+    }
+
+    input, select {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      padding: 9px 12px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    input:focus, select:focus {
+      border-color: var(--gold);
+    }
+
+    select option { background: var(--surface2); }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: linear-gradient(135deg, #9a6f1f, var(--gold));
+      color: #0a0c10;
+      border: none;
+      border-radius: 6px;
+      padding: 10px 20px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.15s;
+      letter-spacing: 0.3px;
+    }
+
+    .btn:hover { opacity: 0.9; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .btn-secondary {
+      background: var(--surface2);
+      color: var(--gold);
+      border: 1px solid var(--gold);
+    }
+
+    .selectors { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 16px; }
+
+    .row { display: flex; gap: 14px; }
+    .row .form-group { flex: 1; }
+
+    .hidden { display: none !important; }
+
+    /* Loading */
+    .loading-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      padding: 48px;
+      color: var(--muted);
+    }
+
+    .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid var(--border);
+      border-top-color: var(--gold);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Results */
+    .result-header {
+      margin-bottom: 20px;
+    }
+
+    .result-header h2 {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--gold);
+      margin-bottom: 8px;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .meta span {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 3px 10px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .bl-badge {
+      border-color: #5b8de8 !important;
+      color: #5b8de8 !important;
+    }
+
+    .no-bl-badge {
+      border-color: var(--muted) !important;
+    }
+
+    .findings { display: flex; flex-direction: column; gap: 12px; }
+
+    .finding {
+      background: var(--surface2);
+      border-radius: var(--radius);
+      border-left: 4px solid var(--border);
+      padding: 14px 16px;
+    }
+
+    .finding.finding-critical { border-left-color: var(--critical); }
+    .finding.finding-warning  { border-left-color: var(--warning); }
+    .finding.finding-info     { border-left-color: var(--info); }
+
+    .finding-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+      flex-wrap: wrap;
+    }
+
+    .severity-badge {
+      font-size: 10px;
+      font-weight: 800;
+      padding: 2px 8px;
+      border-radius: 4px;
+      letter-spacing: 1px;
+    }
+
+    .severity-critical { background: rgba(224,82,82,0.18); color: var(--critical); }
+    .severity-warning  { background: rgba(232,169,58,0.18); color: var(--warning); }
+    .severity-info     { background: rgba(91,141,232,0.18); color: var(--info); }
+
+    .timestamp {
+      font-family: monospace;
+      font-size: 12px;
+      color: var(--muted);
+      background: var(--surface);
+      padding: 1px 6px;
+      border-radius: 4px;
+    }
+
+    .category {
+      font-size: 11px;
+      color: var(--muted);
+      margin-left: auto;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+    }
+
+    .finding-message {
+      color: var(--text);
+      font-size: 13.5px;
+      line-height: 1.55;
+    }
+
+    .no-findings {
+      background: rgba(76,175,122,0.1);
+      border: 1px solid rgba(76,175,122,0.3);
+      border-radius: var(--radius);
+      padding: 20px;
+      text-align: center;
+      color: var(--success);
+      font-weight: 600;
+    }
+
+    .error-msg {
+      background: rgba(224,82,82,0.1);
+      border: 1px solid rgba(224,82,82,0.3);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      color: var(--critical);
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>⚔ WoW Progression Analyzer</h1>
+    <p>Prescriptive combat analysis for Mythic raiders — find the real causes of wipes</p>
+  </header>
+
+  <div class="card">
+    <h2>Load Report</h2>
+    <div class="form-group">
+      <label for="report-url">Warcraft Logs Report URL or Code</label>
+      <input id="report-url" type="text"
+        placeholder="https://www.warcraftlogs.com/reports/AbCdEfGh..."
+        onkeydown="if(event.key==='Enter') loadReport()" />
+    </div>
+    <button class="btn" id="load-btn" onclick="loadReport()">Load Report</button>
+
+    <div id="selectors" class="selectors hidden">
+      <div class="row">
+        <div class="form-group">
+          <label for="fight-select">Fight</label>
+          <select id="fight-select"></select>
+        </div>
+        <div class="form-group">
+          <label for="player-select">Player</label>
+          <select id="player-select"></select>
+        </div>
+      </div>
+      <button class="btn" id="analyze-btn" onclick="analyzePlayer()">Analyze Pull</button>
+    </div>
+  </div>
+
+  <div id="loading" class="hidden">
+    <div class="loading-wrap">
+      <div class="spinner"></div>
+      <span>Fetching combat log from Warcraft Logs…</span>
+    </div>
+  </div>
+
+  <div id="error-box" class="error-msg hidden"></div>
+
+  <div id="results" class="card hidden"></div>
+</div>
+
+<script>
+  let reportCode = '';
+
+  function extractCode(url) {
+    const m = url.match(/\/reports\/([a-zA-Z0-9]+)/);
+    return m ? m[1] : url.trim();
+  }
+
+  function formatDuration(seconds) {
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m}:${String(s).padStart(2, '0')}`;
+  }
+
+  function formatMs(ms) { return formatDuration(ms / 1000); }
+
+  function formatSpec(spec) {
+    // "RetributionPaladin" → "Retribution Paladin"
+    return spec.replace(/([A-Z])/g, ' $1').trim();
+  }
+
+  function categoryLabel(cat) {
+    return {
+      cooldown_alignment: 'Alignment',
+      lost_cooldown:      'Lost Cast',
+      cooldown_delay:     'Delay',
+      cast_efficiency:    'Downtime',
+      unsupported_spec:   'Spec Note',
+    }[cat] || cat;
+  }
+
+  function showError(msg) {
+    const el = document.getElementById('error-box');
+    el.textContent = `⚠ ${msg}`;
+    el.classList.remove('hidden');
+  }
+
+  function clearError() {
+    document.getElementById('error-box').classList.add('hidden');
+  }
+
+  async function loadReport() {
+    clearError();
+    const url = document.getElementById('report-url').value.trim();
+    if (!url) return;
+
+    reportCode = extractCode(url);
+    const btn = document.getElementById('load-btn');
+    btn.textContent = 'Loading…';
+    btn.disabled = true;
+
+    try {
+      const resp = await fetch(`/api/report/${reportCode}`);
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.detail || 'Failed to load report');
+
+      populateFights(data.fights);
+      populatePlayers(data.players);
+      document.getElementById('selectors').classList.remove('hidden');
+      document.getElementById('results').classList.add('hidden');
+    } catch (err) {
+      showError(err.message);
+    } finally {
+      btn.textContent = 'Load Report';
+      btn.disabled = false;
+    }
+  }
+
+  function populateFights(fights) {
+    const sel = document.getElementById('fight-select');
+    sel.innerHTML = '';
+    fights.forEach(f => {
+      const opt = document.createElement('option');
+      opt.value = f.id;
+      const status = f.kill ? '✓ Kill' : '✗ Wipe';
+      opt.textContent = `${f.name} [${status}] ${formatDuration(f.duration_s)}`;
+      sel.appendChild(opt);
+    });
+    // Default to last fight
+    if (fights.length) sel.value = fights[fights.length - 1].id;
+  }
+
+  function populatePlayers(players) {
+    const sel = document.getElementById('player-select');
+    sel.innerHTML = '';
+    players.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = `${p.name} — ${formatSpec(p.spec)}`;
+      sel.appendChild(opt);
+    });
+  }
+
+  async function analyzePlayer() {
+    clearError();
+    const fightId  = parseInt(document.getElementById('fight-select').value, 10);
+    const playerId = parseInt(document.getElementById('player-select').value, 10);
+
+    document.getElementById('loading').classList.remove('hidden');
+    document.getElementById('results').classList.add('hidden');
+
+    const btn = document.getElementById('analyze-btn');
+    btn.disabled = true;
+
+    try {
+      const resp = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ report_url: reportCode, fight_id: fightId, player_id: playerId }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.detail || 'Analysis failed');
+      renderResults(data);
+    } catch (err) {
+      showError(err.message);
+    } finally {
+      document.getElementById('loading').classList.add('hidden');
+      btn.disabled = false;
+    }
+  }
+
+  function renderResults(data) {
+    const el = document.getElementById('results');
+
+    const blBadge = data.bloodlust_time
+      ? `<span class="bl-badge">⚡ Bloodlust at ${data.bloodlust_time}</span>`
+      : `<span class="no-bl-badge">No Bloodlust detected</span>`;
+
+    const findingsHtml = data.findings.length === 0
+      ? '<div class="no-findings">✓ No significant issues detected. Strong performance!</div>'
+      : `<div class="findings">${data.findings.map(renderFinding).join('')}</div>`;
+
+    el.innerHTML = `
+      <div class="result-header">
+        <h2>${data.player} — ${formatSpec(data.spec)}</h2>
+        <div class="meta">
+          <span>Duration: ${formatDuration(data.fight_duration_s)}</span>
+          ${blBadge}
+          <span>Total Casts: ${data.total_casts}</span>
+          <span>${data.findings.filter(f=>f.severity==='critical').length} Critical &nbsp;
+                ${data.findings.filter(f=>f.severity==='warning').length} Warnings</span>
+        </div>
+      </div>
+      ${findingsHtml}
+    `;
+
+    el.classList.remove('hidden');
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function renderFinding(f) {
+    const ts = f.timestamp_ms != null
+      ? `<span class="timestamp">${formatMs(f.timestamp_ms)}</span>` : '';
+
+    return `
+      <div class="finding finding-${f.severity}">
+        <div class="finding-header">
+          <span class="severity-badge severity-${f.severity}">${f.severity.toUpperCase()}</span>
+          ${ts}
+          <span class="category">${categoryLabel(f.category)}</span>
+        </div>
+        <p class="finding-message">${f.message}</p>
+      </div>
+    `;
+  }
+</script>
+</body>
+</html>
