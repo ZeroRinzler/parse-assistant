@@ -241,11 +241,26 @@ async def analyze_parse(
             }
         )
 
+    # Cast efficiency — same gap logic as the main analyzer
+    completed = sorted(
+        [e for e in cast_events if e.get("type") == "cast"],
+        key=lambda e: e["timestamp"],
+    )
+    cast_eff_pct: Optional[float] = None
+    if len(completed) >= 2 and fight_dur_s > 0:
+        downtime_ms = sum(
+            completed[i]["timestamp"] - completed[i - 1]["timestamp"]
+            for i in range(1, len(completed))
+            if completed[i]["timestamp"] - completed[i - 1]["timestamp"] > 1500
+        )
+        cast_eff_pct = round(max(0.0, (1 - downtime_ms / 1000 / fight_dur_s) * 100), 1)
+
     return {
         "player": player["name"],
         "spec": spec,
         "fight_duration_s": round(fight_dur_s, 1),
         "bloodlust_s": round(bl_time_s, 1) if bl_time_s is not None else None,
+        "cast_efficiency_pct": cast_eff_pct,
         "cooldowns": cd_summary,
     }
 

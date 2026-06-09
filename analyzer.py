@@ -133,6 +133,7 @@ def analyze_player(
     buff_events: list[dict],
     spec_cds_override: Optional[list[dict]] = None,
     rules_override: Optional[list[dict]] = None,
+    top_efficiency_pct: Optional[float] = None,
 ) -> dict:
     spec = player.get("subType", "Unknown")
     fight_duration_ms = fight_end - fight_start
@@ -309,23 +310,35 @@ def analyze_player(
         efficiency_pct = max(0.0, (1 - total_downtime_s / fight_duration_s) * 100)
 
         if total_downtime_s > 5:
-            severity = "critical" if efficiency_pct < 88 else "warning"
             worst = sorted(gaps, key=lambda g: -g["duration_ms"])[:3]
             worst_str = ", ".join(
                 f"{_fmt(g['start_ms']/1000)} ({g['duration_ms']/1000:.1f}s gap)" for g in worst
             )
+            if top_efficiency_pct is not None:
+                delta = efficiency_pct - top_efficiency_pct
+                benchmark_str = f"top parses avg {top_efficiency_pct:.0f}%"
+                if delta >= 0:
+                    severity = "success"
+                elif delta >= -7:
+                    severity = "warning"
+                else:
+                    severity = "critical"
+            else:
+                # No benchmark yet — flag for awareness but keep it mild
+                severity = "warning"
+                benchmark_str = "no benchmark — run top-parse analysis for context"
             findings.append({
                 "severity": severity,
                 "category": "cast_efficiency",
                 "timestamp_ms": None,
                 "message": (
-                    f"Cast efficiency: {efficiency_pct:.1f}% — "
-                    f"{len(gaps)} gaps >1.5s totalling {total_downtime_s:.1f}s of downtime. "
-                    f"Elite target is 95%+. "
-                    f"Worst gaps: {worst_str}."
+                    f"Cast efficiency: {efficiency_pct:.1f}% ({benchmark_str}) — "
+                    f"{total_downtime_s:.1f}s in gaps >1.5s. "
+                    f"Worst: {worst_str}."
                 ),
                 "details": {
                     "efficiency_pct": round(efficiency_pct, 1),
+                    "top_efficiency_pct": top_efficiency_pct,
                     "total_downtime_s": round(total_downtime_s, 1),
                     "gap_count": len(gaps),
                 },
