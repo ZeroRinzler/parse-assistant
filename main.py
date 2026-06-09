@@ -1,10 +1,11 @@
+import json
 import re
 from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -182,51 +183,105 @@ async def scrape_guide(guide_id: int):
         raise HTTPException(status_code=422, detail=str(exc))
 
 
-@app.post("/api/admin/guides/spec/{spec}/scrape-all")
-async def scrape_all_guides(spec: str):
-    guides = await db.get_guides(spec)
-    results = []
-    for g in guides:
-        try:
-            title, content = await scrape(g["url"], g["guide_type"])
-            word_count = len(content.split())
-            await db.update_guide_content(g["id"], title, content, word_count)
-            results.append({"id": g["id"], "status": "scraped", "word_count": word_count})
-        except Exception as exc:
-            await db.update_guide_error(g["id"], str(exc))
-            results.append({"id": g["id"], "status": "error", "error": str(exc)})
-    return {"results": results}
+@app.get("/api/admin/guides/spec/{spec}/scrape-stream")
+async def scrape_all_stream(spec: str):
+    """SSE stream — yields one event per guide as it is scraped."""
+    def _evt(payload: dict) -> str:
+        return f"data: {json.dumps(payload)}\n\n"
+
+    async def generate():
+        guides = await db.get_guides(spec)
+        total = len(guides)
+        yield _evt({"type": "start", "total": total})
+        scraped = errors = 0
+        for i, g in enumerate(guides):
+            yield _evt({"type": "progress", "step": i + 1, "total": total,
+                        "url": g["url"], "guide_type": g["guide_type"]})
+            try:
+                title, content = await scrape(g["url"], g["guide_type"])
+                word_count = len(content.split())
+                await db.update_guide_content(g["id"], title, content, word_count)
+                scraped += 1
+                yield _evt({"type": "done", "step": i + 1, "total": total,
+                            "id": g["id"], "title": title, "word_count": word_count})
+            except Exception as exc:
+                await db.update_guide_error(g["id"], str(exc))
+                errors += 1
+                yield _evt({"type": "error", "step": i + 1, "total": total,
+                            "id": g["id"], "error": str(exc)})
+        yield _evt({"type": "complete", "scraped": scraped, "errors": errors})
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 # ── Admin — Rulebook generation ───────────────────────────────────────────────
 
-@app.post("/api/admin/rulebook/{spec}/generate")
-async def generate_rulebook(spec: str, encounter_id: Optional[int] = None):
-    guides = await db.get_guides(spec)
-    scraped = [g for g in guides if g["status"] == "scraped" and g.get("content")]
+@app.post("/api/admin/rulebook/{spec}/generate-stream")
+async def generate_rulebook_stream(spec: str, encounter_id: Optional[int] = None):
+    """SSE stream for rulebook generation — surfaces each stage to the UI."""
+    def _evt(payload: dict) -> str:
+        return f"data: {json.dumps(payload)}\n\n"
 
-    if not scraped:
+    async def generate():
+        guides = await db.get_guides(spec)
+        scraped = [g for g in guides if g["status"] == "scraped" and g.get("content")]
+        if not scraped:
+            yield _evt({"type": "error",
+                        "error": "No scraped guides. Add and scrape at least one guide first."})
+            return
+
+        yield _evt({"type": "status", "message": f"Loaded {len(scraped)} guide(s)…",
+                    "guide_count": len(scraped)})
+
+        parse_context = ""
+        if encounter_id:
+            samples = await db.get_parse_samples(spec, encounter_id)
+            if samples:
+                parse_context = build_parse_context([s["cooldown_data"] for s in samples])
+                yield _evt({"type": "status",
+                            "message": f"Including {len(samples)} top-parse sample(s) as context…"})
+
+        yield _evt({"type": "status",
+                    "message": "Sending to Claude — extracting cooldown rules from guide text…"})
+
+        texts = [g["content"] for g in scraped]
+        try:
+            rulebook = await parse_guides(spec, texts, parse_context)
+        except Exception as exc:
+            yield _evt({"type": "error", "error": str(exc)})
+            return
+
+        await db.save_rulebook(spec, rulebook, guide_count=len(scraped))
+        yield _evt({"type": "complete", "rulebook": rulebook})
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+class ManualRulebookRequest(BaseModel):
+    rulebook: dict
+
+
+@app.put("/api/admin/rulebook/{spec}")
+async def save_manual_rulebook(spec: str, req: ManualRulebookRequest):
+    """Persist a hand-crafted rulebook JSON directly, bypassing the LLM."""
+    rb = req.rulebook
+    if "major_cooldowns" not in rb:
         raise HTTPException(
             status_code=422,
-            detail="No scraped guides found. Add and scrape at least one guide first.",
+            detail="JSON must contain a 'major_cooldowns' array.",
         )
-
-    texts = [g["content"] for g in scraped]
-
-    # Optionally augment with parse context
-    parse_context = ""
-    if encounter_id:
-        samples = await db.get_parse_samples(spec, encounter_id)
-        if samples:
-            parse_context = build_parse_context([s["cooldown_data"] for s in samples])
-
-    try:
-        rulebook = await parse_guides(spec, texts, parse_context)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
-
-    await db.save_rulebook(spec, rulebook, guide_count=len(scraped))
-    return {"message": "Rulebook generated", "rulebook": rulebook}
+    rb.setdefault("spec", spec)
+    rb.setdefault("source_summary", "Manually defined")
+    await db.save_rulebook(spec, rb, guide_count=0)
+    return {"message": "Rulebook saved", "rulebook": rb}
 
 
 @app.get("/api/admin/rulebook/{spec}")
@@ -268,37 +323,69 @@ class FetchParsesRequest(BaseModel):
 
 @app.post("/api/admin/parses/fetch")
 async def fetch_parses(req: FetchParsesRequest):
+    """Non-streaming rankings fetch (no deep analysis)."""
     try:
         result = await fetch_top_rankings(wcl, req.spec, req.encounter_id, req.count)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
-
-    if not req.analyze:
-        return result
-
-    # Deep-analyze each parse (fetch events, extract CD timing)
-    analyzed = []
-    for ranking in result["rankings"]:
-        code = ranking.get("report_code")
-        fight_id = ranking.get("fight_id")
-        if not code or not fight_id:
-            continue
-        summary = await analyze_parse(wcl, req.spec, code, fight_id)
-        if summary:
-            await db.save_parse_sample(
-                spec=req.spec,
-                encounter_id=req.encounter_id,
-                encounter_name=result["encounter_name"],
-                report_code=code,
-                fight_id=fight_id,
-                player_name=summary["player"],
-                cooldown_data=summary,
-            )
-            analyzed.append(summary)
-
-    result["analyzed_parses"] = analyzed
-    result["parse_context"] = build_parse_context(analyzed)
     return result
+
+
+@app.post("/api/admin/parses/analyze-stream")
+async def analyze_parses_stream(req: FetchParsesRequest):
+    """SSE stream — fetches rankings then deep-analyzes each parse one by one."""
+    def _evt(payload: dict) -> str:
+        return f"data: {json.dumps(payload)}\n\n"
+
+    async def generate():
+        # Step 1: rankings
+        yield _evt({"type": "rankings_start"})
+        try:
+            result = await fetch_top_rankings(wcl, req.spec, req.encounter_id, req.count)
+        except Exception as exc:
+            yield _evt({"type": "error", "error": str(exc)})
+            return
+        yield _evt({"type": "rankings_done", "rankings": result["rankings"],
+                    "encounter_name": result["encounter_name"]})
+
+        # Step 2: per-parse event analysis
+        rankings = result["rankings"]
+        total = len(rankings)
+        analyzed = []
+        for i, ranking in enumerate(rankings):
+            code = ranking.get("report_code")
+            fight_id = ranking.get("fight_id")
+            yield _evt({"type": "parse_progress", "step": i + 1, "total": total,
+                        "player": ranking.get("player")})
+            if not code or not fight_id:
+                yield _evt({"type": "parse_skip", "step": i + 1, "player": ranking.get("player")})
+                continue
+            summary = await analyze_parse(wcl, req.spec, code, fight_id)
+            if summary:
+                await db.save_parse_sample(
+                    spec=req.spec,
+                    encounter_id=req.encounter_id,
+                    encounter_name=result["encounter_name"],
+                    report_code=code,
+                    fight_id=fight_id,
+                    player_name=summary["player"],
+                    cooldown_data=summary,
+                )
+                analyzed.append(summary)
+                yield _evt({"type": "parse_done", "step": i + 1, "total": total,
+                            "summary": summary})
+            else:
+                yield _evt({"type": "parse_skip", "step": i + 1, "player": ranking.get("player")})
+
+        parse_context = build_parse_context(analyzed)
+        yield _evt({"type": "complete", "analyzed": len(analyzed),
+                    "parse_context": parse_context})
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")

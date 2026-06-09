@@ -2,23 +2,20 @@ import asyncio
 import re
 from concurrent.futures import ThreadPoolExecutor
 
-import httpx
 from bs4 import BeautifulSoup
+from curl_cffi.requests import AsyncSession
 
 _EXECUTOR = ThreadPoolExecutor(max_workers=4)
 
-_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
-    )
-}
+# curl_cffi impersonates Chrome at TLS level — bypasses Cloudflare (Wowhead, etc.)
+_IMPERSONATE = "chrome120"
 
 
 async def scrape_web(url: str) -> tuple[str, str]:
-    """Fetch a web page and return (title, cleaned_text)."""
-    async with httpx.AsyncClient(follow_redirects=True, timeout=30.0) as client:
-        resp = await client.get(url, headers=_HEADERS)
+    """Fetch a web page and return (title, cleaned_text).
+    Uses curl_cffi Chrome impersonation to bypass Cloudflare-protected sites."""
+    async with AsyncSession() as session:
+        resp = await session.get(url, impersonate=_IMPERSONATE, timeout=30)
         resp.raise_for_status()
 
     soup = BeautifulSoup(resp.text, "lxml")
@@ -44,32 +41,35 @@ async def scrape_web(url: str) -> tuple[str, str]:
 
 
 async def scrape_youtube(url: str) -> tuple[str, str]:
-    """Extract a YouTube transcript and return (title, transcript_text)."""
-    from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, NoTranscriptFound
+    """Extract a YouTube transcript — (title, transcript_text).
+    Uses youtube-transcript-api 1.x instance API."""
+    from youtube_transcript_api import YouTubeTranscriptApi
+    from youtube_transcript_api._errors import TranscriptsDisabled, NoTranscriptFound
 
     match = re.search(r"(?:v=|youtu\.be/)([a-zA-Z0-9_-]{11})", url)
     if not match:
         raise ValueError(f"Cannot parse YouTube video ID from: {url}")
     video_id = match.group(1)
 
+    api = YouTubeTranscriptApi()
     loop = asyncio.get_event_loop()
+
     try:
-        entries = await loop.run_in_executor(
+        fetched = await loop.run_in_executor(
             _EXECUTOR,
-            lambda: YouTubeTranscriptApi.get_transcript(video_id, languages=["en", "en-US"]),
+            lambda: api.fetch(video_id, languages=["en", "en-US"]),
         )
     except (TranscriptsDisabled, NoTranscriptFound) as exc:
         raise ValueError(f"No English transcript available: {exc}") from exc
 
-    text = " ".join(e["text"] for e in entries)
-    text = re.sub(r"\[.*?\]", "", text)          # strip [Music], [Applause] etc.
+    text = " ".join(snippet.text for snippet in fetched)
+    text = re.sub(r"\[.*?\]", "", text)  # strip [Music], [Applause] etc.
     text = re.sub(r" {2,}", " ", text).strip()
 
     return f"YouTube: {video_id}", text[:60_000]
 
 
 async def scrape(url: str, guide_type: str) -> tuple[str, str]:
-    """Dispatch to the correct scraper based on guide_type."""
     if guide_type == "youtube":
         return await scrape_youtube(url)
     return await scrape_web(url)

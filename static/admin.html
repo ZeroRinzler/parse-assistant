@@ -6,95 +6,97 @@
   <title>WoW Analyzer — Admin</title>
   <style>
     :root {
-      --bg: #0a0c10; --surface: #13161e; --surface2: #1c202c; --border: #2a2f3d;
-      --gold: #c8a64f; --gold-light: #e8c86a; --text: #dde1ec; --muted: #7b82a0;
-      --critical: #e05252; --warning: #e8a93a; --info: #5b8de8; --success: #4caf7a;
-      --radius: 8px;
+      --bg:#0a0c10;--surface:#13161e;--surface2:#1c202c;--border:#2a2f3d;
+      --gold:#c8a64f;--text:#dde1ec;--muted:#7b82a0;
+      --critical:#e05252;--warning:#e8a93a;--info:#5b8de8;--success:#4caf7a;
+      --radius:8px;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;font-size:14px}
 
-    /* Layout */
-    .layout { display: flex; min-height: 100vh; }
-    .sidebar { width: 220px; background: var(--surface); border-right: 1px solid var(--border); padding: 24px 16px; flex-shrink: 0; }
-    .main { flex: 1; padding: 32px 28px; overflow: auto; }
+    .layout{display:flex;min-height:100vh}
+    .sidebar{width:220px;background:var(--surface);border-right:1px solid var(--border);padding:24px 16px;flex-shrink:0}
+    .main{flex:1;padding:32px 28px;overflow:auto}
 
-    /* Sidebar */
-    .sidebar h2 { color: var(--gold); font-size: 13px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 16px; }
-    .nav-link { display: block; padding: 8px 10px; border-radius: 6px; color: var(--muted); cursor: pointer; font-size: 13px; margin-bottom: 2px; }
-    .nav-link:hover, .nav-link.active { background: var(--surface2); color: var(--text); }
-    .sidebar-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin: 20px 0 8px; }
-    .back-link { display: block; color: var(--muted); font-size: 12px; margin-top: 32px; cursor: pointer; }
-    .back-link:hover { color: var(--gold); }
+    .sidebar h2{color:var(--gold);font-size:13px;text-transform:uppercase;letter-spacing:1px;margin-bottom:16px}
+    .nav-link{display:block;padding:8px 10px;border-radius:6px;color:var(--muted);cursor:pointer;font-size:13px;margin-bottom:2px}
+    .nav-link:hover,.nav-link.active{background:var(--surface2);color:var(--text)}
+    .back-link{display:block;color:var(--muted);font-size:12px;margin-top:32px;cursor:pointer}
+    .back-link:hover{color:var(--gold)}
 
-    /* Cards */
-    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 20px; }
-    .card-title { font-size: 13px; font-weight: 700; color: var(--gold); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 16px; }
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:20px}
+    .card-title{font-size:13px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.8px;margin-bottom:16px}
 
-    /* Spec selector */
-    .spec-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
-    .spec-bar label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.8px; white-space: nowrap; }
+    .spec-bar{display:flex;align-items:center;gap:12px;margin-bottom:24px}
+    .spec-bar label{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.8px;white-space:nowrap}
 
-    /* Forms */
-    input, select, textarea { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); padding: 8px 12px; font-size: 14px; outline: none; }
-    input:focus, select:focus, textarea:focus { border-color: var(--gold); }
-    select option { background: var(--surface2); }
-    textarea { resize: vertical; font-family: monospace; font-size: 12px; }
-    .form-row { display: flex; gap: 10px; align-items: flex-end; }
-    .form-group { flex: 1; }
-    .form-group label { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 5px; }
+    input,select,textarea{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:8px 12px;font-size:14px;outline:none}
+    input:focus,select:focus,textarea:focus{border-color:var(--gold)}
+    select option{background:var(--surface2)}
+    .form-row{display:flex;gap:10px;align-items:flex-end}
+    .form-group{flex:1}
+    .form-group label{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px}
 
-    /* Buttons */
-    .btn { display: inline-flex; align-items: center; gap: 6px; background: linear-gradient(135deg,#9a6f1f,var(--gold)); color: #0a0c10; border: none; border-radius: 6px; padding: 8px 16px; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; }
-    .btn:hover { opacity: 0.88; }
-    .btn:disabled { opacity: 0.35; cursor: not-allowed; }
-    .btn-sm { padding: 5px 10px; font-size: 12px; }
-    .btn-danger { background: rgba(224,82,82,0.15); color: var(--critical); border: 1px solid rgba(224,82,82,0.3); }
-    .btn-ghost { background: var(--surface2); color: var(--gold); border: 1px solid var(--gold); }
+    .btn{display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,#9a6f1f,var(--gold));color:#0a0c10;border:none;border-radius:6px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
+    .btn:hover{opacity:.88}
+    .btn:disabled{opacity:.35;cursor:not-allowed}
+    .btn-sm{padding:5px 10px;font-size:12px}
+    .btn-danger{background:rgba(224,82,82,.15);color:var(--critical);border:1px solid rgba(224,82,82,.3)}
+    .btn-ghost{background:var(--surface2);color:var(--gold);border:1px solid var(--gold)}
 
-    /* Tables */
-    table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    th { text-align: left; padding: 8px 10px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.7px; border-bottom: 1px solid var(--border); }
-    td { padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
-    tr:last-child td { border-bottom: none; }
-    tr:hover td { background: var(--surface2); }
+    table{width:100%;border-collapse:collapse;font-size:13px}
+    th{text-align:left;padding:8px 10px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.7px;border-bottom:1px solid var(--border)}
+    td{padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+    tr:last-child td{border-bottom:none}
+    tr:hover td{background:var(--surface2)}
 
-    /* Status badges */
-    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
-    .badge-pending  { background: rgba(123,130,160,0.18); color: var(--muted); }
-    .badge-scraped  { background: rgba(76,175,122,0.18); color: var(--success); }
-    .badge-error    { background: rgba(224,82,82,0.18); color: var(--critical); }
-    .badge-static   { background: rgba(91,141,232,0.18); color: var(--info); }
-    .badge-generated{ background: rgba(200,166,79,0.18); color: var(--gold); }
+    .badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;text-transform:uppercase}
+    .badge-pending{background:rgba(123,130,160,.18);color:var(--muted)}
+    .badge-scraped{background:rgba(76,175,122,.18);color:var(--success)}
+    .badge-error{background:rgba(224,82,82,.18);color:var(--critical)}
+    .badge-static{background:rgba(91,141,232,.18);color:var(--info)}
+    .badge-generated{background:rgba(200,166,79,.18);color:var(--gold)}
+    .badge-web{background:rgba(91,141,232,.12);color:var(--info)}
+    .badge-youtube{background:rgba(224,82,82,.12);color:var(--critical)}
 
-    /* Panel tabs */
-    .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
-    .tab { padding: 10px 18px; cursor: pointer; font-size: 13px; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
-    .tab:hover { color: var(--text); }
-    .tab.active { color: var(--gold); border-bottom-color: var(--gold); }
-    .tab-panel { display: none; }
-    .tab-panel.active { display: block; }
+    .tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:20px}
+    .tab{padding:10px 18px;cursor:pointer;font-size:13px;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px}
+    .tab:hover{color:var(--text)}
+    .tab.active{color:var(--gold);border-bottom-color:var(--gold)}
+    .tab-panel{display:none}
+    .tab-panel.active{display:block}
 
-    /* JSON viewer */
-    .json-box { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 14px; font-family: monospace; font-size: 12px; overflow: auto; max-height: 500px; white-space: pre; color: #a8d8a8; }
+    .json-box{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:14px;font-family:monospace;font-size:12px;overflow:auto;max-height:500px;white-space:pre;color:#a8d8a8}
 
-    /* Misc */
-    .muted { color: var(--muted); font-size: 12px; }
-    .url-cell { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .actions { white-space: nowrap; display: flex; gap: 6px; }
-    .page-title { font-size: 20px; font-weight: 700; color: var(--gold); margin-bottom: 4px; }
-    .page-sub { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
-    .toast { position: fixed; bottom: 24px; right: 24px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 20px; color: var(--text); font-size: 13px; z-index: 999; box-shadow: 0 4px 24px rgba(0,0,0,0.5); display: none; }
-    .spinner-inline { width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--gold); border-radius: 50%; animation: spin 0.8s linear infinite; display: inline-block; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .empty { color: var(--muted); text-align: center; padding: 28px; font-size: 13px; }
-    .parse-row-cd { font-size: 11px; color: var(--muted); }
+    .muted{color:var(--muted);font-size:12px}
+    .url-cell{max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .actions{white-space:nowrap;display:flex;gap:6px}
+    .page-title{font-size:20px;font-weight:700;color:var(--gold);margin-bottom:4px}
+    .page-sub{color:var(--muted);font-size:13px;margin-bottom:24px}
+    .empty{color:var(--muted);text-align:center;padding:28px;font-size:13px}
+
+    /* ── Progress UI ──────────────────────────────────────────────────── */
+    .progress-wrap{margin-top:16px;display:none}
+    .progress-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:12px;color:var(--muted)}
+    .progress-bar-track{height:6px;background:var(--surface2);border-radius:3px;overflow:hidden}
+    .progress-bar-fill{height:100%;background:linear-gradient(90deg,#9a6f1f,var(--gold));border-radius:3px;width:0%;transition:width .3s ease}
+    .progress-log{margin-top:10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;font-family:monospace;font-size:12px;max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:4px}
+    .log-line{display:flex;gap:8px;align-items:baseline}
+    .log-line .icon{flex-shrink:0}
+    .log-line.log-done .icon{color:var(--success)}
+    .log-line.log-error .icon{color:var(--critical)}
+    .log-line.log-info .icon{color:var(--info)}
+    .log-line.log-warn .icon{color:var(--warning)}
+    .log-line .log-text{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+    .parse-cd{font-size:11px;color:var(--muted);margin-top:2px}
+    .toast{position:fixed;bottom:24px;right:24px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 20px;color:var(--text);font-size:13px;z-index:999;box-shadow:0 4px 24px rgba(0,0,0,.5);display:none}
+    .spinner-inline{width:13px;height:13px;border:2px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite;display:inline-block;vertical-align:middle}
+    @keyframes spin{to{transform:rotate(360deg)}}
   </style>
 </head>
 <body>
 <div class="layout">
-
-  <!-- Sidebar -->
   <aside class="sidebar">
     <h2>⚙ Admin Panel</h2>
     <div class="nav-link active" onclick="showTab('guides')">📚 Guides</div>
@@ -103,41 +105,38 @@
     <div class="back-link" onclick="window.location='/'">← Back to Analyzer</div>
   </aside>
 
-  <!-- Main -->
   <main class="main">
     <div class="page-title">Guide Management</div>
     <div class="page-sub">Manage guide sources per spec, scrape content, and generate AI rulebooks.</div>
 
-    <!-- Spec selector -->
     <div class="card">
       <div class="spec-bar">
         <label>Active Spec</label>
         <select id="spec-select" onchange="onSpecChange()" style="max-width:280px"></select>
-        <span class="muted" id="rulebook-badge"></span>
+        <span id="rulebook-badge" class="muted"></span>
       </div>
     </div>
 
-    <!-- Tabs -->
     <div class="tabs">
       <div class="tab active" id="tab-guides" onclick="showTab('guides')">📚 Guides</div>
       <div class="tab" id="tab-parses" onclick="showTab('parses')">📊 Top Parses</div>
       <div class="tab" id="tab-rulebook" onclick="showTab('rulebook')">📋 Rulebook</div>
     </div>
 
-    <!-- ── GUIDES TAB ─────────────────────────────────────────────────── -->
+    <!-- ── GUIDES ──────────────────────────────────────────────────────── -->
     <div class="tab-panel active" id="panel-guides">
       <div class="card">
         <div class="card-title">Add Guide</div>
         <div class="form-row">
           <div class="form-group" style="flex:3">
             <label>URL (Wowhead, Icy-Veins, YouTube, any guide page)</label>
-            <input id="guide-url" type="text" placeholder="https://www.wowhead.com/guide/..." />
+            <input id="guide-url" type="text" placeholder="https://www.wowhead.com/guide/…" />
           </div>
           <div class="form-group" style="flex:1">
             <label>Type</label>
             <select id="guide-type">
               <option value="web">Web Page</option>
-              <option value="youtube">YouTube Video</option>
+              <option value="youtube">YouTube</option>
             </select>
           </div>
           <button class="btn btn-sm" onclick="addGuide()">Add</button>
@@ -148,24 +147,40 @@
         <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
           <span>Guides for <span id="guides-spec-label">—</span></span>
           <div style="display:flex;gap:8px">
-            <button class="btn btn-ghost btn-sm" onclick="scrapeAll()">Scrape All Pending</button>
-            <button class="btn btn-sm" onclick="generateRulebook()">✨ Generate Rulebook with AI</button>
+            <button class="btn btn-ghost btn-sm" id="btn-scrape-all" onclick="scrapeAll()">Scrape All</button>
+            <button class="btn btn-sm" id="btn-generate" onclick="generateRulebook()">✨ Generate Rulebook</button>
           </div>
         </div>
-        <div id="guides-table-wrap">
-          <div class="empty">Select a spec to see its guides.</div>
+
+        <div id="guides-table-wrap"><div class="empty">Select a spec to see its guides.</div></div>
+
+        <!-- Scrape progress -->
+        <div class="progress-wrap" id="scrape-progress">
+          <div class="progress-header">
+            <span id="scrape-progress-label">Scraping…</span>
+            <span id="scrape-progress-frac"></span>
+          </div>
+          <div class="progress-bar-track"><div class="progress-bar-fill" id="scrape-bar"></div></div>
+          <div class="progress-log" id="scrape-log"></div>
+        </div>
+
+        <!-- Generate progress -->
+        <div class="progress-wrap" id="gen-progress">
+          <div class="progress-header"><span id="gen-progress-label">Generating…</span></div>
+          <div class="progress-bar-track"><div class="progress-bar-fill" id="gen-bar" style="width:30%;animation:pulse 1.2s ease-in-out infinite"></div></div>
+          <div class="progress-log" id="gen-log"></div>
         </div>
       </div>
     </div>
 
-    <!-- ── PARSES TAB ─────────────────────────────────────────────────── -->
+    <!-- ── PARSES ──────────────────────────────────────────────────────── -->
     <div class="tab-panel" id="panel-parses">
       <div class="card">
         <div class="card-title">Fetch Top Parses from WCL</div>
         <div class="form-row">
           <div class="form-group" style="flex:3">
             <label>Encounter</label>
-            <select id="encounter-select"><option value="">— load encounters —</option></select>
+            <select id="encounter-select"><option value="">— load encounters first —</option></select>
           </div>
           <div class="form-group" style="flex:1">
             <label>Count</label>
@@ -175,30 +190,56 @@
               <option value="20">Top 20</option>
             </select>
           </div>
-          <button class="btn btn-ghost btn-sm" onclick="loadEncounters()">Load Encounters</button>
-          <button class="btn btn-sm" onclick="fetchParses(false)">Fetch Rankings</button>
-          <button class="btn btn-sm" onclick="fetchParses(true)" title="Slower — fetches full event log for each parse">🔍 Deep Analyze</button>
+          <button class="btn btn-ghost btn-sm" id="btn-load-enc" onclick="loadEncounters()">Load Encounters</button>
+          <button class="btn btn-ghost btn-sm" id="btn-fetch-ranks" onclick="fetchRankings()">Fetch Rankings</button>
+          <button class="btn btn-sm" id="btn-deep" onclick="deepAnalyze()">🔍 Deep Analyze</button>
         </div>
-        <p class="muted" style="margin-top:10px">Deep Analyze fetches each player's full event log to extract exact cooldown timings. Takes ~10–30s.</p>
+
+        <!-- Parse deep-analyze progress -->
+        <div class="progress-wrap" id="parse-progress">
+          <div class="progress-header">
+            <span id="parse-progress-label">Analyzing parses…</span>
+            <span id="parse-progress-frac"></span>
+          </div>
+          <div class="progress-bar-track"><div class="progress-bar-fill" id="parse-bar"></div></div>
+          <div class="progress-log" id="parse-log"></div>
+        </div>
       </div>
       <div id="parses-result"></div>
     </div>
 
-    <!-- ── RULEBOOK TAB ────────────────────────────────────────────────── -->
+    <!-- ── RULEBOOK ────────────────────────────────────────────────────── -->
     <div class="tab-panel" id="panel-rulebook">
       <div class="card">
         <div class="card-title">Current Rulebook — <span id="rulebook-spec-label">—</span></div>
         <div id="rulebook-content"><div class="empty">Select a spec to view its rulebook.</div></div>
       </div>
-    </div>
 
+      <div class="card">
+        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+          <span>Manual Editor</span>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-ghost btn-sm" onclick="loadTemplateIntoEditor()">Load Current / Template</button>
+            <button class="btn btn-sm" onclick="saveManualRulebook()">💾 Save &amp; Activate</button>
+          </div>
+        </div>
+        <p class="muted" style="margin-bottom:12px">
+          Paste or edit the rulebook JSON here and click Save — it becomes active immediately without needing an API key.
+        </p>
+        <textarea id="manual-json" rows="22" style="font-family:monospace;font-size:12px;color:#a8d8a8;background:#0d1117"
+          placeholder='{"spec":"RetributionPaladin","major_cooldowns":[{"name":"Avenging Wrath","spell_id":31884,"cooldown":120,"duration":20,"align_with_bloodlust":true,"opener_priority":1,"usage_rule":"Cast on pull, align with Bloodlust"}],"rules":[],"source_summary":"Manually defined"}'></textarea>
+        <div id="manual-save-status" style="margin-top:8px;font-size:12px;color:var(--muted)"></div>
+      </div>
+    </div>
   </main>
 </div>
 
 <div class="toast" id="toast"></div>
+<style>
+@keyframes pulse{0%,100%{opacity:.6}50%{opacity:1}}
+</style>
 
 <script>
-// ── Spec list ──────────────────────────────────────────────────────────────
 const ALL_SPECS = [
   "AfflictionWarlock","ArcaneMage","ArmsWarrior","AssassinationRogue","AugmentationEvoker",
   "BalanceDruid","BeastMasteryHunter","BloodDeathKnight","BrewmasterMonk","DemonologyWarlock",
@@ -213,156 +254,240 @@ const ALL_SPECS = [
 
 let currentSpec = ALL_SPECS[0];
 let currentTab = 'guides';
+// Keep rankings state for the parses tab
+let _rankingsCache = null;
 
-function fmtSpec(s) { return s.replace(/([A-Z])/g,' $1').trim(); }
+function fmtSpec(s){ return s.replace(/([A-Z])/g,' $1').trim(); }
+function fmtDur(s){ return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`; }
 
-function toast(msg, dur=3000) {
-  const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.style.display = 'block';
-  setTimeout(() => el.style.display='none', dur);
+function toast(msg, dur=3500){
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.style.display='block';
+  clearTimeout(el._t);
+  el._t=setTimeout(()=>el.style.display='none', dur);
 }
 
-// ── Init ───────────────────────────────────────────────────────────────────
-window.onload = () => {
-  const sel = document.getElementById('spec-select');
-  ALL_SPECS.forEach(s => {
-    const opt = document.createElement('option');
-    opt.value = s;
-    opt.textContent = fmtSpec(s);
-    sel.appendChild(opt);
+window.onload=()=>{
+  const sel=document.getElementById('spec-select');
+  ALL_SPECS.forEach(s=>{
+    const o=document.createElement('option'); o.value=s; o.textContent=fmtSpec(s); sel.appendChild(o);
   });
-  currentSpec = ALL_SPECS[0];
   onSpecChange();
 };
 
-function onSpecChange() {
-  currentSpec = document.getElementById('spec-select').value;
-  document.getElementById('guides-spec-label').textContent = fmtSpec(currentSpec);
-  document.getElementById('rulebook-spec-label').textContent = fmtSpec(currentSpec);
+function onSpecChange(){
+  currentSpec=document.getElementById('spec-select').value;
+  document.getElementById('guides-spec-label').textContent=fmtSpec(currentSpec);
+  document.getElementById('rulebook-spec-label').textContent=fmtSpec(currentSpec);
   loadGuides();
-  if (currentTab === 'rulebook') loadRulebook();
+  if(currentTab==='rulebook') loadRulebook();
 }
 
-// ── Tabs ───────────────────────────────────────────────────────────────────
-function showTab(name) {
-  ['guides','parses','rulebook'].forEach(t => {
-    document.getElementById(`tab-${t}`).classList.toggle('active', t===name);
-    document.getElementById(`panel-${t}`).classList.toggle('active', t===name);
+function showTab(name){
+  ['guides','parses','rulebook'].forEach(t=>{
+    document.getElementById(`tab-${t}`).classList.toggle('active',t===name);
+    document.getElementById(`panel-${t}`).classList.toggle('active',t===name);
   });
-  currentTab = name;
-  if (name === 'rulebook') loadRulebook();
+  currentTab=name;
+  if(name==='rulebook') loadRulebook();
 }
 
-// ── Guides ─────────────────────────────────────────────────────────────────
-async function loadGuides() {
-  const wrap = document.getElementById('guides-table-wrap');
-  wrap.innerHTML = '<div class="empty"><span class="spinner-inline"></span> Loading…</div>';
-  const data = await apiFetch(`/api/admin/guides/${currentSpec}`);
-  if (!data) return;
-  renderGuidesTable(data.guides);
+// ── Progress helpers ────────────────────────────────────────────────────────
+function showProgress(id){ document.getElementById(id).style.display='block'; }
+function hideProgress(id){ document.getElementById(id).style.display='none'; }
+
+function setBar(barId, pct){
+  const bar=document.getElementById(barId);
+  bar.style.animation='none';
+  bar.style.width=pct+'%';
 }
 
-function renderGuidesTable(guides) {
-  const wrap = document.getElementById('guides-table-wrap');
-  if (!guides.length) {
-    wrap.innerHTML = '<div class="empty">No guides yet. Add one above.</div>';
-    return;
+function addLog(logId, msg, type='info'){
+  const log=document.getElementById(logId);
+  const icons={done:'✓',error:'✗',info:'·',warn:'!'};
+  const line=document.createElement('div');
+  line.className=`log-line log-${type}`;
+  line.innerHTML=`<span class="icon">${icons[type]||'·'}</span><span class="log-text" title="${msg}">${msg}</span>`;
+  log.appendChild(line);
+  log.scrollTop=log.scrollHeight;
+}
+
+function clearLog(logId){ document.getElementById(logId).innerHTML=''; }
+
+// ── SSE stream consumer ─────────────────────────────────────────────────────
+async function consumeStream(url, method='GET', body=null, onEvent){
+  const opts={method, headers:{'Content-Type':'application/json'}};
+  if(body) opts.body=JSON.stringify(body);
+  const resp=await fetch(url,opts);
+  if(!resp.ok){ const e=await resp.json(); throw new Error(e.detail||'Request failed'); }
+
+  const reader=resp.body.getReader();
+  const decoder=new TextDecoder();
+  let buf='';
+
+  while(true){
+    const{done,value}=await reader.read();
+    if(done) break;
+    buf+=decoder.decode(value,{stream:true});
+    const lines=buf.split('\n');
+    buf=lines.pop(); // keep incomplete line
+    for(const line of lines){
+      if(line.startsWith('data: ')){
+        try{ onEvent(JSON.parse(line.slice(6))); } catch{}
+      }
+    }
   }
-  wrap.innerHTML = `
+}
+
+// ── Guides ──────────────────────────────────────────────────────────────────
+async function loadGuides(){
+  const wrap=document.getElementById('guides-table-wrap');
+  wrap.innerHTML='<div class="empty"><span class="spinner-inline"></span> Loading…</div>';
+  const data=await apiFetch(`/api/admin/guides/${currentSpec}`);
+  if(data) renderGuidesTable(data.guides);
+}
+
+function renderGuidesTable(guides){
+  const wrap=document.getElementById('guides-table-wrap');
+  if(!guides.length){ wrap.innerHTML='<div class="empty">No guides yet. Add one above.</div>'; return; }
+  wrap.innerHTML=`
     <table>
-      <thead><tr>
-        <th>Type</th><th>URL / Title</th><th>Words</th><th>Status</th><th>Actions</th>
-      </tr></thead>
-      <tbody>
-        ${guides.map(g => `
-          <tr id="guide-row-${g.id}">
-            <td><span class="badge badge-${g.guide_type==='youtube'?'info':'pending'}">${g.guide_type}</span></td>
-            <td class="url-cell" title="${g.url}">${g.title || g.url}</td>
-            <td>${g.word_count ? g.word_count.toLocaleString() : '—'}</td>
-            <td><span class="badge badge-${g.status}">${g.status}</span>
-                ${g.error_msg ? `<br><span class="muted" title="${g.error_msg}">⚠ error</span>` : ''}
-            </td>
-            <td class="actions">
-              <button class="btn btn-ghost btn-sm" onclick="scrapeOne(${g.id})">Scrape</button>
-              <button class="btn btn-danger btn-sm" onclick="deleteGuide(${g.id})">Delete</button>
-            </td>
-          </tr>
-        `).join('')}
+      <thead><tr><th>Type</th><th>URL / Title</th><th>Words</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody>${guides.map(g=>`
+        <tr id="grow-${g.id}">
+          <td><span class="badge badge-${g.guide_type}">${g.guide_type}</span></td>
+          <td class="url-cell" title="${g.url}">${g.title||g.url}</td>
+          <td>${g.word_count?g.word_count.toLocaleString():'—'}</td>
+          <td>
+            <span class="badge badge-${g.status}">${g.status}</span>
+            ${g.error_msg?`<span class="muted" style="margin-left:4px" title="${g.error_msg}">⚠</span>`:''}
+          </td>
+          <td class="actions">
+            <button class="btn btn-ghost btn-sm" onclick="scrapeOne(${g.id})">Scrape</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteGuide(${g.id})">Delete</button>
+          </td>
+        </tr>`).join('')}
       </tbody>
-    </table>
-  `;
+    </table>`;
 }
 
-async function addGuide() {
-  const url = document.getElementById('guide-url').value.trim();
-  const type = document.getElementById('guide-type').value;
-  if (!url) return;
-  const data = await apiFetch('/api/admin/guides', 'POST', { spec: currentSpec, url, guide_type: type });
-  if (data) {
-    document.getElementById('guide-url').value = '';
-    toast('Guide added.');
-    loadGuides();
-  }
+async function addGuide(){
+  const url=document.getElementById('guide-url').value.trim();
+  const type=document.getElementById('guide-type').value;
+  if(!url) return;
+  const data=await apiFetch('/api/admin/guides','POST',{spec:currentSpec,url,guide_type:type});
+  if(data){ document.getElementById('guide-url').value=''; toast('Guide added.'); loadGuides(); }
 }
 
-async function scrapeOne(id) {
-  const row = document.getElementById(`guide-row-${id}`);
-  if (row) row.style.opacity = '0.5';
-  const data = await apiFetch(`/api/admin/guides/${id}/scrape`, 'POST');
-  if (data) toast(`Scraped: ${data.word_count?.toLocaleString()} words`);
+async function scrapeOne(id){
+  const row=document.getElementById(`grow-${id}`);
+  if(row) row.style.opacity='.5';
+  const data=await apiFetch(`/api/admin/guides/${id}/scrape`,'POST');
+  if(data) toast(`Scraped: ${data.word_count?.toLocaleString()} words`);
   loadGuides();
 }
 
-async function scrapeAll() {
-  toast('Scraping all pending guides…', 10000);
-  const data = await apiFetch(`/api/admin/guides/spec/${currentSpec}/scrape-all`, 'POST');
-  if (data) toast(`Done: ${data.results.length} processed.`);
-  loadGuides();
+async function deleteGuide(id){
+  if(!confirm('Delete this guide?')) return;
+  await apiFetch(`/api/admin/guides/${id}`,'DELETE');
+  toast('Deleted.'); loadGuides();
 }
 
-async function deleteGuide(id) {
-  if (!confirm('Delete this guide?')) return;
-  await apiFetch(`/api/admin/guides/${id}`, 'DELETE');
-  toast('Deleted.');
-  loadGuides();
+async function scrapeAll(){
+  const btn=document.getElementById('btn-scrape-all');
+  btn.disabled=true;
+  clearLog('scrape-log');
+  showProgress('scrape-progress');
+  setBar('scrape-bar',0);
+  document.getElementById('scrape-progress-label').textContent='Starting…';
+  document.getElementById('scrape-progress-frac').textContent='';
+
+  try{
+    await consumeStream(
+      `/api/admin/guides/spec/${currentSpec}/scrape-stream`,
+      'GET', null,
+      (evt)=>{
+        if(evt.type==='start'){
+          document.getElementById('scrape-progress-label').textContent=`Scraping ${evt.total} guide(s)…`;
+        } else if(evt.type==='progress'){
+          document.getElementById('scrape-progress-frac').textContent=`${evt.step}/${evt.total}`;
+          setBar('scrape-bar', Math.round(evt.step/evt.total*80));
+          addLog('scrape-log',`Scraping: ${evt.url}`,'info');
+        } else if(evt.type==='done'){
+          setBar('scrape-bar', Math.round(evt.step/evt.total*100));
+          addLog('scrape-log',`✓ ${evt.title} — ${evt.word_count?.toLocaleString()} words`,'done');
+        } else if(evt.type==='error'){
+          addLog('scrape-log',`✗ ${evt.error}`,'error');
+        } else if(evt.type==='complete'){
+          setBar('scrape-bar',100);
+          document.getElementById('scrape-progress-label').textContent=
+            `Done — ${evt.scraped} scraped, ${evt.errors} errors`;
+          loadGuides();
+          toast(`Scrape complete: ${evt.scraped} OK, ${evt.errors} failed`);
+        }
+      }
+    );
+  } catch(e){ toast(`⚠ ${e.message}`); }
+  btn.disabled=false;
 }
 
-async function generateRulebook() {
-  const encId = document.getElementById('encounter-select')?.value;
-  const params = encId ? `?encounter_id=${encId}` : '';
-  toast('Generating rulebook with AI… this may take 20–40s.', 60000);
-  const data = await apiFetch(`/api/admin/rulebook/${currentSpec}/generate${params}`, 'POST');
-  if (data) {
-    toast('✅ Rulebook generated!');
-    showTab('rulebook');
-    loadRulebook();
-  }
+async function generateRulebook(){
+  const btn=document.getElementById('btn-generate');
+  btn.disabled=true;
+  clearLog('gen-log');
+  showProgress('gen-progress');
+  document.getElementById('gen-progress-label').textContent='Generating…';
+  document.getElementById('gen-bar').style.animation='pulse 1.2s ease-in-out infinite';
+  document.getElementById('gen-bar').style.width='30%';
+
+  const encId=document.getElementById('encounter-select')?.value;
+  const qs=encId?`?encounter_id=${encId}`:'';
+
+  try{
+    await consumeStream(
+      `/api/admin/rulebook/${currentSpec}/generate-stream${qs}`,
+      'POST', null,
+      (evt)=>{
+        if(evt.type==='status'){
+          document.getElementById('gen-progress-label').textContent=evt.message;
+          addLog('gen-log', evt.message,'info');
+        } else if(evt.type==='error'){
+          addLog('gen-log', `✗ ${evt.error}`,'error');
+          toast(`⚠ ${evt.error}`);
+        } else if(evt.type==='complete'){
+          document.getElementById('gen-bar').style.animation='none';
+          document.getElementById('gen-bar').style.width='100%';
+          document.getElementById('gen-progress-label').textContent='Rulebook generated ✓';
+          addLog('gen-log','Rulebook saved and active immediately.','done');
+          toast('✅ Rulebook generated!');
+          showTab('rulebook');
+          loadRulebook();
+        }
+      }
+    );
+  } catch(e){ toast(`⚠ ${e.message}`); }
+  btn.disabled=false;
 }
 
-// ── Parses ─────────────────────────────────────────────────────────────────
-async function loadEncounters() {
-  const sel = document.getElementById('encounter-select');
-  sel.innerHTML = '<option>Loading…</option>';
-  const data = await apiFetch('/api/admin/encounters');
-  if (!data) return;
+// ── Encounters ──────────────────────────────────────────────────────────────
+async function loadEncounters(){
+  const btn=document.getElementById('btn-load-enc');
+  btn.disabled=true; btn.textContent='Loading…';
+  const data=await apiFetch('/api/admin/encounters');
+  btn.disabled=false; btn.textContent='Load Encounters';
+  if(!data) return;
 
-  // Group by expansion → zone
-  const groups = {};
-  data.encounters.forEach(e => {
-    const key = `${e.expansion} — ${e.zone}`;
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(e);
+  const groups={};
+  data.encounters.forEach(e=>{
+    const k=`${e.expansion} — ${e.zone}`;
+    (groups[k]||(groups[k]=[])).push(e);
   });
-
-  sel.innerHTML = '<option value="">— select encounter —</option>';
-  Object.entries(groups).reverse().forEach(([label, encs]) => {
-    const og = document.createElement('optgroup');
-    og.label = label;
-    encs.forEach(e => {
-      const opt = document.createElement('option');
-      opt.value = e.id;
-      opt.textContent = e.name;
+  const sel=document.getElementById('encounter-select');
+  sel.innerHTML='<option value="">— select encounter —</option>';
+  Object.entries(groups).reverse().forEach(([label,encs])=>{
+    const og=document.createElement('optgroup'); og.label=label;
+    encs.forEach(e=>{
+      const opt=document.createElement('option'); opt.value=e.id; opt.textContent=e.name;
       og.appendChild(opt);
     });
     sel.appendChild(og);
@@ -370,139 +495,249 @@ async function loadEncounters() {
   toast('Encounters loaded.');
 }
 
-async function fetchParses(deep) {
-  const encounterID = parseInt(document.getElementById('encounter-select').value, 10);
-  const count = parseInt(document.getElementById('parse-count').value, 10);
-  if (!encounterID) { toast('Select an encounter first.'); return; }
-  toast(`Fetching top ${count} parses${deep?' and analyzing events':''}…`, 30000);
-  const data = await apiFetch('/api/admin/parses/fetch', 'POST', {
-    spec: currentSpec,
-    encounter_id: encounterID,
-    count,
-    analyze: deep,
+async function fetchRankings(){
+  const encounterID=parseInt(document.getElementById('encounter-select').value,10);
+  const count=parseInt(document.getElementById('parse-count').value,10);
+  if(!encounterID){ toast('Select an encounter first.'); return; }
+
+  const btn=document.getElementById('btn-fetch-ranks');
+  btn.disabled=true; btn.innerHTML='<span class="spinner-inline"></span> Fetching…';
+
+  const data=await apiFetch('/api/admin/parses/fetch','POST',{
+    spec:currentSpec, encounter_id:encounterID, count, analyze:false
   });
-  if (!data) return;
-  renderParsesResult(data);
+  btn.disabled=false; btn.textContent='Fetch Rankings';
+  if(!data) return;
+
+  _rankingsCache=data;
+  renderRankingsTable(data, []);
 }
 
-function renderParsesResult(data) {
-  const div = document.getElementById('parses-result');
-  const rows = data.rankings.map((r, i) => {
-    const analyzed = (data.analyzed_parses || []).find(a => a.player === r.player);
-    const cdHtml = analyzed
-      ? analyzed.cooldowns.map(c =>
-          `<div class="parse-row-cd">${c.name}: first=${c.first_cast_s ?? '?'}s | uses=${c.total_uses} | BL=${c.bl_aligned?'✓':'✗'}</div>`
+async function deepAnalyze(){
+  const encounterID=parseInt(document.getElementById('encounter-select').value,10);
+  const count=parseInt(document.getElementById('parse-count').value,10);
+  if(!encounterID){ toast('Select an encounter first.'); return; }
+
+  const btn=document.getElementById('btn-deep');
+  btn.disabled=true;
+  clearLog('parse-log');
+  showProgress('parse-progress');
+  setBar('parse-bar',0);
+  document.getElementById('parse-progress-label').textContent='Fetching rankings…';
+  document.getElementById('parse-progress-frac').textContent='';
+
+  let rankings=[];
+  let analyzed=[];
+
+  try{
+    await consumeStream(
+      '/api/admin/parses/analyze-stream',
+      'POST',
+      {spec:currentSpec, encounter_id:encounterID, count, analyze:true},
+      (evt)=>{
+        if(evt.type==='rankings_start'){
+          addLog('parse-log','Fetching top rankings from WCL…','info');
+        } else if(evt.type==='rankings_done'){
+          rankings=evt.rankings;
+          document.getElementById('parse-progress-label').textContent=
+            `Analyzing ${rankings.length} parse(s)…`;
+          addLog('parse-log',`Got ${rankings.length} rankings for ${evt.encounter_name}`,'done');
+          renderRankingsTable({rankings, encounter_name:evt.encounter_name}, []);
+        } else if(evt.type==='parse_progress'){
+          const pct=Math.round(evt.step/evt.total*100);
+          setBar('parse-bar',pct);
+          document.getElementById('parse-progress-frac').textContent=`${evt.step}/${evt.total}`;
+          addLog('parse-log',`Fetching events for ${evt.player}…`,'info');
+        } else if(evt.type==='parse_done'){
+          addLog('parse-log',`✓ ${evt.summary.player} — ${evt.summary.fight_duration_s}s fight`,'done');
+          analyzed.push(evt.summary);
+          renderRankingsTable({rankings, encounter_name:''}, analyzed);
+        } else if(evt.type==='parse_skip'){
+          addLog('parse-log',`– ${evt.player||'unknown'} skipped (no matching actor)`,'warn');
+        } else if(evt.type==='error'){
+          addLog('parse-log',`✗ ${evt.error}`,'error');
+          toast(`⚠ ${evt.error}`);
+        } else if(evt.type==='complete'){
+          setBar('parse-bar',100);
+          document.getElementById('parse-progress-label').textContent=
+            `Done — ${evt.analyzed} analyzed`;
+          if(evt.parse_context){
+            document.getElementById('parses-result').insertAdjacentHTML('beforeend',`
+              <div class="card">
+                <div class="card-title">Parse Context (used in AI generation)</div>
+                <pre class="json-box" style="color:var(--muted)">${evt.parse_context}</pre>
+              </div>`);
+          }
+          toast(`Deep analysis complete: ${evt.analyzed} parses processed.`);
+        }
+      }
+    );
+  } catch(e){ toast(`⚠ ${e.message}`); }
+  btn.disabled=false;
+}
+
+function renderRankingsTable(data, analyzed){
+  const analyzeMap={};
+  analyzed.forEach(a=>analyzeMap[a.player]=a);
+
+  const rows=(data.rankings||[]).map((r,i)=>{
+    const a=analyzeMap[r.player];
+    const cdHtml=a
+      ? a.cooldowns.map(c=>
+          `<div class="parse-cd">${c.name}: first=${c.first_cast_s??'?'}s | x${c.total_uses} | BL=${c.bl_aligned?'✓':'✗'}</div>`
         ).join('')
-      : '';
+      : '<span class="muted">—</span>';
     return `<tr>
       <td>${r.rank}</td>
       <td><b>${r.player}</b><br><span class="muted">${r.server||''}</span></td>
       <td>${(r.amount||0).toLocaleString()}</td>
       <td>${fmtDur(r.duration_s)}</td>
-      <td>${cdHtml || '<span class="muted">—</span>'}</td>
+      <td>${cdHtml}</td>
     </tr>`;
   }).join('');
 
-  div.innerHTML = `
+  document.getElementById('parses-result').innerHTML=`
     <div class="card">
-      <div class="card-title">Top Parses — ${data.encounter_name} — ${fmtSpec(data.spec)}</div>
+      <div class="card-title">${data.encounter_name||'Rankings'} — ${fmtSpec(currentSpec)}</div>
       <table>
         <thead><tr><th>#</th><th>Player</th><th>DPS</th><th>Duration</th><th>Cooldown Analysis</th></tr></thead>
-        <tbody>${rows}</tbody>
+        <tbody>${rows||'<tr><td colspan="5" class="empty">No data</td></tr>'}</tbody>
       </table>
-      ${data.parse_context ? `
-        <div style="margin-top:16px">
-          <div class="card-title">Parse Context (used in AI generation)</div>
-          <pre class="json-box" style="color:var(--muted)">${data.parse_context}</pre>
-        </div>` : ''}
-    </div>
-  `;
+    </div>`;
 }
 
-// ── Rulebook ───────────────────────────────────────────────────────────────
-async function loadRulebook() {
-  const div = document.getElementById('rulebook-content');
-  const badge = document.getElementById('rulebook-badge');
-  div.innerHTML = '<div class="empty"><span class="spinner-inline"></span> Loading…</div>';
-  const data = await apiFetch(`/api/admin/rulebook/${currentSpec}`);
-  if (!data) return;
+// ── Rulebook ────────────────────────────────────────────────────────────────
+async function loadRulebook(){
+  const div=document.getElementById('rulebook-content');
+  const badge=document.getElementById('rulebook-badge');
+  div.innerHTML='<div class="empty"><span class="spinner-inline"></span> Loading…</div>';
+  const data=await apiFetch(`/api/admin/rulebook/${currentSpec}`);
+  if(!data) return;
 
-  badge.innerHTML = `<span class="badge badge-${data.source}">${data.source}</span>`;
+  badge.innerHTML=`<span class="badge badge-${data.source}">${data.source}</span>`;
 
-  if (data.source === 'none') {
-    div.innerHTML = '<div class="empty">No rulebook for this spec yet. Add guides and generate one.</div>';
+  if(data.source==='none'){
+    div.innerHTML='<div class="empty">No rulebook yet. Add guides and generate one.</div>';
+    return;
+  }
+  if(data.source==='static'){
+    div.innerHTML=`
+      <p class="muted" style="margin-bottom:14px">Using built-in static rulebook. Generate a dynamic one from guides.</p>
+      <div class="json-box">${JSON.stringify(data.cooldowns,null,2)}</div>`;
     return;
   }
 
+  const rb=data.rulebook;
+  const cdsHtml=(rb.major_cooldowns||[]).map(cd=>`<tr>
+    <td><b>${cd.name}</b></td>
+    <td style="font-family:monospace">${cd.spell_id||'—'}</td>
+    <td>${cd.cooldown}s</td>
+    <td>${cd.duration?cd.duration+'s':'—'}</td>
+    <td>${cd.align_with_bloodlust?'<span style="color:var(--info)">✓ yes</span>':'—'}</td>
+    <td>${cd.opener_priority||'—'}</td>
+    <td class="muted">${cd.usage_rule||''}</td>
+  </tr>`).join('');
+
+  const rulesHtml=(rb.rules||[]).map(r=>`<tr>
+    <td><span class="badge badge-${r.priority==='critical'||r.priority==='high'?'error':'pending'}">${r.priority}</span></td>
+    <td>${r.description}</td>
+    <td class="muted">${r.condition||''}</td>
+    <td class="muted">${r.action||''}</td>
+  </tr>`).join('');
+
+  div.innerHTML=`
+    <p class="muted" style="margin-bottom:14px">
+      Generated from ${data.guide_count} guide(s) · ${data.generated_at}
+      ${rb.source_summary?`<br>${rb.source_summary}`:''}
+    </p>
+    <div class="card-title" style="margin:16px 0 10px">Major Cooldowns</div>
+    <table>
+      <thead><tr><th>Ability</th><th>Spell ID</th><th>CD</th><th>Duration</th><th>Align BL</th><th>Opener</th><th>Rule</th></tr></thead>
+      <tbody>${cdsHtml||'<tr><td colspan="7" class="empty">None extracted</td></tr>'}</tbody>
+    </table>
+    ${rulesHtml?`
+    <div class="card-title" style="margin:20px 0 10px">Rules</div>
+    <table>
+      <thead><tr><th>Priority</th><th>Rule</th><th>Condition</th><th>Action</th></tr></thead>
+      <tbody>${rulesHtml}</tbody>
+    </table>`:''}
+    <div class="card-title" style="margin:20px 0 10px">Raw JSON</div>
+    <div class="json-box">${JSON.stringify(rb,null,2)}</div>`;
+}
+
+// ── Manual rulebook editor ───────────────────────────────────────────────────
+async function loadTemplateIntoEditor(){
+  const data = await apiFetch(`/api/admin/rulebook/${currentSpec}`);
+  if (!data) return;
+
+  let json;
   if (data.source === 'generated') {
-    const rb = data.rulebook;
-    const cdsHtml = (rb.major_cooldowns || []).map(cd => `
-      <tr>
-        <td><b>${cd.name}</b></td>
-        <td>${cd.spell_id || '—'}</td>
-        <td>${cd.cooldown}s</td>
-        <td>${cd.duration ? cd.duration+'s' : '—'}</td>
-        <td>${cd.align_with_bloodlust ? '✓' : '—'}</td>
-        <td>${cd.opener_priority || '—'}</td>
-        <td class="muted">${cd.usage_rule || ''}</td>
-      </tr>
-    `).join('');
-
-    const rulesHtml = (rb.rules || []).map(r => `
-      <tr>
-        <td><span class="badge badge-${r.priority==='critical'?'error':r.priority==='high'?'error':'pending'}">${r.priority}</span></td>
-        <td>${r.description}</td>
-        <td class="muted">${r.condition || ''}</td>
-        <td class="muted">${r.action || ''}</td>
-      </tr>
-    `).join('');
-
-    div.innerHTML = `
-      <p class="muted" style="margin-bottom:14px">
-        Generated from ${data.guide_count} guide(s) · ${data.generated_at}
-        ${rb.source_summary ? `<br>${rb.source_summary}` : ''}
-      </p>
-      <div class="card-title" style="margin:16px 0 10px">Major Cooldowns</div>
-      <table>
-        <thead><tr><th>Ability</th><th>Spell ID</th><th>CD</th><th>Duration</th><th>Align BL</th><th>Opener</th><th>Rule</th></tr></thead>
-        <tbody>${cdsHtml || '<tr><td colspan="7" class="empty">None extracted</td></tr>'}</tbody>
-      </table>
-      ${rulesHtml ? `
-        <div class="card-title" style="margin:20px 0 10px">Rules</div>
-        <table>
-          <thead><tr><th>Priority</th><th>Rule</th><th>Condition</th><th>Action</th></tr></thead>
-          <tbody>${rulesHtml}</tbody>
-        </table>` : ''}
-      <div class="card-title" style="margin:20px 0 10px">Raw JSON</div>
-      <div class="json-box">${JSON.stringify(rb, null, 2)}</div>
-    `;
+    json = data.rulebook;
+  } else if (data.source === 'static') {
+    // Convert static cooldowns to the full schema so user has a starting point
+    json = {
+      spec: currentSpec,
+      major_cooldowns: (data.cooldowns || []).map(cd => ({
+        name: cd.name,
+        spell_id: cd.spell_id,
+        cooldown: cd.cooldown,
+        duration: cd.duration || 0,
+        align_with_bloodlust: true,
+        opener_priority: 1,
+        usage_rule: ""
+      })),
+      rules: [],
+      source_summary: "Manually defined"
+    };
   } else {
-    div.innerHTML = `
-      <p class="muted" style="margin-bottom:14px">Using static built-in rulebook. Add guides and generate a dynamic one.</p>
-      <div class="json-box">${JSON.stringify(data.cooldowns, null, 2)}</div>
-    `;
+    json = {
+      spec: currentSpec,
+      major_cooldowns: [],
+      rules: [],
+      source_summary: "Manually defined"
+    };
   }
+  document.getElementById('manual-json').value = JSON.stringify(json, null, 2);
+  document.getElementById('manual-save-status').textContent = '';
 }
 
-// ── API helper ────────────────────────────────────────────────────────────
-async function apiFetch(url, method='GET', body=null) {
+async function saveManualRulebook(){
+  const raw = document.getElementById('manual-json').value.trim();
+  const status = document.getElementById('manual-save-status');
+  let parsed;
   try {
-    const opts = { method, headers: {'Content-Type':'application/json'} };
-    if (body) opts.body = JSON.stringify(body);
-    const resp = await fetch(url, opts);
-    const data = await resp.json();
-    if (!resp.ok) { toast(`⚠ ${data.detail || 'Error'}`); return null; }
-    return data;
+    parsed = JSON.parse(raw);
   } catch(e) {
-    toast(`⚠ ${e.message}`);
-    return null;
+    status.style.color = 'var(--critical)';
+    status.textContent = `⚠ Invalid JSON: ${e.message}`;
+    return;
+  }
+
+  status.style.color = 'var(--muted)';
+  status.textContent = 'Saving…';
+  const data = await apiFetch(`/api/admin/rulebook/${currentSpec}`, 'PUT', { rulebook: parsed });
+  if (data) {
+    status.style.color = 'var(--success)';
+    status.textContent = `✓ Saved and active — ${(parsed.major_cooldowns||[]).length} cooldown(s) loaded.`;
+    loadRulebook();
+    toast('Rulebook saved and active.');
+  } else {
+    status.style.color = 'var(--critical)';
+    status.textContent = '✗ Save failed — check console.';
   }
 }
 
-function fmtDur(s) {
-  return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
+// ── API helper ───────────────────────────────────────────────────────────────
+async function apiFetch(url, method='GET', body=null){
+  try{
+    const opts={method,headers:{'Content-Type':'application/json'}};
+    if(body) opts.body=JSON.stringify(body);
+    const resp=await fetch(url,opts);
+    const data=await resp.json();
+    if(!resp.ok){ toast(`⚠ ${data.detail||'Error'}`); return null; }
+    return data;
+  } catch(e){ toast(`⚠ ${e.message}`); return null; }
 }
-function fmtSpec(s) { return s.replace(/([A-Z])/g,' $1').trim(); }
 </script>
 </body>
 </html>
