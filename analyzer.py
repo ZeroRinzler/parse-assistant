@@ -9,6 +9,117 @@ def _fmt(seconds: float) -> str:
     return f"{m:02d}:{s:02d}"
 
 
+def _evaluate_rules(
+    rules: list[dict],
+    completed_casts: list[dict],
+    fight_start: float,
+    fight_duration_s: float,
+) -> list[dict]:
+    """Evaluate machine-readable condition objects from rules[] against the cast timeline."""
+    findings = []
+
+    def t_s(ts: float) -> float:
+        return (ts - fight_start) / 1000
+
+    cast_times: dict[int, list[float]] = {}
+    for c in completed_casts:
+        if c.get("type") == "cast":
+            sid = c.get("abilityGameID")
+            if sid:
+                cast_times.setdefault(sid, []).append(t_s(c["timestamp"]))
+
+    for rule in rules:
+        cond = rule.get("condition")
+        if not cond:
+            continue
+
+        kind = cond.get("kind")
+        priority = rule.get("priority", "medium")
+        severity = "critical" if priority == "critical" else "warning"
+        action = rule.get("action", "")
+
+        if kind == "cast_without_prior":
+            # Flag each cast of spell_id that has no paired required_spell_id within window_s.
+            # Optional exception: skip if context_spell_id was cast within context_window_s before.
+            sid = cond["spell_id"]
+            req_sid = cond["required_spell_id"]
+            spell_name = cond.get("spell_name", str(sid))
+            req_name = cond.get("required_spell_name", str(req_sid))
+            window = cond.get("window_s", 5)
+            exception = cond.get("exception")
+
+            primary = sorted(cast_times.get(sid, []))
+            required = cast_times.get(req_sid, [])
+
+            violations: list[float] = []
+            for cast_t in primary:
+                paired = any(abs(cast_t - rt) <= window for rt in required)
+                if not paired:
+                    if exception:
+                        ctx_sid = exception["context_spell_id"]
+                        ctx_window = exception.get("context_window_s", 20)
+                        pos = exception.get("position", "before")
+                        ctx_casts = cast_times.get(ctx_sid, [])
+                        if pos == "before":
+                            exempted = any(0 <= cast_t - ct <= ctx_window for ct in ctx_casts)
+                        else:
+                            exempted = any(0 <= ct - cast_t <= ctx_window for ct in ctx_casts)
+                        if exempted:
+                            continue
+                    violations.append(cast_t)
+
+            if violations:
+                findings.append({
+                    "severity": severity,
+                    "category": "rule_violation",
+                    "timestamp_ms": int(violations[0] * 1000),
+                    "message": (
+                        f"{spell_name} without {req_name}: "
+                        f"{len(violations)} of {len(primary)} cast(s) lacked "
+                        f"a paired {req_name} within {window}s. "
+                        f"Unpaired {spell_name} windows waste the burst amplification."
+                    ),
+                    "details": {"remedy": action} if action else None,
+                })
+
+        elif kind == "hold_cooldown_for_anchor":
+            # Flag casts of spell_ids within hold_window_s before each non-opener anchor cast.
+            spell_ids = cond.get("spell_ids", [])
+            spell_names = cond.get("spell_names", [str(s) for s in spell_ids])
+            anchor_sid = cond["anchor_spell_id"]
+            anchor_name = cond.get("anchor_spell_name", str(anchor_sid))
+            hold_window = cond.get("hold_window_s", 15)
+
+            anchor_times = sorted(cast_times.get(anchor_sid, []))
+
+            violations: list[tuple] = []
+            first_violation_t: Optional[float] = None
+            for anchor_t in anchor_times[1:]:  # skip opener cast
+                for i, sid in enumerate(spell_ids):
+                    sname = spell_names[i] if i < len(spell_names) else str(sid)
+                    for ct in sorted(cast_times.get(sid, [])):
+                        if anchor_t - hold_window <= ct < anchor_t:
+                            violations.append((sname, _fmt(ct), _fmt(anchor_t)))
+                            if first_violation_t is None:
+                                first_violation_t = ct
+
+            if violations:
+                spell_list = " / ".join(sorted({v[0] for v in violations}))
+                findings.append({
+                    "severity": severity,
+                    "category": "rule_violation",
+                    "timestamp_ms": int(first_violation_t * 1000) if first_violation_t else None,
+                    "message": (
+                        f"{spell_list} spent in the {hold_window}s hold window before {anchor_name}: "
+                        f"{len(violations)} charge(s) used just before the burst window, "
+                        f"reducing {anchor_name}-amplified damage."
+                    ),
+                    "details": {"remedy": action} if action else None,
+                })
+
+    return findings
+
+
 def analyze_player(
     player: dict,
     fight_start: float,
@@ -16,12 +127,12 @@ def analyze_player(
     cast_events: list[dict],
     buff_events: list[dict],
     spec_cds_override: Optional[list[dict]] = None,
+    rules_override: Optional[list[dict]] = None,
 ) -> dict:
     spec = player.get("subType", "Unknown")
     fight_duration_ms = fight_end - fight_start
     fight_duration_s = fight_duration_ms / 1000
 
-    # Normalise timestamps to fight-relative milliseconds
     def rel(ts: float) -> float:
         return ts - fight_start
 
@@ -79,21 +190,23 @@ def analyze_player(
                     "category": "lost_cooldown",
                     "timestamp_ms": None,
                     "message": (
-                        f"{cd_name} was never cast. You should have used it "
-                        f"{expected_uses}x in a {_fmt(fight_duration_s)} fight "
-                        f"(every {cooldown_s}s)."
+                        f"{cd_name} was never used. "
+                        f"In a {_fmt(fight_duration_s)} fight with a {cooldown_s}s cooldown "
+                        f"you should have {expected_uses} cast(s). "
+                        f"Use it at pull and on cooldown every {cooldown_s}s."
                     ),
                 })
             elif actual_uses < expected_uses:
                 lost = expected_uses - actual_uses
+                pct = round(lost / expected_uses * 100)
                 cd_issues.append({
                     "severity": "critical",
                     "category": "lost_cooldown",
                     "timestamp_ms": None,
                     "message": (
-                        f"You lost {lost} cast(s) of {cd_name}. "
-                        f"In a {_fmt(fight_duration_s)} fight with a {cooldown_s}s cooldown "
-                        f"you should use it {expected_uses}x, but only used it {actual_uses}x."
+                        f"{cd_name} — {actual_uses} of {expected_uses} expected casts. "
+                        f"Lost {lost} use(s) in a {_fmt(fight_duration_s)} fight "
+                        f"({cooldown_s}s cooldown) — roughly {pct}% of this CD's potential."
                     ),
                 })
 
@@ -107,7 +220,7 @@ def analyze_player(
                         "timestamp_ms": int(rel(cd_casts[0]["timestamp"])),
                         "message": (
                             f"{cd_name} first cast at {_fmt(first_s)} ({first_s:.0f}s into the fight). "
-                            "Casting it earlier lets you fit in more total uses."
+                            f"A late opener on a {cooldown_s}s cooldown risks losing a full use later."
                         ),
                     })
 
@@ -122,14 +235,15 @@ def analyze_player(
                 )
                 if not bl_aligned and wants_bl:
                     first_cast_s = rel(cd_casts[0]["timestamp"]) / 1000
+                    delta = abs(first_cast_s - bl_time_s)
                     cd_issues.append({
                         "severity": "critical",
                         "category": "cooldown_alignment",
                         "timestamp_ms": int(rel(cd_casts[0]["timestamp"])),
                         "message": (
-                            f"{cd_name} was not cast during Bloodlust ({_fmt(bl_time_s)}). "
-                            f"Your first cast was at {_fmt(first_cast_s)}. "
-                            "Stack major cooldowns with Bloodlust to maximise burst damage."
+                            f"{cd_name} missed Bloodlust (BL at {_fmt(bl_time_s)}, "
+                            f"first cast at {_fmt(first_cast_s)} — {delta:.0f}s apart). "
+                            f"Stacking all major CDs inside BL multiplies their value by ~30%."
                         ),
                     })
 
@@ -145,9 +259,9 @@ def analyze_player(
                         "category": "cooldown_delay",
                         "timestamp_ms": int(rel(cd_casts[i]["timestamp"])),
                         "message": (
-                            f"{cd_name} cast at {_fmt(curr_s)} was {delay:.0f}s late "
-                            f"(gap: {actual_gap:.0f}s, cooldown: {cooldown_s}s). "
-                            "Holding cooldowns unnecessarily loses damage."
+                            f"{cd_name} held {delay:.0f}s past reset at {_fmt(curr_s)} "
+                            f"({actual_gap:.0f}s gap vs {cooldown_s}s cooldown). "
+                            f"Each second held past reset is direct throughput loss."
                         ),
                     })
 
@@ -163,6 +277,13 @@ def analyze_player(
                     "timestamp_ms": None,
                     "message": f"{cd_name} — {', '.join(parts)}.",
                 })
+
+    # ── Rule engine ───────────────────────────────────────────────────────────
+    if rules_override:
+        rule_findings = _evaluate_rules(
+            rules_override, completed_casts, fight_start, fight_duration_s
+        )
+        findings.extend(rule_findings)
 
     # ── Cast efficiency ───────────────────────────────────────────────────────
     if len(completed_casts) >= 2:
@@ -191,7 +312,7 @@ def analyze_player(
                 "message": (
                     f"Cast efficiency: {efficiency_pct:.1f}% — "
                     f"{len(gaps)} gaps >1.5s totalling {total_downtime_s:.1f}s of downtime. "
-                    f"Top players sustain 95%+. "
+                    f"Elite target is 95%+. "
                     f"Worst gaps: {worst_str}."
                 ),
                 "details": {
@@ -201,9 +322,9 @@ def analyze_player(
                 },
             })
 
-    # Sort: critical → warning → info
-    order = {"critical": 0, "warning": 1, "info": 2}
-    findings.sort(key=lambda f: order.get(f["severity"], 3))
+    # Sort: critical → warning → info → success
+    order = {"critical": 0, "warning": 1, "info": 2, "success": 3}
+    findings.sort(key=lambda f: order.get(f["severity"], 4))
 
     return {
         "player": player["name"],

@@ -70,9 +70,13 @@ warcraft-learner/
    - **First-cast delay** — flags opener CDs used >30 s into the fight.
    - **Cooldown held past reset** — gap between casts > cooldown × 1.2.
    - **Success** — emits a `severity: "success"` finding if a CD had zero issues.
-5. Response includes two sections: **Needs Improvement** (critical/warning) and **Doing Well** (success).
-6. If parse samples exist for the fight's encounter, a **vs Top N Parses** comparison table is appended showing per-CD uses, first-cast timing, and BL-alignment rate vs top performers.
-7. Cooldown rules come from the **dynamic rulebook** if one exists (SQLite + in-memory cache in `db.py`), otherwise from the static `SPEC_COOLDOWNS` dict in `rulebook.py`.
+5. **Rule engine** — after cooldown analysis, evaluates every `rules[]` entry that has a machine-readable `condition` object. Two supported kinds:
+   - `cast_without_prior` — flags each cast of `spell_id` that lacks a paired cast of `required_spell_id` within `window_s`. Optional `exception` exempts casts during a context spell window (e.g. 2nd Dance inside Shadow Blades).
+   - `hold_cooldown_for_anchor` — flags casts of `spell_ids` within `hold_window_s` before each non-opener cast of `anchor_spell_id`.
+   Rule findings include a `details.remedy` field with the rule's `action` text, rendered as a coaching callout in the UI.
+6. Response includes two sections: **Needs Improvement** (critical/warning) and **Doing Well** (success).
+7. If parse samples exist for the fight's encounter, a **vs Top N Parses** comparison table is appended. Uses **uses-per-minute** (not raw counts) to normalize across kill-time differences between the player and top performers.
+8. Cooldown rules come from the **dynamic rulebook** if one exists (SQLite + in-memory cache in `db.py`), otherwise from the static `SPEC_COOLDOWNS` dict in `rulebook.py`.
 
 ### Ingestion pipeline (`/admin`)
 1. **Add guides** — POST `/api/admin/guides` with `{spec, url, guide_type}`. Type is `"web"` or `"youtube"`. Stored in `guides` SQLite table.
@@ -124,11 +128,11 @@ Stores per-fight cooldown timing summaries for top WCL performers. Used for the 
   ],
   "rules": [
     {
-      "type": "cooldown",
-      "priority": "critical",
-      "description": "...",
-      "condition": "...",
-      "action": "..."
+      "type": "cooldown_pairing|cd_hold|opener|rotation|positioning|aoe_switch",
+      "priority": "critical|high|medium|low",
+      "description": "Rule title shown in the UI",
+      "condition": null,
+      "action": "Prescriptive coaching text shown as remedy"
     }
   ],
   "source_summary": "..."
@@ -146,9 +150,36 @@ Stores per-fight cooldown timing summaries for top WCL performers. Used for the 
 ## Spec naming convention
 WCL `actor.subType` historically returned `{Spec}{Class}` CamelCase (e.g. `SubtletyRogue`). In Midnight this changed to class-only (`Rogue`). The codebase now resolves spec via `playerDetails(fightIDs: [...])` which still returns the full spec info. The `_build_spec_map(report)` helper in `main.py` handles the conversion.
 
+### Rule condition schema
+Rules with a machine-readable `condition` object are evaluated by the engine. Supported kinds:
+
+**`cast_without_prior`** — spell cast without a required companion within a time window:
+```json
+{
+  "kind": "cast_without_prior",
+  "spell_id": 185313, "spell_name": "Shadow Dance",
+  "required_spell_id": 280719, "required_spell_name": "Secret Technique",
+  "window_s": 5,
+  "exception": { "context_spell_id": 121471, "context_window_s": 25, "position": "before" }
+}
+```
+
+**`hold_cooldown_for_anchor`** — spell(s) used within the hold window before an anchor spell:
+```json
+{
+  "kind": "hold_cooldown_for_anchor",
+  "spell_ids": [185313, 280719], "spell_names": ["Shadow Dance", "Secret Technique"],
+  "anchor_spell_id": 121471, "anchor_spell_name": "Shadow Blades",
+  "hold_window_s": 15
+}
+```
+
+Rules without a `condition` (or with `null`) are silently skipped by the engine.
+
 ## What's not yet built (from design doc)
 - PostgreSQL migration (currently SQLite)
 - VOD synchronization (Workflow 3)
 - Discord webhook output
 - Frontend Next.js migration
-- Deeper use of generated `rules[]` array in the analyzer (currently only `major_cooldowns[]` is used)
+- Within-CD-window rotational rules (e.g. verify GCDs inside Shadow Dance)
+- Encounter-specific phase context

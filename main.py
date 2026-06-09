@@ -168,6 +168,8 @@ async def analyze(req: AnalyzeRequest):
         spec_map = {}
     spec = spec_map.get(req.player_id) or player.get("subType", "Unknown")
     spec_cds = db.get_spec_cooldowns(spec)
+    cached_rb = db.get_cached_rulebook(spec)
+    spec_rules = (cached_rb or {}).get("rules", []) if cached_rb else []
 
     result = analyze_player(
         player=player,
@@ -176,20 +178,26 @@ async def analyze(req: AnalyzeRequest):
         cast_events=cast_events,
         buff_events=buff_events,
         spec_cds_override=spec_cds,
+        rules_override=spec_rules,
     )
+    result["spec"] = spec  # override actor.subType with properly resolved spec
 
     # Attach parse comparison if we have top-parse samples for this encounter
     encounter_id = fight.get("encounterID")
+    player_fight_dur_s = (end - start) / 1000
     if encounter_id and spec_cds:
         samples = await db.get_parse_samples(spec, encounter_id)
         if samples:
             from collections import defaultdict
             agg: dict[str, list] = defaultdict(list)
             for s in samples:
-                for cd in (s.get("cooldown_data") or {}).get("cooldowns", []):
-                    agg[cd["name"]].append(cd)
+                cd_data = s.get("cooldown_data") or {}
+                fight_dur = cd_data.get("fight_duration_s", 0)
+                for cd in cd_data.get("cooldowns", []):
+                    agg[cd["name"]].append({**cd, "fight_duration_s": fight_dur})
 
             comparison = []
+            player_dur_min = player_fight_dur_s / 60 if player_fight_dur_s > 0 else 1
             for cd in spec_cds:
                 cd_casts = [
                     c for c in cast_events
@@ -199,19 +207,32 @@ async def analyze(req: AnalyzeRequest):
                 top = agg.get(cd["name"], [])
                 if not top:
                     continue
+
                 top_uses = [e["total_uses"] for e in top]
                 top_first = [e["first_cast_s"] for e in top if e.get("first_cast_s") is not None]
                 top_bl = sum(1 for e in top if e.get("bl_aligned"))
+
+                # Uses per minute — normalizes for kill-time differences
+                player_upm = round(len(cd_casts) / player_dur_min, 2)
+                top_upm_list = [
+                    e["total_uses"] / (e["fight_duration_s"] / 60)
+                    for e in top if e.get("fight_duration_s")
+                ]
+                top_avg_upm = round(sum(top_upm_list) / len(top_upm_list), 2) if top_upm_list else None
+
                 comparison.append({
                     "name": cd["name"],
                     "player_uses": len(cd_casts),
+                    "player_uses_per_min": player_upm,
                     "player_first_cast_s": player_first,
                     "top_avg_uses": round(sum(top_uses) / len(top_uses), 1),
+                    "top_avg_uses_per_min": top_avg_upm,
                     "top_avg_first_cast_s": round(sum(top_first) / len(top_first), 1) if top_first else None,
                     "top_bl_pct": round(top_bl / len(top) * 100),
                     "sample_count": len(top),
                 })
             result["parse_comparison"] = comparison
+            result["player_fight_duration_s"] = round(player_fight_dur_s, 1)
 
     return result
 

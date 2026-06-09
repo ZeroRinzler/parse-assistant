@@ -327,6 +327,22 @@
     .delta-good { color: var(--success); font-weight: 700; }
     .delta-bad  { color: var(--critical); font-weight: 700; }
     .delta-ok   { color: var(--muted); }
+
+    .finding-remedy {
+      color: var(--gold-light);
+      font-size: 12.5px;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255,255,255,0.07);
+      font-style: italic;
+    }
+
+    .finding-remedy::before {
+      content: '→ ';
+      font-style: normal;
+      font-weight: 700;
+      color: var(--gold);
+    }
   </style>
 </head>
 <body>
@@ -421,6 +437,8 @@
       cooldown_delay:     'Delay',
       cast_efficiency:    'Downtime',
       unsupported_spec:   'Spec Note',
+      rule_violation:     'Rule',
+      cooldown_usage:     'On Track',
     }[cat] || cat;
   }
 
@@ -564,19 +582,30 @@
     const sampleCount = cmp[0]?.sample_count ?? 0;
 
     const rows = cmp.map(c => {
-      const usesDiff = c.top_avg_uses !== null ? c.player_uses - c.top_avg_uses : null;
+      // Prefer uses-per-minute for fair kill-time comparison; fall back to raw count diff
+      const playerUpm = c.player_uses_per_min ?? null;
+      const topUpm    = c.top_avg_uses_per_min ?? null;
+      const upmDiff   = (playerUpm !== null && topUpm !== null) ? playerUpm - topUpm : null;
+
       const firstDiff = (c.top_avg_first_cast_s !== null && c.player_first_cast_s !== null)
         ? c.player_first_cast_s - c.top_avg_first_cast_s : null;
 
-      const usesClass = usesDiff === null ? 'delta-ok'
-        : usesDiff >= -0.3 ? 'delta-good' : 'delta-bad';
+      const usesClass = upmDiff === null ? 'delta-ok'
+        : upmDiff >= -0.05 ? 'delta-good' : 'delta-bad';
       const firstClass = firstDiff === null ? 'delta-ok'
         : firstDiff <= 3 ? 'delta-good' : 'delta-bad';
 
-      const usesDelta = usesDiff !== null
-        ? `<span class="${usesClass}">${usesDiff >= 0 ? '+' : ''}${usesDiff.toFixed(1)}</span>` : '—';
+      const upmDelta = upmDiff !== null
+        ? `<span class="${usesClass}">${upmDiff >= 0 ? '+' : ''}${upmDiff.toFixed(2)}</span>` : '—';
       const firstDelta = firstDiff !== null
         ? `<span class="${firstClass}">${firstDiff >= 0 ? '+' : ''}${firstDiff.toFixed(1)}s</span>` : '—';
+
+      const playerUsesCell = playerUpm !== null
+        ? `${c.player_uses} <small class="delta-ok">(${playerUpm}/min)</small>`
+        : c.player_uses;
+      const topUsesCell = topUpm !== null
+        ? `${c.top_avg_uses ?? '—'} avg <small class="delta-ok">(${topUpm}/min)</small>`
+        : `${c.top_avg_uses ?? '—'} avg`;
 
       const playerFirst = c.player_first_cast_s !== null ? `${c.player_first_cast_s}s` : '—';
       const topFirst = c.top_avg_first_cast_s !== null ? `${c.top_avg_first_cast_s}s` : '—';
@@ -585,7 +614,7 @@
 
       return `<tr>
         <td class="cd-name">${c.name}</td>
-        <td>${c.player_uses} <small class="delta-ok">/ ${c.top_avg_uses ?? '—'} avg</small> ${usesDelta}</td>
+        <td>${playerUsesCell} <small class="delta-ok">/ ${topUsesCell}</small> ${upmDelta}</td>
         <td>${playerFirst} <small class="delta-ok">/ ${topFirst} avg</small> ${firstDelta}</td>
         <td>${blCell}</td>
       </tr>`;
@@ -593,7 +622,7 @@
 
     return `
       <div class="comparison-card">
-        <h3>vs Top ${sampleCount} Parses</h3>
+        <h3>vs Top ${sampleCount} Parses — uses/min normalized for kill time</h3>
         <table class="cmp-table">
           <thead>
             <tr>
@@ -611,6 +640,8 @@
   function renderFinding(f) {
     const ts = f.timestamp_ms != null
       ? `<span class="timestamp">${formatMs(f.timestamp_ms)}</span>` : '';
+    const remedy = f.details?.remedy
+      ? `<p class="finding-remedy">${f.details.remedy}</p>` : '';
 
     return `
       <div class="finding finding-${f.severity}">
@@ -620,6 +651,7 @@
           <span class="category">${categoryLabel(f.category)}</span>
         </div>
         <p class="finding-message">${f.message}</p>
+        ${remedy}
       </div>
     `;
   }

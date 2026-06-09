@@ -26,11 +26,11 @@ Return ONLY valid JSON — no markdown fences, no explanation — matching this 
   ],
   "rules": [
     {{
-      "type": "cooldown|resource|positional",
+      "type": "cooldown_pairing|cd_hold|opener|rotation|positioning|aoe_switch",
       "priority": "critical|high|medium|low",
-      "description": "Clear, actionable rule",
-      "condition": "When this condition is true",
-      "action": "Take this specific action"
+      "description": "Clear, actionable rule title",
+      "condition": null,
+      "action": "Prescriptive fix the player should take"
     }}
   ],
   "source_summary": "One sentence describing what these sources cover"
@@ -43,7 +43,10 @@ Field guidelines:
 - align_with_bloodlust: true when this CD should be held for or synced with Bloodlust
 - opener_priority: 1 = cast first in pull, 2 = second, etc.; 0 = not part of opener
 - Include only major offensive cooldowns that define DPS burst windows
-- Rules should be objectively measurable (timing, alignment, resource thresholds)
+- Rules: prefer evaluatable types (cooldown_pairing, cd_hold) over vague ones
+- condition: leave null unless you can express it as one of these machine-readable objects:
+  - cast_without_prior: {{"kind":"cast_without_prior","spell_id":N,"spell_name":"Name","required_spell_id":N,"required_spell_name":"Name","window_s":5,"exception":{{"context_spell_id":N,"context_window_s":25,"position":"before"}}}}
+  - hold_cooldown_for_anchor: {{"kind":"hold_cooldown_for_anchor","spell_ids":[N,N],"spell_names":["A","B"],"anchor_spell_id":N,"anchor_spell_name":"Name","hold_window_s":15}}
 """
 
 
