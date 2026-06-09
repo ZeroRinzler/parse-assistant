@@ -176,6 +176,23 @@ Rules with a machine-readable `condition` object are evaluated by the engine. Su
 
 Rules without a `condition` (or with `null`) are silently skipped by the engine.
 
+## Hardcoded thresholds to replace with data from parse samples
+
+These values are static and should eventually be derived from top-parse data per spec/encounter, the same way cast efficiency now is.
+
+| Value | Location | What it controls | Fix |
+|---|---|---|---|
+| `> 30s` first-cast delay | `analyzer.py:222` | Flags opener CDs used after 30s as delayed | Should come from top-parse `avg_first_cast_s` per CD — flag if player's first cast is >Xs later than the top-parse average |
+| `cooldown_s * 1.2` hold threshold | `analyzer.py:261` | Gap between CD uses flagged if >20% over the cooldown | Should be derived from top-parse gap distributions per CD, not a flat 20% tolerance |
+| `> 1500ms` gap threshold | `analyzer.py:303`, `parses_analyzer.py:254` | Minimum gap counted as downtime | Sub Rogue's rotation has intentional short pauses; a spec-calibrated threshold (e.g. sourced from top-parse median gap) would avoid noise |
+| `-7%` efficiency warning band | `analyzer.py:322` | Player flagged as warning if >7% below top-parse efficiency avg | Arbitrary; should be derived from the standard deviation of top-parse efficiency values |
+| `bl_time - 30` to `bl_time + 55` BL window | `parses_analyzer.py:230` | Determines BL-aligned flag in top-parse samples | The 55s tail is BLOODLUST_DURATION_S (40s) + 15s grace; the pre-window (-30s) is reasonable but not validated against real data |
+| `bl_window_start = bl_time - 30` | `analyzer.py:236` | BL pre-window for player CD alignment check | Same as above — 30s lead time is conventional but not data-derived |
+| `>= -0.05` uses/min delta | `index.html:553` | Green/red cutoff in the comparison table | Should be derived from the standard deviation of top-parse uses/min, not a flat tolerance |
+| `firstDiff <= 3` first-cast delta | `index.html:555` | First cast within 3s of top avg shown as green | Should be derived from top-parse first-cast variance per CD |
+
+**Fix pattern**: for each threshold, compute the relevant statistic (mean ± stddev, or a percentile) across the saved `parse_samples` during analysis and pass it alongside `top_efficiency_pct`. The rulebook could also carry per-CD expected timing from parse data.
+
 ## What's not yet built (from design doc)
 - PostgreSQL migration (currently SQLite)
 - VOD synchronization (Workflow 3)
