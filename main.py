@@ -8,6 +8,13 @@ from typing import Optional
 # WCL gear array indices (0-based positional, same order as WoW's paper doll)
 _TRINKET_SLOTS = {12, 13}
 
+# WCL gameData.classes { id name } — class field in encounterRankings is this numeric ID
+_WCL_CLASS_NAMES = {
+    1: "DeathKnight", 2: "Druid", 3: "Hunter", 4: "Mage", 5: "Monk",
+    6: "Paladin", 7: "Priest", 8: "Rogue", 9: "Shaman", 10: "Warlock",
+    11: "Warrior", 12: "DemonHunter", 13: "Evoker",
+}
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
@@ -657,9 +664,15 @@ async def char_gear(name: str, server: str, region: str, encounter_id: int):
     # Use the most recent kill (highest startTime) to get current gear
     most_recent = max(ranks, key=lambda r: r.get("startTime", 0))
     gear = _extract_combatant_info(most_recent)
+    # Build the full SpecClass key used throughout the codebase (e.g. "SubtletyRogue").
+    # encounterRankings returns class as a numeric ID, not a name string.
+    spec_part = most_recent.get("spec") or ""
+    class_id = most_recent.get("class")
+    class_name = _WCL_CLASS_NAMES.get(class_id, "") if isinstance(class_id, int) else ""
+    full_spec = f"{spec_part}{class_name}" if spec_part and class_name else spec_part
     return {
         "found": True,
-        "spec": most_recent.get("spec"),
+        "spec": full_spec,
         "source_report": (most_recent.get("report") or {}).get("code"),
         **gear,
     }

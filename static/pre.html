@@ -278,31 +278,39 @@
   }
 
   async function populateEncounters(autoEnc = null) {
-    if (!_spec) return;
     const encSel = document.getElementById('enc-sel');
     encSel.innerHTML = '<option>Loading…</option>';
     encSel.disabled = true;
     document.getElementById('enc-row').classList.remove('hidden');
 
-    const data = await apiFetch(`/api/admin/parses/stats/${_spec}`);
-    const stats = Object.entries(data?.stats || {})
-      .map(([enc_id, s]) => ({ ...s, encounter_id: parseInt(enc_id, 10) }))
-      .filter(s => s.sample_count > 0);
+    let encounters = [];
+    if (_spec) {
+      // Spec known — show only encounters with ingested parse samples
+      const data = await apiFetch(`/api/admin/parses/stats/${_spec}`);
+      encounters = Object.entries(data?.stats || {})
+        .map(([enc_id, s]) => ({ ...s, encounter_id: parseInt(enc_id, 10) }))
+        .filter(s => s.sample_count > 0)
+        .map(s => ({ id: s.encounter_id, name: `${s.encounter_name}  (${s.sample_count} parses)` }));
+    } else {
+      // Spec unknown — show all current-expansion encounters so user can still pick one
+      const data = await apiFetch('/api/admin/encounters');
+      encounters = (data?.encounters || []).map(e => ({ id: e.id, name: e.name }));
+    }
 
     encSel.innerHTML = '<option value="">— select encounter —</option>';
-    if (!stats.length) {
+    if (!encounters.length) {
       encSel.innerHTML = '<option value="">No data — run Parse Ingestion in Admin first</option>';
       encSel.disabled = false;
       return;
     }
-    stats.forEach(s => {
+    encounters.forEach(e => {
       const o = document.createElement('option');
-      o.value = s.encounter_id;
-      o.textContent = `${s.encounter_name}  (${s.sample_count} parses)`;
+      o.value = e.id;
+      o.textContent = e.name;
       encSel.appendChild(o);
     });
     encSel.disabled = false;
-    if (autoEnc && stats.some(s => s.encounter_id === autoEnc)) {
+    if (autoEnc && encounters.some(e => e.id === autoEnc)) {
       encSel.value = autoEnc;
       await onEncChange();
     }
@@ -323,11 +331,29 @@
     document.getElementById('brief-loading').classList.remove('hidden');
 
     const charGearUrl = `/api/pre/char-gear?name=${encodeURIComponent(_charName)}&server=${encodeURIComponent(_charServer)}&region=${encodeURIComponent(_charRegion)}&encounter_id=${_encId}`;
-    const [briefData, charGearData, topGearData] = await Promise.all([
-      apiFetch(`/api/pre/brief/${_spec}/${_encId}`),
-      apiFetch(charGearUrl),
-      apiFetch(`/api/pre/gear-stats/${_spec}/${_encId}`),
-    ]);
+
+    // If spec is not yet known, fetch char-gear first to resolve it, then fire the rest.
+    // When spec is already known, fire all three in parallel.
+    let briefData, charGearData, topGearData;
+    if (!_spec) {
+      charGearData = await apiFetch(charGearUrl);
+      if (charGearData?.found && charGearData.spec) {
+        _spec = charGearData.spec;
+        // Re-populate encounters with spec-filtered list (don't await — fire and forget)
+        populateEncounters(_encId);
+      }
+    }
+    if (_spec) {
+      const pending = await Promise.all([
+        charGearData ? Promise.resolve(charGearData) : apiFetch(charGearUrl),
+        apiFetch(`/api/pre/brief/${_spec}/${_encId}`),
+        apiFetch(`/api/pre/gear-stats/${_spec}/${_encId}`),
+      ]);
+      [charGearData, briefData, topGearData] = pending;
+    } else {
+      // Spec still unknown after char-gear (character has no ranked kills on this encounter)
+      charGearData = charGearData || await apiFetch(charGearUrl);
+    }
 
     document.getElementById('brief-loading').classList.add('hidden');
 
