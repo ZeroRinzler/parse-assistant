@@ -6,7 +6,7 @@ import json
 from typing import Optional
 
 import db
-from rulebook import BLOODLUST_SPELL_IDS, SPEC_COOLDOWNS
+from rulebook import BLOODLUST_SPELL_IDS, SPEC_COOLDOWNS, SPEC_DEFENSIVES
 from wcl_client import WCLClient
 
 # WCL uses separate className / specName strings
@@ -418,16 +418,13 @@ async def analyze_parse(
     start, end = fight["startTime"], fight["endTime"]
     fight_dur_s = (end - start) / 1000
 
-    # Fetch cast events for this player
+    # Fetch all events in parallel
     try:
-        cast_events = await wcl.get_all_events(
-            report_code, fight_id, "Casts", start, end, source_id=player["id"]
-        )
-        buff_events = await wcl.get_all_events(
-            report_code, fight_id, "Buffs", start, end, target_id=player["id"]
-        )
-        damage_events = await wcl.get_all_events(
-            report_code, fight_id, "DamageDone", start, end, source_id=player["id"]
+        cast_events, buff_events, damage_events, damage_taken_events = await asyncio.gather(
+            wcl.get_all_events(report_code, fight_id, "Casts",       start, end, source_id=player["id"]),
+            wcl.get_all_events(report_code, fight_id, "Buffs",       start, end, target_id=player["id"]),
+            wcl.get_all_events(report_code, fight_id, "DamageDone",  start, end, source_id=player["id"]),
+            wcl.get_all_events(report_code, fight_id, "DamageTaken", start, end, target_id=player["id"]),
         )
     except Exception:
         return None
@@ -529,6 +526,91 @@ async def analyze_parse(
 
     gear_data = _extract_combatant_info(combatant_info) if combatant_info else {}
 
+    # ── Defensive cooldown tracking ───────────────────────────────────────────
+    spec_defensives = SPEC_DEFENSIVES.get(spec) or []
+    defensive_summary: list[dict] = []
+
+    # Build buff window lookup: {spell_id: [(start_s, end_s)]}
+    buff_windows: dict[int, list[tuple]] = {}
+    for e in buff_events:
+        sid = e.get("abilityGameID")
+        t_s = (e["timestamp"] - start) / 1000
+        if e.get("type") == "applybuff":
+            buff_windows.setdefault(sid, []).append([t_s, None])
+        elif e.get("type") == "removebuff":
+            for w in reversed(buff_windows.get(sid, [])):
+                if w[1] is None:
+                    w[1] = t_s
+                    break
+
+    for defn in spec_defensives:
+        sid = defn["spell_id"]
+        duration = defn.get("duration") or 0
+        windows = []
+        for w in (buff_windows.get(sid) or []):
+            w_start = w[0]
+            w_end = w[1] if w[1] is not None else (w_start + duration if duration else w_start + 5)
+            # Compute damage taken during this defensive window
+            dmg_during = sum(
+                e.get("amount", 0) + e.get("absorbed", 0)
+                for e in damage_taken_events
+                if e.get("type") == "damage"
+                and w_start <= (e["timestamp"] - start) / 1000 <= w_end
+            )
+            windows.append({"start_s": round(w_start, 1), "end_s": round(w_end, 1), "dmg_during": int(dmg_during)})
+
+        # Also track explicit casts (for defensives that don't apply a self-buff)
+        if not windows:
+            casts = [
+                round((c["timestamp"] - start) / 1000, 1)
+                for c in cast_events
+                if c.get("type") == "cast" and c.get("abilityGameID") == sid
+            ]
+            for t_s in casts:
+                w_end = t_s + (duration or 5)
+                dmg_during = sum(
+                    e.get("amount", 0) + e.get("absorbed", 0)
+                    for e in damage_taken_events
+                    if e.get("type") == "damage"
+                    and t_s <= (e["timestamp"] - start) / 1000 <= w_end
+                )
+                windows.append({"start_s": t_s, "end_s": round(w_end, 1), "dmg_during": int(dmg_during)})
+
+        if windows:
+            defensive_summary.append({
+                "name": defn["name"],
+                "spell_id": sid,
+                "uses": len(windows),
+                "windows": windows,
+            })
+
+    # ── Damage taken analysis ─────────────────────────────────────────────────
+    # 30s segments of incoming damage + top source abilities
+    segment_s = 30
+    n_segments = max(1, int(fight_dur_s / segment_s) + 1)
+    dmg_segments: list[int] = [0] * n_segments
+    ability_dmg_taken: dict[int, int] = {}
+
+    for e in damage_taken_events:
+        if e.get("type") != "damage":
+            continue
+        amt = e.get("amount", 0) + e.get("absorbed", 0)
+        if not amt:
+            continue
+        t_s = (e["timestamp"] - start) / 1000
+        seg = min(int(t_s / segment_s), n_segments - 1)
+        dmg_segments[seg] += amt
+        sid = e.get("abilityGameID")
+        if sid:
+            ability_dmg_taken[sid] = ability_dmg_taken.get(sid, 0) + amt
+
+    total_dmg_taken = sum(dmg_segments)
+    top_dmg_abilities = sorted(ability_dmg_taken.items(), key=lambda x: -x[1])[:8]
+    dmg_taken_by_ability = [
+        {"spell_id": sid, "damage": dmg, "pct": round(dmg / total_dmg_taken, 3) if total_dmg_taken else 0}
+        for sid, dmg in top_dmg_abilities
+    ]
+
     return {
         "player": player["name"],
         "spec": spec,
@@ -538,6 +620,10 @@ async def analyze_parse(
         "cast_gap_list_ms": cast_gap_list_ms,
         "cooldowns": cd_summary,
         "burst_windows": burst_windows,
+        "defensives": defensive_summary,
+        "dmg_taken_segments": dmg_segments,
+        "dmg_taken_by_ability": dmg_taken_by_ability,
+        "total_dmg_taken": total_dmg_taken,
         "talent_key": gear_data.get("talent_key", ""),
         "trinkets": gear_data.get("trinkets", []),
         "enchants": gear_data.get("enchants", []),

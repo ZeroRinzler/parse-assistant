@@ -186,10 +186,11 @@ async def analyze(req: AnalyzeRequest):
 
     start, end = fight["startTime"], fight["endTime"]
     try:
-        cast_events, buff_events, damage_events = await asyncio.gather(
+        cast_events, buff_events, damage_events, damage_taken_events = await asyncio.gather(
             wcl.get_all_events(code, req.fight_id, "Casts", start, end, source_id=req.player_id),
             wcl.get_all_events(code, req.fight_id, "Buffs", start, end, target_id=req.player_id),
             wcl.get_all_events(code, req.fight_id, "DamageDone", start, end, source_id=req.player_id),
+            wcl.get_all_events(code, req.fight_id, "DamageTaken", start, end, target_id=req.player_id),
         )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Event fetch failed: {exc}")
@@ -418,6 +419,135 @@ async def analyze(req: AnalyzeRequest):
                         break
         bw["active_cds"] = active
     result["player_burst_windows"] = player_bw
+
+    # ── Player defensive analysis ────────────────────────────────────────────
+    from rulebook import SPEC_DEFENSIVES as _SPEC_DEFENSIVES
+    spec_defensives = _SPEC_DEFENSIVES.get(spec) or []
+    player_defensive_usage: list[dict] = []
+
+    # Reconstruct buff windows from applybuff/removebuff events
+    buff_windows_by_sid: dict[int, list[list]] = {}
+    for e in buff_events:
+        sid = e.get("abilityGameID")
+        t_s = (e["timestamp"] - start) / 1000
+        if e.get("type") == "applybuff":
+            buff_windows_by_sid.setdefault(sid, []).append([t_s, None])
+        elif e.get("type") == "removebuff":
+            for w in reversed(buff_windows_by_sid.get(sid, [])):
+                if w[1] is None:
+                    w[1] = t_s
+                    break
+
+    for defn in spec_defensives:
+        sid = defn["spell_id"]
+        duration = defn.get("duration") or 0
+        windows: list[dict] = []
+        for w in (buff_windows_by_sid.get(sid) or []):
+            w_start = w[0]
+            w_end = w[1] if w[1] is not None else (w_start + duration if duration else w_start + 5)
+            dmg_during = sum(
+                e.get("amount", 0) + e.get("absorbed", 0)
+                for e in damage_taken_events
+                if e.get("type") == "damage"
+                and w_start <= (e["timestamp"] - start) / 1000 <= w_end
+            )
+            windows.append({"start_s": round(w_start, 1), "end_s": round(w_end, 1), "dmg_during": int(dmg_during)})
+
+        # Fallback: if no buff events found, look for explicit casts
+        if not windows:
+            def_casts = [
+                c for c in cast_events
+                if c.get("type") == "cast" and c.get("abilityGameID") == sid
+            ]
+            for c in def_casts:
+                t_s = (c["timestamp"] - start) / 1000
+                w_end = t_s + (duration or 5)
+                dmg_during = sum(
+                    e.get("amount", 0) + e.get("absorbed", 0)
+                    for e in damage_taken_events
+                    if e.get("type") == "damage"
+                    and t_s <= (e["timestamp"] - start) / 1000 <= w_end
+                )
+                windows.append({"start_s": round(t_s, 1), "end_s": round(w_end, 1), "dmg_during": int(dmg_during)})
+
+        player_defensive_usage.append({
+            "name": defn["name"],
+            "spell_id": sid,
+            "cooldown": defn.get("cooldown", 0),
+            "uses": len(windows),
+            "windows": windows,
+        })
+
+    result["player_defensives"] = player_defensive_usage
+
+    # ── Player damage taken analysis ─────────────────────────────────────────
+    fight_dur_s = player_fight_dur_s
+    segment_size_s = 30
+    n_segs = max(1, int(fight_dur_s / segment_size_s) + 1)
+    dtk_segments: list[int] = [0] * n_segs
+    ability_dtk: dict[int, int] = {}
+
+    for e in damage_taken_events:
+        if e.get("type") != "damage":
+            continue
+        amt = e.get("amount", 0) + e.get("absorbed", 0)
+        if not amt:
+            continue
+        t_s = (e["timestamp"] - start) / 1000
+        seg = min(int(t_s / segment_size_s), n_segs - 1)
+        dtk_segments[seg] += amt
+        sid = e.get("abilityGameID")
+        if sid:
+            ability_dtk[sid] = ability_dtk.get(sid, 0) + amt
+
+    total_dtk = sum(dtk_segments)
+    top_dtk = sorted(ability_dtk.items(), key=lambda x: -x[1])[:10]
+    result["player_dmg_taken_segments"] = dtk_segments
+    result["player_dmg_taken_by_ability"] = [
+        {"spell_id": sid, "damage": dmg, "pct": round(dmg / total_dtk, 3) if total_dtk else 0}
+        for sid, dmg in top_dtk
+    ]
+    result["player_total_dmg_taken"] = total_dtk
+    result["dmg_segment_size_s"] = segment_size_s
+
+    # Aggregate top-parse defensive data for comparison
+    if encounter_id and samples:
+        agg_def: dict[str, list[dict]] = {}
+        agg_dtk_segs: list[list[int]] = []
+        for s in samples:
+            cd = s.get("cooldown_data") or {}
+            for d in cd.get("defensives") or []:
+                agg_def.setdefault(d["name"], []).append(d)
+            seg_data = cd.get("dmg_taken_segments")
+            if seg_data:
+                agg_dtk_segs.append(seg_data)
+
+        top_defensives_summary: list[dict] = []
+        for defn in spec_defensives:
+            dname = defn["name"]
+            entries = agg_def.get(dname) or []
+            if not entries:
+                continue
+            use_counts = [e["uses"] for e in entries]
+            top_defensives_summary.append({
+                "name": dname,
+                "spell_id": defn["spell_id"],
+                "avg_uses": round(statistics.mean(use_counts), 1),
+                "min_uses": min(use_counts),
+                "max_uses": max(use_counts),
+                "sample_count": len(entries),
+            })
+        if top_defensives_summary:
+            result["top_defensives_summary"] = top_defensives_summary
+
+        # Average damage taken per segment across top parses
+        if agg_dtk_segs:
+            max_segs = max(len(s) for s in agg_dtk_segs)
+            avg_dtk_segs: list[float] = []
+            for i in range(max_segs):
+                vals = [s[i] for s in agg_dtk_segs if i < len(s)]
+                avg_dtk_segs.append(round(statistics.mean(vals)) if vals else 0)
+            result["top_avg_dmg_taken_segments"] = avg_dtk_segs
 
     return result
 

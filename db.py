@@ -88,6 +88,12 @@ async def init_db() -> None:
     DB_PATH.parent.mkdir(exist_ok=True)
     async with _conn() as db:
         await db.executescript(_DDL)
+        # Migration: add name column to spell_icons if it was created without it
+        try:
+            await db.execute("ALTER TABLE spell_icons ADD COLUMN name TEXT")
+            await db.commit()
+        except Exception:
+            pass  # column already exists
         await db.commit()
 
     # Warm the in-memory cache from persisted rulebooks

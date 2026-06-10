@@ -10,6 +10,12 @@ function formatDuration(seconds) {
 
 function formatMs(ms) { return formatDuration(ms / 1000); }
 
+function formatNumber(n) {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+  if (n >= 1_000)     return (n / 1_000).toFixed(1) + 'k';
+  return String(n);
+}
+
 function formatSpec(spec) {
   return spec.replace(/([A-Z])/g, ' $1').trim();
 }
@@ -225,7 +231,7 @@ function applyCharacterSelection(autoPlayer = null) {
 function renderResults(data) {
   const el = document.getElementById('results');
 
-  // Pre-fetch icons for all cooldowns + burst window abilities
+  // Pre-fetch icons for all cooldowns + burst window abilities + defensives + dtk abilities
   const spellIds = Object.values(data.cd_spell_ids || {});
   const bwAbilityIds = (data.burst_windows || []).flatMap(bw =>
     (bw.ability_breakdown || []).map(a => a.spell_id)
@@ -233,7 +239,9 @@ function renderResults(data) {
   const playerBwIds = (data.player_burst_windows || []).flatMap(bw =>
     (bw.ability_breakdown || []).map(a => a.spell_id)
   );
-  const allIds = [...new Set([...spellIds, ...bwAbilityIds, ...playerBwIds])];
+  const defensiveIds = (data.player_defensives || []).map(d => d.spell_id);
+  const dtkIds = (data.player_dmg_taken_by_ability || []).map(a => a.spell_id);
+  const allIds = [...new Set([...spellIds, ...bwAbilityIds, ...playerBwIds, ...defensiveIds, ...dtkIds])];
   if (allIds.length) fetchSpellIcons(allIds).then(() => _refreshIcons(el));
 
   const byCD = {};
@@ -285,6 +293,22 @@ function renderResults(data) {
     burstHtml = renderBurstWindows(data.burst_windows, data.player_burst_windows || []);
   }
 
+  let defHtml = '';
+  if (data.player_defensives?.length) {
+    defHtml = renderDefensives(data.player_defensives, data.top_defensives_summary || []);
+  }
+
+  let dtkHtml = '';
+  if (data.player_dmg_taken_by_ability?.length) {
+    dtkHtml = renderDamageTaken(
+      data.player_dmg_taken_segments || [],
+      data.player_dmg_taken_by_ability || [],
+      data.player_total_dmg_taken || 0,
+      data.top_avg_dmg_taken_segments || [],
+      data.dmg_segment_size_s || 30,
+    );
+  }
+
   el.innerHTML = `
     <div class="result-header">
       <h2>${data.player} — ${formatSpec(data.spec)}</h2>
@@ -293,6 +317,8 @@ function renderResults(data) {
     ${rulesHtml}
     ${compHtml}
     ${burstHtml}
+    ${defHtml}
+    ${dtkHtml}
   `;
 
   el.classList.remove('hidden');
@@ -320,6 +346,12 @@ function _refreshIcons(container) {
     const m = el.dataset.wowhead?.match(/spell=(\d+)/);
     if (!m) return;
     const info = _iconCache[m[1]];
+    if (info?.name) el.textContent = info.name;
+  });
+  // Fill damage-taken ability name spans
+  container.querySelectorAll('[data-spell-id-name]').forEach(el => {
+    const sid = el.getAttribute('data-spell-id-name');
+    const info = _iconCache[sid];
     if (info?.name) el.textContent = info.name;
   });
 }
@@ -527,4 +559,108 @@ function renderBurstWindows(topBws, playerBws) {
       <span class="bw-legend-item"><span class="bw-dot bw-dot-top"></span> Top parse avg</span>
     </div>
     <div class="bw-list">${cards}</div>`;
+}
+
+function renderDefensives(playerDefs, topSummary) {
+  const topByName = {};
+  for (const t of topSummary) topByName[t.name] = t;
+
+  const rows = playerDefs.map(def => {
+    const top = topByName[def.name];
+    const topAvg = top ? top.avg_uses.toFixed(1) : '—';
+    const usesClass = top
+      ? (def.uses >= top.avg_uses ? 'delta-good' : 'delta-bad')
+      : '';
+    const totalDmg = def.windows.reduce((s, w) => s + (w.dmg_during || 0), 0);
+    const dmgStr = totalDmg > 0 ? formatNumber(totalDmg) : '—';
+
+    const windowsList = def.windows.length
+      ? def.windows.map(w => `<span class="def-window">${formatDuration(w.start_s)}–${formatDuration(w.end_s)} <small>${formatNumber(w.dmg_during)}</small></span>`).join(' ')
+      : '<span class="def-none">not used</span>';
+
+    return `<tr>
+      <td class="def-icon-name">
+        <span data-spell-id="${def.spell_id}">${spellIconHtml(def.spell_id, 20)}</span>
+        ${def.name}
+      </td>
+      <td class="${usesClass}">${def.uses}</td>
+      <td>${topAvg}</td>
+      <td>${dmgStr}</td>
+      <td class="def-windows-cell">${windowsList}</td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <p class="section-label" style="margin-top:20px">Defensives</p>
+    <div class="def-table-wrap">
+      <table class="def-table">
+        <thead>
+          <tr>
+            <th>Spell</th>
+            <th>Uses</th>
+            <th>Top avg</th>
+            <th>Dmg absorbed</th>
+            <th>Usage windows</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+function renderDamageTaken(segments, byAbility, total, topAvgSegs, segSizeS) {
+  if (!segments.length) return '';
+
+  // Bar chart of damage taken per 30s segment
+  const maxVal = Math.max(1, ...segments, ...topAvgSegs);
+  const barCells = segments.map((val, i) => {
+    const topVal = topAvgSegs[i] ?? 0;
+    const pct = Math.round(val / maxVal * 100);
+    const topPct = Math.round(topVal / maxVal * 100);
+    const t = i * segSizeS;
+    return `<div class="dtk-bar-group" title="${formatDuration(t)}: ${formatNumber(val)}">
+      <div class="dtk-bar-top" style="height:${topPct}%" title="Top avg: ${formatNumber(topVal)}"></div>
+      <div class="dtk-bar-player" style="height:${pct}%"></div>
+      <div class="dtk-bar-label">${formatDuration(t)}</div>
+    </div>`;
+  }).join('');
+
+  // Ability breakdown table with Wowhead tooltips
+  const abilityRows = byAbility.map(a => {
+    const sid = a.spell_id;
+    return `<tr>
+      <td>
+        <span data-spell-id="${sid}">${spellIconHtml(sid, 20)}</span>
+        <a class="dtk-wowhead" href="https://www.wowhead.com/spell=${sid}" target="_blank" rel="noreferrer"
+           data-wowhead="spell=${sid}"><span class="bw-ab-name" data-spell-id-name="${sid}">${sid}</span></a>
+      </td>
+      <td>${formatNumber(a.damage)}</td>
+      <td>${(a.pct * 100).toFixed(1)}%</td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <p class="section-label" style="margin-top:20px">Damage Taken</p>
+    <div class="dtk-section">
+      <div class="dtk-total">Total: <strong>${formatNumber(total)}</strong></div>
+      <div class="dtk-legend">
+        <span class="dtk-dot dtk-dot-player"></span> You &nbsp;
+        <span class="dtk-dot dtk-dot-top"></span> Top avg
+      </div>
+      <div class="dtk-bars">${barCells}</div>
+      <p class="section-sublabel">Top sources</p>
+      <table class="dtk-ability-table">
+        <thead><tr><th>Ability</th><th>Damage</th><th>% of total</th></tr></thead>
+        <tbody>${abilityRows}</tbody>
+      </table>
+    </div>`;
+}
+
+// Update ability name spans after icons load
+function _applyAbilityNames(container) {
+  container.querySelectorAll('[data-spell-id-name]').forEach(el => {
+    const sid = el.getAttribute('data-spell-id-name');
+    const info = _iconCache[sid];
+    if (info?.name) el.textContent = info.name;
+  });
 }

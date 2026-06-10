@@ -224,3 +224,36 @@
 .bw-ab-table tr:last-child td { border-bottom: none; }
 .bw-ab-name { color: var(--muted); font-size: 12px; }
 .bw-ab-name:not(:empty) { color: var(--text); }
+
+/* ── Defensives section ───────────────────────────────────────── */
+.def-table-wrap { overflow-x: auto; }
+.def-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.def-table th { text-align: left; padding: 7px 10px; color: var(--muted); font-size: 11px; border-bottom: 1px solid var(--border); }
+.def-table td { padding: 8px 10px; border-bottom: 1px solid rgba(42,47,61,.5); vertical-align: middle; }
+.def-table tr:last-child td { border-bottom: none; }
+.def-icon-name { display: flex; align-items: center; gap: 8px; }
+.def-windows-cell { font-size: 12px; max-width: 300px; }
+.def-window { display: inline-block; background: rgba(42,47,61,.6); border-radius: 4px; padding: 2px 6px; margin: 2px; white-space: nowrap; }
+.def-window small { color: var(--muted); }
+.def-none { color: var(--muted); font-style: italic; }
+
+/* ── Damage Taken section ─────────────────────────────────────── */
+.dtk-section { display: flex; flex-direction: column; gap: 14px; }
+.dtk-total { font-size: 13px; color: var(--muted); }
+.dtk-total strong { color: var(--text); }
+.dtk-legend { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.dtk-dot { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+.dtk-dot-player { background: var(--gold); }
+.dtk-dot-top { background: var(--info); }
+.dtk-bars { display: flex; align-items: flex-end; gap: 4px; height: 100px; padding-bottom: 22px; position: relative; overflow-x: auto; }
+.dtk-bar-group { display: flex; align-items: flex-end; gap: 2px; flex-shrink: 0; width: 36px; position: relative; }
+.dtk-bar-top { width: 10px; background: var(--info); opacity: 0.5; border-radius: 2px 2px 0 0; transition: height .3s; min-height: 1px; }
+.dtk-bar-player { width: 10px; background: var(--gold); border-radius: 2px 2px 0 0; transition: height .3s; min-height: 1px; }
+.dtk-bar-label { position: absolute; bottom: -20px; left: 0; width: 100%; text-align: center; font-size: 10px; color: var(--muted); }
+.section-sublabel { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin: 4px 0; }
+.dtk-ability-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.dtk-ability-table th { text-align: left; padding: 7px 10px; color: var(--muted); font-size: 11px; border-bottom: 1px solid var(--border); }
+.dtk-ability-table td { padding: 8px 10px; border-bottom: 1px solid rgba(42,47,61,.5); vertical-align: middle; }
+.dtk-ability-table tr:last-child td { border-bottom: none; }
+.dtk-wowhead { color: var(--text); text-decoration: none; }
+.dtk-wowhead:hover { color: var(--gold); }
