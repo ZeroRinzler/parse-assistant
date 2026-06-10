@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Live — WoW Analyzer</title>
+  <style>
+    :root {
+      --bg:#0a0c10;--surface:#13161e;--surface2:#1c202c;--border:#2a2f3d;
+      --gold:#c8a64f;--gold-light:#e8c86a;--text:#dde1ec;--muted:#7b82a0;
+      --critical:#e05252;--warning:#e8a93a;--info:#5b8de8;--success:#4caf7a;
+      --radius:8px;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;font-size:14px;line-height:1.6;min-height:100vh}
+
+    .page-nav{background:var(--surface);border-bottom:1px solid var(--border);display:flex;justify-content:center;gap:4px;padding:8px 16px}
+    .page-nav a{color:var(--muted);text-decoration:none;padding:6px 18px;border-radius:6px;font-size:13px;font-weight:600}
+    .page-nav a:hover{background:var(--surface2);color:var(--text)}
+    .page-nav a.active{background:var(--surface2);color:var(--gold)}
+
+    .container{max-width:860px;margin:0 auto;padding:28px 20px 64px}
+
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px}
+    .form-group{margin-bottom:12px}
+    label{display:block;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px}
+    input,select{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:9px 12px;font-size:14px;outline:none;transition:border-color .15s}
+    input:focus,select:focus{border-color:var(--gold)}
+    select option{background:var(--surface2)}
+    .row{display:flex;gap:12px}
+    .row .form-group{flex:1}
+    .selectors{margin-top:14px;border-top:1px solid var(--border);padding-top:14px}
+    .hidden{display:none!important}
+
+    /* Poll status bar */
+    .poll-bar{display:flex;align-items:center;gap:9px;padding:8px 14px;border-radius:6px;font-size:12px;margin-bottom:14px;border:1px solid transparent}
+    .poll-bar.watching{background:rgba(76,175,122,0.08);border-color:rgba(76,175,122,0.2);color:var(--success)}
+    .poll-bar.checking{background:rgba(91,141,232,0.08);border-color:rgba(91,141,232,0.2);color:var(--info)}
+    .poll-bar.idle{background:rgba(123,130,160,0.08);border-color:rgba(123,130,160,0.2);color:var(--muted)}
+    .poll-bar.error{background:rgba(224,82,82,0.08);border-color:rgba(224,82,82,0.2);color:var(--critical)}
+    .pulse-dot{width:7px;height:7px;border-radius:50%;background:currentColor;flex-shrink:0}
+    .poll-bar.watching .pulse-dot{animation:pulse 1.4s ease-in-out infinite}
+    @keyframes pulse{0%,100%{opacity:.35}50%{opacity:1}}
+
+    /* Loading */
+    .loading-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;padding:40px;color:var(--muted)}
+    .spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* Results — same as index.html */
+    .result-header{margin-bottom:18px}
+    .result-header h2{font-size:18px;font-weight:700;color:var(--gold)}
+    .findings{display:flex;flex-direction:column;gap:10px}
+    .finding{background:var(--surface2);border-radius:var(--radius);border-left:4px solid var(--border);padding:13px 15px}
+    .finding.finding-critical{border-left-color:var(--critical)}
+    .finding.finding-warning{border-left-color:var(--warning)}
+    .finding.finding-info{border-left-color:var(--info)}
+    .finding.finding-success{border-left-color:var(--success)}
+    .finding-header{display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap}
+    .severity-badge{font-size:10px;font-weight:800;padding:2px 8px;border-radius:4px;letter-spacing:1px}
+    .severity-critical{background:rgba(224,82,82,.18);color:var(--critical)}
+    .severity-warning{background:rgba(232,169,58,.18);color:var(--warning)}
+    .severity-info{background:rgba(91,141,232,.18);color:var(--info)}
+    .severity-success{background:rgba(76,175,122,.18);color:var(--success)}
+    .section-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:18px 0 8px}
+    .section-label:first-child{margin-top:0}
+    .timestamp{font-family:monospace;font-size:12px;color:var(--muted);background:var(--surface);padding:1px 6px;border-radius:4px}
+    .category{font-size:11px;color:var(--muted);margin-left:auto;text-transform:uppercase;letter-spacing:.6px}
+    .finding-message{color:var(--text);font-size:13.5px;line-height:1.55}
+    .finding-remedy{color:var(--gold-light);font-size:12.5px;margin-top:7px;padding-top:7px;border-top:1px solid rgba(255,255,255,.07);font-style:italic}
+    .finding-remedy::before{content:'→ ';font-style:normal;font-weight:700;color:var(--gold)}
+    .no-findings{background:rgba(76,175,122,.1);border:1px solid rgba(76,175,122,.3);border-radius:var(--radius);padding:18px;text-align:center;color:var(--success);font-weight:600}
+    .error-msg{background:rgba(224,82,82,.1);border:1px solid rgba(224,82,82,.3);border-radius:var(--radius);padding:14px 16px;color:var(--critical);font-size:13px;margin-bottom:14px}
+
+    /* Comparison table */
+    .comparison-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;margin-top:14px}
+    .comparison-card h3{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px}
+    .cmp-table{width:100%;border-collapse:collapse;font-size:13px}
+    .cmp-table th{text-align:left;color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;padding:4px 10px 8px;border-bottom:1px solid var(--border)}
+    .cmp-table td{padding:8px 10px;border-bottom:1px solid rgba(42,47,61,.5);color:var(--text)}
+    .cmp-table tr:last-child td{border-bottom:none}
+    .cmp-table td.cd-name{font-weight:600;color:var(--gold-light)}
+    .delta-good{color:var(--success);font-weight:700}
+    .delta-bad{color:var(--critical);font-weight:700}
+    .delta-ok{color:var(--muted)}
+  </style>
+</head>
+<body>
+<nav class="page-nav">
+  <a href="/pre">Pre-Fight</a>
+  <a href="/live" class="active">Live</a>
+  <a href="/">Post-Raid</a>
+</nav>
+<div class="container">
+
+  <div id="poll-bar" class="poll-bar idle hidden">
+    <div class="pulse-dot"></div>
+    <span id="poll-text">Idle</span>
+  </div>
+
+  <div class="card">
+    <div class="form-group">
+      <label>Warcraft Logs Report URL or Code</label>
+      <input id="report-url" type="text" placeholder="https://www.warcraftlogs.com/reports/AbCdEfGh…"
+        oninput="onReportInput()"
+        onkeydown="if(event.key==='Enter'){clearTimeout(_loadTimer);loadReport()}" />
+    </div>
+    <div id="selectors" class="selectors hidden">
+      <div class="row">
+        <div class="form-group">
+          <label>Fight</label>
+          <select id="fight-select" onchange="filterAndPopulatePlayers(); analyzePlayer()"></select>
+        </div>
+        <div class="form-group">
+          <label>Player</label>
+          <select id="player-select" onchange="analyzePlayer()"></select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="loading" class="hidden">
+    <div class="loading-wrap"><div class="spinner"></div><span>Analysing…</span></div>
+  </div>
+  <div id="error-box" class="error-msg hidden"></div>
+  <div id="results" class="card hidden"></div>
+</div>
+
+<script>
+  let reportCode = '';
+  let _loadTimer = null;
+  let _allFights = [], _allPlayers = [];
+  let _pollInterval = null;
+  let _maxFightId = -1;
+  let _isAnalyzing = false;
+  const POLL_MS = 12000;
+
+  // ── URL persistence ──────────────────────────────────────────────────────────
+  function syncURL() {
+    const p = new URLSearchParams();
+    if (reportCode) p.set('report', reportCode);
+    const player = document.getElementById('player-select')?.value;
+    if (player) p.set('player', player);
+    history.replaceState({}, '', p.toString() ? `?${p}` : location.pathname);
+  }
+
+  window.onload = () => {
+    const p = new URLSearchParams(location.search);
+    const r = p.get('report');
+    if (r) {
+      document.getElementById('report-url').value = r;
+      loadReport(null, p.get('player'));
+    }
+  };
+
+  function extractCode(url) {
+    const m = url.match(/\/reports\/([a-zA-Z0-9]+)/);
+    return m ? m[1] : url.trim();
+  }
+  function formatDuration(s) {
+    return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;
+  }
+  function formatMs(ms) { return formatDuration(ms/1000); }
+  function formatSpec(s) { return s.replace(/([A-Z])/g,' $1').trim(); }
+
+  function categoryLabel(cat) {
+    return {
+      cooldown_alignment:'Alignment', lost_cooldown:'Lost Cast', cooldown_delay:'Delay',
+      cast_efficiency:'Downtime', unsupported_spec:'Spec Note', rule_violation:'Rule',
+      cooldown_usage:'On Track', hold_suggestion:'Timing Tip',
+    }[cat] || cat;
+  }
+
+  function showError(msg) {
+    const el = document.getElementById('error-box');
+    el.textContent = `⚠ ${msg}`; el.classList.remove('hidden');
+  }
+  function clearError() { document.getElementById('error-box').classList.add('hidden'); }
+
+  function setPollStatus(state, msg) {
+    const bar = document.getElementById('poll-bar');
+    bar.className = `poll-bar ${state}`;
+    bar.classList.remove('hidden');
+    document.getElementById('poll-text').textContent = msg;
+  }
+
+  // ── Report loading ───────────────────────────────────────────────────────────
+  function onReportInput() {
+    clearTimeout(_loadTimer);
+    _loadTimer = setTimeout(() => loadReport(), 400);
+  }
+
+  async function loadReport(autoFight = null, autoPlayer = null) {
+    clearError();
+    const url = document.getElementById('report-url').value.trim();
+    if (!url) return;
+    reportCode = extractCode(url);
+
+    try {
+      const resp = await fetch(`/api/report/${reportCode}`);
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.detail || 'Failed to load report');
+
+      _allFights = data.fights;
+      _allPlayers = data.players;
+
+      // Live mode: always start from the newest fight
+      const newestFight = data.fights[data.fights.length - 1];
+      const targetFight = autoFight ?? (newestFight?.id ?? '');
+      _maxFightId = Math.max(...data.fights.map(f => f.id), -1);
+
+      populateFights(data.fights, String(targetFight));
+      filterAndPopulatePlayers(autoPlayer);
+      document.getElementById('selectors').classList.remove('hidden');
+      document.getElementById('results').classList.add('hidden');
+      syncURL();
+      analyzePlayer();
+      startPolling();
+    } catch (err) {
+      showError(err.message);
+    }
+  }
+
+  function populateFights(fights, autoFight = null) {
+    const sel = document.getElementById('fight-select');
+    sel.innerHTML = '';
+    fights.forEach(f => {
+      const o = document.createElement('option');
+      o.value = f.id;
+      const status = f.kill ? '✓' : `✗ #${f.attempt}`;
+      o.textContent = `${f.name} [${status}] ${formatDuration(f.duration_s)}`;
+      sel.appendChild(o);
+    });
+    if (autoFight) sel.value = autoFight;
+    else if (fights.length) sel.value = fights[fights.length - 1].id;
+  }
+
+  function filterAndPopulatePlayers(autoPlayer = null) {
+    const fightId = parseInt(document.getElementById('fight-select').value, 10);
+    const fight = _allFights.find(f => f.id === fightId);
+    const fp = fight?.friendlyPlayers;
+    const visible = (fp && fp.length > 0) ? _allPlayers.filter(p => fp.includes(p.id)) : _allPlayers;
+    const sel = document.getElementById('player-select');
+    const prev = sel.value;
+    sel.innerHTML = '';
+    visible.forEach(p => {
+      const o = document.createElement('option');
+      o.value = p.id;
+      o.textContent = `${p.name} — ${formatSpec(p.spec)}`;
+      sel.appendChild(o);
+    });
+    if (autoPlayer) sel.value = autoPlayer;
+    else if (prev && visible.some(p => String(p.id) === prev)) sel.value = prev;
+  }
+
+  // ── Analysis ─────────────────────────────────────────────────────────────────
+  async function analyzePlayer() {
+    if (_isAnalyzing) return;
+    clearError();
+    const fightId  = parseInt(document.getElementById('fight-select').value, 10);
+    const playerId = parseInt(document.getElementById('player-select').value, 10);
+    if (!fightId || !playerId) return;
+
+    _isAnalyzing = true;
+    document.getElementById('loading').classList.remove('hidden');
+    document.getElementById('results').classList.add('hidden');
+    syncURL();
+
+    try {
+      const resp = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({report_url: reportCode, fight_id: fightId, player_id: playerId}),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.detail || 'Analysis failed');
+      renderResults(data, fightId);
+    } catch (err) {
+      showError(err.message);
+    } finally {
+      _isAnalyzing = false;
+      document.getElementById('loading').classList.add('hidden');
+    }
+  }
+
+  // ── Polling ──────────────────────────────────────────────────────────────────
+  function startPolling() {
+    stopPolling();
+    _pollInterval = setInterval(pollForNewPulls, POLL_MS);
+    setPollStatus('watching', `Watching for new pulls — checks every ${POLL_MS/1000}s`);
+  }
+
+  function stopPolling() {
+    if (_pollInterval) { clearInterval(_pollInterval); _pollInterval = null; }
+  }
+
+  async function pollForNewPulls() {
+    if (!reportCode || _isAnalyzing) return;
+    setPollStatus('checking', 'Checking for new pulls…');
+    try {
+      const resp = await fetch(`/api/report/${reportCode}`);
+      if (!resp.ok) { setPollStatus('error', 'Poll failed — will retry'); return; }
+      const data = await resp.json();
+
+      const newMax = Math.max(...data.fights.map(f => f.id), -1);
+      if (newMax > _maxFightId) {
+        _maxFightId = newMax;
+        _allFights = data.fights;
+        _allPlayers = data.players;
+        const newest = data.fights[data.fights.length - 1];
+        populateFights(data.fights, String(newest.id));
+        filterAndPopulatePlayers();
+        setPollStatus('watching', `New pull detected — analysing…`);
+        await analyzePlayer();
+      }
+      setPollStatus('watching', `Watching · last checked ${new Date().toLocaleTimeString()}`);
+    } catch {
+      setPollStatus('error', 'Poll error — will retry');
+    }
+  }
+
+  // ── Rendering ────────────────────────────────────────────────────────────────
+  function renderResults(data, fightId) {
+    const el = document.getElementById('results');
+    const fight = _allFights.find(f => f.id === fightId);
+    const fightLabel = fight
+      ? `${fight.name} [${fight.kill ? '✓' : `✗ #${fight.attempt}`}] ${formatDuration(fight.duration_s)}`
+      : `Fight #${fightId}`;
+
+    const improvements = data.findings.filter(f => f.severity === 'critical' || f.severity === 'warning');
+    const holdTips     = data.findings.filter(f => f.severity === 'info' && f.category === 'hold_suggestion');
+    const otherInfo    = data.findings.filter(f => f.severity === 'info' && f.category !== 'hold_suggestion');
+    const successes    = data.findings.filter(f => f.severity === 'success');
+
+    let html = '';
+    if (otherInfo.length) html += `<div class="findings">${otherInfo.map(renderFinding).join('')}</div>`;
+    if (improvements.length) html += `<p class="section-label">Needs Improvement</p><div class="findings">${improvements.map(renderFinding).join('')}</div>`;
+    if (holdTips.length) html += `<p class="section-label">Timing Suggestions</p><div class="findings">${holdTips.map(renderFinding).join('')}</div>`;
+    if (successes.length) html += `<p class="section-label">Doing Well</p><div class="findings">${successes.map(renderFinding).join('')}</div>`;
+    if (!html) html = '<div class="no-findings">✓ No significant issues detected.</div>';
+
+    const rbSrc = data.rulebook_source || 'static';
+    const rbLabel = rbSrc === 'generated' ? '⚡ generated rulebook' : rbSrc === 'none' ? '⚠ no rulebook' : 'static rulebook';
+    const rbColor = rbSrc === 'none' ? 'var(--warning)' : 'var(--muted)';
+
+    el.innerHTML = `
+      <div class="result-header">
+        <h2>${data.player} — ${formatSpec(data.spec)}</h2>
+        <p style="color:var(--muted);font-size:12px;margin-top:3px">${fightLabel}</p>
+        <p style="color:${rbColor};font-size:12px">${rbLabel}</p>
+      </div>
+      ${html}
+      ${renderComparison(data.parse_comparison)}
+      ${renderBurstWindows(data.burst_windows)}`;
+
+    el.classList.remove('hidden');
+    el.scrollIntoView({behavior:'smooth', block:'start'});
+  }
+
+  function renderFinding(f) {
+    const ts = f.timestamp_ms != null ? `<span class="timestamp">${formatMs(f.timestamp_ms)}</span>` : '';
+    const remedy = f.details?.remedy ? `<p class="finding-remedy">${f.details.remedy}</p>` : '';
+    return `
+      <div class="finding finding-${f.severity}">
+        <div class="finding-header">
+          <span class="severity-badge severity-${f.severity}">${f.severity.toUpperCase()}</span>
+          ${ts}
+          <span class="category">${categoryLabel(f.category)}</span>
+        </div>
+        <p class="finding-message">${f.message}</p>${remedy}
+      </div>`;
+  }
+
+  function renderComparison(cmp) {
+    if (!cmp?.length) return '';
+    const sampleCount = cmp[0]?.sample_count ?? 0;
+    const rows = cmp.map(c => {
+      const playerUpm = c.player_uses_per_min ?? null;
+      const topUpm    = c.top_avg_uses_per_min ?? null;
+      const upmDiff   = (playerUpm !== null && topUpm !== null) ? playerUpm - topUpm : null;
+      const firstDiff = (c.top_avg_first_cast_s !== null && c.player_first_cast_s !== null)
+        ? c.player_first_cast_s - c.top_avg_first_cast_s : null;
+      const upmBand  = c.top_stddev_uses_per_min ?? 0.05;
+      const firstBand = c.top_stddev_first_cast_s ?? 3;
+      const usesClass = upmDiff === null ? 'delta-ok' : upmDiff >= -upmBand ? 'delta-good' : 'delta-bad';
+      const firstClass = firstDiff === null ? 'delta-ok' : firstDiff <= firstBand ? 'delta-good' : 'delta-bad';
+      const upmDelta  = upmDiff !== null ? `<span class="${usesClass}">${upmDiff >= 0 ? '+' : ''}${upmDiff.toFixed(2)}</span>` : '—';
+      const firstDelta = firstDiff !== null ? `<span class="${firstClass}">${firstDiff >= 0 ? '+' : ''}${firstDiff.toFixed(1)}s</span>` : '—';
+      const playerUsesCell = playerUpm !== null ? `${c.player_uses} <small class="delta-ok">(${playerUpm}/min)</small>` : c.player_uses;
+      const topUsesCell    = topUpm    !== null ? `${c.top_avg_uses ?? '—'} avg <small class="delta-ok">(${topUpm}/min)</small>` : `${c.top_avg_uses ?? '—'} avg`;
+      const fmtOff = v => `${v>=0?'+':''}${v.toFixed(1)}s`;
+      let blCell = c.top_bl_pct != null ? `<span class="${c.top_bl_pct>=80?'delta-good':'delta-ok'}">${c.top_bl_pct}% aligned</span>` : '—';
+      if (c.top_avg_bl_offset_s != null) {
+        const sdStr = c.top_stddev_bl_offset_s != null ? ` ±${c.top_stddev_bl_offset_s.toFixed(1)}s` : '';
+        if (c.player_bl_offset_s != null) {
+          const band = c.top_stddev_bl_offset_s != null ? 2*c.top_stddev_bl_offset_s : 5;
+          const cls  = Math.abs(c.player_bl_offset_s - c.top_avg_bl_offset_s) <= band ? 'delta-good' : 'delta-bad';
+          blCell += `<br><small>BL: <span class="${cls}">${fmtOff(c.player_bl_offset_s)}</span> / top ${fmtOff(c.top_avg_bl_offset_s)}${sdStr}</small>`;
+        }
+      }
+      return `<tr>
+        <td class="cd-name">${c.name}</td>
+        <td>${playerUsesCell} <small class="delta-ok">/ ${topUsesCell}</small> ${upmDelta}</td>
+        <td>${c.player_first_cast_s ?? '—'}s <small class="delta-ok">/ ${c.top_avg_first_cast_s ?? '—'}s avg</small> ${firstDelta}</td>
+        <td>${blCell}</td>
+      </tr>`;
+    }).join('');
+    return `<div class="comparison-card"><h3>vs Top ${sampleCount} Parses — uses/min normalized</h3>
+      <table class="cmp-table"><thead><tr>
+        <th>Cooldown</th><th>Uses (you / top avg)</th><th>First Cast</th><th>BL-Aligned</th>
+      </tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
+
+  function renderBurstWindows(windows) {
+    if (!windows?.length) return '';
+    const fmt = s => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(Math.floor(s%60)).padStart(2,'0')}`;
+    const rows = windows.map(w => {
+      const sdStr = w.stddev_s > 0 ? ` <small class="delta-ok">±${w.stddev_s}s</small>` : '';
+      const cds   = w.common_cds?.length ? w.common_cds.map(n=>`<span class="cd-name">${n}</span>`).join(', ') : '<span class="delta-ok">none tracked</span>';
+      return `<tr>
+        <td>${fmt(w.time_s)}${sdStr}</td>
+        <td>${(w.pct_avg*100).toFixed(1)}% of damage</td>
+        <td>${cds}</td>
+        <td><span class="delta-ok">${w.count}/${w.total_samples} parses</span></td>
+      </tr>`;
+    }).join('');
+    return `<div class="comparison-card"><h3>Burst Windows — top parse damage spikes</h3>
+      <table class="cmp-table"><thead><tr>
+        <th>Time (±σ)</th><th>Damage Concentration</th><th>Active CDs</th><th>Frequency</th>
+      </tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
+</script>
+</body>
+</html>

@@ -318,9 +318,19 @@
       font-weight: 700;
       color: var(--gold);
     }
+
+    .page-nav{background:var(--surface);border-bottom:1px solid var(--border);display:flex;justify-content:center;gap:4px;padding:8px 16px}
+    .page-nav a{color:var(--muted);text-decoration:none;padding:6px 18px;border-radius:6px;font-size:13px;font-weight:600}
+    .page-nav a:hover{background:var(--surface2);color:var(--text)}
+    .page-nav a.active{background:var(--surface2);color:var(--gold)}
   </style>
 </head>
 <body>
+<nav class="page-nav">
+  <a href="/pre">Pre-Fight</a>
+  <a href="/live">Live</a>
+  <a href="/" class="active">Post-Raid</a>
+</nav>
 <div class="container">
   <div class="card">
     <div class="form-group">

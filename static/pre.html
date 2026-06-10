@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pre-Fight Brief — WoW Analyzer</title>
+  <style>
+    :root {
+      --bg:#0a0c10;--surface:#13161e;--surface2:#1c202c;--border:#2a2f3d;
+      --gold:#c8a64f;--gold-light:#e8c86a;--text:#dde1ec;--muted:#7b82a0;
+      --critical:#e05252;--warning:#e8a93a;--info:#5b8de8;--success:#4caf7a;
+      --radius:8px;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;font-size:14px;line-height:1.6;min-height:100vh}
+
+    .page-nav{background:var(--surface);border-bottom:1px solid var(--border);display:flex;justify-content:center;gap:4px;padding:8px 16px}
+    .page-nav a{color:var(--muted);text-decoration:none;padding:6px 18px;border-radius:6px;font-size:13px;font-weight:600}
+    .page-nav a:hover{background:var(--surface2);color:var(--text)}
+    .page-nav a.active{background:var(--surface2);color:var(--gold)}
+
+    .container{max-width:900px;margin:0 auto;padding:28px 20px 64px}
+    header{text-align:center;margin-bottom:28px}
+    header h1{font-size:22px;font-weight:700;color:var(--gold);margin-bottom:4px}
+    header p{color:var(--muted);font-size:13px}
+
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px}
+    .card-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:14px}
+
+    .selectors{display:flex;gap:12px;align-items:flex-end}
+    .form-group{flex:1}
+    .form-group label{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px}
+    select{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:9px 12px;font-size:14px;outline:none}
+    select:focus{border-color:var(--gold)}
+    select option{background:var(--surface2)}
+    select:disabled{opacity:.45;cursor:not-allowed}
+
+    .stats-bar{display:flex;gap:32px;padding:8px 0 14px}
+    .stat .val{font-size:24px;font-weight:700;color:var(--gold);line-height:1.2}
+    .stat .lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px}
+
+    .summary-box{background:rgba(91,141,232,0.07);border:1px solid rgba(91,141,232,0.2);border-radius:6px;padding:12px 16px;font-size:13px;color:var(--text);line-height:1.55;margin-top:4px}
+
+    .cd-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    @media(max-width:620px){.cd-grid{grid-template-columns:1fr}}
+    .cd-card{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px}
+    .cd-card-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+    .cd-name{font-weight:700;color:var(--gold-light);font-size:14px}
+    .badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px}
+    .badge-hold{background:rgba(232,169,58,0.18);color:var(--warning)}
+    .badge-cd{background:rgba(76,175,122,0.18);color:var(--success)}
+    .badge-bl{background:rgba(91,141,232,0.18);color:var(--info)}
+
+    .cd-stats-row{display:flex;gap:14px;margin-bottom:8px;flex-wrap:wrap}
+    .cd-stat{display:flex;flex-direction:column}
+    .cd-stat-val{font-weight:600;font-size:13px}
+    .cd-stat-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+
+    .hold-note{background:rgba(232,169,58,0.09);border:1px solid rgba(232,169,58,0.25);border-radius:5px;padding:5px 9px;font-size:12px;color:var(--warning);margin-bottom:6px;line-height:1.4}
+    .cd-rule{font-size:12px;color:var(--muted);font-style:italic;line-height:1.4;border-top:1px solid rgba(255,255,255,0.05);padding-top:7px;margin-top:4px}
+
+    .bw-row{display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid rgba(42,47,61,0.5);font-size:13px}
+    .bw-row:last-child{border-bottom:none}
+    .bw-time{font-family:monospace;font-weight:700;min-width:64px}
+    .bw-bar-wrap{flex:0 0 120px;height:5px;background:var(--surface);border-radius:3px;overflow:hidden}
+    .bw-bar{height:100%;background:linear-gradient(90deg,#9a6f1f,var(--gold));border-radius:3px}
+    .bw-pct{font-weight:600;color:var(--gold);min-width:40px;text-align:right;font-size:12px}
+    .bw-cds{color:var(--muted);font-size:12px;flex:1}
+
+    .rule-row{display:flex;gap:10px;padding:7px 0;border-bottom:1px solid rgba(42,47,61,0.4);align-items:flex-start}
+    .rule-row:last-child{border-bottom:none}
+    .rule-badge{font-size:10px;font-weight:800;padding:2px 6px;border-radius:4px;white-space:nowrap;flex-shrink:0;margin-top:2px}
+    .rb-critical{background:rgba(224,82,82,0.18);color:var(--critical)}
+    .rb-high{background:rgba(232,169,58,0.18);color:var(--warning)}
+    .rule-text{font-size:13px;line-height:1.4}
+
+    .placeholder-box{background:var(--surface2);border:1px dashed var(--border);border-radius:var(--radius);padding:18px 20px;color:var(--muted);font-size:13px;text-align:center}
+
+    .empty-state{text-align:center;color:var(--muted);padding:40px 20px;font-size:13px}
+    .spinner{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px}
+    @keyframes spin{to{transform:rotate(360deg)}}
+  </style>
+</head>
+<body>
+<nav class="page-nav">
+  <a href="/pre" class="active">Pre-Fight</a>
+  <a href="/live">Live</a>
+  <a href="/">Post-Raid</a>
+</nav>
+<div class="container">
+  <header>
+    <h1>Pre-Fight Brief</h1>
+    <p>What top players do on this encounter — know before you pull</p>
+  </header>
+
+  <div class="card">
+    <div class="selectors">
+      <div class="form-group">
+        <label for="spec-sel">Spec</label>
+        <select id="spec-sel" onchange="onSpecChange()">
+          <option value="">— select spec —</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="enc-sel">Encounter</label>
+        <select id="enc-sel" onchange="onEncChange()" disabled>
+          <option value="">— select spec first —</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div id="brief"></div>
+</div>
+
+<script>
+  let _spec = '', _encId = 0;
+
+  function fmt(s) {
+    return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(Math.floor(s%60)).padStart(2,'0')}`;
+  }
+  function formatSpec(s) { return s.replace(/([A-Z])/g,' $1').trim(); }
+
+  async function apiFetch(url) {
+    try { const r = await fetch(url); return r.ok ? r.json() : null; }
+    catch { return null; }
+  }
+
+  function syncURL() {
+    const p = new URLSearchParams();
+    if (_spec) p.set('spec', _spec);
+    if (_encId) p.set('encounter', _encId);
+    history.replaceState({}, '', p.toString() ? `?${p}` : location.pathname);
+  }
+
+  window.onload = async () => {
+    const p = new URLSearchParams(location.search);
+    const data = await apiFetch('/api/pre/specs');
+    if (!data) return;
+    const sel = document.getElementById('spec-sel');
+    data.specs.forEach(s => {
+      const o = document.createElement('option');
+      o.value = s; o.textContent = formatSpec(s);
+      sel.appendChild(o);
+    });
+    const specParam = p.get('spec');
+    if (specParam) {
+      sel.value = specParam;
+      await onSpecChange(parseInt(p.get('encounter') || '0', 10));
+    }
+  };
+
+  async function onSpecChange(autoEnc = null) {
+    _spec = document.getElementById('spec-sel').value;
+    _encId = 0;
+    const encSel = document.getElementById('enc-sel');
+    encSel.innerHTML = '<option>Loading…</option>';
+    encSel.disabled = true;
+    document.getElementById('brief').innerHTML = '';
+    if (!_spec) return;
+
+    const data = await apiFetch(`/api/admin/parses/stats/${_spec}`);
+    const stats = (data?.stats || []).filter(s => s.sample_count > 0);
+    encSel.innerHTML = '<option value="">— select encounter —</option>';
+    if (!stats.length) {
+      encSel.innerHTML = '<option value="">No data — run Parse Ingestion in Admin first</option>';
+      return;
+    }
+    stats.forEach(s => {
+      const o = document.createElement('option');
+      o.value = s.encounter_id;
+      o.textContent = `${s.encounter_name}  (${s.sample_count} parses)`;
+      encSel.appendChild(o);
+    });
+    encSel.disabled = false;
+    if (autoEnc && stats.some(s => s.encounter_id === autoEnc)) {
+      encSel.value = autoEnc;
+      await onEncChange();
+    }
+  }
+
+  async function onEncChange() {
+    _encId = parseInt(document.getElementById('enc-sel').value || '0', 10);
+    syncURL();
+    const div = document.getElementById('brief');
+    if (!_encId) { div.innerHTML = ''; return; }
+    div.innerHTML = '<div class="empty-state"><div class="spinner"></div>Loading brief…</div>';
+    const data = await apiFetch(`/api/pre/brief/${_spec}/${_encId}`);
+    if (!data) { div.innerHTML = '<div class="empty-state">Failed to load.</div>'; return; }
+    renderBrief(data);
+  }
+
+  function renderBrief(data) {
+    const div = document.getElementById('brief');
+    if (!data.sample_count) {
+      div.innerHTML = '<div class="empty-state">No parse data for this encounter. Run top-parse ingestion in Admin first.</div>';
+      return;
+    }
+
+    // Stats bar
+    const statsHtml = `
+      <div class="card">
+        <div class="stats-bar">
+          <div class="stat"><div class="val">${data.sample_count}</div><div class="lbl">Top Parses</div></div>
+          <div class="stat"><div class="val">${data.avg_duration_s ? fmt(data.avg_duration_s) : '—'}</div><div class="lbl">Avg Kill</div></div>
+          <div class="stat"><div class="val">${Object.keys(data.cooldowns||{}).length}</div><div class="lbl">Tracked CDs</div></div>
+          ${data.burst_windows?.length ? `<div class="stat"><div class="val">${data.burst_windows.length}</div><div class="lbl">Burst Windows</div></div>` : ''}
+        </div>
+        ${data.source_summary ? `<div class="summary-box">${data.source_summary}</div>` : ''}
+      </div>`;
+
+    // CD guide
+    const cdEntries = Object.entries(data.cooldowns || {});
+    let cdSection = '';
+    if (cdEntries.length) {
+      const cards = cdEntries.map(([name, cd]) => {
+        const openStr = cd.avg_first_cast_s != null
+          ? `~${fmt(cd.avg_first_cast_s)}${cd.stddev_first_cast_s != null ? ` <small style="opacity:.6">±${cd.stddev_first_cast_s}s</small>` : ''}`
+          : '—';
+        const pattern = cd.majority_hold
+          ? '<span class="badge badge-hold">hold</span>'
+          : '<span class="badge badge-cd">on cd</span>';
+        const blBadge = cd.align_with_bloodlust && cd.bl_pct >= 70
+          ? `<span class="badge badge-bl">${cd.bl_pct}% BL</span>` : '';
+
+        const holdNotes = Object.entries(cd.hold_targets || {}).map(([idx, ht]) =>
+          `<div class="hold-note">Cast ${idx}: hold to ~${fmt(ht.target_s)} <span style="opacity:.6">±${ht.stddev_s}s · ${ht.count}/${ht.total_samples} parsers</span></div>`
+        ).join('');
+
+        return `
+          <div class="cd-card">
+            <div class="cd-card-head">
+              <span class="cd-name">${name}</span>
+              <span style="display:flex;gap:5px">${pattern}${blBadge}</span>
+            </div>
+            <div class="cd-stats-row">
+              <div class="cd-stat"><div class="cd-stat-val">${openStr}</div><div class="cd-stat-lbl">Opener</div></div>
+              <div class="cd-stat"><div class="cd-stat-val">${cd.avg_uses ?? '—'}</div><div class="cd-stat-lbl">Avg uses</div></div>
+              <div class="cd-stat"><div class="cd-stat-val">${cd.avg_uses_per_min ?? '—'}<small style="opacity:.6">/min</small></div><div class="cd-stat-lbl">Rate</div></div>
+              ${cd.align_with_bloodlust ? `<div class="cd-stat"><div class="cd-stat-val">${cd.bl_pct}%</div><div class="cd-stat-lbl">BL aligned</div></div>` : ''}
+            </div>
+            ${holdNotes}
+            ${cd.usage_rule ? `<div class="cd-rule">"${cd.usage_rule}"</div>` : ''}
+          </div>`;
+      }).join('');
+      cdSection = `<div class="card"><div class="card-title">Cooldown Guide — what the best do</div><div class="cd-grid">${cards}</div></div>`;
+    }
+
+    // Burst windows
+    let bwSection = '';
+    if (data.burst_windows?.length) {
+      const maxPct = Math.max(...data.burst_windows.map(b => b.pct_avg));
+      const rows = data.burst_windows.map(bw => {
+        const sdStr = bw.stddev_s > 0 ? ` <small style="opacity:.5">±${bw.stddev_s}s</small>` : '';
+        const pct = Math.round(bw.pct_avg / maxPct * 100);
+        const cds = bw.common_cds?.length ? bw.common_cds.join(', ') : '<span style="opacity:.5">no tracked CD</span>';
+        return `
+          <div class="bw-row">
+            <div class="bw-time">${fmt(bw.time_s)}${sdStr}</div>
+            <div class="bw-bar-wrap"><div class="bw-bar" style="width:${pct}%"></div></div>
+            <div class="bw-pct">${(bw.pct_avg*100).toFixed(1)}%</div>
+            <div class="bw-cds">${cds} <span style="opacity:.4">(${bw.count}/${bw.total_samples})</span></div>
+          </div>`;
+      }).join('');
+      bwSection = `<div class="card"><div class="card-title">Burst Windows — be ready to peak here</div>${rows}</div>`;
+    }
+
+    // Rules
+    let rulesSection = '';
+    if (data.top_rules?.length) {
+      const rows = data.top_rules.map(r => `
+        <div class="rule-row">
+          <span class="rule-badge rb-${r.priority}">${r.priority}</span>
+          <span class="rule-text">${r.action || r.description}</span>
+        </div>`).join('');
+      rulesSection = `<div class="card"><div class="card-title">Key Rules</div>${rows}</div>`;
+    }
+
+    // Placeholder — future gear / talent check
+    const placeholderSection = `
+      <div class="card">
+        <div class="card-title">Gear & Talent Check</div>
+        <div class="placeholder-box">Gear and talent analysis coming soon — add your character name to check bis items, gem choices, and talent builds for this encounter.</div>
+      </div>`;
+
+    div.innerHTML = statsHtml + cdSection + bwSection + rulesSection + placeholderSection;
+  }
+</script>
+</body>
+</html>

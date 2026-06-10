@@ -21,7 +21,9 @@ python3 -m uvicorn main:app --host 0.0.0.0 --port 8000
 
 | URL | Description |
 |---|---|
-| `http://localhost:8000` | Player analyzer |
+| `http://localhost:8000/pre` | Pre-fight brief — what top parsers do on each boss |
+| `http://localhost:8000/live` | Live mode — auto-selects newest pull, polls every 12s |
+| `http://localhost:8000` | Post-raid — full cooldown analysis for any fight |
 | `http://localhost:8000/admin` | Admin — guide management, rulebook generation, parse ingestion |
 
 ## Setup flow

@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 import db
 from analyzer import analyze_player
-from parses_analyzer import get_encounters, fetch_top_rankings, analyze_parse
+from parses_analyzer import get_encounters, fetch_top_rankings, analyze_parse, SPEC_TO_WCL
 from rulebook import BLOODLUST_SPELL_IDS
 from scraper import scrape
 from wcl_client import WCLClient
@@ -70,6 +70,16 @@ async def frontend():
 @app.get("/admin", include_in_schema=False)
 async def admin_frontend():
     return FileResponse(STATIC_DIR / "admin.html")
+
+
+@app.get("/pre", include_in_schema=False)
+async def pre_frontend():
+    return FileResponse(STATIC_DIR / "pre.html")
+
+
+@app.get("/live", include_in_schema=False)
+async def live_frontend():
+    return FileResponse(STATIC_DIR / "live.html")
 
 
 # ── Player analysis API ───────────────────────────────────────────────────────
@@ -369,6 +379,96 @@ async def analyze(req: AnalyzeRequest):
             result["burst_windows"] = consistent_bw
 
     return result
+
+
+# ── Pre-fight brief API ───────────────────────────────────────────────────────
+
+@app.get("/api/pre/specs")
+async def pre_specs():
+    return {"specs": sorted(SPEC_TO_WCL.keys())}
+
+
+@app.get("/api/pre/brief/{spec}/{encounter_id}")
+async def pre_fight_brief(spec: str, encounter_id: int):
+    samples = await db.get_parse_samples(spec, encounter_id)
+    if not samples:
+        return {"sample_count": 0, "spec": spec, "encounter_id": encounter_id}
+
+    encounter_name = samples[0].get("encounter_name", "Unknown")
+    durations = [
+        (s.get("cooldown_data") or {}).get("fight_duration_s")
+        for s in samples
+    ]
+    durations = [d for d in durations if d]
+
+    agg: dict[str, list] = defaultdict(list)
+    for s in samples:
+        cd_data = s.get("cooldown_data") or {}
+        fight_dur = cd_data.get("fight_duration_s", 0)
+        for cd in cd_data.get("cooldowns", []):
+            agg[cd["name"]].append({**cd, "fight_duration_s": fight_dur})
+
+    cached_rb = db.get_cached_rulebook(spec)
+    rb_cds = {cd["name"]: cd for cd in ((cached_rb or {}).get("major_cooldowns") or [])}
+    rb_rules = [
+        r for r in ((cached_rb or {}).get("rules") or [])
+        if r.get("priority") in ("critical", "high")
+    ]
+
+    cd_briefs: dict = {}
+    for cd_name, entries in agg.items():
+        first_casts = [e["first_cast_s"] for e in entries if e.get("first_cast_s") is not None]
+        upm_list = [
+            e["total_uses"] / (e["fight_duration_s"] / 60)
+            for e in entries if e.get("fight_duration_s")
+        ]
+        bl_count = sum(1 for e in entries if e.get("bl_aligned"))
+        bl_offsets = [e["bl_offset_s"] for e in entries if e.get("bl_offset_s") is not None]
+
+        hold_by_cast_idx: dict[int, list[float]] = defaultdict(list)
+        for e in entries:
+            for hw in e.get("hold_windows", []):
+                hold_by_cast_idx[hw["cast_index"]].append(hw["actual_s"])
+        hold_targets: dict[int, dict] = {}
+        for cast_idx, times in hold_by_cast_idx.items():
+            if len(times) >= max(2, len(entries) * 0.35):
+                hold_targets[cast_idx] = {
+                    "target_s": round(statistics.median(times), 1),
+                    "stddev_s": round(statistics.stdev(times) if len(times) > 1 else 20.0, 1),
+                    "count": len(times),
+                    "total_samples": len(entries),
+                }
+
+        cd_briefs[cd_name] = {
+            "avg_first_cast_s": round(statistics.mean(first_casts), 1) if first_casts else None,
+            "stddev_first_cast_s": round(statistics.stdev(first_casts), 1) if len(first_casts) > 1 else None,
+            "avg_uses_per_min": round(statistics.mean(upm_list), 2) if upm_list else None,
+            "avg_uses": round(statistics.mean([e["total_uses"] for e in entries]), 1) if entries else 0,
+            "bl_pct": round(bl_count / len(entries) * 100) if entries else 0,
+            "avg_bl_offset_s": round(statistics.mean(bl_offsets), 1) if bl_offsets else None,
+            "hold_targets": hold_targets,
+            "majority_hold": sum(1 for e in entries if e.get("cast_pattern") == "hold") > len(entries) * 0.5,
+            "usage_rule": rb_cds.get(cd_name, {}).get("usage_rule"),
+            "align_with_bloodlust": rb_cds.get(cd_name, {}).get("align_with_bloodlust", False),
+        }
+
+    all_bw: list[dict] = []
+    for s in samples:
+        for bw in (s.get("cooldown_data") or {}).get("burst_windows", []):
+            all_bw.append(bw)
+    burst_windows = _cluster_burst_windows(all_bw, len(samples)) if all_bw else []
+
+    return {
+        "sample_count": len(samples),
+        "spec": spec,
+        "encounter_id": encounter_id,
+        "encounter_name": encounter_name,
+        "avg_duration_s": round(statistics.mean(durations), 1) if durations else None,
+        "cooldowns": cd_briefs,
+        "burst_windows": burst_windows,
+        "source_summary": (cached_rb or {}).get("source_summary"),
+        "top_rules": rb_rules[:5],
+    }
 
 
 # ── Admin — Guides ────────────────────────────────────────────────────────────
