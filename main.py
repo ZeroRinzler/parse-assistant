@@ -524,6 +524,7 @@ def _aggregate_gear(samples: list[dict]) -> dict:
     """Aggregate talent builds, trinkets, and enchants across stored parse samples."""
     total = len(samples)
     talent_counter: Counter = Counter()
+    talent_example: dict[str, dict] = {}  # talent_key → {report_code, fight_id, player_name}
     trinket_counters: dict[int, Counter] = {12: Counter(), 13: Counter()}
     trinket_names: dict[int, str] = {}
     enchant_counters: dict[int, Counter] = defaultdict(Counter)
@@ -535,6 +536,12 @@ def _aggregate_gear(samples: list[dict]) -> dict:
         tk = cd_data.get("talent_key", "")
         if tk:
             talent_counter[tk] += 1
+            if tk not in talent_example:
+                talent_example[tk] = {
+                    "report_code": s.get("report_code", ""),
+                    "fight_id": s.get("fight_id"),
+                    "player_name": s.get("player_name", ""),
+                }
 
         for t in cd_data.get("trinkets") or []:
             slot = t.get("slot")
@@ -555,7 +562,12 @@ def _aggregate_gear(samples: list[dict]) -> dict:
     return {
         "sample_count": total,
         "talent_builds": [
-            {"key": k, "count": c, "pct": round(c / total * 100) if total else 0}
+            {
+                "key": k,
+                "count": c,
+                "pct": round(c / total * 100) if total else 0,
+                **talent_example.get(k, {}),
+            }
             for k, c in talent_counter.most_common(5)
         ],
         "trinkets": {

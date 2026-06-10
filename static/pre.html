@@ -60,6 +60,7 @@
     .gear-item .warn{color:var(--warning)}
     .gear-item .missing{color:var(--critical)}
     .gear-item .unknown{color:var(--muted)}
+    .wcl-link{color:var(--info);text-decoration:none;}.wcl-link:hover{text-decoration:underline;}
     .gear-top{font-size:11px;color:var(--muted);font-style:italic}
 
     .no-data-note{font-size:12px;color:var(--muted);font-style:italic}
@@ -430,7 +431,16 @@
         if (status === 'ok') {
           bodyHtml = `<div class="gear-item"><span class="ok">✓</span> Matches top parse build (${matchPct}% of parses)</div>`;
         } else {
-          bodyHtml = `<div class="gear-item"><span class="warn">⚠</span> Build differs — most common used by ${builds[0]?.pct ?? 0}% of top parsers</div>`;
+          const top = builds[0];
+          let wclLink = '';
+          if (top?.report_code) {
+            const href = top.fight_id
+              ? `https://www.warcraftlogs.com/reports/${top.report_code}#fight=${top.fight_id}&type=talents`
+              : `https://www.warcraftlogs.com/reports/${top.report_code}`;
+            const label = top.player_name ? `View ${top.player_name} on WCL` : 'View on WCL';
+            wclLink = ` — <a href="${href}" target="_blank" rel="noopener" class="wcl-link">${label}</a>`;
+          }
+          bodyHtml = `<div class="gear-item"><span class="warn">⚠</span> Build differs — most common used by ${top?.pct ?? 0}% of top parsers${wclLink}</div>`;
         }
       }
     }
