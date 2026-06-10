@@ -21,8 +21,10 @@ venv/
 env/
 ENV/
 
-# Database — runtime state, not source
-data/
+# Database — tracked so GitHub Actions can commit refreshed parse samples
+# data/warcraft.db is committed; exclude only transient files
+data/*.log
+data/tmp/
 
 # Logs
 *.log

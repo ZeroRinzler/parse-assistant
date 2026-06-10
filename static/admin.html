@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>WoW Analyzer — Admin</title>
+  <title>WoW Analyzer — Contribute</title>
   <style>
     :root {
       --bg:#0a0c10;--surface:#13161e;--surface2:#1c202c;--border:#2a2f3d;
@@ -103,15 +103,15 @@
 <body>
 <div class="layout">
   <aside class="sidebar">
-    <h2>⚙ Admin Panel</h2>
+    <h2>✦ Contribute</h2>
     <div class="nav-link active" onclick="showTab('guides')">📚 Guides</div>
     <div class="nav-link" onclick="showTab('parses')">📊 Top Parses</div>
     <div class="back-link" onclick="window.location='/'">← Back to Analyzer</div>
   </aside>
 
   <main class="main">
-    <div class="page-title">Admin</div>
-    <div class="page-sub">Manage guides, generate rulebooks, and ingest top-parse benchmarks per spec.</div>
+    <div class="page-title">Contribute</div>
+    <div class="page-sub">Help keep spec data up to date — add guides, generate rulebooks, and refresh top-parse benchmarks. Parse ingestion runs automatically via GitHub Actions daily; use this page to add guides or trigger a manual refresh.</div>
 
     <div class="card">
       <div class="spec-bar">
@@ -132,6 +132,12 @@
     <div class="tab-panel active" id="panel-guides">
       <div class="card">
         <div class="card-title">Add Guide</div>
+        <div class="muted" style="font-size:12px;margin-bottom:10px">
+          Add a guide URL to scrape. Guides are used to generate the rulebook for this spec via an LLM prompt.
+          You can also trigger guide scraping via GitHub Actions
+          (<a href="https://github.com" target="_blank" rel="noreferrer" style="color:var(--gold)">Actions → Scrape Guide</a>)
+          without needing this page.
+        </div>
         <div class="form-row">
           <div class="form-group" style="flex:3">
             <label>URL (Wowhead, Icy-Veins, YouTube, any guide page)</label>
@@ -198,7 +204,9 @@
         <div class="ingest-header">
           <div>
             <div class="card-title" style="margin-bottom:4px">Parse Ingestion — <span id="parses-spec-label">—</span></div>
-            <div class="muted">Always top 10 &nbsp;·&nbsp; Last ingested: <span id="spec-last-ingested" style="color:var(--text)">—</span></div>
+            <div class="muted">Always top 10 &nbsp;·&nbsp; Last ingested: <span id="spec-last-ingested" style="color:var(--text)">—</span>
+              &nbsp;·&nbsp; <span style="color:var(--info);font-size:11px">Auto-refreshed daily via GitHub Actions</span>
+            </div>
           </div>
           <button class="btn" id="btn-ingest-all" onclick="ingestAll()">⬇ Ingest All Bosses</button>
         </div>

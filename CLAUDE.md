@@ -54,7 +54,7 @@ warcraft-learner/
 │   ├── live.html        # Live analysis UI — polls for new pulls during raid
 │   └── admin.html       # Admin guide management UI (vanilla JS)
 ├── data/
-│   └── warcraft.db      # SQLite DB (gitignored — created at startup)
+│   └── warcraft.db      # SQLite DB (tracked; refreshed by GitHub Actions daily)
 ├── .env                 # Secrets (gitignored)
 ├── .env.example         # Credential template
 └── requirements.txt
@@ -273,6 +273,8 @@ Source: `design-doc.md` (architecture blueprint) + `intial-research.md` (researc
 | Per-fight player filtering | ✅ Done | `friendlyPlayers` from WCL per fight; player dropdown updates on fight change |
 | Fight dropdown attempt numbering | ✅ Done | Wipes show `✗ #N` per-boss; kills show `✓` |
 | Pre-fight gear check | ✅ Done | `/pre` page; character URL input; talents/trinkets/enchants vs top-parse aggregates; gear data stored per sample during ingestion |
+| Defensive cooldown analysis | ✅ Done | `SPEC_DEFENSIVES` in rulebook.py; player usage with damage absorbed per window; comparison vs top-parse avg; 30s damage-taken segments |
+| GitHub Actions ingestion pipeline | ✅ Done | `.github/workflows/ingest-parses.yml` (daily schedule + manual); `scripts/ingest_parses.py` and `scripts/scrape_guides.py` work identically locally |
 
 ### Gaps — from design-doc.md
 

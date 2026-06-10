@@ -1,0 +1,54 @@
+name: Ingest Parse Samples
+
+on:
+  schedule:
+    # Runs daily at 06:00 UTC — after EU/US raid nights have concluded
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      spec:
+        description: 'Spec to ingest (leave empty to ingest all specs with existing data)'
+        required: false
+        default: ''
+      top_n:
+        description: 'Number of top parses per boss'
+        required: false
+        default: '10'
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run parse ingestion
+        env:
+          WCL_CLIENT_ID: ${{ secrets.WCL_CLIENT_ID }}
+          WCL_CLIENT_SECRET: ${{ secrets.WCL_CLIENT_SECRET }}
+        run: |
+          SPEC="${{ github.event.inputs.spec }}"
+          TOP_N="${{ github.event.inputs.top_n || '10' }}"
+          if [ -n "$SPEC" ]; then
+            python3 scripts/ingest_parses.py --spec "$SPEC" --top-n "$TOP_N"
+          else
+            python3 scripts/ingest_parses.py --all --top-n "$TOP_N"
+          fi
+
+      - name: Commit updated database
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'chore: refresh parse samples [skip ci]'
+          file_pattern: 'data/warcraft.db'
+          commit_user_name: 'github-actions[bot]'
+          commit_user_email: 'github-actions[bot]@users.noreply.github.com'

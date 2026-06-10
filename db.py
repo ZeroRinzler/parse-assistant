@@ -286,6 +286,15 @@ async def get_parse_samples(spec: str, encounter_id: int) -> list[dict]:
             return result
 
 
+async def list_specs_with_samples() -> list[str]:
+    """Return distinct spec names that have at least one parse sample."""
+    async with _conn() as db:
+        async with db.execute(
+            "SELECT DISTINCT spec FROM parse_samples ORDER BY spec"
+        ) as cur:
+            return [row[0] async for row in cur]
+
+
 # ── Spell icon cache ──────────────────────────────────────────────────────────
 
 async def get_cached_spell_icons(spell_ids: list[int]) -> dict[int, dict]:

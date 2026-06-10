@@ -82,6 +82,7 @@ async def frontend():
 
 
 @app.get("/admin", include_in_schema=False)
+@app.get("/contribute", include_in_schema=False)
 async def admin_frontend():
     return FileResponse(STATIC_DIR / "admin.html")
 

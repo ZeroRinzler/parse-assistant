@@ -1,0 +1,52 @@
+name: Scrape Guide
+
+on:
+  workflow_dispatch:
+    inputs:
+      spec:
+        description: 'WCL spec name, e.g. SubtletyRogue'
+        required: true
+      url:
+        description: 'Guide URL to scrape'
+        required: true
+      guide_type:
+        description: 'Guide type'
+        required: true
+        default: 'web'
+        type: choice
+        options:
+          - web
+          - youtube
+          - simc
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Scrape guide
+        run: |
+          python3 scripts/scrape_guides.py \
+            --spec "${{ github.event.inputs.spec }}" \
+            --url "${{ github.event.inputs.url }}" \
+            --type "${{ github.event.inputs.guide_type }}"
+
+      - name: Commit updated database
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'chore: add guide for ${{ github.event.inputs.spec }} [skip ci]'
+          file_pattern: 'data/warcraft.db'
+          commit_user_name: 'github-actions[bot]'
+          commit_user_email: 'github-actions[bot]@users.noreply.github.com'
