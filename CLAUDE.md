@@ -66,9 +66,10 @@ warcraft-learner/
 3. Fetches `Casts` and `Buffs` events for that player via `wcl_client.py`.
 4. `analyzer.py` checks per cooldown:
    - **Lost cooldown casts** — `expected = 1 + floor(fight_duration / cd_cooldown)` vs actual.
-   - **Bloodlust alignment** — flags any major CD (where `align_with_bloodlust: true`) not cast within the BL window.
-   - **First-cast delay** — flags opener CDs used >30 s into the fight.
-   - **Cooldown held past reset** — gap between casts > cooldown × 1.2.
+   - **Bloodlust alignment** — flags any major CD (where `align_with_bloodlust: true`) whose BL-window cast timing is >2σ from the top-parse average offset. Falls back to a binary in/out-of-window check when no parse data exists.
+   - **First-cast delay** — flags opener CDs whose first cast is >2σ later than the top-parse `avg_first_cast_s`. Falls back to a flat 30 s threshold when no parse data exists.
+   - **Cooldown held past reset** — gap between casts is >2σ above the top-parse `avg_gap_s` for that CD. Falls back to `cooldown × 1.2` when no parse data exists.
+   - **Cast efficiency** — compares player downtime (gaps above the p90 of top-parse inter-cast gaps) against the top-parse average. Warning band uses top-parse stddev rather than a fixed percentage.
    - **Success** — emits a `severity: "success"` finding if a CD had zero issues.
 5. **Rule engine** — after cooldown analysis, evaluates every `rules[]` entry that has a machine-readable `condition` object. Two supported kinds:
    - `cast_without_prior` — flags each cast of `spell_id` that lacks a paired cast of `required_spell_id` within `window_s`. Optional `exception` exempts casts during a context spell window (e.g. 2nd Dance inside Shadow Blades).
@@ -83,12 +84,14 @@ warcraft-learner/
 2. **Scrape** — POST `/api/admin/guides/{id}/scrape`. `scraper.py` fetches page text (BeautifulSoup) or YouTube transcript (`youtube-transcript-api`). Up to 60 k chars stored per guide.
 3. **Generate rulebook** — POST `/api/admin/rulebook/{spec}/generate-stream`. `llm_parser.py` batches all scraped guide content and optionally top-parse context, sends to Claude (`claude-sonnet-4-6`), receives structured JSON with `major_cooldowns[]` and `rules[]`. Saved to `generated_rulebooks` table and loaded into in-memory cache — live immediately with no restart.
 4. **Manual rulebook** — PUT `/api/admin/rulebook/{spec}`. Persists hand-crafted JSON directly, bypassing the LLM. Must include `major_cooldowns` key.
-5. **Top parses** — POST `/api/admin/parses/analyze-stream`. Fetches WCL `characterRankings` for spec + encounter, then deep-analyzes each top player's events using the **dynamic rulebook** (not the static fallback). Results saved to `parse_samples` table.
+5. **Top parses** — Single "Ingest All Bosses" button on the parses tab. Streams progress via `GET /api/admin/parses/ingest-all-stream/{spec}` (SSE). Always ingests top 10 per boss; **overwrites** existing samples for that spec+encounter on each run. Per-boss progress shown as a mini bar in the boss table. After ingestion, stored samples can be inspected per boss via the "View N" button (calls `GET /api/admin/parses/samples/{spec}/{encounter_id}`).
 
-### Encounter selection (admin parses tab)
+### Encounter selection
 Encounters auto-load on page open. Filtered to:
 - Current expansion only (auto-detected as the expansion with the first unique name in the WCL API response — WCL returns newest first).
 - Excludes zones matching: `beta`, `ptr`, `mythic+`, `complete raids`, `delves`, `torghast`.
+
+The encounter selector on the guides tab is used solely as optional context when generating a rulebook (passes top-parse samples from that boss to the LLM). The parses tab shows all current-expansion bosses in a table with sample counts and last-ingested timestamps — no manual encounter selection needed.
 
 ## Data models
 
@@ -110,6 +113,17 @@ Encounters auto-load on page open. Filtered to:
 
 ### `parse_samples` table
 Stores per-fight cooldown timing summaries for top WCL performers. Used for the vs-top-parses comparison on the analyzer page and as grounding context for LLM rulebook generation.
+
+Key fields stored inside the `cooldown_data` JSON blob:
+
+| Field | Level | Notes |
+|---|---|---|
+| `fight_duration_s` | top-level | Fight length in seconds |
+| `cast_efficiency_pct` | top-level | % of fight time actively casting (1500ms baseline) |
+| `cast_gap_list_ms` | top-level | Sorted list of all inter-cast gaps in ms — used to derive the p90 downtime threshold |
+| `cooldowns[].cast_times_s` | per-CD | List of cast timestamps relative to fight start — used to compute avg/stddev first-cast and gap benchmarks |
+| `cooldowns[].bl_offset_s` | per-CD | Seconds between the BL-window cast and BL start (negative = pre-cast) — used to benchmark BL timing |
+| `cooldowns[].bl_aligned` | per-CD | Whether this parse cast the CD inside the BL window |
 
 ### Rulebook JSON schema
 ```json
@@ -176,22 +190,25 @@ Rules with a machine-readable `condition` object are evaluated by the engine. Su
 
 Rules without a `condition` (or with `null`) are silently skipped by the engine.
 
-## Hardcoded thresholds to replace with data from parse samples
+## Analysis thresholds
 
-These values are static and should eventually be derived from top-parse data per spec/encounter, the same way cast efficiency now is.
+All thresholds are now derived from top-parse data when samples exist for the encounter, with static fallbacks when they do not.
 
-| Value | Location | What it controls | Fix |
-|---|---|---|---|
-| `> 30s` first-cast delay | `analyzer.py:222` | Flags opener CDs used after 30s as delayed | Should come from top-parse `avg_first_cast_s` per CD — flag if player's first cast is >Xs later than the top-parse average |
-| `cooldown_s * 1.2` hold threshold | `analyzer.py:261` | Gap between CD uses flagged if >20% over the cooldown | Should be derived from top-parse gap distributions per CD, not a flat 20% tolerance |
-| `> 1500ms` gap threshold | `analyzer.py:303`, `parses_analyzer.py:254` | Minimum gap counted as downtime | Sub Rogue's rotation has intentional short pauses; a spec-calibrated threshold (e.g. sourced from top-parse median gap) would avoid noise |
-| `-7%` efficiency warning band | `analyzer.py:322` | Player flagged as warning if >7% below top-parse efficiency avg | Arbitrary; should be derived from the standard deviation of top-parse efficiency values |
-| `bl_time - 30` to `bl_time + 55` BL window | `parses_analyzer.py:230` | Determines BL-aligned flag in top-parse samples | The 55s tail is BLOODLUST_DURATION_S (40s) + 15s grace; the pre-window (-30s) is reasonable but not validated against real data |
-| `bl_window_start = bl_time - 30` | `analyzer.py:236` | BL pre-window for player CD alignment check | Same as above — 30s lead time is conventional but not data-derived |
-| `>= -0.05` uses/min delta | `index.html:553` | Green/red cutoff in the comparison table | Should be derived from the standard deviation of top-parse uses/min, not a flat tolerance |
-| `firstDiff <= 3` first-cast delta | `index.html:555` | First cast within 3s of top avg shown as green | Should be derived from top-parse first-cast variance per CD |
+| Threshold | How it is derived | Fallback (no parse data) |
+|---|---|---|
+| First-cast delay | `avg_first_cast_s + 2σ` across top parses for that CD | 30 s |
+| Gap between CD uses | `avg_gap_s + 2σ` across top parses for that CD | `cooldown × 1.2` |
+| Downtime gap floor | p90 of pooled `cast_gap_list_ms` from all samples | 1500 ms |
+| Efficiency warning band | `top_efficiency_stddev` (1σ below avg triggers warning, 2σ triggers critical) | flat −7% |
+| BL timing comparison | `avg_bl_offset_s ± 2σ` across top parses for that CD | binary in/out-of-window |
+| Comparison table green/red (uses/min) | `top_stddev_uses_per_min` per CD | ±0.05 uses/min |
+| Comparison table green/red (first cast) | `top_stddev_first_cast_s` per CD | ±3 s |
 
-**Fix pattern**: for each threshold, compute the relevant statistic (mean ± stddev, or a percentile) across the saved `parse_samples` during analysis and pass it alongside `top_efficiency_pct`. The rulebook could also carry per-CD expected timing from parse data.
+### Remaining static values
+
+| Value | Location | Notes |
+|---|---|---|
+| `bl_time - 30` to `bl_time + 55` BL detection window | `parses_analyzer.py` | Used when ingesting top parses to decide which CD cast counts as "BL-aligned". The 55s tail = BL duration (40s) + 15s grace. Not worth deriving from data since it defines what we measure. |
 
 ## Gap analysis vs original design documents
 
@@ -208,6 +225,8 @@ Source: `design-doc.md` (architecture blueprint) + `intial-research.md` (researc
 | Cast efficiency benchmarked from real top-parse data | ✅ Done | Previously hardcoded at 95%, now sourced from samples |
 | Prescriptive coaching output (not just raw data) | ✅ Done | Rule `action` field surfaces as remedy text in UI |
 | Admin ingestion pipeline with URL persistence and encounter filter | ✅ Done | |
+| All analysis thresholds derived from top-parse data | ✅ Done | First-cast delay, gap tolerance, downtime floor, efficiency band, BL timing — all data-derived with static fallbacks |
+| Single-button all-boss parse ingestion | ✅ Done | SSE-streamed per-boss progress; always top 10; overwrites on re-run; boss overview table with sample counts and last-ingested dates |
 
 ### Gaps — from design-doc.md
 
