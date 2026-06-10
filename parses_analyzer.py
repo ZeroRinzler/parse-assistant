@@ -222,14 +222,19 @@ async def analyze_parse(
         ]
         cd_casts.sort(key=lambda e: e["timestamp"])
 
-        first_cast_s = (cd_casts[0]["timestamp"] - start) / 1000 if cd_casts else None
+        cast_times_s = [(c["timestamp"] - start) / 1000 for c in cd_casts]
+        first_cast_s = cast_times_s[0] if cast_times_s else None
         bl_aligned = False
-        if bl_time_s is not None and cd_casts:
-            for c in cd_casts:
-                t = (c["timestamp"] - start) / 1000
+        bl_offset_s = None
+        if bl_time_s is not None and cast_times_s:
+            for t in cast_times_s:
                 if bl_time_s - 30 <= t <= bl_time_s + 55:
                     bl_aligned = True
                     break
+            # Record offset of the BL-window cast closest to BL start (negative = before BL)
+            window_offsets = [t - bl_time_s for t in cast_times_s if bl_time_s - 30 <= t <= bl_time_s + 55]
+            if window_offsets:
+                bl_offset_s = round(min(window_offsets, key=abs), 1)
 
         cd_summary.append(
             {
@@ -238,21 +243,26 @@ async def analyze_parse(
                 "total_uses": len(cd_casts),
                 "first_cast_s": round(first_cast_s, 1) if first_cast_s is not None else None,
                 "bl_aligned": bl_aligned,
+                "bl_offset_s": bl_offset_s,
+                "cast_times_s": [round(t, 2) for t in cast_times_s],
             }
         )
 
-    # Cast efficiency — same gap logic as the main analyzer
+    # Cast efficiency — store full sorted gap list so main.py can derive the threshold
     completed = sorted(
         [e for e in cast_events if e.get("type") == "cast"],
         key=lambda e: e["timestamp"],
     )
     cast_eff_pct: Optional[float] = None
+    cast_gap_list_ms: list[int] = []
     if len(completed) >= 2 and fight_dur_s > 0:
-        downtime_ms = sum(
-            completed[i]["timestamp"] - completed[i - 1]["timestamp"]
+        cast_gap_list_ms = sorted([
+            int(completed[i]["timestamp"] - completed[i - 1]["timestamp"])
             for i in range(1, len(completed))
-            if completed[i]["timestamp"] - completed[i - 1]["timestamp"] > 1500
-        )
+        ])
+        # Keep stored efficiency at 1500ms for backward-compatibility;
+        # main.py recomputes it at the derived threshold when cast_gap_list_ms is present.
+        downtime_ms = sum(g for g in cast_gap_list_ms if g > 1500)
         cast_eff_pct = round(max(0.0, (1 - downtime_ms / 1000 / fight_dur_s) * 100), 1)
 
     return {
@@ -261,6 +271,7 @@ async def analyze_parse(
         "fight_duration_s": round(fight_dur_s, 1),
         "bloodlust_s": round(bl_time_s, 1) if bl_time_s is not None else None,
         "cast_efficiency_pct": cast_eff_pct,
+        "cast_gap_list_ms": cast_gap_list_ms,
         "cooldowns": cd_summary,
     }
 

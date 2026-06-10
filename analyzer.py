@@ -134,6 +134,9 @@ def analyze_player(
     spec_cds_override: Optional[list[dict]] = None,
     rules_override: Optional[list[dict]] = None,
     top_efficiency_pct: Optional[float] = None,
+    top_efficiency_stddev: Optional[float] = None,
+    per_cd_benchmarks: Optional[dict] = None,
+    downtime_threshold_ms: float = 1500.0,
 ) -> dict:
     spec = player.get("subType", "Unknown")
     fight_duration_ms = fight_end - fight_start
@@ -216,10 +219,29 @@ def analyze_player(
                     ),
                 })
 
+            bench = (per_cd_benchmarks or {}).get(cd_name)
+
             # First-cast delay
             if cd_casts:
                 first_s = rel(cd_casts[0]["timestamp"]) / 1000
-                if first_s > 30:
+                if bench and bench.get("avg_first_cast_s") is not None:
+                    avg_f = bench["avg_first_cast_s"]
+                    sd_f = bench.get("stddev_first_cast_s") or 10.0
+                    # Flag only when opener is more than 2σ later than top parsers on this encounter.
+                    # Earlier is not penalised — on some fights holding until a mechanic is optimal.
+                    if first_s > avg_f + 2 * sd_f:
+                        cd_issues.append({
+                            "severity": "warning",
+                            "category": "cooldown_delay",
+                            "timestamp_ms": int(rel(cd_casts[0]["timestamp"])),
+                            "message": (
+                                f"{cd_name} opener at {_fmt(first_s)} — "
+                                f"{first_s - avg_f:.0f}s later than top parsers "
+                                f"({_fmt(avg_f)} avg ±{sd_f:.0f}s on this encounter). "
+                                f"A delayed opener on a {cooldown_s}s cooldown risks losing a use later."
+                            ),
+                        })
+                elif first_s > 30:
                     cd_issues.append({
                         "severity": "warning",
                         "category": "cooldown_delay",
@@ -235,10 +257,12 @@ def analyze_player(
             if bl_time_s is not None and cd_casts:
                 bl_window_start_s = bl_time_s - 30
                 bl_window_end_s = bl_time_s + BLOODLUST_DURATION_S + 15
-                bl_aligned = any(
-                    bl_window_start_s <= rel(c["timestamp"]) / 1000 <= bl_window_end_s
-                    for c in cd_casts
-                )
+                bl_window_casts = [
+                    c for c in cd_casts
+                    if bl_window_start_s <= rel(c["timestamp"]) / 1000 <= bl_window_end_s
+                ]
+                bl_aligned = bool(bl_window_casts)
+
                 if not bl_aligned and wants_bl:
                     first_cast_s = rel(cd_casts[0]["timestamp"]) / 1000
                     delta = abs(first_cast_s - bl_time_s)
@@ -252,13 +276,53 @@ def analyze_player(
                             f"Stacking all major CDs inside BL multiplies their value by ~30%."
                         ),
                     })
+                elif bl_aligned and wants_bl and bench:
+                    # BL was hit — check if the timing within BL matches top parsers.
+                    # Positive offset = cast after BL started; negative = pre-cast before BL.
+                    offsets = [rel(c["timestamp"]) / 1000 - bl_time_s for c in bl_window_casts]
+                    player_bl_offset = min(offsets, key=abs)
+                    avg_off = bench.get("avg_bl_offset_s")
+                    if avg_off is not None:
+                        sd_off = bench.get("stddev_bl_offset_s") or 5.0
+                        if abs(player_bl_offset - avg_off) > 2 * sd_off:
+                            direction = "late" if player_bl_offset > avg_off else "early"
+                            sign = lambda v: f"+{v:.0f}" if v >= 0 else f"{v:.0f}"
+                            cd_issues.append({
+                                "severity": "warning",
+                                "category": "cooldown_alignment",
+                                "timestamp_ms": int(rel(bl_window_casts[0]["timestamp"])),
+                                "message": (
+                                    f"{cd_name} used at BL {sign(player_bl_offset)}s — "
+                                    f"top parsers use it at BL {sign(avg_off)}s (±{sd_off:.0f}s) on this encounter. "
+                                    f"Using it {direction} in the Bloodlust window reduces overlap with the damage buff."
+                                ),
+                            })
 
             # Gaps between consecutive CD casts
             for i in range(1, len(cd_casts)):
                 prev_s = rel(cd_casts[i - 1]["timestamp"]) / 1000
                 curr_s = rel(cd_casts[i]["timestamp"]) / 1000
                 actual_gap = curr_s - prev_s
-                if actual_gap > cooldown_s * 1.2:
+                if bench and bench.get("avg_gap_s") is not None:
+                    avg_g = bench["avg_gap_s"]
+                    # Default σ to 20% of the cooldown when not available (matches old 1.2x heuristic).
+                    sd_g = bench.get("stddev_gap_s") or (cooldown_s * 0.2)
+                    # Flag only when gap is more than 2σ above top-parse average for this encounter.
+                    # Top parsers who hold for boss mechanics produce a naturally larger avg_gap_s,
+                    # so this adapts to encounter-specific patterns automatically.
+                    if actual_gap > avg_g + 2 * sd_g:
+                        delay = actual_gap - avg_g
+                        cd_issues.append({
+                            "severity": "warning",
+                            "category": "cooldown_delay",
+                            "timestamp_ms": int(rel(cd_casts[i]["timestamp"])),
+                            "message": (
+                                f"{cd_name} at {_fmt(curr_s)}: {actual_gap:.0f}s gap vs "
+                                f"top-parse avg {avg_g:.0f}s (±{sd_g:.0f}s) on this encounter. "
+                                f"Held {delay:.0f}s longer than top performers typically do here."
+                            ),
+                        })
+                elif actual_gap > cooldown_s * 1.2:
                     delay = actual_gap - cooldown_s
                     cd_issues.append({
                         "severity": "warning",
@@ -300,7 +364,7 @@ def analyze_player(
         gaps: list[dict] = []
         for i in range(1, len(completed_casts)):
             gap_ms = rel(completed_casts[i]["timestamp"]) - rel(completed_casts[i - 1]["timestamp"])
-            if gap_ms > 1500:
+            if gap_ms > downtime_threshold_ms:
                 gaps.append({
                     "start_ms": int(rel(completed_casts[i - 1]["timestamp"])),
                     "duration_ms": int(gap_ms),
@@ -319,6 +383,9 @@ def analyze_player(
                 benchmark_str = f"top parses avg {top_efficiency_pct:.0f}%"
                 if delta >= 0:
                     severity = "success"
+                elif top_efficiency_stddev is not None:
+                    # Within 1σ of top-parse mean → warning; further → critical.
+                    severity = "warning" if delta >= -top_efficiency_stddev else "critical"
                 elif delta >= -7:
                     severity = "warning"
                 else:
@@ -333,7 +400,7 @@ def analyze_player(
                 "timestamp_ms": None,
                 "message": (
                     f"Cast efficiency: {efficiency_pct:.1f}% ({benchmark_str}) — "
-                    f"{total_downtime_s:.1f}s in gaps >1.5s. "
+                    f"{total_downtime_s:.1f}s in gaps >{downtime_threshold_ms/1000:.1f}s. "
                     f"Worst: {worst_str}."
                 ),
                 "details": {

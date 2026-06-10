@@ -549,10 +549,15 @@
       const firstDiff = (c.top_avg_first_cast_s !== null && c.player_first_cast_s !== null)
         ? c.player_first_cast_s - c.top_avg_first_cast_s : null;
 
+      // Use per-CD σ from top parses as the good/bad boundary.
+      // Player is green if within 1σ of the top-parse average; red if further away.
+      // Falls back to flat constants when σ is not yet available (no parse samples).
+      const upmBand = (c.top_stddev_uses_per_min != null) ? c.top_stddev_uses_per_min : 0.05;
       const usesClass = upmDiff === null ? 'delta-ok'
-        : upmDiff >= -0.05 ? 'delta-good' : 'delta-bad';
+        : upmDiff >= -upmBand ? 'delta-good' : 'delta-bad';
+      const firstBand = (c.top_stddev_first_cast_s != null) ? c.top_stddev_first_cast_s : 3;
       const firstClass = firstDiff === null ? 'delta-ok'
-        : firstDiff <= 3 ? 'delta-good' : 'delta-bad';
+        : firstDiff <= firstBand ? 'delta-good' : 'delta-bad';
 
       const upmDelta = upmDiff !== null
         ? `<span class="${usesClass}">${upmDiff >= 0 ? '+' : ''}${upmDiff.toFixed(2)}</span>` : '—';
@@ -568,8 +573,25 @@
 
       const playerFirst = c.player_first_cast_s !== null ? `${c.player_first_cast_s}s` : '—';
       const topFirst = c.top_avg_first_cast_s !== null ? `${c.top_avg_first_cast_s}s` : '—';
-      const blCell = c.top_bl_pct !== null
-        ? `<span class="${c.top_bl_pct >= 80 ? 'delta-good' : 'delta-ok'}">${c.top_bl_pct}%</span>` : '—';
+
+      // BL column: alignment rate + offset comparison when top-parse offset data is available
+      const fmtOff = v => `${v >= 0 ? '+' : ''}${v.toFixed(1)}s`;
+      let blCell = c.top_bl_pct !== null
+        ? `<span class="${c.top_bl_pct >= 80 ? 'delta-good' : 'delta-ok'}">${c.top_bl_pct}% aligned</span>`
+        : '—';
+      if (c.top_avg_bl_offset_s != null) {
+        const topOffStr = fmtOff(c.top_avg_bl_offset_s);
+        const sdStr = c.top_stddev_bl_offset_s != null ? ` ±${c.top_stddev_bl_offset_s.toFixed(1)}s` : '';
+        if (c.player_bl_offset_s != null) {
+          const band = c.top_stddev_bl_offset_s != null ? 2 * c.top_stddev_bl_offset_s : 5;
+          const offsetDiff = Math.abs(c.player_bl_offset_s - c.top_avg_bl_offset_s);
+          const offsetClass = offsetDiff <= band ? 'delta-good' : 'delta-bad';
+          blCell += `<br><small>BL timing: <span class="${offsetClass}">${fmtOff(c.player_bl_offset_s)}</span>`
+                  + ` / top avg ${topOffStr}${sdStr}</small>`;
+        } else {
+          blCell += `<br><small>Top BL timing: ${topOffStr}${sdStr}</small>`;
+        }
+      }
 
       return `<tr>
         <td class="cd-name">${c.name}</td>

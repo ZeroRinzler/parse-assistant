@@ -1,5 +1,7 @@
 import json
 import re
+import statistics
+from collections import defaultdict
 from pathlib import Path
 from typing import Optional
 
@@ -12,6 +14,7 @@ from pydantic import BaseModel
 import db
 from analyzer import analyze_player
 from parses_analyzer import get_encounters, fetch_top_rankings, analyze_parse, build_parse_context
+from rulebook import BLOODLUST_SPELL_IDS
 from scraper import scrape
 from llm_parser import parse_guides
 from wcl_client import WCLClient
@@ -171,21 +174,75 @@ async def analyze(req: AnalyzeRequest):
     cached_rb = db.get_cached_rulebook(spec)
     spec_rules = (cached_rb or {}).get("rules", []) if cached_rb else []
 
-    # Pre-fetch parse samples so we can pass the efficiency benchmark to the analyzer
+    # Pre-fetch parse samples; compute benchmarks before calling the analyzer
     encounter_id = fight.get("encounterID")
     player_fight_dur_s = (end - start) / 1000
     samples = []
     top_avg_efficiency: Optional[float] = None
+    top_efficiency_stddev: Optional[float] = None
+    per_cd_benchmarks: dict = {}
+    agg: dict[str, list] = {}
+    downtime_threshold_ms: float = 1500.0  # fallback when no parse data available
+
     if encounter_id:
         samples = await db.get_parse_samples(spec, encounter_id)
         if samples:
-            eff_vals = [
-                (s.get("cooldown_data") or {}).get("cast_efficiency_pct")
-                for s in samples
-            ]
-            eff_vals = [v for v in eff_vals if v is not None]
+            # Aggregate per-CD data across all parse samples
+            agg = defaultdict(list)
+            for s in samples:
+                cd_data = s.get("cooldown_data") or {}
+                fight_dur = cd_data.get("fight_duration_s", 0)
+                for cd in cd_data.get("cooldowns", []):
+                    agg[cd["name"]].append({**cd, "fight_duration_s": fight_dur})
+
+            # Derive downtime threshold from the p90 of all top-parse inter-cast gaps.
+            # A gap that top parsers commonly produce is their natural rotation — not downtime.
+            all_top_gaps_ms: list[int] = []
+            for s in samples:
+                all_top_gaps_ms.extend((s.get("cooldown_data") or {}).get("cast_gap_list_ms") or [])
+            if all_top_gaps_ms:
+                all_top_gaps_ms.sort()
+                p90_idx = max(0, int(0.90 * len(all_top_gaps_ms)) - 1)
+                downtime_threshold_ms = float(all_top_gaps_ms[p90_idx])
+
+            # Recompute top-parse efficiency at the derived threshold for a consistent baseline.
+            # Falls back to the stored 1500ms value for old samples that lack cast_gap_list_ms.
+            eff_vals: list[float] = []
+            for s in samples:
+                cd_data = s.get("cooldown_data") or {}
+                gap_list = cd_data.get("cast_gap_list_ms") or []
+                dur_s = cd_data.get("fight_duration_s") or 0
+                if gap_list and dur_s > 0:
+                    dt_s = sum(g for g in gap_list if g > downtime_threshold_ms) / 1000
+                    eff_vals.append(round(max(0.0, (1 - dt_s / dur_s) * 100), 1))
+            if not eff_vals:
+                eff_vals = [
+                    (s.get("cooldown_data") or {}).get("cast_efficiency_pct")
+                    for s in samples
+                ]
+                eff_vals = [v for v in eff_vals if v is not None]
             if eff_vals:
-                top_avg_efficiency = round(sum(eff_vals) / len(eff_vals), 1)
+                top_avg_efficiency = round(statistics.mean(eff_vals), 1)
+                if len(eff_vals) > 1:
+                    top_efficiency_stddev = round(statistics.stdev(eff_vals), 1)
+
+            # Per-CD benchmark stats for data-driven thresholds
+            for cd_name, entries in agg.items():
+                top_first_casts = [e["first_cast_s"] for e in entries if e.get("first_cast_s") is not None]
+                all_gaps: list[float] = []
+                for e in entries:
+                    times = e.get("cast_times_s", [])
+                    for j in range(1, len(times)):
+                        all_gaps.append(times[j] - times[j - 1])
+                bl_offsets = [e["bl_offset_s"] for e in entries if e.get("bl_offset_s") is not None]
+                per_cd_benchmarks[cd_name] = {
+                    "avg_first_cast_s": round(statistics.mean(top_first_casts), 1) if top_first_casts else None,
+                    "stddev_first_cast_s": round(statistics.stdev(top_first_casts), 1) if len(top_first_casts) > 1 else None,
+                    "avg_gap_s": round(statistics.mean(all_gaps), 1) if all_gaps else None,
+                    "stddev_gap_s": round(statistics.stdev(all_gaps), 1) if len(all_gaps) > 1 else None,
+                    "avg_bl_offset_s": round(statistics.mean(bl_offsets), 1) if bl_offsets else None,
+                    "stddev_bl_offset_s": round(statistics.stdev(bl_offsets), 1) if len(bl_offsets) > 1 else None,
+                }
 
     result = analyze_player(
         player=player,
@@ -196,18 +253,24 @@ async def analyze(req: AnalyzeRequest):
         spec_cds_override=spec_cds,
         rules_override=spec_rules,
         top_efficiency_pct=top_avg_efficiency,
+        top_efficiency_stddev=top_efficiency_stddev,
+        per_cd_benchmarks=per_cd_benchmarks or None,
+        downtime_threshold_ms=downtime_threshold_ms,
     )
     result["spec"] = spec  # override actor.subType with properly resolved spec
 
     # Attach parse comparison
-    if encounter_id and spec_cds and samples:
-        from collections import defaultdict
-        agg: dict[str, list] = defaultdict(list)
-        for s in samples:
-            cd_data = s.get("cooldown_data") or {}
-            fight_dur = cd_data.get("fight_duration_s", 0)
-            for cd in cd_data.get("cooldowns", []):
-                agg[cd["name"]].append({**cd, "fight_duration_s": fight_dur})
+    if encounter_id and spec_cds and samples and agg:
+        # Resolve player BL time for per-CD BL offset comparison in the table
+        player_bl_s: Optional[float] = None
+        for e in buff_events:
+            if (
+                e.get("type") == "applybuff"
+                and e.get("abilityGameID") in BLOODLUST_SPELL_IDS
+                and start <= e["timestamp"] <= end
+            ):
+                player_bl_s = (e["timestamp"] - start) / 1000
+                break
 
         comparison = []
         player_dur_min = player_fight_dur_s / 60 if player_fight_dur_s > 0 else 1
@@ -231,23 +294,46 @@ async def analyze(req: AnalyzeRequest):
                 e["total_uses"] / (e["fight_duration_s"] / 60)
                 for e in top if e.get("fight_duration_s")
             ]
-            top_avg_upm = round(sum(top_upm_list) / len(top_upm_list), 2) if top_upm_list else None
+            top_avg_upm = round(statistics.mean(top_upm_list), 2) if top_upm_list else None
+            top_stddev_upm = round(statistics.stdev(top_upm_list), 3) if len(top_upm_list) > 1 else None
+            top_avg_first = round(statistics.mean(top_first), 1) if top_first else None
+            top_stddev_first = round(statistics.stdev(top_first), 1) if len(top_first) > 1 else None
 
+            # BL offset: when (relative to BL start) did the player use this CD during BL?
+            player_bl_offset: Optional[float] = None
+            if player_bl_s is not None and cd_casts:
+                window_offsets = [
+                    (c["timestamp"] - start) / 1000 - player_bl_s
+                    for c in cd_casts
+                    if player_bl_s - 30 <= (c["timestamp"] - start) / 1000 <= player_bl_s + 55
+                ]
+                if window_offsets:
+                    player_bl_offset = round(min(window_offsets, key=abs), 1)
+
+            bench_cd = per_cd_benchmarks.get(cd["name"], {})
             comparison.append({
                 "name": cd["name"],
                 "player_uses": len(cd_casts),
                 "player_uses_per_min": player_upm,
                 "player_first_cast_s": player_first,
-                "top_avg_uses": round(sum(top_uses) / len(top_uses), 1),
+                "top_avg_uses": round(statistics.mean(top_uses), 1) if top_uses else None,
                 "top_avg_uses_per_min": top_avg_upm,
-                "top_avg_first_cast_s": round(sum(top_first) / len(top_first), 1) if top_first else None,
+                "top_stddev_uses_per_min": top_stddev_upm,
+                "top_avg_first_cast_s": top_avg_first,
+                "top_stddev_first_cast_s": top_stddev_first,
                 "top_bl_pct": round(top_bl / len(top) * 100),
+                "player_bl_offset_s": player_bl_offset,
+                "top_avg_bl_offset_s": bench_cd.get("avg_bl_offset_s"),
+                "top_stddev_bl_offset_s": bench_cd.get("stddev_bl_offset_s"),
                 "sample_count": len(top),
             })
         result["parse_comparison"] = comparison
         result["player_fight_duration_s"] = round(player_fight_dur_s, 1)
+        result["downtime_threshold_ms"] = round(downtime_threshold_ms)
         if top_avg_efficiency is not None:
             result["top_efficiency_pct"] = top_avg_efficiency
+        if top_efficiency_stddev is not None:
+            result["top_efficiency_stddev"] = top_efficiency_stddev
 
     return result
 
