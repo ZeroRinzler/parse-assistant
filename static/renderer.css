@@ -1,5 +1,65 @@
 /* Shared results styles — included by index.html and live.html */
 
+/* ── Spell icons ──────────────────────────────────────────────────── */
+.spell-icon { border-radius: 3px; vertical-align: middle; flex-shrink: 0; }
+.spell-icon-small  { width: 18px; height: 18px; }
+.spell-icon-medium { width: 36px; height: 36px; }
+
+.cd-icon-slot { display: flex; align-items: center; flex-shrink: 0; }
+
+/* ── Category icons ──────────────────────────────────────────────── */
+.cat-icon { width: 14px; height: 14px; display: inline-block; vertical-align: middle; flex-shrink: 0; }
+.cat-critical { color: var(--critical); }
+.cat-warning  { color: var(--warning); }
+.cat-info     { color: var(--info); }
+.cat-success  { color: var(--success); }
+
+.cd-issue { display: flex; align-items: flex-start; gap: 6px; padding: 9px 0 4px; }
+.cd-issue > .cat-icon { margin-top: 3px; }
+.rule-item { display: flex; align-items: flex-start; gap: 8px; }
+.rule-item > .cat-icon { margin-top: 3px; flex-shrink: 0; }
+
+/* ── Character chip ──────────────────────────────────────────────── */
+.char-chip {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 20px; padding: 4px 10px; font-size: 12px; white-space: nowrap;
+}
+.char-chip.saved { border-color: rgba(200,166,79,0.4); }
+.char-chip-name { color: var(--gold); font-weight: 600; }
+.char-chip-change { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 11px; padding: 0 2px; }
+.char-chip-change:hover { color: var(--critical); }
+.char-chip-set { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 12px; padding: 0; text-decoration: underline; }
+.char-chip-set:hover { color: var(--gold); }
+
+/* ── Character modal ─────────────────────────────────────────────── */
+.char-modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.65); z-index: 100;
+  display: flex; align-items: center; justify-content: center;
+}
+.char-modal-box {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  padding: 24px 28px; width: 340px; box-shadow: 0 8px 40px rgba(0,0,0,.6);
+}
+.char-modal-box h3 { font-size: 15px; color: var(--gold); margin-bottom: 8px; }
+.char-modal-box p { font-size: 12px; color: var(--muted); margin-bottom: 14px; }
+.char-modal-row { display: flex; gap: 8px; }
+.char-modal-row input { flex: 1; }
+.char-modal-btn {
+  background: linear-gradient(135deg,#9a6f1f,var(--gold)); color: #0a0c10;
+  border: none; border-radius: 6px; padding: 8px 16px; font-weight: 700;
+  font-size: 13px; cursor: pointer; white-space: nowrap;
+}
+.char-modal-btn:hover { opacity: .88; }
+.char-modal-skip { display: block; text-align: center; margin-top: 12px; font-size: 12px; color: var(--muted); cursor: pointer; }
+.char-modal-skip:hover { color: var(--text); }
+
+.char-not-found {
+  background: rgba(232,169,58,0.08); border: 1px solid rgba(232,169,58,0.25);
+  border-radius: 6px; padding: 8px 12px; color: var(--warning);
+  font-size: 12px; margin-bottom: 10px;
+}
+
 .result-header { margin-bottom: 18px; }
 .result-header h2 { font-size: 18px; font-weight: 700; color: var(--gold); }
 
@@ -50,7 +110,6 @@
 }
 .cd-card.open .cd-card-body { display: block; }
 
-.cd-issue { padding: 9px 0 4px; }
 .cd-issue + .cd-issue { border-top: 1px solid rgba(42,47,61,0.5); padding-top: 9px; }
 
 .cd-issue-msg { font-size: 13px; color: var(--text); line-height: 1.5; }

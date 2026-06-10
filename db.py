@@ -47,6 +47,12 @@ CREATE TABLE IF NOT EXISTS parse_samples (
     cooldown_data  TEXT,                   -- JSON blob
     sampled_at     TEXT DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS spell_icons (
+    spell_id  INTEGER PRIMARY KEY,
+    icon      TEXT NOT NULL,
+    cached_at TEXT DEFAULT (datetime('now'))
+);
 """
 
 # ── In-memory rulebook cache ─────────────────────────────────────────────────
@@ -271,3 +277,29 @@ async def get_parse_samples(spec: str, encounter_id: int) -> list[dict]:
                 d["cooldown_data"] = json.loads(d["cooldown_data"] or "{}")
                 result.append(d)
             return result
+
+
+# ── Spell icon cache ──────────────────────────────────────────────────────────
+
+async def get_cached_spell_icons(spell_ids: list[int]) -> dict[int, str]:
+    if not spell_ids:
+        return {}
+    placeholders = ",".join("?" * len(spell_ids))
+    async with _conn() as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            f"SELECT spell_id, icon FROM spell_icons WHERE spell_id IN ({placeholders})",
+            spell_ids,
+        ) as cur:
+            return {row["spell_id"]: row["icon"] async for row in cur}
+
+
+async def cache_spell_icons(icons: dict[int, str]) -> None:
+    if not icons:
+        return
+    async with _conn() as db:
+        await db.executemany(
+            "INSERT OR REPLACE INTO spell_icons (spell_id, icon) VALUES (?,?)",
+            [(sid, icon) for sid, icon in icons.items()],
+        )
+        await db.commit()

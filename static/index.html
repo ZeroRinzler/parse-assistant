@@ -15,10 +15,11 @@
     *{ box-sizing:border-box; margin:0; padding:0; }
     body{ background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui,sans-serif; font-size:14px; line-height:1.6; min-height:100vh; }
 
-    .page-nav{ background:var(--surface); border-bottom:1px solid var(--border); display:flex; justify-content:center; gap:4px; padding:8px 16px; }
+    .page-nav{ background:var(--surface); border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:center; gap:4px; padding:8px 16px; position:relative; }
     .page-nav a{ color:var(--muted); text-decoration:none; padding:6px 18px; border-radius:6px; font-size:13px; font-weight:600; }
     .page-nav a:hover{ background:var(--surface2); color:var(--text); }
     .page-nav a.active{ background:var(--surface2); color:var(--gold); }
+    .nav-char{ position:absolute; right:16px; }
 
     .container{ max-width:860px; margin:0 auto; padding:32px 20px 64px; }
 
@@ -47,7 +48,23 @@
   <a href="/pre">Pre-Fight</a>
   <a href="/live">Live</a>
   <a href="/" class="active">Post-Raid</a>
+  <div class="nav-char"><div id="char-chip" class="char-chip"></div></div>
 </nav>
+
+<!-- Character selection modal -->
+<div id="char-modal" class="char-modal-overlay hidden">
+  <div class="char-modal-box">
+    <h3>Who are you?</h3>
+    <p>Enter your character name and it will be auto-selected in every log you open.</p>
+    <div class="char-modal-row">
+      <input id="char-modal-input" type="text" placeholder="Playername"
+        onkeydown="if(event.key==='Enter') closeCharModal(true)" />
+      <button class="char-modal-btn" onclick="closeCharModal(true)">Save</button>
+    </div>
+    <span class="char-modal-skip" onclick="closeCharModal(false)">Skip for now</span>
+  </div>
+</div>
+
 <div class="container">
   <div class="card">
     <div class="form-group">
@@ -58,12 +75,13 @@
         onkeydown="if(event.key==='Enter'){ clearTimeout(_loadTimer); loadReport(); }" />
     </div>
     <div id="selectors" class="selectors hidden">
+      <div id="char-not-found" class="char-not-found hidden"></div>
       <div class="row">
         <div class="form-group">
           <label for="fight-select">Fight</label>
           <select id="fight-select" onchange="filterAndPopulatePlayers(); analyzePlayer()"></select>
         </div>
-        <div class="form-group">
+        <div class="form-group" id="player-select-group">
           <label for="player-select">Player</label>
           <select id="player-select" onchange="analyzePlayer()"></select>
         </div>
@@ -101,6 +119,10 @@
   }
 
   window.onload = () => {
+    renderCharChip();
+    // First-time visitor prompt
+    if (!getSavedChar()) promptChangeChar();
+
     const p = new URLSearchParams(location.search);
     const r = p.get('report');
     if (r) {
@@ -121,7 +143,8 @@
       _allFights  = data.fights;
       _allPlayers = data.players;
       populateFights(data.fights, autoFight);
-      filterAndPopulatePlayers(autoPlayer);
+      filterAndPopulatePlayers();
+      applyCharacterSelection(autoPlayer);
       document.getElementById('selectors').classList.remove('hidden');
       document.getElementById('results').classList.add('hidden');
       syncURL();

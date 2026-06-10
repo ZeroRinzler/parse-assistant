@@ -142,6 +142,21 @@ class WCLClient:
     async def get_player_details(self, code: str, fight_id: int) -> dict:
         return await self.query(PLAYER_DETAILS_QUERY, {"code": code, "fightIDs": [fight_id]})
 
+    async def get_spell_icons(self, spell_ids: list[int]) -> dict[int, str]:
+        """Return {spell_id: icon_name} for a batch of spell IDs via gameData aliasing."""
+        if not spell_ids:
+            return {}
+        parts = [f"s{sid}: spell(id: {sid}) {{ icon }}" for sid in spell_ids]
+        gql = "query { gameData { " + " ".join(parts) + " } }"
+        data = await self.query(gql)
+        result: dict[int, str] = {}
+        game_data = (data or {}).get("gameData") or {}
+        for sid in spell_ids:
+            entry = game_data.get(f"s{sid}") or {}
+            if entry.get("icon"):
+                result[sid] = entry["icon"]
+        return result
+
     async def get_all_events(
         self,
         code: str,

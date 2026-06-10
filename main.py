@@ -313,6 +313,8 @@ async def analyze(req: AnalyzeRequest):
     result["spec"] = spec  # override actor.subType with properly resolved spec
     result["rulebook_source"] = rulebook_source
     result["player_fight_duration_s"] = round(player_fight_dur_s, 1)
+    # Expose spell_id per cooldown so the frontend can look up icons
+    result["cd_spell_ids"] = {cd["name"]: cd["spell_id"] for cd in (spec_cds or [])}
 
     # Attach parse comparison
     if encounter_id and spec_cds and samples and agg:
@@ -392,6 +394,31 @@ async def analyze(req: AnalyzeRequest):
             result["burst_windows"] = consistent_bw
 
     return result
+
+
+# ── Spell icons API ──────────────────────────────────────────────────────────
+
+@app.get("/api/spell-icons")
+async def spell_icons_endpoint(ids: str = ""):
+    """Return {spell_id: icon_name} for a comma-separated list of spell IDs."""
+    try:
+        spell_ids = [int(x.strip()) for x in ids.split(",") if x.strip().isdigit()]
+    except ValueError:
+        return {}
+    if not spell_ids:
+        return {}
+
+    cached = await db.get_cached_spell_icons(spell_ids)
+    missing = [sid for sid in spell_ids if sid not in cached]
+    if missing:
+        try:
+            fresh = await wcl.get_spell_icons(missing)
+            if fresh:
+                await db.cache_spell_icons(fresh)
+                cached.update(fresh)
+        except Exception:
+            pass  # icons are non-critical, degrade gracefully
+    return cached
 
 
 # ── Pre-fight brief API ───────────────────────────────────────────────────────

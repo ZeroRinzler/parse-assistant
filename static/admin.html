@@ -115,8 +115,10 @@
 
     <div class="card">
       <div class="spec-bar">
-        <label>Active Spec</label>
-        <select id="spec-select" onchange="onSpecChange()" style="max-width:280px"></select>
+        <label>Class</label>
+        <select id="class-select" onchange="onClassChange()" style="max-width:180px"></select>
+        <label style="margin-left:8px">Spec</label>
+        <select id="spec-select" onchange="onSpecChange()" style="max-width:180px"></select>
         <span id="rulebook-badge" class="muted"></span>
       </div>
     </div>
@@ -235,7 +237,23 @@ const ALL_SPECS = [
   "UnholyDeathKnight","VengeanceDemonHunter","WindwalkerMonk",
 ];
 
+// WoW class names that appear as suffixes in spec strings (longest first so greedy match works)
+const CLASS_SUFFIXES = [
+  "DemonHunter","DeathKnight","Evoker","Druid","Hunter","Mage","Monk",
+  "Paladin","Priest","Rogue","Shaman","Warlock","Warrior",
+];
+
+// Build class → [spec strings] map
+const SPECS_BY_CLASS = {};
+for (const s of ALL_SPECS) {
+  const cls = CLASS_SUFFIXES.find(c => s.endsWith(c)) || "Other";
+  if (!SPECS_BY_CLASS[cls]) SPECS_BY_CLASS[cls] = [];
+  SPECS_BY_CLASS[cls].push(s);
+}
+const ALL_CLASSES = Object.keys(SPECS_BY_CLASS).sort();
+
 let currentSpec = "SubtletyRogue";
+let currentClass = "Rogue";
 let currentTab  = "guides";
 
 // Parses tab state
@@ -275,20 +293,54 @@ window.onload = async () => {
   const specParam = p.get("spec");
   const tabParam  = p.get("tab");
 
-  if(specParam && ALL_SPECS.includes(specParam)) currentSpec = specParam;
+  if(specParam && ALL_SPECS.includes(specParam)) {
+    currentSpec = specParam;
+    currentClass = CLASS_SUFFIXES.find(c => specParam.endsWith(c)) || ALL_CLASSES[0];
+  }
 
-  const sel = document.getElementById("spec-select");
-  ALL_SPECS.forEach(s=>{
-    const o=document.createElement("option"); o.value=s; o.textContent=fmtSpec(s);
-    sel.appendChild(o);
+  // Populate class dropdown
+  const classSel = document.getElementById("class-select");
+  ALL_CLASSES.forEach(c=>{
+    const o=document.createElement("option"); o.value=c; o.textContent=c.replace(/([A-Z])/g," $1").trim();
+    classSel.appendChild(o);
   });
-  sel.value = currentSpec;
+  classSel.value = currentClass;
+
+  // Populate spec dropdown for the selected class
+  _populateSpecDropdown(currentClass, currentSpec);
   onSpecChange();
 
   await loadEncounters();
 
   if(tabParam && ["guides","parses"].includes(tabParam)) showTab(tabParam);
 };
+
+function _populateSpecDropdown(cls, selectValue) {
+  const sel = document.getElementById("spec-select");
+  sel.innerHTML = "";
+  const specs = SPECS_BY_CLASS[cls] || [];
+  specs.forEach(s=>{
+    const o=document.createElement("option"); o.value=s;
+    // Strip the class suffix to show just the spec part
+    const specPart = s.replace(cls, "").replace(/([A-Z])/g," $1").trim();
+    o.textContent = specPart || s;
+    sel.appendChild(o);
+  });
+  if(selectValue && specs.includes(selectValue)) sel.value = selectValue;
+  else if(specs.length) sel.value = specs[0];
+}
+
+function onClassChange(){
+  currentClass = document.getElementById("class-select").value;
+  _populateSpecDropdown(currentClass);
+  currentSpec = document.getElementById("spec-select").value;
+  document.getElementById("guides-spec-label").textContent  = fmtSpec(currentSpec);
+  document.getElementById("rulebook-spec-label").textContent = fmtSpec(currentSpec);
+  loadGuides();
+  loadRulebook();
+  if(currentTab==="parses") loadParseOverview();
+  syncAdminURL();
+}
 
 function onSpecChange(){
   currentSpec = document.getElementById("spec-select").value;
