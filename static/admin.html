@@ -476,6 +476,27 @@ async function copyPrompt(){
   }
 }
 
+function _validateRulebook(rb){
+  const errs=[];
+  if(!rb.spec || typeof rb.spec!=="string") errs.push("missing 'spec'");
+  if(!Array.isArray(rb.major_cooldowns)||rb.major_cooldowns.length===0){
+    errs.push("'major_cooldowns' must be a non-empty array");
+  } else {
+    rb.major_cooldowns.forEach((cd,i)=>{
+      const tag=`cooldowns[${i}] "${cd.name||"unnamed"}"`;
+      if(!cd.name)                          errs.push(`${tag}: missing name`);
+      if(!cd.spell_id)                      errs.push(`${tag}: missing spell_id`);
+      if(typeof cd.cooldown!=="number")     errs.push(`${tag}: missing cooldown (seconds)`);
+      if(!cd.usage_rule)                    errs.push(`${tag}: missing usage_rule`);
+      if(typeof cd.align_with_bloodlust!=="boolean")
+                                            errs.push(`${tag}: align_with_bloodlust must be true or false`);
+    });
+  }
+  if(!Array.isArray(rb.rules))             errs.push("'rules' must be an array");
+  if(!rb.source_summary)                   errs.push("missing 'source_summary'");
+  return errs;
+}
+
 async function saveAIRulebook(){
   const raw=document.getElementById("ai-json-input").value.trim();
   const status=document.getElementById("ai-save-status");
@@ -483,6 +504,12 @@ async function saveAIRulebook(){
   let parsed;
   try{ parsed=JSON.parse(raw); }
   catch(e){ status.style.color="var(--critical)"; status.textContent=`⚠ Invalid JSON: ${e.message}`; return; }
+  const errs=_validateRulebook(parsed);
+  if(errs.length){
+    status.style.color="var(--critical)";
+    status.innerHTML=`⚠ Schema invalid:<br><ul style="margin:4px 0 0 16px">${errs.map(e=>`<li>${e}</li>`).join("")}</ul>`;
+    return;
+  }
   status.style.color="var(--muted)"; status.textContent="Saving…";
   const data=await apiFetch(`/api/admin/rulebook/${currentSpec}`,"PUT",{rulebook:parsed});
   if(data){
