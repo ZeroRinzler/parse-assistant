@@ -323,27 +323,25 @@
 <body>
 <div class="container">
   <div class="card">
-    <h2>Load Report</h2>
     <div class="form-group">
       <label for="report-url">Warcraft Logs Report URL or Code</label>
       <input id="report-url" type="text"
         placeholder="https://www.warcraftlogs.com/reports/AbCdEfGh..."
-        onkeydown="if(event.key==='Enter') loadReport()" />
+        oninput="onReportInput()"
+        onkeydown="if(event.key==='Enter'){ clearTimeout(_loadTimer); loadReport(); }" />
     </div>
-    <button class="btn" id="load-btn" onclick="loadReport()">Load Report</button>
 
     <div id="selectors" class="selectors hidden">
       <div class="row">
         <div class="form-group">
           <label for="fight-select">Fight</label>
-          <select id="fight-select" onchange="syncURL()"></select>
+          <select id="fight-select" onchange="analyzePlayer()"></select>
         </div>
         <div class="form-group">
           <label for="player-select">Player</label>
-          <select id="player-select" onchange="syncURL()"></select>
+          <select id="player-select" onchange="analyzePlayer()"></select>
         </div>
       </div>
-      <button class="btn" id="analyze-btn" onclick="analyzePlayer()">Analyze Pull</button>
     </div>
   </div>
 
@@ -361,6 +359,12 @@
 
 <script>
   let reportCode = '';
+  let _loadTimer = null;
+
+  function onReportInput() {
+    clearTimeout(_loadTimer);
+    _loadTimer = setTimeout(() => loadReport(), 400);
+  }
 
   // ── URL persistence ──────────────────────────────────────────────────────────
   function syncURL() {
@@ -428,9 +432,6 @@
     if (!url) return;
 
     reportCode = extractCode(url);
-    const btn = document.getElementById('load-btn');
-    btn.textContent = 'Loading…';
-    btn.disabled = true;
 
     try {
       const resp = await fetch(`/api/report/${reportCode}`);
@@ -442,12 +443,9 @@
       document.getElementById('selectors').classList.remove('hidden');
       document.getElementById('results').classList.add('hidden');
       syncURL();
-      if (autoFight && autoPlayer) analyzePlayer();
+      analyzePlayer();
     } catch (err) {
       showError(err.message);
-    } finally {
-      btn.textContent = 'Load Report';
-      btn.disabled = false;
     }
   }
 
@@ -484,9 +482,6 @@
     document.getElementById('loading').classList.remove('hidden');
     document.getElementById('results').classList.add('hidden');
 
-    const btn = document.getElementById('analyze-btn');
-    btn.disabled = true;
-
     try {
       const resp = await fetch('/api/analyze', {
         method: 'POST',
@@ -500,7 +495,6 @@
       showError(err.message);
     } finally {
       document.getElementById('loading').classList.add('hidden');
-      btn.disabled = false;
     }
   }
 

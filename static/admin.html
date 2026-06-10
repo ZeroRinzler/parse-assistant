@@ -106,13 +106,12 @@
     <h2>⚙ Admin Panel</h2>
     <div class="nav-link active" onclick="showTab('guides')">📚 Guides</div>
     <div class="nav-link" onclick="showTab('parses')">📊 Top Parses</div>
-    <div class="nav-link" onclick="showTab('rulebook')">📋 Rulebook</div>
     <div class="back-link" onclick="window.location='/'">← Back to Analyzer</div>
   </aside>
 
   <main class="main">
-    <div class="page-title">Guide Management</div>
-    <div class="page-sub">Manage guide sources per spec, scrape content, and generate AI rulebooks.</div>
+    <div class="page-title">Admin</div>
+    <div class="page-sub">Manage guides, generate rulebooks, and ingest top-parse benchmarks per spec.</div>
 
     <div class="card">
       <div class="spec-bar">
@@ -125,7 +124,6 @@
     <div class="tabs">
       <div class="tab active" id="tab-guides" onclick="showTab('guides')">📚 Guides</div>
       <div class="tab" id="tab-parses" onclick="showTab('parses')">📊 Top Parses</div>
-      <div class="tab" id="tab-rulebook" onclick="showTab('rulebook')">📋 Rulebook</div>
     </div>
 
     <!-- ── GUIDES ──────────────────────────────────────────────────────── -->
@@ -185,6 +183,11 @@
           </div>
         </div>
       </div>
+
+      <div class="card">
+        <div class="card-title">Current Rulebook — <span id="rulebook-spec-label">—</span></div>
+        <div id="rulebook-content"><div class="empty">Select a spec to see its rulebook.</div></div>
+      </div>
     </div>
 
     <!-- ── PARSES ──────────────────────────────────────────────────────── -->
@@ -214,14 +217,6 @@
       <div id="boss-detail-panels"></div>
     </div>
 
-    <!-- ── RULEBOOK ────────────────────────────────────────────────────── -->
-    <div class="tab-panel" id="panel-rulebook">
-      <div class="card">
-        <div class="card-title">Current Rulebook — <span id="rulebook-spec-label">—</span></div>
-        <div id="rulebook-content"><div class="empty">Select a spec to view its rulebook.</div></div>
-      </div>
-
-    </div>
   </main>
 </div>
 
@@ -292,7 +287,7 @@ window.onload = async () => {
 
   await loadEncounters();
 
-  if(tabParam && ["guides","parses","rulebook"].includes(tabParam)) showTab(tabParam);
+  if(tabParam && ["guides","parses"].includes(tabParam)) showTab(tabParam);
 };
 
 function onSpecChange(){
@@ -300,19 +295,19 @@ function onSpecChange(){
   document.getElementById("guides-spec-label").textContent  = fmtSpec(currentSpec);
   document.getElementById("rulebook-spec-label").textContent = fmtSpec(currentSpec);
   loadGuides();
-  if(currentTab==="rulebook") loadRulebook();
-  if(currentTab==="parses")   loadParseOverview();
+  loadRulebook();
+  if(currentTab==="parses") loadParseOverview();
   syncAdminURL();
 }
 
 function showTab(name){
-  ["guides","parses","rulebook"].forEach(t=>{
+  ["guides","parses"].forEach(t=>{
     document.getElementById(`tab-${t}`).classList.toggle("active",t===name);
     document.getElementById(`panel-${t}`).classList.toggle("active",t===name);
   });
   currentTab = name;
-  if(name==="rulebook") loadRulebook();
-  if(name==="parses")   loadParseOverview();
+  if(name==="guides") loadRulebook();
+  if(name==="parses") loadParseOverview();
   syncAdminURL();
 }
 
@@ -517,7 +512,7 @@ async function saveAIRulebook(){
     status.textContent=`✓ Active — ${(parsed.major_cooldowns||[]).length} cooldown(s) loaded.`;
     toast("✅ Rulebook saved and active.");
     document.getElementById("paste-back-panel").style.display="none";
-    showTab("rulebook"); loadRulebook();
+    loadRulebook();
   } else {
     status.style.color="var(--critical)"; status.textContent="✗ Save failed.";
   }
