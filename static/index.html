@@ -335,7 +335,7 @@
       <div class="row">
         <div class="form-group">
           <label for="fight-select">Fight</label>
-          <select id="fight-select" onchange="analyzePlayer()"></select>
+          <select id="fight-select" onchange="filterAndPopulatePlayers(); analyzePlayer()"></select>
         </div>
         <div class="form-group">
           <label for="player-select">Player</label>
@@ -360,6 +360,8 @@
 <script>
   let reportCode = '';
   let _loadTimer = null;
+  let _allPlayers = [];   // all actors from report
+  let _allFights  = [];   // fights with friendlyPlayers
 
   function onReportInput() {
     clearTimeout(_loadTimer);
@@ -413,6 +415,7 @@
       unsupported_spec:   'Spec Note',
       rule_violation:     'Rule',
       cooldown_usage:     'On Track',
+      hold_suggestion:    'Timing Tip',
     }[cat] || cat;
   }
 
@@ -438,8 +441,10 @@
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.detail || 'Failed to load report');
 
+      _allFights  = data.fights;
+      _allPlayers = data.players;
       populateFights(data.fights, autoFight);
-      populatePlayers(data.players, autoPlayer);
+      filterAndPopulatePlayers(autoPlayer);
       document.getElementById('selectors').classList.remove('hidden');
       document.getElementById('results').classList.add('hidden');
       syncURL();
@@ -455,23 +460,33 @@
     fights.forEach(f => {
       const opt = document.createElement('option');
       opt.value = f.id;
-      const status = f.kill ? '✓ Kill' : '✗ Wipe';
+      const status = f.kill ? '✓' : `✗ #${f.attempt}`;
       opt.textContent = `${f.name} [${status}] ${formatDuration(f.duration_s)}`;
       sel.appendChild(opt);
     });
     sel.value = autoFight ?? (fights.length ? fights[fights.length - 1].id : '');
   }
 
-  function populatePlayers(players, autoPlayer = null) {
+  function filterAndPopulatePlayers(autoPlayer = null) {
+    const fightId = parseInt(document.getElementById('fight-select').value, 10);
+    const fight = _allFights.find(f => f.id === fightId);
+    const fp = fight?.friendlyPlayers;
+    // If WCL returned friendlyPlayers, limit to those; otherwise show all
+    const visible = (fp && fp.length > 0)
+      ? _allPlayers.filter(p => fp.includes(p.id))
+      : _allPlayers;
     const sel = document.getElementById('player-select');
+    const prev = sel.value;
     sel.innerHTML = '';
-    players.forEach(p => {
+    visible.forEach(p => {
       const opt = document.createElement('option');
       opt.value = p.id;
       opt.textContent = `${p.name} — ${formatSpec(p.spec)}`;
       sel.appendChild(opt);
     });
+    // Preserve selection if the player is still in this fight; otherwise first player
     if (autoPlayer) sel.value = autoPlayer;
+    else if (prev && visible.some(p => String(p.id) === prev)) sel.value = prev;
   }
 
   async function analyzePlayer() {
@@ -501,28 +516,37 @@
   function renderResults(data) {
     const el = document.getElementById('results');
 
-    const improvements = data.findings.filter(f => f.severity === 'critical' || f.severity === 'warning');
-    const successes    = data.findings.filter(f => f.severity === 'success');
-    const info         = data.findings.filter(f => f.severity === 'info');
+    const improvements  = data.findings.filter(f => f.severity === 'critical' || f.severity === 'warning');
+    const holdTips      = data.findings.filter(f => f.severity === 'info' && f.category === 'hold_suggestion');
+    const otherInfo     = data.findings.filter(f => f.severity === 'info' && f.category !== 'hold_suggestion');
+    const successes     = data.findings.filter(f => f.severity === 'success');
 
     let findingsHtml = '';
-    if (info.length)
-      findingsHtml += `<div class="findings">${info.map(renderFinding).join('')}</div>`;
+    if (otherInfo.length)
+      findingsHtml += `<div class="findings">${otherInfo.map(renderFinding).join('')}</div>`;
     if (improvements.length)
       findingsHtml += `<p class="section-label">Needs Improvement</p><div class="findings">${improvements.map(renderFinding).join('')}</div>`;
+    if (holdTips.length)
+      findingsHtml += `<p class="section-label">Timing Suggestions</p><div class="findings">${holdTips.map(renderFinding).join('')}</div>`;
     if (successes.length)
       findingsHtml += `<p class="section-label">Doing Well</p><div class="findings">${successes.map(renderFinding).join('')}</div>`;
     if (!findingsHtml)
       findingsHtml = '<div class="no-findings">✓ No significant issues detected. Strong performance!</div>';
 
-    const compHtml = renderComparison(data.parse_comparison);
+    const compHtml  = renderComparison(data.parse_comparison);
+    const burstHtml = renderBurstWindows(data.burst_windows);
 
+    const rbSrc = data.rulebook_source || 'static';
+    const rbLabel = rbSrc === 'generated' ? '⚡ generated rulebook' : rbSrc === 'none' ? '⚠ no rulebook' : 'static rulebook';
+    const rbColor = rbSrc === 'none' ? 'var(--warning)' : 'var(--muted)';
     el.innerHTML = `
       <div class="result-header">
         <h2>${data.player} — ${formatSpec(data.spec)}</h2>
+        <p style="color:${rbColor};font-size:12px;margin-top:4px">${rbLabel}</p>
       </div>
       ${findingsHtml}
       ${compHtml}
+      ${burstHtml}
     `;
 
     el.classList.remove('hidden');
@@ -605,6 +629,43 @@
               <th>Uses (you / top avg)</th>
               <th>First Cast (you / top avg)</th>
               <th>BL-Aligned (top %)</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  }
+
+  function renderBurstWindows(windows) {
+    if (!windows || windows.length === 0) return '';
+
+    const fmt = s => `${String(Math.floor(s / 60)).padStart(2,'0')}:${String(Math.floor(s % 60)).padStart(2,'0')}`;
+
+    const rows = windows.map(w => {
+      const sdStr  = w.stddev_s > 0 ? ` <small class="delta-ok">±${w.stddev_s}s</small>` : '';
+      const pctStr = (w.pct_avg * 100).toFixed(1) + '%';
+      const cdsStr = w.common_cds && w.common_cds.length > 0
+        ? w.common_cds.map(n => `<span class="cd-name">${n}</span>`).join(', ')
+        : '<span class="delta-ok">none tracked</span>';
+      const freq = `${w.count}/${w.total_samples} parses`;
+      return `<tr>
+        <td>${fmt(w.time_s)}${sdStr}</td>
+        <td>${pctStr} of damage</td>
+        <td>${cdsStr}</td>
+        <td><span class="delta-ok">${freq}</span></td>
+      </tr>`;
+    }).join('');
+
+    return `
+      <div class="comparison-card">
+        <h3>Burst Windows — where top parsers spike damage</h3>
+        <table class="cmp-table">
+          <thead>
+            <tr>
+              <th>Time (±σ)</th>
+              <th>Damage Concentration</th>
+              <th>Active CDs</th>
+              <th>Frequency</th>
             </tr>
           </thead>
           <tbody>${rows}</tbody>

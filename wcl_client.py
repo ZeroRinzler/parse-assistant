@@ -21,6 +21,7 @@ query GetReport($code: String!) {
         kill
         encounterID
         difficulty
+        friendlyPlayers
       }
       masterData {
         actors(type: "Player") {

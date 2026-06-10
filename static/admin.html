@@ -702,6 +702,7 @@ async function viewBossSamples(encId, encName){
   }
 
   const cdNames=[...new Set(samples.flatMap(s=>(s.cooldown_data?.cooldowns||[]).map(c=>c.name)))];
+  const fmt=s=>`${String(Math.floor(s/60)).padStart(2,"0")}:${String(Math.floor(s%60)).padStart(2,"0")}`;
 
   const rows=samples.map(s=>{
     const cd=s.cooldown_data||{};
@@ -711,7 +712,12 @@ async function viewBossSamples(encId, encName){
       if(!c) return '<td class="muted">—</td>';
       const offStr=c.bl_offset_s!=null
         ? ` <span class="muted">BL${c.bl_offset_s>=0?"+":""}${c.bl_offset_s}s</span>` : "";
-      return `<td><span class="muted">×${c.total_uses}</span> first:${c.first_cast_s??"?"}s${offStr} BL:${c.bl_aligned?"✓":"—"}</td>`;
+      const patternStyle=c.cast_pattern==="hold"?"color:var(--warning)":"color:var(--success)";
+      const patternBadge=c.cast_pattern
+        ? ` <span style="${patternStyle};font-size:11px;font-weight:700">${c.cast_pattern==="hold"?"HOLD":"CD"}</span>` : "";
+      const holdInfo=c.hold_windows?.length>0
+        ? ` <span class="muted">(${c.hold_windows.length} hold${c.hold_windows.length>1?"s":""})</span>` : "";
+      return `<td><span class="muted">×${c.total_uses}</span> first:${c.first_cast_s??"?"}s${offStr} BL:${c.bl_aligned?"✓":"—"}${patternBadge}${holdInfo}</td>`;
     });
     return `<tr>
       <td><b>${s.player_name||"?"}</b></td>
@@ -720,6 +726,31 @@ async function viewBossSamples(encId, encName){
       ${cdCells.join("")}
     </tr>`;
   }).join("");
+
+  // Burst windows summary — cluster by time across samples
+  const allBurst=samples.flatMap(s=>(s.cooldown_data?.burst_windows||[]).map(bw=>({...bw,player:s.player_name})));
+  let burstHtml="";
+  if(allBurst.length>0){
+    const burstRows=allBurst.map(bw=>{
+      const activeCds=bw.active_cds?.length>0?bw.active_cds.join(", "):"—";
+      return `<tr>
+        <td class="muted">${bw.player||"?"}</td>
+        <td>${fmt(bw.time_s)}</td>
+        <td>${(bw.pct_of_total*100).toFixed(1)}%</td>
+        <td>${activeCds}</td>
+      </tr>`;
+    }).join("");
+    burstHtml=`
+      <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
+        <div class="card-title" style="margin-bottom:8px">Burst Windows</div>
+        <div style="overflow-x:auto">
+          <table>
+            <thead><tr><th>Player</th><th>Time</th><th>Dmg%</th><th>Active CDs</th></tr></thead>
+            <tbody>${burstRows}</tbody>
+          </table>
+        </div>
+      </div>`;
+  }
 
   const closeJs=`document.getElementById('boss-detail-panels').innerHTML='';delete document.getElementById('boss-detail-panels').dataset.encId`;
   panels.innerHTML=`
@@ -737,6 +768,7 @@ async function viewBossSamples(encId, encName){
           <tbody>${rows}</tbody>
         </table>
       </div>
+      ${burstHtml}
       <p class="muted" style="margin-top:10px">Sampled: ${fmtDate(samples[0]?.sampled_at)}</p>
     </div>`;
 }

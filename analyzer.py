@@ -191,6 +191,7 @@ def analyze_player(
             expected_uses = 1 + math.floor(fight_duration_s / cooldown_s)
 
             cd_issues: list[dict] = []
+            cd_suggestions: list[dict] = []
 
             # Lost casts
             if actual_uses == 0:
@@ -335,6 +336,36 @@ def analyze_player(
                         ),
                     })
 
+            # Hold target suggestions — top parsers consistently delay this CD past on-cooldown time
+            if bench and bench.get("hold_targets") and cd_casts:
+                player_cast_times = [rel(c["timestamp"]) / 1000 for c in cd_casts]
+                for cast_idx_str, target in bench["hold_targets"].items():
+                    k = int(cast_idx_str) - 1  # 0-indexed
+                    if k >= len(player_cast_times):
+                        continue
+                    player_t = player_cast_times[k]
+                    target_t = target["target_s"]
+                    tolerance = max(target.get("stddev_s", 20.0), 15.0)
+                    count = target["count"]
+                    total = target.get("total_samples", count)
+                    if player_t < target_t - tolerance:
+                        cd_suggestions.append({
+                            "severity": "info",
+                            "category": "hold_suggestion",
+                            "timestamp_ms": int(rel(cd_casts[k]["timestamp"])),
+                            "message": (
+                                f"{cd_name} cast {int(cast_idx_str)} used at {_fmt(player_t)} — "
+                                f"{count}/{total} top parsers hold until ~{_fmt(target_t)} here. "
+                                f"A burst window or mechanic at ~{_fmt(target_t)} likely makes this optimal."
+                            ),
+                            "details": {
+                                "remedy": (
+                                    f"Consider holding {cd_name} until ~{_fmt(target_t)} — "
+                                    f"top parsers consistently delay cast {int(cast_idx_str)} here."
+                                )
+                            },
+                        })
+
             if cd_issues:
                 findings.extend(cd_issues)
             elif actual_uses > 0:
@@ -351,6 +382,8 @@ def analyze_player(
                     "timestamp_ms": None,
                     "message": f"{cd_name} — {', '.join(parts)}.",
                 })
+            if actual_uses > 0:
+                findings.extend(cd_suggestions)
 
     # ── Rule engine ───────────────────────────────────────────────────────────
     if rules_override:

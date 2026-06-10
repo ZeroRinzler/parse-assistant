@@ -156,6 +156,55 @@ async def fetch_top_rankings(
     }
 
 
+def _find_burst_windows(
+    damage_events: list[dict],
+    fight_start_ms: float,
+    window_ms: int = 8000,
+    top_n: int = 4,
+) -> list[dict]:
+    """
+    Find top N non-overlapping 8s burst windows by total damage dealt.
+    Returns [{time_s, pct_of_total, active_cds}] sorted by fight time.
+    """
+    hits = sorted(
+        (e["timestamp"], e.get("amount", 0) + e.get("absorbed", 0))
+        for e in damage_events
+        if e.get("type") == "damage" and (e.get("amount", 0) + e.get("absorbed", 0)) > 0
+    )
+    if not hits:
+        return []
+    total = sum(d for _, d in hits)
+    if not total:
+        return []
+
+    # Two-pointer rolling window: for each starting event i, sum all events in [t_i, t_i + window_ms]
+    n = len(hits)
+    j = 0
+    window_sum = 0
+    candidates: list[tuple[float, float]] = []
+    for i in range(n):
+        while j < n and hits[j][0] <= hits[i][0] + window_ms:
+            window_sum += hits[j][1]
+            j += 1
+        candidates.append((hits[i][0], window_sum))
+        window_sum -= hits[i][1]
+
+    candidates.sort(key=lambda x: -x[1])
+    selected: list[dict] = []
+    for ts, dmg in candidates:
+        # Skip windows that overlap with an already-selected one
+        if not any(abs(ts - (fight_start_ms + s["time_s"] * 1000)) < window_ms for s in selected):
+            selected.append({
+                "time_s": round((ts - fight_start_ms) / 1000, 1),
+                "pct_of_total": round(dmg / total, 3),
+                "active_cds": [],  # filled in by caller
+            })
+        if len(selected) >= top_n:
+            break
+
+    return sorted(selected, key=lambda s: s["time_s"])
+
+
 async def analyze_parse(
     wcl: WCLClient,
     spec: str,
@@ -202,6 +251,9 @@ async def analyze_parse(
         buff_events = await wcl.get_all_events(
             report_code, fight_id, "Buffs", start, end, target_id=player["id"]
         )
+        damage_events = await wcl.get_all_events(
+            report_code, fight_id, "DamageDone", start, end, source_id=player["id"]
+        )
     except Exception:
         return None
 
@@ -236,6 +288,24 @@ async def analyze_parse(
             if window_offsets:
                 bl_offset_s = round(min(window_offsets, key=abs), 1)
 
+        # Hold pattern: compare actual cast times to expected on-cooldown times
+        hold_windows: list[dict] = []
+        if len(cast_times_s) > 1:
+            cd_seconds = cd.get("cooldown", 90)
+            expected_t = cast_times_s[0]
+            for k in range(1, len(cast_times_s)):
+                expected_t += cd_seconds
+                actual = cast_times_s[k]
+                hold_amount = actual - expected_t
+                if hold_amount > 8.0:
+                    hold_windows.append({
+                        "cast_index": k + 1,
+                        "expected_s": round(expected_t, 1),
+                        "actual_s": round(actual, 1),
+                        "hold_amount_s": round(hold_amount, 1),
+                    })
+        cast_pattern = "hold" if hold_windows else "on_cooldown"
+
         cd_summary.append(
             {
                 "name": cd["name"],
@@ -245,6 +315,8 @@ async def analyze_parse(
                 "bl_aligned": bl_aligned,
                 "bl_offset_s": bl_offset_s,
                 "cast_times_s": [round(t, 2) for t in cast_times_s],
+                "hold_windows": hold_windows,
+                "cast_pattern": cast_pattern,
             }
         )
 
@@ -265,6 +337,21 @@ async def analyze_parse(
         downtime_ms = sum(g for g in cast_gap_list_ms if g > 1500)
         cast_eff_pct = round(max(0.0, (1 - downtime_ms / 1000 / fight_dur_s) * 100), 1)
 
+    # Burst windows — top non-overlapping 8s damage peaks
+    burst_windows = _find_burst_windows(damage_events, start)
+    for bw in burst_windows:
+        bw_t = bw["time_s"]
+        active: list[str] = []
+        for cd_entry in cd_summary:
+            cd_def = next((c for c in spec_cds if c["name"] == cd_entry["name"]), {})
+            dur = cd_def.get("duration") or 0
+            if dur > 0:
+                for t in cd_entry["cast_times_s"]:
+                    if t <= bw_t <= t + dur:
+                        active.append(cd_entry["name"])
+                        break
+        bw["active_cds"] = active
+
     return {
         "player": player["name"],
         "spec": spec,
@@ -273,6 +360,7 @@ async def analyze_parse(
         "cast_efficiency_pct": cast_eff_pct,
         "cast_gap_list_ms": cast_gap_list_ms,
         "cooldowns": cd_summary,
+        "burst_windows": burst_windows,
     }
 
 

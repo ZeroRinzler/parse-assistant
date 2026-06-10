@@ -1,7 +1,7 @@
 import json
 import re
 import statistics
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Optional
 
@@ -98,35 +98,39 @@ async def get_report(code: str):
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
 
-    fights = sorted(
-        [
-            {
-                "id": f["id"],
-                "name": f["name"],
-                "startTime": f["startTime"],
-                "endTime": f["endTime"],
-                "kill": f.get("kill"),
-                "duration_s": round((f["endTime"] - f["startTime"]) / 1000, 1),
-                "encounterID": f.get("encounterID"),
-            }
-            for f in report["fights"]
-            if (f.get("encounterID") or 0) > 0
-        ],
+    # Add per-boss attempt numbering (chronological within each boss)
+    boss_attempt: dict[int, int] = {}
+    raw_fights = sorted(
+        [f for f in report["fights"] if (f.get("encounterID") or 0) > 0],
         key=lambda x: x["startTime"],
     )
+    fights = []
+    for f in raw_fights:
+        enc_id = f.get("encounterID") or 0
+        boss_attempt[enc_id] = boss_attempt.get(enc_id, 0) + 1
+        fights.append({
+            "id": f["id"],
+            "name": f["name"],
+            "startTime": f["startTime"],
+            "endTime": f["endTime"],
+            "kill": f.get("kill"),
+            "duration_s": round((f["endTime"] - f["startTime"]) / 1000, 1),
+            "encounterID": enc_id,
+            "attempt": boss_attempt[enc_id],
+            "friendlyPlayers": f.get("friendlyPlayers") or [],
+        })
+
     spec_map = _build_spec_map(report)
-    players = sorted(
-        [
-            {
-                "id": a["id"],
-                "name": a["name"],
-                "spec": spec_map.get(a["id"]) or a.get("subType") or "Unknown",
-                "server": a.get("server") or "",
-            }
-            for a in report["masterData"]["actors"]
-        ],
-        key=lambda x: x["name"],
-    )
+    all_actors = {
+        a["id"]: {
+            "id": a["id"],
+            "name": a["name"],
+            "spec": spec_map.get(a["id"]) or a.get("subType") or "Unknown",
+            "server": a.get("server") or "",
+        }
+        for a in report["masterData"]["actors"]
+    }
+    players = sorted(all_actors.values(), key=lambda x: x["name"])
     return {"title": report.get("title", code), "fights": fights, "players": players}
 
 
@@ -173,6 +177,7 @@ async def analyze(req: AnalyzeRequest):
     spec_cds = db.get_spec_cooldowns(spec)
     cached_rb = db.get_cached_rulebook(spec)
     spec_rules = (cached_rb or {}).get("rules", []) if cached_rb else []
+    rulebook_source = "generated" if cached_rb else ("static" if spec_cds else "none")
 
     # Pre-fetch parse samples; compute benchmarks before calling the analyzer
     encounter_id = fight.get("encounterID")
@@ -182,6 +187,7 @@ async def analyze(req: AnalyzeRequest):
     top_efficiency_stddev: Optional[float] = None
     per_cd_benchmarks: dict = {}
     agg: dict[str, list] = {}
+    consistent_bw: list = []
     downtime_threshold_ms: float = 1500.0  # fallback when no parse data available
 
     if encounter_id:
@@ -235,6 +241,22 @@ async def analyze(req: AnalyzeRequest):
                     for j in range(1, len(times)):
                         all_gaps.append(times[j] - times[j - 1])
                 bl_offsets = [e["bl_offset_s"] for e in entries if e.get("bl_offset_s") is not None]
+
+                # Hold targets — cast indices where top parsers consistently delay past on-cooldown time
+                hold_by_cast_idx: dict[int, list[float]] = defaultdict(list)
+                for e in entries:
+                    for hw in e.get("hold_windows", []):
+                        hold_by_cast_idx[hw["cast_index"]].append(hw["actual_s"])
+                hold_targets: dict[int, dict] = {}
+                for cast_idx, times in hold_by_cast_idx.items():
+                    if len(times) >= max(2, len(entries) * 0.4):
+                        hold_targets[cast_idx] = {
+                            "target_s": round(statistics.median(times), 1),
+                            "stddev_s": round(statistics.stdev(times) if len(times) > 1 else 20.0, 1),
+                            "count": len(times),
+                            "total_samples": len(entries),
+                        }
+
                 per_cd_benchmarks[cd_name] = {
                     "avg_first_cast_s": round(statistics.mean(top_first_casts), 1) if top_first_casts else None,
                     "stddev_first_cast_s": round(statistics.stdev(top_first_casts), 1) if len(top_first_casts) > 1 else None,
@@ -242,7 +264,15 @@ async def analyze(req: AnalyzeRequest):
                     "stddev_gap_s": round(statistics.stdev(all_gaps), 1) if len(all_gaps) > 1 else None,
                     "avg_bl_offset_s": round(statistics.mean(bl_offsets), 1) if bl_offsets else None,
                     "stddev_bl_offset_s": round(statistics.stdev(bl_offsets), 1) if len(bl_offsets) > 1 else None,
+                    "hold_targets": hold_targets,
                 }
+
+            # Aggregate burst windows across all parse samples
+            all_bw: list[dict] = []
+            for s in samples:
+                for bw in (s.get("cooldown_data") or {}).get("burst_windows", []):
+                    all_bw.append(bw)
+            consistent_bw = _cluster_burst_windows(all_bw, len(samples)) if all_bw else []
 
     result = analyze_player(
         player=player,
@@ -258,6 +288,7 @@ async def analyze(req: AnalyzeRequest):
         downtime_threshold_ms=downtime_threshold_ms,
     )
     result["spec"] = spec  # override actor.subType with properly resolved spec
+    result["rulebook_source"] = rulebook_source
 
     # Attach parse comparison
     if encounter_id and spec_cds and samples and agg:
@@ -334,6 +365,8 @@ async def analyze(req: AnalyzeRequest):
             result["top_efficiency_pct"] = top_avg_efficiency
         if top_efficiency_stddev is not None:
             result["top_efficiency_stddev"] = top_efficiency_stddev
+        if consistent_bw:
+            result["burst_windows"] = consistent_bw
 
     return result
 
@@ -562,9 +595,7 @@ async def analyze_parses_stream(req: FetchParsesRequest):
             else:
                 yield _evt({"type": "parse_skip", "step": i + 1, "player": ranking.get("player")})
 
-        parse_context = build_parse_context(analyzed)
-        yield _evt({"type": "complete", "analyzed": len(analyzed),
-                    "parse_context": parse_context})
+        yield _evt({"type": "complete", "analyzed": len(analyzed)})
 
     return StreamingResponse(
         generate(),
@@ -665,6 +696,45 @@ async def ingest_all_stream(spec: str):
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+def _cluster_burst_windows(windows: list[dict], total_samples: int, merge_s: float = 15.0) -> list[dict]:
+    """Cluster burst windows from multiple parses by fight time and return consistent ones."""
+    if not windows:
+        return []
+    sorted_w = sorted(windows, key=lambda w: w["time_s"])
+    clusters: list[list[dict]] = []
+    for w in sorted_w:
+        placed = False
+        for cl in clusters:
+            center = statistics.median(c["time_s"] for c in cl)
+            if abs(w["time_s"] - center) <= merge_s:
+                cl.append(w)
+                placed = True
+                break
+        if not placed:
+            clusters.append([w])
+
+    result = []
+    for cl in clusters:
+        if len(cl) < max(2, total_samples * 0.35):
+            continue
+        times = [c["time_s"] for c in cl]
+        pcts = [c["pct_of_total"] for c in cl]
+        cd_counts: Counter = Counter()
+        for c in cl:
+            for name in c.get("active_cds", []):
+                cd_counts[name] += 1
+        common_cds = [name for name, cnt in cd_counts.most_common() if cnt >= len(cl) * 0.5]
+        result.append({
+            "time_s": round(statistics.median(times), 1),
+            "stddev_s": round(statistics.stdev(times) if len(times) > 1 else 0.0, 1),
+            "count": len(cl),
+            "total_samples": total_samples,
+            "pct_avg": round(statistics.mean(pcts), 3),
+            "common_cds": common_cds,
+        })
+    return sorted(result, key=lambda r: r["time_s"])
 
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")

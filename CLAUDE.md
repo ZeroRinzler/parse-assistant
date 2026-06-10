@@ -69,29 +69,34 @@ warcraft-learner/
    - **Bloodlust alignment** — flags any major CD (where `align_with_bloodlust: true`) whose BL-window cast timing is >2σ from the top-parse average offset. Falls back to a binary in/out-of-window check when no parse data exists.
    - **First-cast delay** — flags opener CDs whose first cast is >2σ later than the top-parse `avg_first_cast_s`. Falls back to a flat 30 s threshold when no parse data exists.
    - **Cooldown held past reset** — gap between casts is >2σ above the top-parse `avg_gap_s` for that CD. Falls back to `cooldown × 1.2` when no parse data exists.
+   - **Hold suggestions** — per-cast-index check against `hold_targets` from top parses. If ≥40% of top parsers delay a specific cast past on-cooldown time, and the player uses it >max(stddev, 15s) earlier, emits a `severity: "info"` / `category: "hold_suggestion"` finding with target time.
    - **Cast efficiency** — compares player downtime (gaps above the p90 of top-parse inter-cast gaps) against the top-parse average. Warning band uses top-parse stddev rather than a fixed percentage.
    - **Success** — emits a `severity: "success"` finding if a CD had zero issues.
 5. **Rule engine** — after cooldown analysis, evaluates every `rules[]` entry that has a machine-readable `condition` object. Two supported kinds:
    - `cast_without_prior` — flags each cast of `spell_id` that lacks a paired cast of `required_spell_id` within `window_s`. Optional `exception` exempts casts during a context spell window (e.g. 2nd Dance inside Shadow Blades).
    - `hold_cooldown_for_anchor` — flags casts of `spell_ids` within `hold_window_s` before each non-opener cast of `anchor_spell_id`.
    Rule findings include a `details.remedy` field with the rule's `action` text, rendered as a coaching callout in the UI.
-6. Response includes two sections: **Needs Improvement** (critical/warning) and **Doing Well** (success).
-7. If parse samples exist for the fight's encounter, a **vs Top N Parses** comparison table is appended. Uses **uses-per-minute** (not raw counts) to normalize across kill-time differences between the player and top performers.
+6. Response includes: **Needs Improvement** (critical/warning), **Timing Suggestions** (info/hold_suggestion), and **Doing Well** (success). Also includes `rulebook_source` ("generated", "static", or "none") shown under the player name.
+7. If parse samples exist for the fight's encounter, a **vs Top N Parses** comparison table is appended. Uses **uses-per-minute** (not raw counts) to normalize across kill-time differences between the player and top performers. A **Burst Windows** card shows the top recurring 8s damage spikes across top parses with the CDs active in them.
 8. Cooldown rules come from the **dynamic rulebook** if one exists (SQLite + in-memory cache in `db.py`), otherwise from the static `SPEC_COOLDOWNS` dict in `rulebook.py`.
 
 ### Ingestion pipeline (`/admin`)
-1. **Add guides** — POST `/api/admin/guides` with `{spec, url, guide_type}`. Type is `"web"` or `"youtube"`. Stored in `guides` SQLite table.
-2. **Scrape** — POST `/api/admin/guides/{id}/scrape`. `scraper.py` fetches page text (BeautifulSoup) or YouTube transcript (`youtube-transcript-api`). Up to 60 k chars stored per guide.
-3. **Generate rulebook** — POST `/api/admin/rulebook/{spec}/generate-stream`. `llm_parser.py` batches all scraped guide content and optionally top-parse context, sends to Claude (`claude-sonnet-4-6`), receives structured JSON with `major_cooldowns[]` and `rules[]`. Saved to `generated_rulebooks` table and loaded into in-memory cache — live immediately with no restart.
-4. **Manual rulebook** — PUT `/api/admin/rulebook/{spec}`. Persists hand-crafted JSON directly, bypassing the LLM. Must include `major_cooldowns` key.
-5. **Top parses** — Single "Ingest All Bosses" button on the parses tab. Streams progress via `GET /api/admin/parses/ingest-all-stream/{spec}` (SSE). Always ingests top 10 per boss; **overwrites** existing samples for that spec+encounter on each run. Per-boss progress shown as a mini bar in the boss table. After ingestion, stored samples can be inspected per boss via the "View N" button (calls `GET /api/admin/parses/samples/{spec}/{encounter_id}`).
+1. **Add guides** — POST `/api/admin/guides` with `{spec, url, guide_type}`. Type is `"web"`, `"youtube"`, or `"simc"`. GitHub blob URLs are auto-converted to raw.githubusercontent.com. Up to 60 k chars stored per guide.
+2. **Scrape** — POST `/api/admin/guides/{id}/scrape`. `scraper.py` fetches page text (BeautifulSoup), YouTube transcript (`youtube-transcript-api`), or raw file (GitHub/SimC APL).
+3. **Copy AI Prompt** — GET `/api/admin/guides/{spec}/prompt`. Assembles the skill file (`prompts/rulebook_skill.md`) with all scraped guide content into a ready-to-paste prompt. No LLM API call — the user pastes into their own LLM.
+4. **Save AI output** — PUT `/api/admin/rulebook/{spec}`. Client-side schema validation runs first (checks for `spell_id` on every cooldown, etc.); then persists JSON to `generated_rulebooks` table and live-loads into in-memory cache.
+5. **Top parses** — Single "Ingest All Bosses" button on the parses tab. Streams progress via `GET /api/admin/parses/ingest-all-stream/{spec}` (SSE). Always ingests top 10 per boss; **overwrites** existing samples for that spec+encounter on each run. Each parse now also stores:
+   - `cooldowns[].hold_windows` — per-CD list of casts delayed >8s past on-cooldown time
+   - `cooldowns[].cast_pattern` — "hold" or "on_cooldown"
+   - `burst_windows` — top 4 non-overlapping 8s damage peaks with active CDs
+   Per-boss progress shown as a mini bar in the boss table. After ingestion, samples can be inspected per boss via "View N" (shows cast_pattern badges, hold counts, and burst window breakdown).
 
 ### Encounter selection
 Encounters auto-load on page open. Filtered to:
 - Current expansion only (auto-detected as the expansion with the first unique name in the WCL API response — WCL returns newest first).
 - Excludes zones matching: `beta`, `ptr`, `mythic+`, `complete raids`, `delves`, `torghast`.
 
-The encounter selector on the guides tab is used solely as optional context when generating a rulebook (passes top-parse samples from that boss to the LLM). The parses tab shows all current-expansion bosses in a table with sample counts and last-ingested timestamps — no manual encounter selection needed.
+The parses tab shows all current-expansion bosses in a table with sample counts and last-ingested timestamps — no manual encounter selection needed.
 
 ## Data models
 
@@ -124,6 +129,9 @@ Key fields stored inside the `cooldown_data` JSON blob:
 | `cooldowns[].cast_times_s` | per-CD | List of cast timestamps relative to fight start — used to compute avg/stddev first-cast and gap benchmarks |
 | `cooldowns[].bl_offset_s` | per-CD | Seconds between the BL-window cast and BL start (negative = pre-cast) — used to benchmark BL timing |
 | `cooldowns[].bl_aligned` | per-CD | Whether this parse cast the CD inside the BL window |
+| `cooldowns[].hold_windows` | per-CD | List of `{cast_index, expected_s, actual_s, hold_amount_s}` for casts delayed >8s past on-cooldown time |
+| `cooldowns[].cast_pattern` | per-CD | `"hold"` if any cast was held >8s; `"on_cooldown"` otherwise |
+| `burst_windows` | top-level | List of `{time_s, pct_of_total, active_cds}` — top 4 non-overlapping 8s damage peaks |
 
 ### Rulebook JSON schema
 ```json
@@ -198,9 +206,11 @@ All thresholds are now derived from top-parse data when samples exist for the en
 |---|---|---|
 | First-cast delay | `avg_first_cast_s + 2σ` across top parses for that CD | 30 s |
 | Gap between CD uses | `avg_gap_s + 2σ` across top parses for that CD | `cooldown × 1.2` |
+| Hold suggestion trigger | cast index where ≥40% of samples have `hold_amount_s > 8s`; fires if player casts >max(σ, 15s) before median hold time | no suggestion emitted |
 | Downtime gap floor | p90 of pooled `cast_gap_list_ms` from all samples | 1500 ms |
 | Efficiency warning band | `top_efficiency_stddev` (1σ below avg triggers warning, 2σ triggers critical) | flat −7% |
 | BL timing comparison | `avg_bl_offset_s ± 2σ` across top parses for that CD | binary in/out-of-window |
+| Burst window clustering | windows within 15s of each other merged; ≥35% of samples required to surface | n/a |
 | Comparison table green/red (uses/min) | `top_stddev_uses_per_min` per CD | ±0.05 uses/min |
 | Comparison table green/red (first cast) | `top_stddev_first_cast_s` per CD | ±3 s |
 
@@ -218,7 +228,7 @@ Source: `design-doc.md` (architecture blueprint) + `intial-research.md` (researc
 
 | Original goal | Status | Notes |
 |---|---|---|
-| Guide ingestion: scrape URLs → LLM → JSON rulebook | ✅ Done | Web + YouTube, streaming progress UI |
+| Guide ingestion: scrape URLs → LLM → JSON rulebook | ✅ Done | Web + YouTube + SimC APL (GitHub); copy-prompt / paste-back workflow replaces direct LLM API |
 | Deterministic rules engine evaluating rulebook | ✅ Done | `cast_without_prior`, `hold_cooldown_for_anchor`; more kinds needed |
 | Cooldown analysis: lost casts, BL alignment, opener delay, held CDs | ✅ Done | All four checks live |
 | Top-parse comparison with kill-time normalization | ✅ Done | Uses/min replaces raw count |
@@ -227,6 +237,10 @@ Source: `design-doc.md` (architecture blueprint) + `intial-research.md` (researc
 | Admin ingestion pipeline with URL persistence and encounter filter | ✅ Done | |
 | All analysis thresholds derived from top-parse data | ✅ Done | First-cast delay, gap tolerance, downtime floor, efficiency band, BL timing — all data-derived with static fallbacks |
 | Single-button all-boss parse ingestion | ✅ Done | SSE-streamed per-boss progress; always top 10; overwrites on re-run; boss overview table with sample counts and last-ingested dates |
+| Hold pattern detection | ✅ Done | Per-CD-cast-index hold targets aggregated from top parses; "Timing Suggestions" section in UI |
+| AoE burst window analysis | ✅ Done | Top 4 non-overlapping 8s damage peaks per parse; clustered across parses; "Burst Windows" card in UI |
+| Per-fight player filtering | ✅ Done | `friendlyPlayers` from WCL per fight; player dropdown updates on fight change |
+| Fight dropdown attempt numbering | ✅ Done | Wipes show `✗ #N` per-boss; kills show `✓` |
 
 ### Gaps — from design-doc.md
 
