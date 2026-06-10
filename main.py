@@ -1,3 +1,4 @@
+import asyncio
 import json
 import re
 import statistics
@@ -185,8 +186,11 @@ async def analyze(req: AnalyzeRequest):
 
     start, end = fight["startTime"], fight["endTime"]
     try:
-        cast_events = await wcl.get_all_events(code, req.fight_id, "Casts", start, end, source_id=req.player_id)
-        buff_events = await wcl.get_all_events(code, req.fight_id, "Buffs", start, end, target_id=req.player_id)
+        cast_events, buff_events, damage_events = await asyncio.gather(
+            wcl.get_all_events(code, req.fight_id, "Casts", start, end, source_id=req.player_id),
+            wcl.get_all_events(code, req.fight_id, "Buffs", start, end, target_id=req.player_id),
+            wcl.get_all_events(code, req.fight_id, "DamageDone", start, end, source_id=req.player_id),
+        )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Event fetch failed: {exc}")
 
@@ -393,6 +397,28 @@ async def analyze(req: AnalyzeRequest):
         if consistent_bw:
             result["burst_windows"] = consistent_bw
 
+    # Compute player burst windows for damage comparison
+    from parses_analyzer import _find_burst_windows as _player_find_bw
+    player_bw = _player_find_bw(damage_events, start)
+    # Annotate with active CDs (same logic as ingestion)
+    for bw in player_bw:
+        bw_t = bw["time_s"]
+        active: list[str] = []
+        for cd in (spec_cds or []):
+            dur = cd.get("duration") or 0
+            if dur > 0:
+                cd_casts = [
+                    c for c in cast_events
+                    if c.get("type") == "cast" and c.get("abilityGameID") == cd["spell_id"]
+                ]
+                for c in cd_casts:
+                    ct = (c["timestamp"] - start) / 1000
+                    if ct <= bw_t <= ct + dur:
+                        active.append(cd["name"])
+                        break
+        bw["active_cds"] = active
+    result["player_burst_windows"] = player_bw
+
     return result
 
 
@@ -418,7 +444,8 @@ async def spell_icons_endpoint(ids: str = ""):
                 cached.update(fresh)
         except Exception:
             pass  # icons are non-critical, degrade gracefully
-    return cached
+    # Return {str(spell_id): {icon, name}} — JS keys are strings
+    return {str(sid): info for sid, info in cached.items()}
 
 
 # ── Pre-fight brief API ───────────────────────────────────────────────────────
@@ -1079,14 +1106,42 @@ def _cluster_burst_windows(windows: list[dict], total_samples: int, merge_s: flo
                 cd_counts[name] += 1
         common_cds = [name for name, cnt in cd_counts.most_common() if cnt >= len(cl) * 0.5]
         avg_targets = round(statistics.mean(c.get("target_count", 1) for c in cl), 1)
+        pct_stddev = round(statistics.stdev(pcts) if len(pcts) > 1 else 0.0, 3)
+
+        # Aggregate ability breakdowns across the cluster
+        ability_totals: dict[int, list[float]] = defaultdict(list)
+        for c in cl:
+            for ab in c.get("ability_breakdown", []):
+                ability_totals[ab["spell_id"]].append(ab["pct"])
+        # Abilities present in at least half the cluster parses
+        ability_breakdown = sorted(
+            [
+                {
+                    "spell_id": sid,
+                    "avg_pct": round(statistics.mean(pcts_list), 3),
+                    "count": len(pcts_list),
+                }
+                for sid, pcts_list in ability_totals.items()
+                if len(pcts_list) >= len(cl) * 0.5
+            ],
+            key=lambda x: -x["avg_pct"],
+        )[:6]
+
+        # Per-parse pct values — used by the player comparison to find worst and best
+        parse_pcts = sorted(pcts)  # ascending
+
         result.append({
             "time_s": round(statistics.median(times), 1),
             "stddev_s": round(statistics.stdev(times) if len(times) > 1 else 0.0, 1),
             "count": len(cl),
             "total_samples": total_samples,
             "pct_avg": round(statistics.mean(pcts), 3),
+            "pct_stddev": pct_stddev,
+            "pct_min": round(parse_pcts[0], 3),  # worst top-parse value
+            "pct_max": round(parse_pcts[-1], 3),  # best top-parse value
             "common_cds": common_cds,
             "avg_targets": avg_targets,
+            "ability_breakdown": ability_breakdown,
         })
     return sorted(result, key=lambda r: r["time_s"])
 

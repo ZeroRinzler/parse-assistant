@@ -68,21 +68,29 @@ function clearError() {
 
 // ── Spell icon cache & rendering ──────────────────────────────────────────────
 
-const _iconCache = {};  // {spell_id: icon_name}
+const _iconCache = {};  // {spell_id: {icon, name}}
 
 async function fetchSpellIcons(spellIds) {
-  const missing = spellIds.filter(id => id && !(id in _iconCache));
+  const missing = spellIds.filter(id => id && !_iconCache[id]);
   if (!missing.length) return;
   try {
     const resp = await fetch(`/api/spell-icons?ids=${missing.join(',')}`);
-    if (resp.ok) Object.assign(_iconCache, await resp.json());
+    if (resp.ok) {
+      const data = await resp.json();
+      Object.assign(_iconCache, data);  // keys are string spell IDs
+    }
   } catch { /* icons are non-critical */ }
 }
 
 function spellIconHtml(spellId, size = 'small') {
-  const icon = _iconCache[spellId];
-  if (!icon) return '';
-  return `<img class="spell-icon spell-icon-${size}" src="https://wow.zamimg.com/images/wow/icons/${size}/${icon}.jpg" alt="" loading="lazy" onerror="this.style.display='none'" />`;
+  const info = _iconCache[spellId] || _iconCache[String(spellId)];
+  if (!info?.icon) return '';
+  return `<img class="spell-icon spell-icon-${size}" src="https://wow.zamimg.com/images/wow/icons/${size}/${info.icon}.jpg" alt="${info.name || ''}" loading="lazy" onerror="this.style.display='none'" />`;
+}
+
+function spellName(spellId) {
+  const info = _iconCache[spellId] || _iconCache[String(spellId)];
+  return info?.name || '';
 }
 
 // ── Category icons ────────────────────────────────────────────────────────────
@@ -217,11 +225,16 @@ function applyCharacterSelection(autoPlayer = null) {
 function renderResults(data) {
   const el = document.getElementById('results');
 
-  // Pre-fetch icons for all cooldowns in the response
+  // Pre-fetch icons for all cooldowns + burst window abilities
   const spellIds = Object.values(data.cd_spell_ids || {});
-  if (spellIds.length) {
-    fetchSpellIcons(spellIds).then(() => _refreshIcons(el));
-  }
+  const bwAbilityIds = (data.burst_windows || []).flatMap(bw =>
+    (bw.ability_breakdown || []).map(a => a.spell_id)
+  );
+  const playerBwIds = (data.player_burst_windows || []).flatMap(bw =>
+    (bw.ability_breakdown || []).map(a => a.spell_id)
+  );
+  const allIds = [...new Set([...spellIds, ...bwAbilityIds, ...playerBwIds])];
+  if (allIds.length) fetchSpellIcons(allIds).then(() => _refreshIcons(el));
 
   const byCD = {};
   const ruleFindings = [];
@@ -243,7 +256,6 @@ function renderResults(data) {
     }
   }
 
-  // Also add success findings as their own entries
   for (const f of data.findings) {
     if (f.severity !== 'success') continue;
     const n = f.cd_name;
@@ -263,31 +275,52 @@ function renderResults(data) {
       <div class="rule-list">${ruleFindings.map(renderRuleItem).join('')}</div>`;
   }
 
+  let compHtml = '';
+  if (data.parse_comparison?.length) {
+    compHtml = renderParseComparison(data.parse_comparison, data.player_fight_duration_s);
+  }
+
+  let burstHtml = '';
+  if (data.burst_windows?.length) {
+    burstHtml = renderBurstWindows(data.burst_windows, data.player_burst_windows || []);
+  }
+
   el.innerHTML = `
     <div class="result-header">
       <h2>${data.player} — ${formatSpec(data.spec)}</h2>
     </div>
     <div class="cd-list">${cdHtml}</div>
     ${rulesHtml}
+    ${compHtml}
+    ${burstHtml}
   `;
 
   el.classList.remove('hidden');
   el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-// After icons load, swap in the img tags that were originally empty placeholders
+// After icons load, refresh icon placeholders and ability name spans
 function _refreshIcons(container) {
   container.querySelectorAll('[data-spell-id]').forEach(el => {
-    const sid = parseInt(el.dataset.spellId, 10);
-    const icon = _iconCache[sid];
-    if (icon && !el.querySelector('img')) {
+    const sid = el.dataset.spellId;
+    const info = _iconCache[sid];
+    if (info?.icon && !el.querySelector('img')) {
       const img = document.createElement('img');
       img.className = 'spell-icon spell-icon-small';
-      img.src = `https://wow.zamimg.com/images/wow/icons/small/${icon}.jpg`;
+      img.src = `https://wow.zamimg.com/images/wow/icons/small/${info.icon}.jpg`;
+      img.alt = info.name || '';
       img.loading = 'lazy';
       img.onerror = () => img.style.display = 'none';
       el.prepend(img);
     }
+  });
+  // Fill in ability name spans from the cache
+  container.querySelectorAll('.bw-ab-name[data-wowhead]').forEach(el => {
+    if (el.textContent) return;
+    const m = el.dataset.wowhead?.match(/spell=(\d+)/);
+    if (!m) return;
+    const info = _iconCache[m[1]];
+    if (info?.name) el.textContent = info.name;
   });
 }
 
@@ -336,4 +369,162 @@ function renderRuleItem(f) {
   const remedy = f.details?.remedy ? `<div class="rule-remedy">${f.details.remedy}</div>` : '';
   const sev = f.severity === 'warning' ? 'sev-warning' : '';
   return `<div class="rule-item ${sev}">${icon}${ts}<span class="rule-item-msg">${f.message}</span>${remedy}</div>`;
+}
+
+// ── Parse comparison table ───────────────────────────────────────────────────
+
+function _delta(player, top, stddev) {
+  if (player == null || top == null) return '<span class="delta-ok">—</span>';
+  const diff = player - top;
+  const sd = stddev || 0.05;
+  const cls = diff >= 0 ? 'delta-good' : Math.abs(diff) > sd ? 'delta-bad' : 'delta-ok';
+  const sign = diff >= 0 ? '+' : '';
+  return `<span class="${cls}">${sign}${diff.toFixed(2)}</span>`;
+}
+
+function renderParseComparison(comparison, playerDurS) {
+  const rows = comparison.map(cd => {
+    const upmDelta = _delta(cd.player_uses_per_min, cd.top_avg_uses_per_min, cd.top_stddev_uses_per_min);
+    const firstDelta = cd.player_first_cast_s != null && cd.top_avg_first_cast_s != null
+      ? _delta(-(cd.player_first_cast_s - cd.top_avg_first_cast_s), 0, cd.top_stddev_first_cast_s)
+      : '<span class="delta-ok">—</span>';
+    const blCell = cd.top_bl_pct > 0
+      ? `${cd.player_bl_offset_s != null ? (cd.player_bl_offset_s >= 0 ? '+' : '') + cd.player_bl_offset_s + 's' : '—'} <span class="delta-ok">/ avg ${cd.top_avg_bl_offset_s != null ? (cd.top_avg_bl_offset_s >= 0 ? '+' : '') + cd.top_avg_bl_offset_s + 's' : '—'}</span>`
+      : '<span class="delta-ok">—</span>';
+    return `<tr>
+      <td style="font-weight:600">${cd.name}</td>
+      <td>${cd.player_uses} <span class="delta-ok">(${cd.player_uses_per_min}/min)</span> ${upmDelta}</td>
+      <td>${cd.player_first_cast_s != null ? formatDuration(cd.player_first_cast_s) : '—'} ${firstDelta}</td>
+      <td>${blCell}</td>
+      <td class="delta-ok">${cd.sample_count}</td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <p class="section-label" style="margin-top:20px">vs Top ${comparison[0]?.sample_count || ''} Parses</p>
+    <div class="comp-table-wrap">
+      <table class="comp-table">
+        <thead><tr>
+          <th>Cooldown</th>
+          <th>Uses/min</th>
+          <th>First cast</th>
+          <th>BL offset</th>
+          <th>Samples</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+// ── Burst window deep dive ───────────────────────────────────────────────────
+
+function renderBurstWindows(topBws, playerBws) {
+  // Match player burst windows to the closest top-parse window by time
+  function findPlayerWindow(topTimeS) {
+    let best = null, bestDiff = 20;
+    for (const bw of playerBws) {
+      const d = Math.abs(bw.time_s - topTimeS);
+      if (d < bestDiff) { bestDiff = d; best = bw; }
+    }
+    return best;
+  }
+
+  const cards = topBws.map((bw, idx) => {
+    const playerBw = findPlayerWindow(bw.time_s);
+    const topPct  = bw.pct_avg;
+    const playerPct = playerBw?.pct_of_total ?? null;
+    const minPct  = bw.pct_min ?? topPct - 0.02;
+    const maxPct  = bw.pct_max ?? topPct + 0.02;
+
+    let statusClass = 'bw-ok';
+    let statusLabel = 'On Par';
+    if (playerPct === null) {
+      statusClass = 'bw-missing'; statusLabel = 'No data';
+    } else if (playerPct < minPct - (bw.pct_stddev || 0.01)) {
+      statusClass = 'bw-low'; statusLabel = 'Below range';
+    } else if (playerPct >= topPct - (bw.pct_stddev || 0.005)) {
+      statusClass = 'bw-ok'; statusLabel = 'On Par';
+    } else {
+      statusClass = 'bw-warn'; statusLabel = 'Slightly below';
+    }
+
+    const cdsStr = bw.common_cds?.length ? bw.common_cds.join(', ') : '—';
+    const playerPctStr = playerPct != null ? (playerPct * 100).toFixed(1) + '%' : '—';
+    const topPctStr = (topPct * 100).toFixed(1) + '%';
+
+    // Ability breakdown — shown only when expanded and player is below range
+    const showBreakdown = playerPct !== null && playerPct < maxPct;
+    let breakdownHtml = '';
+    if (showBreakdown && bw.ability_breakdown?.length) {
+      // Merge top-parse abilities with player abilities
+      const playerAbMap = {};
+      for (const a of (playerBw?.ability_breakdown || [])) playerAbMap[a.spell_id] = a;
+
+      const rows = bw.ability_breakdown.map(topAb => {
+        const sid = topAb.spell_id;
+        const playerAb = playerAbMap[sid];
+        const topPctStr = (topAb.avg_pct * 100).toFixed(1) + '%';
+        const plPctStr  = playerAb ? (playerAb.pct * 100).toFixed(1) + '%' : '—';
+        const diff = playerAb ? playerAb.pct - topAb.avg_pct : null;
+        const diffCls = diff === null ? 'delta-ok' : diff >= 0 ? 'delta-good' : 'delta-bad';
+        const diffStr = diff !== null ? `<span class="${diffCls}">${diff >= 0 ? '+' : ''}${(diff*100).toFixed(1)}%</span>` : '';
+        const iconSlot = `<span data-spell-id="${sid}">${spellIconHtml(sid)}</span>`;
+        return `<tr>
+          <td>${iconSlot} <span class="bw-ab-name" data-wowhead="spell=${sid}"></span></td>
+          <td>${plPctStr} ${diffStr}</td>
+          <td class="delta-ok">${topPctStr}</td>
+        </tr>`;
+      }).join('');
+
+      // Also add player-only abilities not in top-parse breakdown
+      const topIds = new Set(bw.ability_breakdown.map(a => a.spell_id));
+      for (const pa of (playerBw?.ability_breakdown || [])) {
+        if (!topIds.has(pa.spell_id)) {
+          const sid = pa.spell_id;
+          rows + `<tr>
+            <td><span data-spell-id="${sid}">${spellIconHtml(sid)}</span></td>
+            <td>${(pa.pct * 100).toFixed(1)}% <span class="delta-good">+top</span></td>
+            <td class="delta-ok">—</td>
+          </tr>`;
+        }
+      }
+
+      breakdownHtml = `
+        <div class="bw-breakdown">
+          <table class="bw-ab-table">
+            <thead><tr><th>Ability</th><th>You</th><th>Top avg</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+    }
+
+    const expandBtn = showBreakdown && bw.ability_breakdown?.length
+      ? `<button class="bw-expand-btn" onclick="this.closest('.bw-card').classList.toggle('expanded')">Detail ▾</button>`
+      : '';
+
+    return `
+      <div class="bw-card ${statusClass}" id="bw-card-${idx}">
+        <div class="bw-card-header">
+          <span class="bw-time">${formatDuration(bw.time_s)}</span>
+          <div class="bw-bar-wrap">
+            <div class="bw-bar" style="--top:${Math.min(topPct*400, 100)}%;--player:${playerPct != null ? Math.min(playerPct*400,100) : 0}%"></div>
+          </div>
+          <span class="bw-pct-player">${playerPctStr}</span>
+          <span class="bw-pct-sep">/</span>
+          <span class="bw-pct-top">${topPctStr}</span>
+          <span class="bw-status-badge bw-badge-${statusClass}">${statusLabel}</span>
+          <span class="bw-cds">${cdsStr}</span>
+          ${expandBtn}
+        </div>
+        ${breakdownHtml}
+      </div>`;
+  }).join('');
+
+  return `
+    <p class="section-label" style="margin-top:20px">Burst Windows</p>
+    <div class="bw-legend">
+      <span class="bw-legend-item"><span class="bw-dot bw-dot-player"></span> You</span>
+      <span class="bw-legend-item"><span class="bw-dot bw-dot-top"></span> Top parse avg</span>
+    </div>
+    <div class="bw-list">${cards}</div>`;
 }

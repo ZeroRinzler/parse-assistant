@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS parse_samples (
 CREATE TABLE IF NOT EXISTS spell_icons (
     spell_id  INTEGER PRIMARY KEY,
     icon      TEXT NOT NULL,
+    name      TEXT,
     cached_at TEXT DEFAULT (datetime('now'))
 );
 """
@@ -281,25 +282,27 @@ async def get_parse_samples(spec: str, encounter_id: int) -> list[dict]:
 
 # ── Spell icon cache ──────────────────────────────────────────────────────────
 
-async def get_cached_spell_icons(spell_ids: list[int]) -> dict[int, str]:
+async def get_cached_spell_icons(spell_ids: list[int]) -> dict[int, dict]:
+    """Return {spell_id: {icon, name}} for cached entries."""
     if not spell_ids:
         return {}
     placeholders = ",".join("?" * len(spell_ids))
     async with _conn() as db:
         db.row_factory = aiosqlite.Row
         async with db.execute(
-            f"SELECT spell_id, icon FROM spell_icons WHERE spell_id IN ({placeholders})",
+            f"SELECT spell_id, icon, name FROM spell_icons WHERE spell_id IN ({placeholders})",
             spell_ids,
         ) as cur:
-            return {row["spell_id"]: row["icon"] async for row in cur}
+            return {row["spell_id"]: {"icon": row["icon"], "name": row["name"] or ""} async for row in cur}
 
 
-async def cache_spell_icons(icons: dict[int, str]) -> None:
+async def cache_spell_icons(icons: dict[int, dict]) -> None:
+    """Cache {spell_id: {icon, name}} entries."""
     if not icons:
         return
     async with _conn() as db:
         await db.executemany(
-            "INSERT OR REPLACE INTO spell_icons (spell_id, icon) VALUES (?,?)",
-            [(sid, icon) for sid, icon in icons.items()],
+            "INSERT OR REPLACE INTO spell_icons (spell_id, icon, name) VALUES (?,?,?)",
+            [(sid, data.get("icon", ""), data.get("name", "")) for sid, data in icons.items()],
         )
         await db.commit()

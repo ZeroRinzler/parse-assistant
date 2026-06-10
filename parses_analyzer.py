@@ -307,23 +307,29 @@ def _find_burst_windows(
 ) -> list[dict]:
     """
     Find top N non-overlapping 8s burst windows by total damage dealt.
-    Returns [{time_s, pct_of_total, active_cds}] sorted by fight time.
+    Returns [{time_s, pct_of_total, active_cds, ability_breakdown, window_damage}]
+    sorted by fight time.
     """
     hits = sorted(
-        (e["timestamp"], e.get("amount", 0) + e.get("absorbed", 0), e.get("targetID", 0))
+        (
+            e["timestamp"],
+            e.get("amount", 0) + e.get("absorbed", 0),
+            e.get("targetID", 0),
+            e.get("abilityGameID", 0),
+        )
         for e in damage_events
         if e.get("type") == "damage" and (e.get("amount", 0) + e.get("absorbed", 0)) > 0
     )
     if not hits:
         return []
-    total = sum(d for _, d, _ in hits)
+    total = sum(d for _, d, _, _ in hits)
     if not total:
         return []
 
-    # Build a parallel list of targetIDs for the window target-count pass
     hit_ts   = [h[0] for h in hits]
     hit_dmg  = [h[1] for h in hits]
     hit_tids = [h[2] for h in hits]
+    hit_aids = [h[3] for h in hits]
 
     n = len(hits)
     j = 0
@@ -340,14 +346,32 @@ def _find_burst_windows(
     selected: list[dict] = []
     for ts, dmg in candidates:
         if not any(abs(ts - (fight_start_ms + s["time_s"] * 1000)) < window_ms for s in selected):
-            # Count unique targets hit in this window
             t_end = ts + window_ms
             targets = {hit_tids[k] for k in range(n) if ts <= hit_ts[k] <= t_end and hit_tids[k]}
+
+            # Per-ability breakdown for this window
+            ability_dmg: dict[int, int] = {}
+            for k in range(n):
+                if ts <= hit_ts[k] <= t_end and hit_aids[k]:
+                    ability_dmg[hit_aids[k]] = ability_dmg.get(hit_aids[k], 0) + hit_dmg[k]
+            top_abilities = sorted(ability_dmg.items(), key=lambda x: -x[1])[:6]
+            ability_breakdown = [
+                {
+                    "spell_id": sid,
+                    "damage": d,
+                    "pct": round(d / dmg, 3) if dmg else 0,
+                }
+                for sid, d in top_abilities
+            ]
+
             selected.append({
                 "time_s": round((ts - fight_start_ms) / 1000, 1),
                 "pct_of_total": round(dmg / total, 3),
+                "window_damage": dmg,
+                "total_damage": total,
                 "active_cds": [],
                 "target_count": len(targets) if targets else 1,
+                "ability_breakdown": ability_breakdown,
             })
         if len(selected) >= top_n:
             break
