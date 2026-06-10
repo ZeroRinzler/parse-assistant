@@ -5,6 +5,9 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Optional
 
+# WCL gear array indices (0-based positional, same order as WoW's paper doll)
+_TRINKET_SLOTS = {12, 13}
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
@@ -13,7 +16,10 @@ from pydantic import BaseModel
 
 import db
 from analyzer import analyze_player
-from parses_analyzer import get_encounters, fetch_top_rankings, analyze_parse, SPEC_TO_WCL
+from parses_analyzer import (
+    get_encounters, fetch_top_rankings, analyze_parse, SPEC_TO_WCL,
+    _extract_combatant_info, _CHAR_ENC_RANKINGS_QUERY,
+)
 from rulebook import BLOODLUST_SPELL_IDS
 from scraper import scrape
 from wcl_client import WCLClient
@@ -471,6 +477,201 @@ async def pre_fight_brief(spec: str, encounter_id: int):
     }
 
 
+# ── Gear helpers ─────────────────────────────────────────────────────────────
+
+def _parse_char_url(url_or_input: str) -> tuple[str, str, str]:
+    """Return (name, server_slug, region) from a WCL or armory character URL."""
+    s = url_or_input.strip()
+    # WCL: warcraftlogs.com/character/{region}/{server}/{name}
+    m = re.search(r"warcraftlogs\.com/character/([a-z]+)/([a-zA-Z0-9\-]+)/([^\s/?#]+)", s, re.I)
+    if m:
+        return m.group(3).lower(), m.group(2).lower(), m.group(1).lower()
+    # Armory: worldofwarcraft.blizzard.com/{locale}/character/{region}/{server}/{name}
+    m = re.search(r"worldofwarcraft\.blizzard\.com/[a-z\-]+/character/([a-z]+)/([a-zA-Z0-9\-]+)/([^\s/?#]+)", s, re.I)
+    if m:
+        return m.group(3).lower(), m.group(2).lower(), m.group(1).lower()
+    raise ValueError(
+        f"Could not parse character URL. Use a WCL or Armory character page URL: {s!r}"
+    )
+
+
+def _find_player_in_pd(report: dict, player_name: str) -> tuple[Optional[dict], Optional[str]]:
+    """Find player entry in playerDetails, return (entry, spec_string)."""
+    spec_map = _build_spec_map(report)
+    raw = report.get("playerDetails")
+    if not raw:
+        return None, None
+    outer = json.loads(raw) if isinstance(raw, str) else raw
+    details = (outer.get("data") or {}).get("playerDetails") or outer
+    name_lower = player_name.lower()
+    for role in ("dps", "healers", "tanks", "unknown"):
+        for p in (details.get(role) or []):
+            if (p.get("name") or "").lower() == name_lower:
+                return p, spec_map.get(p.get("id"))
+    return None, None
+
+
+
+
+def _aggregate_gear(samples: list[dict]) -> dict:
+    """Aggregate talent builds, trinkets, and enchants across stored parse samples."""
+    total = len(samples)
+    talent_counter: Counter = Counter()
+    trinket_counters: dict[int, Counter] = {12: Counter(), 13: Counter()}
+    trinket_names: dict[int, str] = {}
+    enchant_counters: dict[int, Counter] = defaultdict(Counter)
+    enchant_names: dict[int, str] = {}
+
+    for s in samples:
+        cd_data = s.get("cooldown_data") or {}
+
+        tk = cd_data.get("talent_key", "")
+        if tk:
+            talent_counter[tk] += 1
+
+        for t in cd_data.get("trinkets") or []:
+            slot = t.get("slot")
+            item_id = t.get("id")
+            if slot in (12, 13) and item_id:
+                trinket_counters[slot][item_id] += 1
+                if item_id not in trinket_names:
+                    trinket_names[item_id] = t.get("name", "")
+
+        for e in cd_data.get("enchants") or []:
+            slot = e.get("slot")
+            enc_id = e.get("id")
+            if slot is not None and enc_id:
+                enchant_counters[slot][enc_id] += 1
+                if enc_id not in enchant_names:
+                    enchant_names[enc_id] = e.get("name", "")
+
+    return {
+        "sample_count": total,
+        "talent_builds": [
+            {"key": k, "count": c, "pct": round(c / total * 100) if total else 0}
+            for k, c in talent_counter.most_common(5)
+        ],
+        "trinkets": {
+            slot: [
+                {
+                    "id": item_id,
+                    "name": trinket_names.get(item_id, ""),
+                    "count": c,
+                    "pct": round(c / total * 100) if total else 0,
+                }
+                for item_id, c in counter.most_common(5)
+            ]
+            for slot, counter in trinket_counters.items()
+            if counter
+        },
+        "enchants": {
+            slot: [
+                {
+                    "id": enc_id,
+                    "name": enchant_names.get(enc_id, ""),
+                    "count": c,
+                    "pct": round(c / total * 100) if total else 0,
+                }
+                for enc_id, c in counter.most_common(3)
+            ]
+            for slot, counter in enchant_counters.items()
+            if counter
+        },
+    }
+
+
+@app.get("/api/pre/char-lookup")
+async def char_lookup(url: str):
+    """Identify a character from a WCL or Armory URL and resolve their spec."""
+    try:
+        name, server_slug, region = _parse_char_url(url)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    try:
+        char_data = await wcl.get_character(name, server_slug, region)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"WCL character lookup failed: {exc}")
+
+    char = (char_data.get("characterData") or {}).get("character")
+    if not char:
+        raise HTTPException(status_code=404, detail=f"Character not found: {name}-{server_slug} ({region})")
+
+    reports = ((char.get("recentReports") or {}).get("data")) or []
+    if not reports:
+        raise HTTPException(status_code=404, detail="No recent WCL reports found for this character.")
+
+    # Detect spec from recent report's playerDetails
+    spec = None
+    source_report = reports[0]["code"]
+    for rep in reports[:3]:
+        try:
+            rd = await wcl.get_report(rep["code"])
+        except Exception:
+            continue
+        fights = (rd.get("reportData") or {}).get("report", {}).get("fights") or []
+        if not fights:
+            continue
+        try:
+            pd_data = await wcl.get_player_details(rep["code"], fights[0]["id"])
+        except Exception:
+            continue
+        pd_report = (pd_data.get("reportData") or {}).get("report") or {}
+        _, detected = _find_player_in_pd(pd_report, char["name"])
+        if detected:
+            spec = detected
+            source_report = rep["code"]
+            break
+
+    return {
+        "name": char["name"],
+        "spec": spec,
+        "server": server_slug,
+        "region": region,
+        "source_report": source_report,
+    }
+
+
+@app.get("/api/pre/char-gear")
+async def char_gear(name: str, server: str, region: str, encounter_id: int):
+    """
+    Fetch player gear from their best ranked performance on an encounter.
+    WCL's encounterRankings includes gear/talent data from their ranked kills.
+    """
+    try:
+        data = await wcl.query(_CHAR_ENC_RANKINGS_QUERY, {
+            "name": name, "serverSlug": server, "serverRegion": region, "encID": encounter_id,
+        })
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"WCL query failed: {exc}")
+
+    raw = (data.get("characterData") or {}).get("character", {}).get("encounterRankings")
+    if raw is None:
+        raise HTTPException(status_code=404, detail=f"Character not found: {name}-{server} ({region})")
+
+    rankings_data = json.loads(raw) if isinstance(raw, str) else raw
+    ranks = (rankings_data.get("ranks") or []) if isinstance(rankings_data, dict) else []
+    if not ranks:
+        return {"found": False, "message": "No ranked kills found. Enable advanced combat logging and upload a recent raid log."}
+
+    # Use the most recent kill (highest startTime) to get current gear
+    most_recent = max(ranks, key=lambda r: r.get("startTime", 0))
+    gear = _extract_combatant_info(most_recent)
+    return {
+        "found": True,
+        "spec": most_recent.get("spec"),
+        "source_report": (most_recent.get("report") or {}).get("code"),
+        **gear,
+    }
+
+
+@app.get("/api/pre/gear-stats/{spec}/{encounter_id}")
+async def gear_stats(spec: str, encounter_id: int):
+    """Return aggregated gear (talents, trinkets, enchants) from top parse samples."""
+    samples = await db.get_parse_samples(spec, encounter_id)
+    return _aggregate_gear(samples)
+
+
 # ── Admin — Guides ────────────────────────────────────────────────────────────
 
 class AddGuideRequest(BaseModel):
@@ -678,7 +879,9 @@ async def analyze_parses_stream(req: FetchParsesRequest):
             if not code or not fight_id:
                 yield _evt({"type": "parse_skip", "step": i + 1, "player": ranking.get("player")})
                 continue
-            summary = await analyze_parse(wcl, req.spec, code, fight_id, player_name=ranking.get("player"))
+            summary = await analyze_parse(wcl, req.spec, code, fight_id,
+                                          player_name=ranking.get("player"),
+                                          combatant_info=ranking.get("combatant_info"))
             if summary:
                 await db.save_parse_sample(
                     spec=req.spec,
@@ -771,7 +974,8 @@ async def ingest_all_stream(spec: str):
                                 "player": r.get("player")})
                     continue
                 summary = await analyze_parse(wcl, spec, code, fight_id,
-                                              player_name=r.get("player"))
+                                              player_name=r.get("player"),
+                                              combatant_info=r.get("combatant_info"))
                 if summary:
                     await db.save_parse_sample(
                         spec=spec, encounter_id=enc_id, encounter_name=enc_name,

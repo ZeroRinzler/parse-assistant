@@ -1,6 +1,7 @@
 """
 Fetch top WCL parses for a spec+encounter and extract cooldown timing patterns.
 """
+import asyncio
 import json
 from typing import Optional
 
@@ -60,12 +61,104 @@ query($encounterID: Int!, $className: String!, $specName: String!) {
         className: $className
         specName: $specName
         metric: dps
-        includeCombatantInfo: false
+        includeCombatantInfo: true
       )
     }
   }
 }
 """
+
+_TRINKET_INDICES = {12, 13}
+
+_CHAR_ENC_RANKINGS_QUERY = """
+query($name: String!, $serverSlug: String!, $serverRegion: String!, $encID: Int!) {
+  characterData {
+    character(name: $name, serverSlug: $serverSlug, serverRegion: $serverRegion) {
+      encounterRankings(encounterID: $encID, includeCombatantInfo: true)
+    }
+  }
+}
+"""
+
+
+async def _fetch_v2_talent(wcl: WCLClient, name: str, server_slug: str, server_region: str, encounter_id: int) -> str:
+    """Fetch v2 talent key for a character from their encounterRankings (most recent kill)."""
+    if not name or not server_slug or not server_region:
+        return ""
+    try:
+        data = await wcl.query(_CHAR_ENC_RANKINGS_QUERY, {
+            "name": name,
+            "serverSlug": server_slug,
+            "serverRegion": server_region,
+            "encID": encounter_id,
+        })
+        raw = (data.get("characterData") or {}).get("character", {}).get("encounterRankings")
+        if raw is None:
+            return ""
+        rankings_data = json.loads(raw) if isinstance(raw, str) else raw
+        ranks = (rankings_data.get("ranks") or []) if isinstance(rankings_data, dict) else []
+        if not ranks:
+            return ""
+        most_recent = max(ranks, key=lambda r: r.get("startTime", 0))
+        return _extract_combatant_info(most_recent).get("talent_key", "")
+    except Exception:
+        return ""
+
+
+def _extract_combatant_info(ranking_entry: dict) -> dict:
+    """
+    Extract talent fingerprint, trinkets, and enchants from a characterRankings entry.
+    WCL returns gear as a positionally-ordered array (index 12/13 = trinkets).
+    Talents use 'talentID' key. permanentEnchant is returned as a string.
+    """
+    if not ranking_entry:
+        return {"talent_key": "", "trinkets": [], "enchants": []}
+
+    gear = ranking_entry.get("gear") or []
+    talents_raw = ranking_entry.get("talents") or []
+
+    trinkets = []
+    enchants = []
+    for idx, item in enumerate(gear):
+        if not item or not item.get("id"):
+            continue
+        item_id = int(item["id"]) if isinstance(item["id"], str) else item["id"]
+        name = item.get("name") or ""
+
+        if idx in _TRINKET_INDICES:
+            trinkets.append({"slot": idx, "id": item_id, "name": name})
+
+        enc_raw = item.get("permanentEnchant")
+        if enc_raw:
+            enc_id = int(enc_raw) if isinstance(enc_raw, str) else enc_raw
+            enchants.append({"slot": idx, "id": enc_id, "name": item.get("permanentEnchantName") or ""})
+
+    if isinstance(talents_raw, str):
+        talent_key = talents_raw
+    elif isinstance(talents_raw, list) and talents_raw:
+        # Old WCL format: [{talentID: N, points: P}]
+        ids = sorted(
+            str(t.get("talentID") or t.get("id") or "")
+            for t in talents_raw if t
+        )
+        talent_key = "v1:" + ",".join(x for x in ids if x)
+    elif isinstance(talents_raw, dict) and talents_raw:
+        # Midnight format: {class: {row: [{node: {nodeId: N}}]}, spec: {row: [...]}}
+        node_ids = []
+        for section_key in ("class", "spec"):
+            section = talents_raw.get(section_key) or {}
+            if isinstance(section, dict):
+                for row_nodes in section.values():
+                    if isinstance(row_nodes, list):
+                        for entry in row_nodes:
+                            nid = (entry.get("node") or {}).get("nodeId")
+                            if nid:
+                                node_ids.append(str(nid))
+        talent_key = "v2:" + ",".join(sorted(node_ids))
+    else:
+        talent_key = ""
+
+    return {"talent_key": talent_key, "trinkets": trinkets, "enchants": enchants}
 
 _ENCOUNTERS_QUERY = """
 query {
@@ -137,22 +230,44 @@ async def fetch_top_rankings(
     rankings_data = json.loads(raw) if isinstance(raw, str) else raw
     rankings = (rankings_data.get("rankings") or [])[:count]
 
+    def _server_slug(r: dict) -> str:
+        return (r.get("server") or {}).get("slug", "") or ""
+
+    def _region_slug(r: dict) -> str:
+        region = (r.get("server") or {}).get("region") or {}
+        # WCL may return region as a plain string ("EU") or as an object {"slug": "eu"}
+        return region.get("slug", "") if isinstance(region, dict) else str(region).lower()
+
+    # Fetch v2 talent keys for all ranked players in parallel.
+    # encounterRankings uses a different ID space than characterRankings,
+    # so we query each player individually to get a comparable talent key.
+    talent_keys = await asyncio.gather(*[
+        _fetch_v2_talent(wcl, r.get("name", ""), _server_slug(r), _region_slug(r), encounter_id)
+        for r in rankings
+    ])
+
+    result_rankings = []
+    for i, (r, tk) in enumerate(zip(rankings, talent_keys)):
+        ci = dict(r)
+        if tk:
+            # Inject v2 string directly; _extract_combatant_info handles str talents unchanged
+            ci["talents"] = tk
+        result_rankings.append({
+            "rank": i + 1,
+            "player": r.get("name"),
+            "amount": round(r.get("amount", 0)),
+            "duration_s": round(r.get("duration", 0) / 1000, 1),
+            "report_code": (r.get("report") or {}).get("code"),
+            "fight_id": (r.get("report") or {}).get("fightID"),
+            "server": (r.get("server") or {}).get("name"),
+            "combatant_info": ci,
+        })
+
     return {
         "encounter_id": encounter_id,
         "encounter_name": enc["name"],
         "spec": spec,
-        "rankings": [
-            {
-                "rank": i + 1,
-                "player": r.get("name"),
-                "amount": round(r.get("amount", 0)),
-                "duration_s": round(r.get("duration", 0) / 1000, 1),
-                "report_code": (r.get("report") or {}).get("code"),
-                "fight_id": (r.get("report") or {}).get("fightID"),
-                "server": (r.get("server") or {}).get("name"),
-            }
-            for i, r in enumerate(rankings)
-        ],
+        "rankings": result_rankings,
     }
 
 
@@ -218,6 +333,7 @@ async def analyze_parse(
     report_code: str,
     fight_id: int,
     player_name: Optional[str] = None,
+    combatant_info: Optional[dict] = None,
 ) -> Optional[dict]:
     """
     For a single top-parse entry, fetch the player's cast events and return
@@ -359,6 +475,8 @@ async def analyze_parse(
                         break
         bw["active_cds"] = active
 
+    gear_data = _extract_combatant_info(combatant_info) if combatant_info else {}
+
     return {
         "player": player["name"],
         "spec": spec,
@@ -368,6 +486,9 @@ async def analyze_parse(
         "cast_gap_list_ms": cast_gap_list_ms,
         "cooldowns": cd_summary,
         "burst_windows": burst_windows,
+        "talent_key": gear_data.get("talent_key", ""),
+        "trinkets": gear_data.get("trinkets", []),
+        "enchants": gear_data.get("enchants", []),
     }
 
 

@@ -20,26 +20,54 @@
     .page-nav a.active{background:var(--surface2);color:var(--gold)}
 
     .container{max-width:900px;margin:0 auto;padding:28px 20px 64px}
-    header{text-align:center;margin-bottom:28px}
-    header h1{font-size:22px;font-weight:700;color:var(--gold);margin-bottom:4px}
-    header p{color:var(--muted);font-size:13px}
 
     .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;margin-bottom:16px}
     .card-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:14px}
 
-    .selectors{display:flex;gap:12px;align-items:flex-end}
-    .form-group{flex:1}
+    .input-row{display:flex;gap:10px;align-items:flex-end}
+    .input-row .form-group{flex:1}
     .form-group label{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:5px}
-    select{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:9px 12px;font-size:14px;outline:none}
-    select:focus{border-color:var(--gold)}
+    input,select{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:9px 12px;font-size:14px;outline:none;transition:border-color .15s}
+    input:focus,select:focus{border-color:var(--gold)}
     select option{background:var(--surface2)}
     select:disabled{opacity:.45;cursor:not-allowed}
+    .btn{padding:9px 18px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;transition:opacity .15s;white-space:nowrap}
+    .btn-primary{background:var(--gold);color:#0a0c10}
+    .btn-primary:hover{opacity:.85}
+    .btn-primary:disabled{opacity:.4;cursor:not-allowed}
 
+    .char-badge{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface2);border-radius:6px;border:1px solid var(--border);margin-top:12px}
+    .char-badge-name{font-weight:700;color:var(--gold-light)}
+    .char-badge-spec{color:var(--muted);font-size:12px}
+    .char-badge-report{color:var(--muted);font-size:11px;margin-left:auto}
+
+    /* Gear check cards */
+    .gear-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px}
+    @media(max-width:700px){.gear-grid{grid-template-columns:1fr}}
+    .gear-card{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px}
+    .gear-card-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+    .gear-status-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;background:var(--muted)}
+    .gear-status-dot.ok{background:var(--success)}
+    .gear-status-dot.warn{background:var(--warning)}
+    .gear-status-dot.missing{background:var(--critical)}
+    .gear-status-dot.unknown{background:var(--muted)}
+    .gear-card-title{font-weight:700;font-size:13px;color:var(--text)}
+    .gear-row{display:flex;flex-direction:column;gap:3px;margin-bottom:8px}
+    .gear-row:last-child{margin-bottom:0}
+    .gear-slot-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+    .gear-item{font-size:12px;color:var(--text);display:flex;align-items:center;gap:6px}
+    .gear-item .ok{color:var(--success)}
+    .gear-item .warn{color:var(--warning)}
+    .gear-item .missing{color:var(--critical)}
+    .gear-item .unknown{color:var(--muted)}
+    .gear-top{font-size:11px;color:var(--muted);font-style:italic}
+
+    .no-data-note{font-size:12px;color:var(--muted);font-style:italic}
+
+    /* CD guide styles */
     .stats-bar{display:flex;gap:32px;padding:8px 0 14px}
     .stat .val{font-size:24px;font-weight:700;color:var(--gold);line-height:1.2}
     .stat .lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px}
-
-    .summary-box{background:rgba(91,141,232,0.07);border:1px solid rgba(91,141,232,0.2);border-radius:6px;padding:12px 16px;font-size:13px;color:var(--text);line-height:1.55;margin-top:4px}
 
     .cd-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
     @media(max-width:620px){.cd-grid{grid-template-columns:1fr}}
@@ -65,11 +93,10 @@
     .bw-cds{color:var(--muted);font-size:12px;flex:1}
     .bw-aoe{font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;letter-spacing:.5px;background:rgba(91,141,232,0.15);color:#5b8de8;white-space:nowrap}
 
-
-    .placeholder-box{background:var(--surface2);border:1px dashed var(--border);border-radius:var(--radius);padding:18px 20px;color:var(--muted);font-size:13px;text-align:center}
-
+    .error-msg{background:rgba(224,82,82,0.1);border:1px solid rgba(224,82,82,0.3);border-radius:var(--radius);padding:12px 16px;color:var(--critical);font-size:13px;margin-bottom:14px}
+    .hidden{display:none!important}
     .empty-state{text-align:center;color:var(--muted);padding:40px 20px;font-size:13px}
-    .spinner{width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px}
+    .spinner{width:26px;height:26px;border:3px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 10px}
     @keyframes spin{to{transform:rotate(360deg)}}
   </style>
 </head>
@@ -80,81 +107,188 @@
   <a href="/">Post-Raid</a>
 </nav>
 <div class="container">
-  <header>
-    <h1>Pre-Fight Brief</h1>
-    <p>What top players do on this encounter — know before you pull</p>
-  </header>
 
+  <!-- Input card -->
   <div class="card">
-    <div class="selectors">
+    <div class="input-row">
       <div class="form-group">
-        <label for="spec-sel">Spec</label>
-        <select id="spec-sel" onchange="onSpecChange()">
-          <option value="">— select spec —</option>
-        </select>
+        <label for="char-url">Character URL</label>
+        <input id="char-url" type="text"
+          placeholder="https://www.warcraftlogs.com/character/us/stormrage/Name"
+          onkeydown="if(event.key==='Enter') loadChar()" />
       </div>
+      <button class="btn btn-primary" onclick="loadChar()" id="load-btn">Load</button>
+    </div>
+    <div id="char-badge" class="char-badge hidden">
+      <div class="gear-status-dot ok"></div>
+      <span id="char-badge-name" class="char-badge-name"></span>
+      <span id="char-badge-spec" class="char-badge-spec"></span>
+      <span id="char-badge-report" class="char-badge-report"></span>
+    </div>
+    <div id="enc-row" class="hidden" style="margin-top:12px">
       <div class="form-group">
         <label for="enc-sel">Encounter</label>
         <select id="enc-sel" onchange="onEncChange()" disabled>
-          <option value="">— select spec first —</option>
+          <option value="">— select encounter —</option>
         </select>
       </div>
     </div>
   </div>
 
+  <div id="error-box" class="error-msg hidden"></div>
+  <div id="char-loading" class="hidden"><div class="empty-state"><div class="spinner"></div>Looking up character…</div></div>
+
+  <!-- Gear check section (shown after char load, before encounter select) -->
+  <div id="gear-section" class="hidden">
+    <div class="card">
+      <div class="card-title">Gear &amp; Talents Check</div>
+      <div id="gear-grid" class="gear-grid"></div>
+      <div id="gear-no-data" class="hidden no-data-note">Select an encounter to compare against top parses.</div>
+    </div>
+  </div>
+
+  <!-- CD guide + burst windows (shown after encounter select) -->
+  <div id="brief-loading" class="hidden"><div class="empty-state"><div class="spinner"></div>Loading brief…</div></div>
   <div id="brief"></div>
+
 </div>
 
 <script>
-  let _spec = '', _encId = 0;
+  let _spec = '';
+  let _encId = 0;
+  let _charGear = null;   // { talent_key, trinkets, enchants } from char-gear endpoint
+  let _charName = '';
+  let _charServer = '';
+  let _charRegion = '';
+
+  // Common TWW / Midnight enchant IDs (WCL doesn't return names — built from wowhead)
+  const ENCHANT_NAMES = {
+    7961:'Algari Mana Oil', 7963:'Stormrider\'s Agility', 7964:'Stormrider\'s Versatility',
+    7965:'Stormrider\'s Mastery', 7966:'Stormrider\'s Haste',
+    7967:'Radiant Critical Strike', 7968:'Radiant Haste', 7969:'Radiant Mastery', 7970:'Radiant Versatility',
+    7971:'Culminating Blaststeel', 7972:'Oathsworn\'s Tenacity',
+    7978:'Stonebound Artistry', 7979:'Defender\'s March', 7980:'Whisper of Silken Avoidance',
+    7981:'Cavalry\'s March', 7982:'Graceful Avoidance',
+    7983:'Enchant Cloak — Binding of Binding', 7984:'Enchant Cloak — Chant of Leeching Fangs',
+    7985:'Enchant Cloak — Chant of Winged Grace', 7986:'Enchant Cloak — Chant of Armor Breaching',
+    7987:'Enchant Chest — Crystalline Radiance', 7988:'Enchant Chest — Stormcharged Texture',
+    7989:'Enchant Chest — Chant of Leeching Fangs', 7990:'Enchant Chest — Chant of Winged Grace',
+    7991:'Enchant Boots — Scout\'s March', 7992:'Enchant Boots — Cavalry\'s March',
+    7993:'Enchant Boots — Defender\'s March', 7994:'Enchant Boots — Surekian Striders',
+    7995:'Enchant Wrist — Chant of Armored Avoidance', 7996:'Enchant Wrist — Chant of Armored Leech',
+    7997:'Enchant Wrist — Chant of Armored Speed', 7998:'Enchant Wrist — Chant of Armored Versatility',
+    8001:'Enchant Shoulder — Council\'s Guile', 8002:'Enchant Shoulder — Stormrider\'s Fury',
+    8007:'Enchant Weapon — Stonebreaker\'s Bane', 8008:'Enchant Weapon — Stonebreaker\'s Command',
+    8009:'Enchant Weapon — Sundering',
+    8010:'Authority of Fiery Resolve', 8011:'Authority of Radiant Power', 8012:'Authority of Storms',
+    8013:'Authority of the Depths', 8014:'Council\'s Guile', 8015:'Oathsworn\'s Tenacity',
+    8017:'Enchant Head — Algari Insight', 8018:'Enchant Head — Stormrider\'s Sight',
+    8039:'Enchant Main Hand — Stonebreaker\'s Resolve',
+    8159:'Enchant Legs — Stormrider\'s Fortitude', 8160:'Enchant Legs — Ironweave Binding',
+    8161:'Enchant Legs — Defender\'s Fortification',
+  };
+
+  // WCL gear array is 0-based positional. Weapons land at 15/16 in Midnight (Back at 14).
+  const SLOT_NAMES = {
+    0:'Head', 1:'Neck', 2:'Shoulder', 3:'Back', 4:'Chest',
+    5:'Waist', 6:'Legs', 7:'Feet', 8:'Wrists', 9:'Hands',
+    10:'Ring 1', 11:'Ring 2', 12:'Trinket 1', 13:'Trinket 2',
+    14:'Back', 15:'Main Hand', 16:'Off Hand',
+};
 
   function fmt(s) {
     return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(Math.floor(s%60)).padStart(2,'0')}`;
   }
-  function formatSpec(s) { return s.replace(/([A-Z])/g,' $1').trim(); }
+  function fmtSpec(s) { return s ? s.replace(/([A-Z])/g,' $1').trim() : ''; }
 
   async function apiFetch(url) {
-    try { const r = await fetch(url); return r.ok ? r.json() : null; }
-    catch { return null; }
+    const r = await fetch(url);
+    return r.ok ? r.json() : null;
   }
 
   function syncURL() {
     const p = new URLSearchParams();
-    if (_spec) p.set('spec', _spec);
+    const url = document.getElementById('char-url').value.trim();
+    if (url) p.set('url', url);
     if (_encId) p.set('encounter', _encId);
     history.replaceState({}, '', p.toString() ? `?${p}` : location.pathname);
   }
 
+  function showError(msg) {
+    const el = document.getElementById('error-box');
+    el.textContent = `⚠ ${msg}`;
+    el.classList.remove('hidden');
+  }
+  function clearError() { document.getElementById('error-box').classList.add('hidden'); }
+
   window.onload = async () => {
     const p = new URLSearchParams(location.search);
-    const data = await apiFetch('/api/pre/specs');
-    if (!data) return;
-    const sel = document.getElementById('spec-sel');
-    data.specs.forEach(s => {
-      const o = document.createElement('option');
-      o.value = s; o.textContent = formatSpec(s);
-      sel.appendChild(o);
-    });
-    const specParam = p.get('spec');
-    if (specParam) {
-      sel.value = specParam;
-      await onSpecChange(parseInt(p.get('encounter') || '0', 10));
+    const url = p.get('url');
+    if (url) {
+      document.getElementById('char-url').value = url;
+      await loadChar(parseInt(p.get('encounter') || '0', 10));
     }
   };
 
-  async function onSpecChange(autoEnc = null) {
-    _spec = document.getElementById('spec-sel').value;
-    _encId = 0;
+  // ── Character loading ─────────────────────────────────────────────────────
+
+  async function loadChar(autoEnc = null) {
+    const url = document.getElementById('char-url').value.trim();
+    if (!url) return;
+    clearError();
+    document.getElementById('char-loading').classList.remove('hidden');
+    document.getElementById('char-badge').classList.add('hidden');
+    document.getElementById('enc-row').classList.add('hidden');
+    document.getElementById('gear-section').classList.add('hidden');
+    document.getElementById('brief').innerHTML = '';
+    document.getElementById('load-btn').disabled = true;
+    _charGear = null; _spec = ''; _encId = 0;
+
+    try {
+      const resp = await fetch(`/api/pre/char-lookup?url=${encodeURIComponent(url)}`);
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.detail || 'Character lookup failed');
+
+      _spec = data.spec || '';
+      _charName = data.name || '';
+      _charServer = data.server || '';
+      _charRegion = data.region || '';
+      _charGear = null;
+
+      // Show character badge
+      document.getElementById('char-badge-name').textContent = data.name;
+      document.getElementById('char-badge-spec').textContent = fmtSpec(data.spec) + (data.server ? ` — ${data.server}` : '');
+      document.getElementById('char-badge-report').textContent = `from ${data.source_report}`;
+      document.getElementById('char-badge').classList.remove('hidden');
+
+      // Show gear section with "no encounter selected" note
+      document.getElementById('gear-grid').innerHTML = '';
+      document.getElementById('gear-section').classList.remove('hidden');
+      document.getElementById('gear-no-data').classList.remove('hidden');
+
+      // Populate encounter dropdown
+      await populateEncounters(autoEnc);
+      syncURL();
+    } catch (err) {
+      showError(err.message);
+    } finally {
+      document.getElementById('char-loading').classList.add('hidden');
+      document.getElementById('load-btn').disabled = false;
+    }
+  }
+
+  async function populateEncounters(autoEnc = null) {
+    if (!_spec) return;
     const encSel = document.getElementById('enc-sel');
     encSel.innerHTML = '<option>Loading…</option>';
     encSel.disabled = true;
-    document.getElementById('brief').innerHTML = '';
-    if (!_spec) return;
+    document.getElementById('enc-row').classList.remove('hidden');
 
     const data = await apiFetch(`/api/admin/parses/stats/${_spec}`);
     const stats = Object.entries(data?.stats || {})
-      .map(([enc_id, s]) => ({...s, encounter_id: parseInt(enc_id, 10)}))
+      .map(([enc_id, s]) => ({ ...s, encounter_id: parseInt(enc_id, 10) }))
       .filter(s => s.sample_count > 0);
+
     encSel.innerHTML = '<option value="">— select encounter —</option>';
     if (!stats.length) {
       encSel.innerHTML = '<option value="">No data — run Parse Ingestion in Admin first</option>';
@@ -174,16 +308,233 @@
     }
   }
 
+  // ── Encounter selection ───────────────────────────────────────────────────
+
   async function onEncChange() {
     _encId = parseInt(document.getElementById('enc-sel').value || '0', 10);
     syncURL();
-    const div = document.getElementById('brief');
-    if (!_encId) { div.innerHTML = ''; return; }
-    div.innerHTML = '<div class="empty-state"><div class="spinner"></div>Loading brief…</div>';
-    const data = await apiFetch(`/api/pre/brief/${_spec}/${_encId}`);
-    if (!data) { div.innerHTML = '<div class="empty-state">Failed to load.</div>'; return; }
-    renderBrief(data);
+    document.getElementById('brief').innerHTML = '';
+    if (!_encId) {
+      document.getElementById('gear-grid').innerHTML = '';
+      document.getElementById('gear-no-data').classList.remove('hidden');
+      return;
+    }
+    document.getElementById('gear-no-data').classList.add('hidden');
+    document.getElementById('brief-loading').classList.remove('hidden');
+
+    const charGearUrl = `/api/pre/char-gear?name=${encodeURIComponent(_charName)}&server=${encodeURIComponent(_charServer)}&region=${encodeURIComponent(_charRegion)}&encounter_id=${_encId}`;
+    const [briefData, charGearData, topGearData] = await Promise.all([
+      apiFetch(`/api/pre/brief/${_spec}/${_encId}`),
+      apiFetch(charGearUrl),
+      apiFetch(`/api/pre/gear-stats/${_spec}/${_encId}`),
+    ]);
+
+    document.getElementById('brief-loading').classList.add('hidden');
+
+    if (charGearData?.found) {
+      _charGear = charGearData;
+    }
+    renderGearCards(topGearData);
+    if (briefData) renderBrief(briefData);
   }
+
+  // ── Gear check rendering ──────────────────────────────────────────────────
+
+  function renderGearCards(topStats) {
+    const grid = document.getElementById('gear-grid');
+    if (!_charGear) {
+      if (!topStats) { grid.innerHTML = ''; return; }
+      // No char gear but have top stats — show "no ranked data" state in each card
+      grid.innerHTML = ['Talents', 'Trinkets', 'Enchants'].map(title => `
+        <div class="gear-card">
+          <div class="gear-card-head">
+            <div class="gear-status-dot unknown"></div>
+            <span class="gear-card-title">${title}</span>
+          </div>
+          <p class="no-data-note">No ranked kill found for this encounter. Upload a log with advanced combat logging to compare.</p>
+        </div>`).join('');
+      return;
+    }
+
+    grid.innerHTML = [
+      renderTalentCard(topStats),
+      renderTrinketCard(topStats),
+      renderEnchantCard(topStats),
+    ].join('');
+  }
+
+  function gearStatusIcon(status) {
+    if (status === 'ok')      return '<span class="ok">✓</span>';
+    if (status === 'warn')    return '<span class="warn">⚠</span>';
+    if (status === 'missing') return '<span class="missing">✗</span>';
+    return '<span class="unknown">—</span>';
+  }
+
+  function overallStatus(statuses) {
+    if (statuses.includes('missing')) return 'missing';
+    if (statuses.includes('warn'))    return 'warn';
+    if (statuses.every(s => s === 'ok')) return 'ok';
+    return 'unknown';
+  }
+
+  function renderTalentCard(topStats) {
+    const builds = topStats?.talent_builds || [];
+    const playerKey = _charGear.talent_key || '';
+
+    let status = 'unknown';
+    let bodyHtml = '';
+
+    if (!builds.length) {
+      bodyHtml = '<p class="no-data-note">No talent data yet — re-run Parse Ingestion.</p>';
+    } else if (!playerKey) {
+      bodyHtml = '<p class="no-data-note">Talent data not available from WCL for this character.</p>';
+    } else {
+      // Only compare if both keys use the same version prefix
+      const playerVersion = playerKey.split(':')[0];
+      const topVersion = (builds[0]?.key || '').split(':')[0];
+
+      if (playerVersion !== topVersion) {
+        // v1 (characterRankings) and v2 (encounterRankings) use different ID spaces — not comparable
+        status = 'unknown';
+        bodyHtml = `<div class="gear-item"><span class="unknown">—</span> Talent comparison unavailable — WCL uses different talent ID formats for different query types.</div>`;
+      } else {
+        const match = builds.find(b => b.key === playerKey);
+        const matchPct = match?.pct ?? 0;
+        status = (match && match.pct >= 40) ? 'ok' : 'warn';
+        if (status === 'ok') {
+          bodyHtml = `<div class="gear-item"><span class="ok">✓</span> Matches top parse build (${matchPct}% of parses)</div>`;
+        } else {
+          bodyHtml = `<div class="gear-item"><span class="warn">⚠</span> Build differs — most common used by ${builds[0]?.pct ?? 0}% of top parsers</div>`;
+        }
+      }
+    }
+
+    return `<div class="gear-card">
+      <div class="gear-card-head">
+        <div class="gear-status-dot ${status}"></div>
+        <span class="gear-card-title">Talents</span>
+      </div>
+      ${bodyHtml}
+    </div>`;
+  }
+
+  function renderTrinketCard(topStats) {
+    const topTrinkets = topStats?.trinkets || {};
+    const statuses = [];
+    let bodyHtml = '';
+
+    for (const slot of [12, 13]) {
+      const slotName = SLOT_NAMES[slot];
+      const playerItem = _charGear.trinkets.find(t => t.slot === slot);
+      const topItems = topTrinkets[slot] || [];
+
+      let status = 'unknown';
+      let note = '';
+
+      if (!topItems.length) {
+        note = playerItem ? playerItem.name || `Item #${playerItem.id}` : '—';
+        status = 'unknown';
+      } else if (!playerItem) {
+        note = `<span class="missing">missing</span>`;
+        status = 'missing';
+      } else {
+        const inTop = topItems.find(t => t.id === playerItem.id);
+        status = inTop ? 'ok' : 'warn';
+        note = `${gearStatusIcon(status)} ${playerItem.name || `Item #${playerItem.id}`}`;
+        if (!inTop && topItems[0]) {
+          note += `<div class="gear-top">Top: ${topItems[0].name || `#${topItems[0].id}`} (${topItems[0].pct}%)</div>`;
+        }
+      }
+
+      statuses.push(status);
+      bodyHtml += `<div class="gear-row">
+        <div class="gear-slot-label">${slotName}</div>
+        <div class="gear-item">${note}</div>
+      </div>`;
+    }
+
+    return `<div class="gear-card">
+      <div class="gear-card-head">
+        <div class="gear-status-dot ${overallStatus(statuses)}"></div>
+        <span class="gear-card-title">Trinkets</span>
+      </div>
+      ${bodyHtml}
+    </div>`;
+  }
+
+  function renderEnchantCard(topStats) {
+    const topEnchants = topStats?.enchants || {};
+    const statuses = [];
+    let bodyHtml = '';
+
+    // Collect all slots present in either player or top data
+    const playerSlots = new Set(_charGear.enchants.map(e => e.slot)
+      .concat(_charGear.missing_enchant_slots));
+    const topSlots = new Set(Object.keys(topEnchants).map(Number));
+    const allSlots = [...new Set([...playerSlots, ...topSlots])]
+      .filter(s => SLOT_NAMES[s])
+      .sort((a, b) => a - b);
+
+    if (!allSlots.length) {
+      return `<div class="gear-card">
+        <div class="gear-card-head">
+          <div class="gear-status-dot unknown"></div>
+          <span class="gear-card-title">Enchants</span>
+        </div>
+        <p class="no-data-note">No enchant data yet — re-run Parse Ingestion.</p>
+      </div>`;
+    }
+
+    for (const slot of allSlots) {
+      const slotName = SLOT_NAMES[slot];
+      const playerEnc = _charGear.enchants.find(e => e.slot === slot);
+      const topItems = topEnchants[slot] || [];
+      const topEnc = topItems[0];
+
+      let status = 'unknown';
+      let note = '';
+
+      const eName = id => ENCHANT_NAMES[id] || `#${id}`;
+      if (!topItems.length) {
+        note = playerEnc ? eName(playerEnc.id) : '—';
+        status = 'unknown';
+      } else if (!playerEnc) {
+        if (topEnc && topEnc.pct >= 70) {
+          status = 'missing';
+          note = `<span class="missing">missing</span><div class="gear-top">Top: ${eName(topEnc.id)} (${topEnc.pct}%)</div>`;
+        } else {
+          status = 'ok';
+          note = '—';
+        }
+      } else if (topEnc && playerEnc.id === topEnc.id) {
+        status = 'ok';
+        note = `${gearStatusIcon('ok')} ${eName(playerEnc.id)}`;
+      } else {
+        const inTop = topItems.find(t => t.id === playerEnc.id);
+        status = inTop ? 'ok' : 'warn';
+        note = `${gearStatusIcon(status)} ${eName(playerEnc.id)}`;
+        if (!inTop && topEnc) {
+          note += `<div class="gear-top">Top: ${eName(topEnc.id)} (${topEnc.pct}%)</div>`;
+        }
+      }
+
+      statuses.push(status);
+      bodyHtml += `<div class="gear-row">
+        <div class="gear-slot-label">${slotName}</div>
+        <div class="gear-item">${note}</div>
+      </div>`;
+    }
+
+    return `<div class="gear-card">
+      <div class="gear-card-head">
+        <div class="gear-status-dot ${overallStatus(statuses)}"></div>
+        <span class="gear-card-title">Enchants</span>
+      </div>
+      ${bodyHtml || '<p class="no-data-note">No enchant data yet — re-run Parse Ingestion.</p>'}
+    </div>`;
+  }
+
+  // ── CD guide + burst windows rendering ───────────────────────────────────
 
   function renderBrief(data) {
     const div = document.getElementById('brief');
@@ -192,16 +543,14 @@
       return;
     }
 
-    // Stats bar
     const statsHtml = data.avg_duration_s ? `
       <div class="card">
         <div class="stats-bar">
-          <div class="stat"><div class="val">${data.avg_duration_s ? fmt(data.avg_duration_s) : '—'}</div><div class="lbl">Avg Kill Time</div></div>
+          <div class="stat"><div class="val">${fmt(data.avg_duration_s)}</div><div class="lbl">Avg Kill Time</div></div>
           ${data.burst_windows?.length ? `<div class="stat"><div class="val">${data.burst_windows.length}</div><div class="lbl">Burst Windows</div></div>` : ''}
         </div>
       </div>` : '';
 
-    // CD guide
     const cdEntries = Object.entries(data.cooldowns || {});
     let cdSection = '';
     if (cdEntries.length) {
@@ -219,50 +568,40 @@
           `<div class="hold-note">Cast ${idx}: hold to ~${fmt(ht.target_s)} <span style="opacity:.6">±${ht.stddev_s}s · ${ht.count}/${ht.total_samples} parsers</span></div>`
         ).join('');
 
-        return `
-          <div class="cd-card">
-            <div class="cd-card-head">
-              <span class="cd-name">${name}</span>
-              <span style="display:flex;gap:5px">${pattern}${blBadge}</span>
-            </div>
-            <div class="cd-stats-row">
-              <div class="cd-stat"><div class="cd-stat-val">${openStr}</div><div class="cd-stat-lbl">Opener</div></div>
-              <div class="cd-stat"><div class="cd-stat-val">${cd.avg_uses ?? '—'}</div><div class="cd-stat-lbl">Avg uses</div></div>
-              <div class="cd-stat"><div class="cd-stat-val">${cd.avg_uses_per_min ?? '—'}<small style="opacity:.6">/min</small></div><div class="cd-stat-lbl">Rate</div></div>
-              ${cd.align_with_bloodlust ? `<div class="cd-stat"><div class="cd-stat-val">${cd.bl_pct}%</div><div class="cd-stat-lbl">BL aligned</div></div>` : ''}
-            </div>
-            ${holdNotes}
-            ${cd.usage_rule ? `<div class="cd-rule">"${cd.usage_rule}"</div>` : ''}
-          </div>`;
+        return `<div class="cd-card">
+          <div class="cd-card-head">
+            <span class="cd-name">${name}</span>
+            <span style="display:flex;gap:5px">${pattern}${blBadge}</span>
+          </div>
+          <div class="cd-stats-row">
+            <div class="cd-stat"><div class="cd-stat-val">${openStr}</div><div class="cd-stat-lbl">Opener</div></div>
+            <div class="cd-stat"><div class="cd-stat-val">${cd.avg_uses ?? '—'}</div><div class="cd-stat-lbl">Avg uses</div></div>
+            <div class="cd-stat"><div class="cd-stat-val">${cd.avg_uses_per_min ?? '—'}<small style="opacity:.6">/min</small></div><div class="cd-stat-lbl">Rate</div></div>
+            ${cd.align_with_bloodlust ? `<div class="cd-stat"><div class="cd-stat-val">${cd.bl_pct}%</div><div class="cd-stat-lbl">BL aligned</div></div>` : ''}
+          </div>
+          ${holdNotes}
+          ${cd.usage_rule ? `<div class="cd-rule">"${cd.usage_rule}"</div>` : ''}
+        </div>`;
       }).join('');
       cdSection = `<div class="card"><div class="card-title">Cooldown Guide — what the best do</div><div class="cd-grid">${cards}</div></div>`;
     }
 
-    // Burst windows
     let bwSection = '';
     if (data.burst_windows?.length) {
       const rows = data.burst_windows.map(bw => {
         const sdStr = bw.stddev_s > 0 ? ` <small style="opacity:.5">±${bw.stddev_s}s</small>` : '';
         const cds = bw.common_cds?.length ? bw.common_cds.join(', ') : '<span style="opacity:.5">no tracked CD</span>';
         const aoe = (bw.avg_targets ?? 1) >= 2 ? '<span class="bw-aoe">AoE</span>' : '';
-        return `
-          <div class="bw-row">
-            <div class="bw-time">${fmt(bw.time_s)}${sdStr}</div>
-            <div class="bw-cds">${cds}</div>
-            ${aoe}
-          </div>`;
+        return `<div class="bw-row">
+          <div class="bw-time">${fmt(bw.time_s)}${sdStr}</div>
+          <div class="bw-cds">${cds}</div>
+          ${aoe}
+        </div>`;
       }).join('');
       bwSection = `<div class="card"><div class="card-title">Burst Windows</div>${rows}</div>`;
     }
 
-    // Placeholder — future gear / talent check
-    const placeholderSection = `
-      <div class="card">
-        <div class="card-title">Gear & Talent Check</div>
-        <div class="placeholder-box">Gear and talent analysis coming soon — add your character name to check bis items, gem choices, and talent builds for this encounter.</div>
-      </div>`;
-
-    div.innerHTML = statsHtml + cdSection + bwSection + placeholderSection;
+    div.innerHTML = statsHtml + cdSection + bwSection;
   }
 </script>
 </body>

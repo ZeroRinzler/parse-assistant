@@ -78,6 +78,21 @@ query GetEvents(
 """
 
 
+CHARACTER_QUERY = """
+query($name: String!, $serverSlug: String!, $serverRegion: String!) {
+  characterData {
+    character(name: $name, serverSlug: $serverSlug, serverRegion: $serverRegion) {
+      name
+      classID
+      recentReports(limit: 5) {
+        data { code startTime }
+      }
+    }
+  }
+}
+"""
+
+
 class WCLClient:
     def __init__(self):
         self.client_id = os.environ.get("WCL_CLIENT_ID", "")
@@ -116,6 +131,13 @@ class WCLClient:
 
     async def get_report(self, code: str) -> dict:
         return await self.query(REPORT_QUERY, {"code": code})
+
+    async def get_character(self, name: str, server_slug: str, server_region: str) -> dict:
+        return await self.query(CHARACTER_QUERY, {
+            "name": name,
+            "serverSlug": server_slug,
+            "serverRegion": server_region,
+        })
 
     async def get_player_details(self, code: str, fight_id: int) -> dict:
         return await self.query(PLAYER_DETAILS_QUERY, {"code": code, "fightIDs": [fight_id]})

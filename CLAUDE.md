@@ -40,16 +40,18 @@ Example: `/admin?spec=SubtletyRogue&tab=rulebook`
 
 ```
 warcraft-learner/
-├── main.py              # FastAPI app — all routes (player API + admin API)
+├── main.py              # FastAPI app — all routes (player API + admin API + pre-fight API)
 ├── analyzer.py          # Rules engine — evaluates cast events against a rulebook
 ├── wcl_client.py        # Warcraft Logs OAuth2 + GraphQL client (handles pagination)
 ├── rulebook.py          # Static fallback cooldowns for 22+ DPS specs
 ├── db.py                # SQLite via aiosqlite — guide CRUD, generated rulebook cache
 ├── scraper.py           # Web (BeautifulSoup/lxml) + YouTube transcript scraping
 ├── llm_parser.py        # Claude API — converts guide text → structured JSON rulebook
-├── parses_analyzer.py   # WCL characterRankings + per-parse cooldown timing analysis
+├── parses_analyzer.py   # WCL characterRankings + per-parse cooldown timing analysis + gear extraction
 ├── static/
-│   ├── index.html       # Player-facing analyzer UI (vanilla JS)
+│   ├── index.html       # Post-raid player analyzer UI (vanilla JS)
+│   ├── pre.html         # Pre-fight gear check UI (vanilla JS)
+│   ├── live.html        # Live analysis UI — polls for new pulls during raid
 │   └── admin.html       # Admin guide management UI (vanilla JS)
 ├── data/
 │   └── warcraft.db      # SQLite DB (gitignored — created at startup)
@@ -90,6 +92,18 @@ warcraft-learner/
    - `cooldowns[].cast_pattern` — "hold" or "on_cooldown"
    - `burst_windows` — top 4 non-overlapping 8s damage peaks with active CDs
    Per-boss progress shown as a mini bar in the boss table. After ingestion, samples can be inspected per boss via "View N" (shows cast_pattern badges, hold counts, and burst window breakdown).
+
+### Pre-fight gear check (`/pre`)
+1. User enters a WCL or Armory character URL. `GET /api/pre/char-lookup?url=` parses the URL, queries `characterData.character` on WCL, and returns `{name, spec, server, region}`.
+2. User selects an encounter from the dropdown (same filtered encounter list as the parses tab).
+3. Three parallel requests fire on encounter change:
+   - `GET /api/pre/char-gear?name&server&region&encounter_id` — queries `characterData.character.encounterRankings(includeCombatantInfo: true)` and extracts gear/talents from the player's most recent ranked kill.
+   - `GET /api/pre/gear-stats/{spec}/{encounter_id}` — returns aggregated talent builds, trinket usage, and enchant usage from stored parse samples.
+   - `GET /api/pre/brief?spec&encounter_id` — returns the cooldown brief text.
+4. Three cards rendered client-side:
+   - **Talents** — compares player's `v2:` talent fingerprint against the distribution from top parses.
+   - **Trinkets** — per-slot (12 = Trinket 1, 13 = Trinket 2) comparison with top-parse usage rates.
+   - **Enchants** — per-slot comparison; missing enchants on high-consensus slots (≥70% of top parsers) flagged as warnings.
 
 ### Encounter selection
 Encounters auto-load on page open. Filtered to:
@@ -132,6 +146,9 @@ Key fields stored inside the `cooldown_data` JSON blob:
 | `cooldowns[].hold_windows` | per-CD | List of `{cast_index, expected_s, actual_s, hold_amount_s}` for casts delayed >8s past on-cooldown time |
 | `cooldowns[].cast_pattern` | per-CD | `"hold"` if any cast was held >8s; `"on_cooldown"` otherwise |
 | `burst_windows` | top-level | List of `{time_s, pct_of_total, active_cds}` — top 4 non-overlapping 8s damage peaks |
+| `talent_key` | top-level | `v2:`-prefixed sorted talent node IDs extracted from the parser's `encounterRankings` (Midnight format) |
+| `trinkets` | top-level | List of `{slot, id, name}` for trinket slots 12 and 13 |
+| `enchants` | top-level | List of `{slot, id, name}` for all gear slots with a `permanentEnchant` |
 
 ### Rulebook JSON schema
 ```json
@@ -160,6 +177,20 @@ Key fields stored inside the `cooldown_data` JSON blob:
   "source_summary": "..."
 }
 ```
+
+## WCL gear API quirks
+
+These are non-obvious and have caused bugs before — read before touching gear extraction.
+
+| Quirk | Detail |
+|---|---|
+| **Gear array is positionally indexed** | WCL returns gear as a bare array; the array index (0-based) IS the slot number. There is no `slot` field on each item. |
+| **Weapon slots shifted in Midnight** | In Midnight-era content the gear array has 17 entries (0–16). Weapons land at index 15 (Main Hand) and 16 (Off Hand). Index 14 is Back/Cloak (no enchant in modern WoW). Earlier code assumed 14/15 — this was wrong. |
+| **Trinket slots are 12 and 13** | Confirmed from both `characterRankings` and `encounterRankings` responses. |
+| **`permanentEnchant` is a string** | WCL returns it as a string even though it's a numeric ID. Cast with `int()`. `permanentEnchantName` is never populated. `pre.html` has a hardcoded `ENCHANT_NAMES` lookup dict for common IDs. |
+| **Two incompatible talent formats** | `characterRankings` returns the old format (`{talentID: N, points: P}` list) → stored as `v1:` key. `encounterRankings` returns the Midnight format (`{class: {row: [{node: {nodeId: N}}]}, spec: {...}}` dict) → stored as `v2:` key. The ID spaces are genuinely different (v1: IDs are 112 000+; v2: IDs are 90 000–110 000). They cannot be compared directly. |
+| **Solving the talent format problem** | During parse ingestion, `fetch_top_rankings` fires a parallel `encounterRankings` query per ranked player to obtain their `v2:` talent key. This overwrites the `v1:` key that would otherwise come from the `characterRankings` entry, ensuring top-parse talent keys use the same format as the player's gear (also fetched via `encounterRankings`). |
+| **`server.region` may be a string** | In the `characterRankings` JSON blob, `server.region` is sometimes a plain string (`"EU"`) rather than an object (`{slug: "eu"}`). The `_region_slug()` helper in `parses_analyzer.py` handles both forms. |
 
 ## External APIs
 
@@ -241,6 +272,7 @@ Source: `design-doc.md` (architecture blueprint) + `intial-research.md` (researc
 | AoE burst window analysis | ✅ Done | Top 4 non-overlapping 8s damage peaks per parse; clustered across parses; "Burst Windows" card in UI |
 | Per-fight player filtering | ✅ Done | `friendlyPlayers` from WCL per fight; player dropdown updates on fight change |
 | Fight dropdown attempt numbering | ✅ Done | Wipes show `✗ #N` per-boss; kills show `✓` |
+| Pre-fight gear check | ✅ Done | `/pre` page; character URL input; talents/trinkets/enchants vs top-parse aggregates; gear data stored per sample during ingestion |
 
 ### Gaps — from design-doc.md
 
