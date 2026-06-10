@@ -160,10 +160,13 @@
     if (!_spec) return;
 
     const data = await apiFetch(`/api/admin/parses/stats/${_spec}`);
-    const stats = (data?.stats || []).filter(s => s.sample_count > 0);
+    const stats = Object.entries(data?.stats || {})
+      .map(([enc_id, s]) => ({...s, encounter_id: parseInt(enc_id, 10)}))
+      .filter(s => s.sample_count > 0);
     encSel.innerHTML = '<option value="">— select encounter —</option>';
     if (!stats.length) {
       encSel.innerHTML = '<option value="">No data — run Parse Ingestion in Admin first</option>';
+      encSel.disabled = false;
       return;
     }
     stats.forEach(s => {
@@ -198,16 +201,13 @@
     }
 
     // Stats bar
-    const statsHtml = `
+    const statsHtml = data.avg_duration_s ? `
       <div class="card">
         <div class="stats-bar">
-          <div class="stat"><div class="val">${data.sample_count}</div><div class="lbl">Top Parses</div></div>
-          <div class="stat"><div class="val">${data.avg_duration_s ? fmt(data.avg_duration_s) : '—'}</div><div class="lbl">Avg Kill</div></div>
-          <div class="stat"><div class="val">${Object.keys(data.cooldowns||{}).length}</div><div class="lbl">Tracked CDs</div></div>
+          <div class="stat"><div class="val">${data.avg_duration_s ? fmt(data.avg_duration_s) : '—'}</div><div class="lbl">Avg Kill Time</div></div>
           ${data.burst_windows?.length ? `<div class="stat"><div class="val">${data.burst_windows.length}</div><div class="lbl">Burst Windows</div></div>` : ''}
         </div>
-        ${data.source_summary ? `<div class="summary-box">${data.source_summary}</div>` : ''}
-      </div>`;
+      </div>` : '';
 
     // CD guide
     const cdEntries = Object.entries(data.cooldowns || {});
