@@ -224,6 +224,28 @@ async def save_parse_sample(
         await db.commit()
 
 
+async def get_parse_stats(spec: str) -> dict:
+    """Per-encounter sample count and last ingested timestamp for a spec."""
+    async with _conn() as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            """SELECT encounter_id, encounter_name,
+                      COUNT(*) AS sample_count,
+                      MAX(sampled_at) AS last_ingested
+               FROM parse_samples WHERE spec=?
+               GROUP BY encounter_id""",
+            (spec,),
+        ) as cur:
+            result: dict = {}
+            async for row in cur:
+                result[row["encounter_id"]] = {
+                    "encounter_name": row["encounter_name"],
+                    "sample_count": row["sample_count"],
+                    "last_ingested": row["last_ingested"],
+                }
+            return result
+
+
 async def get_parse_samples(spec: str, encounter_id: int) -> list[dict]:
     async with _conn() as db:
         db.row_factory = aiosqlite.Row

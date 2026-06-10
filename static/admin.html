@@ -75,7 +75,7 @@
     .page-sub{color:var(--muted);font-size:13px;margin-bottom:24px}
     .empty{color:var(--muted);text-align:center;padding:28px;font-size:13px}
 
-    /* ── Progress UI ──────────────────────────────────────────────────── */
+    /* ── Progress ─────────────────────────────────────────────────────── */
     .progress-wrap{margin-top:16px;display:none}
     .progress-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:12px;color:var(--muted)}
     .progress-bar-track{height:6px;background:var(--surface2);border-radius:3px;overflow:hidden}
@@ -89,10 +89,15 @@
     .log-line.log-warn .icon{color:var(--warning)}
     .log-line .log-text{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
-    .parse-cd{font-size:11px;color:var(--muted);margin-top:2px}
+    /* ── Parses tab ───────────────────────────────────────────────────── */
+    .ingest-header{display:flex;justify-content:space-between;align-items:center}
+    .boss-mini-bar{height:4px;background:var(--surface2);border-radius:2px;overflow:hidden;margin-top:5px;width:100px}
+    .boss-mini-fill{height:100%;background:linear-gradient(90deg,#9a6f1f,var(--gold));border-radius:2px;transition:width .25s ease}
+
     .toast{position:fixed;bottom:24px;right:24px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 20px;color:var(--text);font-size:13px;z-index:999;box-shadow:0 4px 24px rgba(0,0,0,.5);display:none}
     .spinner-inline{width:13px;height:13px;border:2px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite;display:inline-block;vertical-align:middle}
     @keyframes spin{to{transform:rotate(360deg)}}
+    @keyframes pulse{0%,100%{opacity:.6}50%{opacity:1}}
   </style>
 </head>
 <body>
@@ -146,7 +151,11 @@
       <div class="card">
         <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
           <span>Guides for <span id="guides-spec-label">—</span></span>
-          <div style="display:flex;gap:8px">
+          <div style="display:flex;gap:8px;align-items:center">
+            <select id="gen-encounter-select" style="width:auto;min-width:150px;font-size:12px;padding:5px 8px"
+              title="Optionally include top-parse context from this encounter when generating">
+              <option value="">No parse context</option>
+            </select>
             <button class="btn btn-ghost btn-sm" id="btn-scrape-all" onclick="scrapeAll()">Scrape All</button>
             <button class="btn btn-sm" id="btn-generate" onclick="generateRulebook()">✨ Generate Rulebook</button>
           </div>
@@ -154,7 +163,6 @@
 
         <div id="guides-table-wrap"><div class="empty">Select a spec to see its guides.</div></div>
 
-        <!-- Scrape progress -->
         <div class="progress-wrap" id="scrape-progress">
           <div class="progress-header">
             <span id="scrape-progress-label">Scraping…</span>
@@ -164,7 +172,6 @@
           <div class="progress-log" id="scrape-log"></div>
         </div>
 
-        <!-- Generate progress -->
         <div class="progress-wrap" id="gen-progress">
           <div class="progress-header"><span id="gen-progress-label">Generating…</span></div>
           <div class="progress-bar-track"><div class="progress-bar-fill" id="gen-bar" style="width:30%;animation:pulse 1.2s ease-in-out infinite"></div></div>
@@ -176,35 +183,28 @@
     <!-- ── PARSES ──────────────────────────────────────────────────────── -->
     <div class="tab-panel" id="panel-parses">
       <div class="card">
-        <div class="card-title">Fetch Top Parses from WCL</div>
-        <div class="form-row">
-          <div class="form-group" style="flex:3">
-            <label>Encounter</label>
-            <select id="encounter-select"><option value="">— loading encounters… —</option></select>
+        <div class="ingest-header">
+          <div>
+            <div class="card-title" style="margin-bottom:4px">Parse Ingestion — <span id="parses-spec-label">—</span></div>
+            <div class="muted">Always top 10 &nbsp;·&nbsp; Last ingested: <span id="spec-last-ingested" style="color:var(--text)">—</span></div>
           </div>
-          <div class="form-group" style="flex:1">
-            <label>Count</label>
-            <select id="parse-count">
-              <option value="5">Top 5</option>
-              <option value="10" selected>Top 10</option>
-              <option value="20">Top 20</option>
-            </select>
-          </div>
-          <button class="btn btn-ghost btn-sm" id="btn-fetch-ranks" onclick="fetchRankings()">Fetch Rankings</button>
-          <button class="btn btn-sm" id="btn-deep" onclick="deepAnalyze()">🔍 Deep Analyze</button>
+          <button class="btn" id="btn-ingest-all" onclick="ingestAll()">⬇ Ingest All Bosses</button>
         </div>
-
-        <!-- Parse deep-analyze progress -->
-        <div class="progress-wrap" id="parse-progress">
+        <div class="progress-wrap" id="ingest-overall-progress">
           <div class="progress-header">
-            <span id="parse-progress-label">Analyzing parses…</span>
-            <span id="parse-progress-frac"></span>
+            <span id="ingest-progress-label">Ingesting…</span>
+            <span id="ingest-progress-frac"></span>
           </div>
-          <div class="progress-bar-track"><div class="progress-bar-fill" id="parse-bar"></div></div>
-          <div class="progress-log" id="parse-log"></div>
+          <div class="progress-bar-track"><div class="progress-bar-fill" id="ingest-bar"></div></div>
         </div>
       </div>
-      <div id="parses-result"></div>
+
+      <div class="card">
+        <div class="card-title">Current Expansion — Boss Overview</div>
+        <div id="boss-table-wrap"><div class="empty"><span class="spinner-inline"></span> Loading…</div></div>
+      </div>
+
+      <div id="boss-detail-panels"></div>
     </div>
 
     <!-- ── RULEBOOK ────────────────────────────────────────────────────── -->
@@ -234,9 +234,6 @@
 </div>
 
 <div class="toast" id="toast"></div>
-<style>
-@keyframes pulse{0%,100%{opacity:.6}50%{opacity:1}}
-</style>
 
 <script>
 const ALL_SPECS = [
@@ -252,121 +249,168 @@ const ALL_SPECS = [
 ];
 
 let currentSpec = "SubtletyRogue";
-let currentTab = 'guides';
-// Keep rankings state for the parses tab
-let _rankingsCache = null;
+let currentTab  = "guides";
 
-function fmtSpec(s){ return s.replace(/([A-Z])/g,' $1').trim(); }
-function fmtDur(s){ return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`; }
+// Parses tab state
+let _currentEncounters = [];  // [{id,name,zone,expansion}] — current expansion only
+let _parseStats        = {};  // {encounter_id: {sample_count, last_ingested}}
+let _bossIngestState   = {};  // {encounter_id: {status,step,total,analyzed,error}}
+let _ingestRunning     = false;
+let _encountersCache   = null;
 
-function toast(msg, dur=3500){
-  const el=document.getElementById('toast');
-  el.textContent=msg; el.style.display='block';
-  clearTimeout(el._t);
-  el._t=setTimeout(()=>el.style.display='none', dur);
+// ── Formatters ──────────────────────────────────────────────────────────────
+function fmtSpec(s){ return s.replace(/([A-Z])/g," $1").trim(); }
+function fmtDur(s){ return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,"0")}`; }
+function fmtDate(dt){
+  if(!dt) return "—";
+  const d = new Date(dt.replace(" ","T")+"Z");
+  return d.toLocaleString(undefined,{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"});
 }
 
+// ── Toast ────────────────────────────────────────────────────────────────────
+function toast(msg, dur=3500){
+  const el=document.getElementById("toast");
+  el.textContent=msg; el.style.display="block";
+  clearTimeout(el._t);
+  el._t=setTimeout(()=>el.style.display="none",dur);
+}
+
+// ── URL sync ─────────────────────────────────────────────────────────────────
 function syncAdminURL(){
   const p=new URLSearchParams();
-  p.set('spec',currentSpec);
-  p.set('tab',currentTab);
-  history.replaceState({},'',`?${p}`);
+  p.set("spec",currentSpec); p.set("tab",currentTab);
+  history.replaceState({},"",`?${p}`);
 }
 
-window.onload=()=>{
-  const p=new URLSearchParams(location.search);
-  const specParam=p.get('spec');
-  const tabParam=p.get('tab');
+// ── Boot ─────────────────────────────────────────────────────────────────────
+window.onload = async () => {
+  const p = new URLSearchParams(location.search);
+  const specParam = p.get("spec");
+  const tabParam  = p.get("tab");
 
-  if(specParam && ALL_SPECS.includes(specParam)) currentSpec=specParam;
+  if(specParam && ALL_SPECS.includes(specParam)) currentSpec = specParam;
 
-  const sel=document.getElementById('spec-select');
+  const sel = document.getElementById("spec-select");
   ALL_SPECS.forEach(s=>{
-    const o=document.createElement('option'); o.value=s; o.textContent=fmtSpec(s); sel.appendChild(o);
+    const o=document.createElement("option"); o.value=s; o.textContent=fmtSpec(s);
+    sel.appendChild(o);
   });
-  sel.value=currentSpec;
+  sel.value = currentSpec;
   onSpecChange();
 
-  if(tabParam && ['guides','parses','rulebook'].includes(tabParam)) showTab(tabParam);
-  loadEncounters();
+  await loadEncounters();
+
+  if(tabParam && ["guides","parses","rulebook"].includes(tabParam)) showTab(tabParam);
 };
 
 function onSpecChange(){
-  currentSpec=document.getElementById('spec-select').value;
-  document.getElementById('guides-spec-label').textContent=fmtSpec(currentSpec);
-  document.getElementById('rulebook-spec-label').textContent=fmtSpec(currentSpec);
+  currentSpec = document.getElementById("spec-select").value;
+  document.getElementById("guides-spec-label").textContent  = fmtSpec(currentSpec);
+  document.getElementById("rulebook-spec-label").textContent = fmtSpec(currentSpec);
   loadGuides();
-  if(currentTab==='rulebook') loadRulebook();
+  if(currentTab==="rulebook") loadRulebook();
+  if(currentTab==="parses")   loadParseOverview();
   syncAdminURL();
 }
 
 function showTab(name){
-  ['guides','parses','rulebook'].forEach(t=>{
-    document.getElementById(`tab-${t}`).classList.toggle('active',t===name);
-    document.getElementById(`panel-${t}`).classList.toggle('active',t===name);
+  ["guides","parses","rulebook"].forEach(t=>{
+    document.getElementById(`tab-${t}`).classList.toggle("active",t===name);
+    document.getElementById(`panel-${t}`).classList.toggle("active",t===name);
   });
-  currentTab=name;
-  if(name==='rulebook') loadRulebook();
+  currentTab = name;
+  if(name==="rulebook") loadRulebook();
+  if(name==="parses")   loadParseOverview();
   syncAdminURL();
 }
 
-// ── Progress helpers ────────────────────────────────────────────────────────
-function showProgress(id){ document.getElementById(id).style.display='block'; }
-function hideProgress(id){ document.getElementById(id).style.display='none'; }
-
-function setBar(barId, pct){
-  const bar=document.getElementById(barId);
-  bar.style.animation='none';
-  bar.style.width=pct+'%';
-}
-
-function addLog(logId, msg, type='info'){
+// ── Progress helpers ─────────────────────────────────────────────────────────
+function showProgress(id){ document.getElementById(id).style.display="block"; }
+function setBar(id,pct){ const b=document.getElementById(id); b.style.animation="none"; b.style.width=pct+"%"; }
+function addLog(logId,msg,type="info"){
   const log=document.getElementById(logId);
-  const icons={done:'✓',error:'✗',info:'·',warn:'!'};
-  const line=document.createElement('div');
+  const icons={done:"✓",error:"✗",info:"·",warn:"!"};
+  const line=document.createElement("div");
   line.className=`log-line log-${type}`;
-  line.innerHTML=`<span class="icon">${icons[type]||'·'}</span><span class="log-text" title="${msg}">${msg}</span>`;
-  log.appendChild(line);
-  log.scrollTop=log.scrollHeight;
+  line.innerHTML=`<span class="icon">${icons[type]||"·"}</span><span class="log-text" title="${msg}">${msg}</span>`;
+  log.appendChild(line); log.scrollTop=log.scrollHeight;
 }
+function clearLog(id){ document.getElementById(id).innerHTML=""; }
 
-function clearLog(logId){ document.getElementById(logId).innerHTML=''; }
-
-// ── SSE stream consumer ─────────────────────────────────────────────────────
-async function consumeStream(url, method='GET', body=null, onEvent){
-  const opts={method, headers:{'Content-Type':'application/json'}};
+// ── SSE consumer ─────────────────────────────────────────────────────────────
+async function consumeStream(url, method="GET", body=null, onEvent){
+  const opts={method,headers:{"Content-Type":"application/json"}};
   if(body) opts.body=JSON.stringify(body);
-  const resp=await fetch(url,opts);
-  if(!resp.ok){ const e=await resp.json(); throw new Error(e.detail||'Request failed'); }
-
-  const reader=resp.body.getReader();
-  const decoder=new TextDecoder();
-  let buf='';
-
+  const resp = await fetch(url,opts);
+  if(!resp.ok){ const e=await resp.json(); throw new Error(e.detail||"Request failed"); }
+  const reader=resp.body.getReader(), decoder=new TextDecoder();
+  let buf="";
   while(true){
     const{done,value}=await reader.read();
     if(done) break;
     buf+=decoder.decode(value,{stream:true});
-    const lines=buf.split('\n');
-    buf=lines.pop(); // keep incomplete line
+    const lines=buf.split("\n"); buf=lines.pop();
     for(const line of lines){
-      if(line.startsWith('data: ')){
-        try{ onEvent(JSON.parse(line.slice(6))); } catch{}
+      if(line.startsWith("data: ")){
+        try{ onEvent(JSON.parse(line.slice(6))); }catch{}
       }
     }
   }
 }
 
-// ── Guides ──────────────────────────────────────────────────────────────────
+// ── API helper ────────────────────────────────────────────────────────────────
+async function apiFetch(url,method="GET",body=null){
+  try{
+    const opts={method,headers:{"Content-Type":"application/json"}};
+    if(body) opts.body=JSON.stringify(body);
+    const resp=await fetch(url,opts);
+    const data=await resp.json();
+    if(!resp.ok){ toast(`⚠ ${data.detail||"Error"}`); return null; }
+    return data;
+  }catch(e){ toast(`⚠ ${e.message}`); return null; }
+}
+
+// ── Encounters (cached; populates gen-encounter-select for generate flow) ────
+async function loadEncounters(){
+  if(!_encountersCache){
+    const data = await apiFetch("/api/admin/encounters");
+    if(!data) return;
+    _encountersCache = data;
+  }
+  _populateEncounterSelect(_encountersCache);
+}
+
+function _populateEncounterSelect(data){
+  const EXCLUDE=/beta|ptr|mythic\+|complete raids|delves|torghast/i;
+  const live=data.encounters.filter(e=>!EXCLUDE.test(e.zone));
+  const currentExp=live.map(e=>e.expansion).find(Boolean);
+  const filtered=live.filter(e=>e.expansion===currentExp);
+
+  const groups={};
+  filtered.forEach(e=>{ (groups[e.zone]||(groups[e.zone]=[])).push(e); });
+
+  const sel=document.getElementById("gen-encounter-select");
+  sel.innerHTML='<option value="">No parse context</option>';
+  Object.entries(groups).forEach(([zone,encs])=>{
+    const og=document.createElement("optgroup"); og.label=zone;
+    encs.forEach(e=>{
+      const opt=document.createElement("option"); opt.value=e.id; opt.textContent=e.name;
+      og.appendChild(opt);
+    });
+    sel.appendChild(og);
+  });
+}
+
+// ── Guides ────────────────────────────────────────────────────────────────────
 async function loadGuides(){
-  const wrap=document.getElementById('guides-table-wrap');
+  const wrap=document.getElementById("guides-table-wrap");
   wrap.innerHTML='<div class="empty"><span class="spinner-inline"></span> Loading…</div>';
   const data=await apiFetch(`/api/admin/guides/${currentSpec}`);
   if(data) renderGuidesTable(data.guides);
 }
 
 function renderGuidesTable(guides){
-  const wrap=document.getElementById('guides-table-wrap');
+  const wrap=document.getElementById("guides-table-wrap");
   if(!guides.length){ wrap.innerHTML='<div class="empty">No guides yet. Add one above.</div>'; return; }
   wrap.innerHTML=`
     <table>
@@ -375,273 +419,344 @@ function renderGuidesTable(guides){
         <tr id="grow-${g.id}">
           <td><span class="badge badge-${g.guide_type}">${g.guide_type}</span></td>
           <td class="url-cell" title="${g.url}">${g.title||g.url}</td>
-          <td>${g.word_count?g.word_count.toLocaleString():'—'}</td>
+          <td>${g.word_count?g.word_count.toLocaleString():"—"}</td>
           <td>
             <span class="badge badge-${g.status}">${g.status}</span>
-            ${g.error_msg?`<span class="muted" style="margin-left:4px" title="${g.error_msg}">⚠</span>`:''}
+            ${g.error_msg?`<span class="muted" style="margin-left:4px" title="${g.error_msg}">⚠</span>`:""}
           </td>
           <td class="actions">
             <button class="btn btn-ghost btn-sm" onclick="scrapeOne(${g.id})">Scrape</button>
             <button class="btn btn-danger btn-sm" onclick="deleteGuide(${g.id})">Delete</button>
           </td>
-        </tr>`).join('')}
+        </tr>`).join("")}
       </tbody>
     </table>`;
 }
 
 async function addGuide(){
-  const url=document.getElementById('guide-url').value.trim();
-  const type=document.getElementById('guide-type').value;
+  const url=document.getElementById("guide-url").value.trim();
+  const type=document.getElementById("guide-type").value;
   if(!url) return;
-  const data=await apiFetch('/api/admin/guides','POST',{spec:currentSpec,url,guide_type:type});
-  if(data){ document.getElementById('guide-url').value=''; toast('Guide added.'); loadGuides(); }
+  const data=await apiFetch("/api/admin/guides","POST",{spec:currentSpec,url,guide_type:type});
+  if(data){ document.getElementById("guide-url").value=""; toast("Guide added."); loadGuides(); }
 }
 
 async function scrapeOne(id){
   const row=document.getElementById(`grow-${id}`);
-  if(row) row.style.opacity='.5';
-  const data=await apiFetch(`/api/admin/guides/${id}/scrape`,'POST');
+  if(row) row.style.opacity=".5";
+  const data=await apiFetch(`/api/admin/guides/${id}/scrape`,"POST");
   if(data) toast(`Scraped: ${data.word_count?.toLocaleString()} words`);
   loadGuides();
 }
 
 async function deleteGuide(id){
-  if(!confirm('Delete this guide?')) return;
-  await apiFetch(`/api/admin/guides/${id}`,'DELETE');
-  toast('Deleted.'); loadGuides();
+  if(!confirm("Delete this guide?")) return;
+  await apiFetch(`/api/admin/guides/${id}`,"DELETE");
+  toast("Deleted."); loadGuides();
 }
 
 async function scrapeAll(){
-  const btn=document.getElementById('btn-scrape-all');
+  const btn=document.getElementById("btn-scrape-all");
   btn.disabled=true;
-  clearLog('scrape-log');
-  showProgress('scrape-progress');
-  setBar('scrape-bar',0);
-  document.getElementById('scrape-progress-label').textContent='Starting…';
-  document.getElementById('scrape-progress-frac').textContent='';
-
+  clearLog("scrape-log");
+  showProgress("scrape-progress");
+  setBar("scrape-bar",0);
+  document.getElementById("scrape-progress-label").textContent="Starting…";
+  document.getElementById("scrape-progress-frac").textContent="";
   try{
-    await consumeStream(
-      `/api/admin/guides/spec/${currentSpec}/scrape-stream`,
-      'GET', null,
-      (evt)=>{
-        if(evt.type==='start'){
-          document.getElementById('scrape-progress-label').textContent=`Scraping ${evt.total} guide(s)…`;
-        } else if(evt.type==='progress'){
-          document.getElementById('scrape-progress-frac').textContent=`${evt.step}/${evt.total}`;
-          setBar('scrape-bar', Math.round(evt.step/evt.total*80));
-          addLog('scrape-log',`Scraping: ${evt.url}`,'info');
-        } else if(evt.type==='done'){
-          setBar('scrape-bar', Math.round(evt.step/evt.total*100));
-          addLog('scrape-log',`✓ ${evt.title} — ${evt.word_count?.toLocaleString()} words`,'done');
-        } else if(evt.type==='error'){
-          addLog('scrape-log',`✗ ${evt.error}`,'error');
-        } else if(evt.type==='complete'){
-          setBar('scrape-bar',100);
-          document.getElementById('scrape-progress-label').textContent=
-            `Done — ${evt.scraped} scraped, ${evt.errors} errors`;
-          loadGuides();
-          toast(`Scrape complete: ${evt.scraped} OK, ${evt.errors} failed`);
-        }
+    await consumeStream(`/api/admin/guides/spec/${currentSpec}/scrape-stream`,"GET",null,(evt)=>{
+      if(evt.type==="start"){
+        document.getElementById("scrape-progress-label").textContent=`Scraping ${evt.total} guide(s)…`;
+      } else if(evt.type==="progress"){
+        document.getElementById("scrape-progress-frac").textContent=`${evt.step}/${evt.total}`;
+        setBar("scrape-bar",Math.round(evt.step/evt.total*80));
+        addLog("scrape-log",`Scraping: ${evt.url}`,"info");
+      } else if(evt.type==="done"){
+        setBar("scrape-bar",Math.round(evt.step/evt.total*100));
+        addLog("scrape-log",`✓ ${evt.title} — ${evt.word_count?.toLocaleString()} words`,"done");
+      } else if(evt.type==="error"){
+        addLog("scrape-log",`✗ ${evt.error}`,"error");
+      } else if(evt.type==="complete"){
+        setBar("scrape-bar",100);
+        document.getElementById("scrape-progress-label").textContent=
+          `Done — ${evt.scraped} scraped, ${evt.errors} errors`;
+        loadGuides();
+        toast(`Scrape complete: ${evt.scraped} OK, ${evt.errors} failed`);
       }
-    );
-  } catch(e){ toast(`⚠ ${e.message}`); }
+    });
+  }catch(e){ toast(`⚠ ${e.message}`); }
   btn.disabled=false;
 }
 
 async function generateRulebook(){
-  const btn=document.getElementById('btn-generate');
+  const btn=document.getElementById("btn-generate");
   btn.disabled=true;
-  clearLog('gen-log');
-  showProgress('gen-progress');
-  document.getElementById('gen-progress-label').textContent='Generating…';
-  document.getElementById('gen-bar').style.animation='pulse 1.2s ease-in-out infinite';
-  document.getElementById('gen-bar').style.width='30%';
+  clearLog("gen-log");
+  showProgress("gen-progress");
+  document.getElementById("gen-progress-label").textContent="Generating…";
+  document.getElementById("gen-bar").style.animation="pulse 1.2s ease-in-out infinite";
+  document.getElementById("gen-bar").style.width="30%";
 
-  const encId=document.getElementById('encounter-select')?.value;
-  const qs=encId?`?encounter_id=${encId}`:'';
+  const encId=document.getElementById("gen-encounter-select")?.value;
+  const qs=encId?`?encounter_id=${encId}`:"";
 
   try{
-    await consumeStream(
-      `/api/admin/rulebook/${currentSpec}/generate-stream${qs}`,
-      'POST', null,
-      (evt)=>{
-        if(evt.type==='status'){
-          document.getElementById('gen-progress-label').textContent=evt.message;
-          addLog('gen-log', evt.message,'info');
-        } else if(evt.type==='error'){
-          addLog('gen-log', `✗ ${evt.error}`,'error');
-          toast(`⚠ ${evt.error}`);
-        } else if(evt.type==='complete'){
-          document.getElementById('gen-bar').style.animation='none';
-          document.getElementById('gen-bar').style.width='100%';
-          document.getElementById('gen-progress-label').textContent='Rulebook generated ✓';
-          addLog('gen-log','Rulebook saved and active immediately.','done');
-          toast('✅ Rulebook generated!');
-          showTab('rulebook');
-          loadRulebook();
-        }
+    await consumeStream(`/api/admin/rulebook/${currentSpec}/generate-stream${qs}`,"POST",null,(evt)=>{
+      if(evt.type==="status"){
+        document.getElementById("gen-progress-label").textContent=evt.message;
+        addLog("gen-log",evt.message,"info");
+      } else if(evt.type==="error"){
+        addLog("gen-log",`✗ ${evt.error}`,"error");
+        toast(`⚠ ${evt.error}`);
+      } else if(evt.type==="complete"){
+        document.getElementById("gen-bar").style.animation="none";
+        document.getElementById("gen-bar").style.width="100%";
+        document.getElementById("gen-progress-label").textContent="Rulebook generated ✓";
+        addLog("gen-log","Rulebook saved and active immediately.","done");
+        toast("✅ Rulebook generated!");
+        showTab("rulebook"); loadRulebook();
       }
-    );
-  } catch(e){ toast(`⚠ ${e.message}`); }
-  btn.disabled=false;
-}
-
-// ── Encounters ──────────────────────────────────────────────────────────────
-async function loadEncounters(){
-  const data=await apiFetch('/api/admin/encounters');
-  if(!data) return;
-
-  const EXCLUDE = /beta|ptr|mythic\+|complete raids|delves|torghast/i;
-  const live = data.encounters.filter(e => !EXCLUDE.test(e.zone));
-
-  // WCL returns expansions newest-first — take the first unique expansion name
-  const currentExp = live.map(e => e.expansion).find(Boolean);
-  const filtered = live.filter(e => e.expansion === currentExp);
-
-  const groups={};
-  filtered.forEach(e=>{
-    (groups[e.zone]||(groups[e.zone]=[])).push(e);
-  });
-
-  const sel=document.getElementById('encounter-select');
-  sel.innerHTML='<option value="">— select encounter —</option>';
-  Object.entries(groups).forEach(([zone,encs])=>{
-    const og=document.createElement('optgroup'); og.label=zone;
-    encs.forEach(e=>{
-      const opt=document.createElement('option'); opt.value=e.id; opt.textContent=e.name;
-      og.appendChild(opt);
     });
-    sel.appendChild(og);
-  });
-}
-
-async function fetchRankings(){
-  const encounterID=parseInt(document.getElementById('encounter-select').value,10);
-  const count=parseInt(document.getElementById('parse-count').value,10);
-  if(!encounterID){ toast('Select an encounter first.'); return; }
-
-  const btn=document.getElementById('btn-fetch-ranks');
-  btn.disabled=true; btn.innerHTML='<span class="spinner-inline"></span> Fetching…';
-
-  const data=await apiFetch('/api/admin/parses/fetch','POST',{
-    spec:currentSpec, encounter_id:encounterID, count, analyze:false
-  });
-  btn.disabled=false; btn.textContent='Fetch Rankings';
-  if(!data) return;
-
-  _rankingsCache=data;
-  renderRankingsTable(data, []);
-}
-
-async function deepAnalyze(){
-  const encounterID=parseInt(document.getElementById('encounter-select').value,10);
-  const count=parseInt(document.getElementById('parse-count').value,10);
-  if(!encounterID){ toast('Select an encounter first.'); return; }
-
-  const btn=document.getElementById('btn-deep');
-  btn.disabled=true;
-  clearLog('parse-log');
-  showProgress('parse-progress');
-  setBar('parse-bar',0);
-  document.getElementById('parse-progress-label').textContent='Fetching rankings…';
-  document.getElementById('parse-progress-frac').textContent='';
-
-  let rankings=[];
-  let analyzed=[];
-
-  try{
-    await consumeStream(
-      '/api/admin/parses/analyze-stream',
-      'POST',
-      {spec:currentSpec, encounter_id:encounterID, count, analyze:true},
-      (evt)=>{
-        if(evt.type==='rankings_start'){
-          addLog('parse-log','Fetching top rankings from WCL…','info');
-        } else if(evt.type==='rankings_done'){
-          rankings=evt.rankings;
-          document.getElementById('parse-progress-label').textContent=
-            `Analyzing ${rankings.length} parse(s)…`;
-          addLog('parse-log',`Got ${rankings.length} rankings for ${evt.encounter_name}`,'done');
-          renderRankingsTable({rankings, encounter_name:evt.encounter_name}, []);
-        } else if(evt.type==='parse_progress'){
-          const pct=Math.round(evt.step/evt.total*100);
-          setBar('parse-bar',pct);
-          document.getElementById('parse-progress-frac').textContent=`${evt.step}/${evt.total}`;
-          addLog('parse-log',`Fetching events for ${evt.player}…`,'info');
-        } else if(evt.type==='parse_done'){
-          addLog('parse-log',`✓ ${evt.summary.player} — ${evt.summary.fight_duration_s}s fight`,'done');
-          analyzed.push(evt.summary);
-          renderRankingsTable({rankings, encounter_name:''}, analyzed);
-        } else if(evt.type==='parse_skip'){
-          addLog('parse-log',`– ${evt.player||'unknown'} skipped (no matching actor)`,'warn');
-        } else if(evt.type==='error'){
-          addLog('parse-log',`✗ ${evt.error}`,'error');
-          toast(`⚠ ${evt.error}`);
-        } else if(evt.type==='complete'){
-          setBar('parse-bar',100);
-          document.getElementById('parse-progress-label').textContent=
-            `Done — ${evt.analyzed} analyzed`;
-          if(evt.parse_context){
-            document.getElementById('parses-result').insertAdjacentHTML('beforeend',`
-              <div class="card">
-                <div class="card-title">Parse Context (used in AI generation)</div>
-                <pre class="json-box" style="color:var(--muted)">${evt.parse_context}</pre>
-              </div>`);
-          }
-          toast(`Deep analysis complete: ${evt.analyzed} parses processed.`);
-        }
-      }
-    );
-  } catch(e){ toast(`⚠ ${e.message}`); }
+  }catch(e){ toast(`⚠ ${e.message}`); }
   btn.disabled=false;
 }
 
-function renderRankingsTable(data, analyzed){
-  const analyzeMap={};
-  analyzed.forEach(a=>analyzeMap[a.player]=a);
+// ── Parses overview ──────────────────────────────────────────────────────────
+async function loadParseOverview(){
+  document.getElementById("parses-spec-label").textContent = fmtSpec(currentSpec);
+  document.getElementById("spec-last-ingested").textContent = "—";
+  document.getElementById("boss-table-wrap").innerHTML =
+    '<div class="empty"><span class="spinner-inline"></span> Loading…</div>';
+  document.getElementById("boss-detail-panels").innerHTML = "";
 
-  const rows=(data.rankings||[]).map((r,i)=>{
-    const a=analyzeMap[r.player];
-    const cdHtml=a
-      ? a.cooldowns.map(c=>
-          `<div class="parse-cd">${c.name}: first=${c.first_cast_s??'?'}s | x${c.total_uses} | BL=${c.bl_aligned?'✓':'✗'}</div>`
-        ).join('')
-      : '<span class="muted">—</span>';
+  // Use cached encounters; fetch parse stats fresh per spec
+  if(!_encountersCache){
+    const d=await apiFetch("/api/admin/encounters");
+    if(d) _encountersCache=d;
+  }
+  const statsData = await apiFetch(`/api/admin/parses/stats/${currentSpec}`);
+  if(!_encountersCache || !statsData) return;
+
+  const EXCLUDE=/beta|ptr|mythic\+|complete raids|delves|torghast/i;
+  const live=_encountersCache.encounters.filter(e=>!EXCLUDE.test(e.zone));
+  const currentExp=live.map(e=>e.expansion).find(Boolean);
+  _currentEncounters=live.filter(e=>e.expansion===currentExp);
+
+  _parseStats=statsData.stats;
+  _bossIngestState={};
+  _updateSpecLastIngested();
+  renderBossTable();
+}
+
+function _updateSpecLastIngested(){
+  const dates=Object.values(_parseStats)
+    .map(s=>s.last_ingested).filter(Boolean).sort().reverse();
+  document.getElementById("spec-last-ingested").textContent =
+    dates.length ? fmtDate(dates[0]) : "Never";
+}
+
+function renderBossTable(){
+  const wrap=document.getElementById("boss-table-wrap");
+  if(!_currentEncounters.length){
+    wrap.innerHTML='<div class="empty">No encounters found for current expansion.</div>'; return;
+  }
+  const rows=_currentEncounters.map(enc=>_buildBossRow(enc)).join("");
+  wrap.innerHTML=`
+    <table>
+      <thead><tr>
+        <th>Boss</th><th>Zone</th><th>Samples</th><th>Last Ingested</th><th>Status</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function _buildBossRow(enc){
+  const stat  = _parseStats[enc.id]||{};
+  const state = _bossIngestState[enc.id];
+  const n     = stat.sample_count||0;
+  const lastIn= stat.last_ingested ? fmtDate(stat.last_ingested) : '<span class="muted">Never</span>';
+  return `<tr id="boss-row-${enc.id}">
+    <td><b>${enc.name}</b></td>
+    <td class="muted">${enc.zone}</td>
+    <td id="boss-n-${enc.id}">${n||'<span class="muted">0</span>'}</td>
+    <td id="boss-dt-${enc.id}">${lastIn}</td>
+    <td id="boss-st-${enc.id}">${_bossStatusCell(enc,stat,state)}</td>
+  </tr>`;
+}
+
+function _bossStatusCell(enc,stat,state){
+  const n=stat.sample_count||0;
+  if(state){
+    if(state.status==="pending")  return '<span class="muted">Queued…</span>';
+    if(state.status==="ingesting"){
+      const pct=state.total?Math.round(state.step/state.total*100):0;
+      return `<div style="display:flex;align-items:center;gap:8px">
+        <span class="spinner-inline"></span>
+        <span class="muted">${state.step}/${state.total}</span>
+        <div class="boss-mini-bar"><div class="boss-mini-fill" style="width:${pct}%"></div></div>
+      </div>`;
+    }
+    if(state.status==="done")
+      return `<span style="color:var(--success)">✓ ${state.analyzed} ingested</span>`;
+    if(state.status==="error")
+      return `<span style="color:var(--critical)" title="${state.error}">✗ Error</span>`;
+  }
+  const safeName=enc.name.replace(/'/g,"\\'");
+  return n
+    ? `<button class="btn btn-ghost btn-sm" onclick="viewBossSamples(${enc.id},'${safeName}')">View ${n}</button>`
+    : '<span class="muted">—</span>';
+}
+
+function _updateBossRow(encId){
+  const enc  = _currentEncounters.find(e=>e.id===encId); if(!enc) return;
+  const stat = _parseStats[encId]||{};
+  const state= _bossIngestState[encId];
+  const n    = stat.sample_count||0;
+  const dt   = stat.last_ingested ? fmtDate(stat.last_ingested) : '<span class="muted">Never</span>';
+  const stEl = document.getElementById(`boss-st-${encId}`);
+  const nEl  = document.getElementById(`boss-n-${encId}`);
+  const dtEl = document.getElementById(`boss-dt-${encId}`);
+  if(stEl) stEl.innerHTML=_bossStatusCell(enc,stat,state);
+  if(nEl)  nEl.innerHTML =n||'<span class="muted">0</span>';
+  if(dtEl) dtEl.innerHTML=dt;
+}
+
+async function ingestAll(){
+  if(_ingestRunning){ toast("Ingestion already running."); return; }
+  _ingestRunning=true;
+  const btn=document.getElementById("btn-ingest-all");
+  btn.disabled=true;
+  showProgress("ingest-overall-progress");
+  setBar("ingest-bar",0);
+  document.getElementById("ingest-progress-label").textContent="Connecting…";
+  document.getElementById("ingest-progress-frac").textContent="";
+
+  _currentEncounters.forEach(e=>{ _bossIngestState[e.id]={status:"pending"}; });
+  renderBossTable();
+
+  try{
+    await consumeStream(
+      `/api/admin/parses/ingest-all-stream/${currentSpec}`,"GET",null,
+      (evt)=>{
+        if(evt.type==="start"){
+          document.getElementById("ingest-progress-label").textContent=
+            `Ingesting ${evt.total} bosses (${evt.expansion})…`;
+        } else if(evt.type==="boss_start"){
+          _bossIngestState[evt.encounter_id]={status:"ingesting",step:0,total:10};
+          _updateBossRow(evt.encounter_id);
+          setBar("ingest-bar",Math.round(evt.index/evt.total*100));
+          document.getElementById("ingest-progress-frac").textContent=`${evt.index+1}/${evt.total}`;
+          document.getElementById("ingest-progress-label").textContent=`${evt.encounter_name}…`;
+        } else if(evt.type==="parse_progress"){
+          const s=_bossIngestState[evt.encounter_id];
+          if(s){ s.step=evt.step; s.total=evt.total; _updateBossRow(evt.encounter_id); }
+        } else if(evt.type==="parse_done"){
+          const s=_bossIngestState[evt.encounter_id];
+          if(s){ s.step=evt.step; _updateBossRow(evt.encounter_id); }
+        } else if(evt.type==="boss_done"){
+          _bossIngestState[evt.encounter_id]={status:"done",analyzed:evt.analyzed};
+          if(!_parseStats[evt.encounter_id]) _parseStats[evt.encounter_id]={};
+          _parseStats[evt.encounter_id].sample_count=evt.analyzed;
+          _parseStats[evt.encounter_id].last_ingested=
+            new Date().toISOString().slice(0,19).replace("T"," ");
+          _updateBossRow(evt.encounter_id);
+          setBar("ingest-bar",Math.round((evt.index+1)/evt.total*100));
+        } else if(evt.type==="boss_error"){
+          _bossIngestState[evt.encounter_id]={status:"error",error:evt.error};
+          _updateBossRow(evt.encounter_id);
+        } else if(evt.type==="complete"){
+          setBar("ingest-bar",100);
+          document.getElementById("ingest-progress-label").textContent=
+            `Done — ${evt.total_analyzed} parses ingested`;
+          document.getElementById("ingest-progress-frac").textContent="";
+          toast(`✅ Ingest complete: ${evt.total_analyzed} parses`);
+        } else if(evt.type==="error"){
+          toast(`⚠ ${evt.error}`);
+        }
+      }
+    );
+  }catch(e){ toast(`⚠ ${e.message}`); }
+
+  // Refresh from DB after stream closes, clear transient ingest state
+  _bossIngestState={};
+  const statsData=await apiFetch(`/api/admin/parses/stats/${currentSpec}`);
+  if(statsData){ _parseStats=statsData.stats; _updateSpecLastIngested(); renderBossTable(); }
+  _ingestRunning=false;
+  btn.disabled=false;
+}
+
+async function viewBossSamples(encId, encName){
+  const panels=document.getElementById("boss-detail-panels");
+  // Toggle off if already open for the same boss
+  if(panels.dataset.encId===String(encId)){
+    panels.innerHTML=""; delete panels.dataset.encId; return;
+  }
+  panels.dataset.encId=String(encId);
+  panels.innerHTML=`<div class="card"><div class="empty"><span class="spinner-inline"></span> Loading samples…</div></div>`;
+  panels.scrollIntoView({behavior:"smooth",block:"nearest"});
+
+  const data=await apiFetch(`/api/admin/parses/samples/${currentSpec}/${encId}`);
+  if(!data){ panels.innerHTML=""; return; }
+  const samples=data.samples;
+
+  if(!samples.length){
+    panels.innerHTML=`<div class="card"><div class="empty">No samples stored for ${encName}.</div></div>`;
+    return;
+  }
+
+  const cdNames=[...new Set(samples.flatMap(s=>(s.cooldown_data?.cooldowns||[]).map(c=>c.name)))];
+
+  const rows=samples.map(s=>{
+    const cd=s.cooldown_data||{};
+    const cdMap={}; (cd.cooldowns||[]).forEach(c=>{ cdMap[c.name]=c; });
+    const cdCells=cdNames.map(n=>{
+      const c=cdMap[n];
+      if(!c) return '<td class="muted">—</td>';
+      const offStr=c.bl_offset_s!=null
+        ? ` <span class="muted">BL${c.bl_offset_s>=0?"+":""}${c.bl_offset_s}s</span>` : "";
+      return `<td><span class="muted">×${c.total_uses}</span> first:${c.first_cast_s??"?"}s${offStr} BL:${c.bl_aligned?"✓":"—"}</td>`;
+    });
     return `<tr>
-      <td>${r.rank}</td>
-      <td><b>${r.player}</b><br><span class="muted">${r.server||''}</span></td>
-      <td>${(r.amount||0).toLocaleString()}</td>
-      <td>${fmtDur(r.duration_s)}</td>
-      <td>${cdHtml}</td>
+      <td><b>${s.player_name||"?"}</b></td>
+      <td>${fmtDur(cd.fight_duration_s||0)}</td>
+      <td>${cd.cast_efficiency_pct!=null?cd.cast_efficiency_pct+"%":"—"}</td>
+      ${cdCells.join("")}
     </tr>`;
-  }).join('');
+  }).join("");
 
-  document.getElementById('parses-result').innerHTML=`
+  const closeJs=`document.getElementById('boss-detail-panels').innerHTML='';delete document.getElementById('boss-detail-panels').dataset.encId`;
+  panels.innerHTML=`
     <div class="card">
-      <div class="card-title">${data.encounter_name||'Rankings'} — ${fmtSpec(currentSpec)}</div>
-      <table>
-        <thead><tr><th>#</th><th>Player</th><th>DPS</th><th>Duration</th><th>Cooldown Analysis</th></tr></thead>
-        <tbody>${rows||'<tr><td colspan="5" class="empty">No data</td></tr>'}</tbody>
-      </table>
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <span>${encName} — ${fmtSpec(currentSpec)} · ${samples.length} sample(s)</span>
+        <button class="btn btn-ghost btn-sm" onclick="${closeJs}">✕ Close</button>
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr>
+            <th>Player</th><th>Duration</th><th>Eff%</th>
+            ${cdNames.map(n=>`<th>${n}</th>`).join("")}
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <p class="muted" style="margin-top:10px">Sampled: ${fmtDate(samples[0]?.sampled_at)}</p>
     </div>`;
 }
 
-// ── Rulebook ────────────────────────────────────────────────────────────────
+// ── Rulebook ──────────────────────────────────────────────────────────────────
 async function loadRulebook(){
-  const div=document.getElementById('rulebook-content');
-  const badge=document.getElementById('rulebook-badge');
+  const div=document.getElementById("rulebook-content");
+  const badge=document.getElementById("rulebook-badge");
   div.innerHTML='<div class="empty"><span class="spinner-inline"></span> Loading…</div>';
   const data=await apiFetch(`/api/admin/rulebook/${currentSpec}`);
   if(!data) return;
 
   badge.innerHTML=`<span class="badge badge-${data.source}">${data.source}</span>`;
-
-  if(data.source==='none'){
-    div.innerHTML='<div class="empty">No rulebook yet. Add guides and generate one.</div>';
-    return;
+  if(data.source==="none"){
+    div.innerHTML='<div class="empty">No rulebook yet. Add guides and generate one.</div>'; return;
   }
-  if(data.source==='static'){
+  if(data.source==="static"){
     div.innerHTML=`
       <p class="muted" style="margin-bottom:14px">Using built-in static rulebook. Generate a dynamic one from guides.</p>
       <div class="json-box">${JSON.stringify(data.cooldowns,null,2)}</div>`;
@@ -651,25 +766,25 @@ async function loadRulebook(){
   const rb=data.rulebook;
   const cdsHtml=(rb.major_cooldowns||[]).map(cd=>`<tr>
     <td><b>${cd.name}</b></td>
-    <td style="font-family:monospace">${cd.spell_id||'—'}</td>
+    <td style="font-family:monospace">${cd.spell_id||"—"}</td>
     <td>${cd.cooldown}s</td>
-    <td>${cd.duration?cd.duration+'s':'—'}</td>
-    <td>${cd.align_with_bloodlust?'<span style="color:var(--info)">✓ yes</span>':'—'}</td>
-    <td>${cd.opener_priority||'—'}</td>
-    <td class="muted">${cd.usage_rule||''}</td>
-  </tr>`).join('');
+    <td>${cd.duration?cd.duration+"s":"—"}</td>
+    <td>${cd.align_with_bloodlust?'<span style="color:var(--info)">✓ yes</span>':"—"}</td>
+    <td>${cd.opener_priority||"—"}</td>
+    <td class="muted">${cd.usage_rule||""}</td>
+  </tr>`).join("");
 
   const rulesHtml=(rb.rules||[]).map(r=>`<tr>
-    <td><span class="badge badge-${r.priority==='critical'||r.priority==='high'?'error':'pending'}">${r.priority}</span></td>
+    <td><span class="badge badge-${r.priority==="critical"||r.priority==="high"?"error":"pending"}">${r.priority}</span></td>
     <td>${r.description}</td>
-    <td class="muted">${r.condition||''}</td>
-    <td class="muted">${r.action||''}</td>
-  </tr>`).join('');
+    <td class="muted">${r.condition||""}</td>
+    <td class="muted">${r.action||""}</td>
+  </tr>`).join("");
 
   div.innerHTML=`
     <p class="muted" style="margin-bottom:14px">
       Generated from ${data.guide_count} guide(s) · ${data.generated_at}
-      ${rb.source_summary?`<br>${rb.source_summary}`:''}
+      ${rb.source_summary?`<br>${rb.source_summary}`:""}
     </p>
     <div class="card-title" style="margin:16px 0 10px">Major Cooldowns</div>
     <table>
@@ -681,83 +796,48 @@ async function loadRulebook(){
     <table>
       <thead><tr><th>Priority</th><th>Rule</th><th>Condition</th><th>Action</th></tr></thead>
       <tbody>${rulesHtml}</tbody>
-    </table>`:''}
+    </table>`:""}
     <div class="card-title" style="margin:20px 0 10px">Raw JSON</div>
     <div class="json-box">${JSON.stringify(rb,null,2)}</div>`;
 }
 
-// ── Manual rulebook editor ───────────────────────────────────────────────────
+// ── Manual rulebook editor ────────────────────────────────────────────────────
 async function loadTemplateIntoEditor(){
-  const data = await apiFetch(`/api/admin/rulebook/${currentSpec}`);
-  if (!data) return;
-
+  const data=await apiFetch(`/api/admin/rulebook/${currentSpec}`);
+  if(!data) return;
   let json;
-  if (data.source === 'generated') {
-    json = data.rulebook;
-  } else if (data.source === 'static') {
-    // Convert static cooldowns to the full schema so user has a starting point
-    json = {
-      spec: currentSpec,
-      major_cooldowns: (data.cooldowns || []).map(cd => ({
-        name: cd.name,
-        spell_id: cd.spell_id,
-        cooldown: cd.cooldown,
-        duration: cd.duration || 0,
-        align_with_bloodlust: true,
-        opener_priority: 1,
-        usage_rule: ""
-      })),
-      rules: [],
-      source_summary: "Manually defined"
-    };
+  if(data.source==="generated"){
+    json=data.rulebook;
+  } else if(data.source==="static"){
+    json={spec:currentSpec,major_cooldowns:(data.cooldowns||[]).map(cd=>({
+      name:cd.name,spell_id:cd.spell_id,cooldown:cd.cooldown,duration:cd.duration||0,
+      align_with_bloodlust:true,opener_priority:1,usage_rule:""
+    })),rules:[],source_summary:"Manually defined"};
   } else {
-    json = {
-      spec: currentSpec,
-      major_cooldowns: [],
-      rules: [],
-      source_summary: "Manually defined"
-    };
+    json={spec:currentSpec,major_cooldowns:[],rules:[],source_summary:"Manually defined"};
   }
-  document.getElementById('manual-json').value = JSON.stringify(json, null, 2);
-  document.getElementById('manual-save-status').textContent = '';
+  document.getElementById("manual-json").value=JSON.stringify(json,null,2);
+  document.getElementById("manual-save-status").textContent="";
 }
 
 async function saveManualRulebook(){
-  const raw = document.getElementById('manual-json').value.trim();
-  const status = document.getElementById('manual-save-status');
+  const raw=document.getElementById("manual-json").value.trim();
+  const status=document.getElementById("manual-save-status");
   let parsed;
-  try {
-    parsed = JSON.parse(raw);
-  } catch(e) {
-    status.style.color = 'var(--critical)';
-    status.textContent = `⚠ Invalid JSON: ${e.message}`;
-    return;
+  try{ parsed=JSON.parse(raw); }
+  catch(e){
+    status.style.color="var(--critical)";
+    status.textContent=`⚠ Invalid JSON: ${e.message}`; return;
   }
-
-  status.style.color = 'var(--muted)';
-  status.textContent = 'Saving…';
-  const data = await apiFetch(`/api/admin/rulebook/${currentSpec}`, 'PUT', { rulebook: parsed });
-  if (data) {
-    status.style.color = 'var(--success)';
-    status.textContent = `✓ Saved and active — ${(parsed.major_cooldowns||[]).length} cooldown(s) loaded.`;
-    loadRulebook();
-    toast('Rulebook saved and active.');
+  status.style.color="var(--muted)"; status.textContent="Saving…";
+  const data=await apiFetch(`/api/admin/rulebook/${currentSpec}`,"PUT",{rulebook:parsed});
+  if(data){
+    status.style.color="var(--success)";
+    status.textContent=`✓ Saved and active — ${(parsed.major_cooldowns||[]).length} cooldown(s) loaded.`;
+    loadRulebook(); toast("Rulebook saved and active.");
   } else {
-    status.style.color = 'var(--critical)';
-    status.textContent = '✗ Save failed — check console.';
+    status.style.color="var(--critical)"; status.textContent="✗ Save failed.";
   }
-}
-
-// ── API helper ───────────────────────────────────────────────────────────────
-async function apiFetch(url, method='GET', body=null){
-  try{
-    const opts={method,headers:{'Content-Type':'application/json'}};
-    if(body) opts.body=JSON.stringify(body);
-    const resp=await fetch(url,opts);
-    const data=await resp.json();
-    if(!resp.ok){ toast(`⚠ ${data.detail||'Error'}`); return null; }
-    return data;
-  } catch(e){ toast(`⚠ ${e.message}`); return null; }
 }
 </script>
 </body>

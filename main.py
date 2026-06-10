@@ -588,4 +588,97 @@ async def analyze_parses_stream(req: FetchParsesRequest):
     )
 
 
+_INGEST_EXCLUDE = re.compile(r"beta|ptr|mythic\+|complete raids|delves|torghast", re.IGNORECASE)
+
+
+@app.get("/api/admin/parses/stats/{spec}")
+async def parse_stats(spec: str):
+    return {"stats": await db.get_parse_stats(spec)}
+
+
+@app.get("/api/admin/parses/samples/{spec}/{encounter_id}")
+async def parse_samples_endpoint(spec: str, encounter_id: int):
+    samples = await db.get_parse_samples(spec, encounter_id)
+    for s in samples:
+        cd = s.get("cooldown_data") or {}
+        cd.pop("cast_gap_list_ms", None)
+        for c in cd.get("cooldowns", []):
+            c.pop("cast_times_s", None)
+    return {"samples": samples}
+
+
+@app.get("/api/admin/parses/ingest-all-stream/{spec}")
+async def ingest_all_stream(spec: str):
+    """SSE — ingests top 10 parses for every current-expansion boss sequentially."""
+    def _evt(payload: dict) -> str:
+        return f"data: {json.dumps(payload)}\n\n"
+
+    async def generate():
+        try:
+            encounters = await get_encounters(wcl)
+        except Exception as exc:
+            yield _evt({"type": "error", "error": str(exc)})
+            return
+
+        live = [e for e in encounters if not _INGEST_EXCLUDE.search(e.get("zone", ""))]
+        current_exp = next((e["expansion"] for e in live if e.get("expansion")), None)
+        if not current_exp:
+            yield _evt({"type": "error", "error": "Could not determine current expansion."})
+            return
+
+        current = [e for e in live if e["expansion"] == current_exp]
+        total_bosses = len(current)
+        yield _evt({"type": "start", "total": total_bosses, "expansion": current_exp})
+
+        total_analyzed = 0
+        for idx, enc in enumerate(current):
+            enc_id, enc_name = enc["id"], enc["name"]
+            yield _evt({"type": "boss_start", "encounter_id": enc_id,
+                        "encounter_name": enc_name, "index": idx, "total": total_bosses})
+            try:
+                result = await fetch_top_rankings(wcl, spec, enc_id, 10)
+            except Exception as exc:
+                yield _evt({"type": "boss_error", "encounter_id": enc_id,
+                            "encounter_name": enc_name, "error": str(exc)})
+                continue
+
+            rankings = result["rankings"]
+            boss_done = 0
+            for step, r in enumerate(rankings):
+                code = r.get("report_code")
+                fight_id = r.get("fight_id")
+                yield _evt({"type": "parse_progress", "encounter_id": enc_id,
+                            "step": step + 1, "total": len(rankings), "player": r.get("player")})
+                if not code or not fight_id:
+                    yield _evt({"type": "parse_skip", "encounter_id": enc_id,
+                                "player": r.get("player")})
+                    continue
+                summary = await analyze_parse(wcl, spec, code, fight_id,
+                                              player_name=r.get("player"))
+                if summary:
+                    await db.save_parse_sample(
+                        spec=spec, encounter_id=enc_id, encounter_name=enc_name,
+                        report_code=code, fight_id=fight_id,
+                        player_name=summary["player"], cooldown_data=summary,
+                    )
+                    boss_done += 1
+                    yield _evt({"type": "parse_done", "encounter_id": enc_id,
+                                "step": step + 1, "player": summary["player"]})
+                else:
+                    yield _evt({"type": "parse_skip", "encounter_id": enc_id,
+                                "player": r.get("player")})
+
+            total_analyzed += boss_done
+            yield _evt({"type": "boss_done", "encounter_id": enc_id, "encounter_name": enc_name,
+                        "analyzed": boss_done, "index": idx, "total": total_bosses})
+
+        yield _evt({"type": "complete", "total_analyzed": total_analyzed})
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
