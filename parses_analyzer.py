@@ -520,35 +520,3 @@ async def analyze_parse(
     }
 
 
-def build_parse_context(parse_results: list[dict]) -> str:
-    """
-    Convert a list of per-parse cooldown summaries into a human-readable
-    text block suitable for inclusion in the LLM guide-ingestion prompt.
-    """
-    if not parse_results:
-        return ""
-
-    lines = [f"Top {len(parse_results)} parse analysis:"]
-
-    # Aggregate per cooldown
-    from collections import defaultdict
-    agg: dict[str, list] = defaultdict(list)
-    for pr in parse_results:
-        for cd in pr.get("cooldowns", []):
-            agg[cd["name"]].append(cd)
-
-    for cd_name, entries in agg.items():
-        first_casts = [e["first_cast_s"] for e in entries if e.get("first_cast_s") is not None]
-        bl_count = sum(1 for e in entries if e.get("bl_aligned"))
-        uses = [e["total_uses"] for e in entries]
-        avg_first = round(sum(first_casts) / len(first_casts), 1) if first_casts else "n/a"
-        avg_uses = round(sum(uses) / len(uses), 1) if uses else "n/a"
-        bl_pct = round(bl_count / len(entries) * 100) if entries else 0
-
-        lines.append(
-            f"- {cd_name}: avg first cast at {avg_first}s | "
-            f"avg {avg_uses} uses/fight | "
-            f"{bl_pct}% BL-aligned"
-        )
-
-    return "\n".join(lines)

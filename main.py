@@ -518,8 +518,6 @@ def _find_player_in_pd(report: dict, player_name: str) -> tuple[Optional[dict], 
     return None, None
 
 
-
-
 def _aggregate_gear(samples: list[dict]) -> dict:
     """Aggregate talent builds, trinkets, and enchants across stored parse samples."""
     total = len(samples)
@@ -832,7 +830,6 @@ async def save_manual_rulebook(spec: str, req: ManualRulebookRequest):
 async def get_rulebook(spec: str):
     row = await db.get_rulebook_row(spec)
     if row:
-        import json
         return {
             "source": "generated",
             "spec": spec,
@@ -862,7 +859,6 @@ class FetchParsesRequest(BaseModel):
     spec: str
     encounter_id: int
     count: int = 10
-    analyze: bool = False  # if True, also fetch + analyze each parse's events
 
 
 @app.post("/api/admin/parses/fetch")
