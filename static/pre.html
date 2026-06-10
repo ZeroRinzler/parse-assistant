@@ -435,7 +435,7 @@
           let wclLink = '';
           if (top?.report_code) {
             const href = top.fight_id
-              ? `https://www.warcraftlogs.com/reports/${top.report_code}#fight=${top.fight_id}&type=talents`
+              ? `https://www.warcraftlogs.com/reports/${top.report_code}?fight=${top.fight_id}&type=summary`
               : `https://www.warcraftlogs.com/reports/${top.report_code}`;
             const label = top.player_name ? `View ${top.player_name} on WCL` : 'View on WCL';
             wclLink = ` — <a href="${href}" target="_blank" rel="noopener" class="wcl-link">${label}</a>`;
