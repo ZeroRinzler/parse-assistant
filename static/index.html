@@ -572,24 +572,8 @@
       }
     }
 
-    // Also bucket success findings to know which CDs are tracked but clean
-    const cleanCDs = [];
-    for (const f of data.findings) {
-      if (f.severity === 'success' && f.cd_name) cleanCDs.push(f.cd_name);
-    }
-
-    // CD cards — issues + holds per CD, then clean CDs as a compact row
-    let cdHtml = '';
-    const issueCards = Object.entries(byCD).map(([name, bucket]) => renderCDCard(name, bucket)).join('');
-    cdHtml += issueCards;
-
-    if (cleanCDs.length) {
-      const chips = cleanCDs.map(n => `<span style="color:var(--success);font-size:12px">✓ ${n}</span>`).join('  ');
-      cdHtml += `<div style="padding:8px 2px;display:flex;flex-wrap:wrap;gap:10px;">${chips}</div>`;
-    }
-
-    if (!cdHtml && !ruleFindings.length)
-      cdHtml = '<div class="no-findings">✓ No significant issues detected.</div>';
+    const cdHtml = Object.entries(byCD).map(([name, bucket]) => renderCDCard(name, bucket)).join('')
+      || (!ruleFindings.length ? '<div class="no-findings">✓ No significant issues detected.</div>' : '');
 
     // Rotation rules section
     let rulesHtml = '';
@@ -598,14 +582,9 @@
         <div class="rule-list">${ruleFindings.map(renderRuleItem).join('')}</div>`;
     }
 
-    const rbSrc = data.rulebook_source || 'static';
-    const rbColor = rbSrc === 'none' ? 'var(--warning)' : 'var(--muted)';
-    const rbLabel = rbSrc === 'generated' ? '⚡ generated rulebook' : rbSrc === 'none' ? '⚠ no rulebook' : 'static rulebook';
-
     el.innerHTML = `
       <div class="result-header">
         <h2>${data.player} — ${formatSpec(data.spec)}</h2>
-        <span style="color:${rbColor};font-size:12px">${rbLabel}</span>
       </div>
       <div class="cd-list">${cdHtml}</div>
       ${rulesHtml}
