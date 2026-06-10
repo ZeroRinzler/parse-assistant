@@ -276,64 +276,53 @@
     }
     .timeline-card h3 {
       font-size: 11px; font-weight: 700; text-transform: uppercase;
-      letter-spacing: 1px; color: var(--muted); margin-bottom: 14px;
+      letter-spacing: 1px; color: var(--muted); margin-bottom: 10px;
     }
-    .timeline-wrap { position: relative; }
-    .timeline-track {
-      position: relative; height: 6px; background: var(--surface2);
-      border-radius: 3px; margin: 28px 0 22px;
+    /* Outer container: burst labels above, track in middle, hold labels below */
+    .tl-container {
+      position: relative;
+      height: 76px;
+      margin: 0 4px;
     }
-    .tl-burst {
-      position: absolute; top: -4px; height: 14px;
-      background: rgba(200,166,79,0.18); border-left: 2px solid rgba(200,166,79,0.5);
+    /* The track line */
+    .tl-track {
+      position: absolute;
+      left: 0; right: 0; top: 36px;
+      height: 4px;
+      background: var(--surface2);
       border-radius: 2px;
     }
-    .tl-burst-label {
-      position: absolute; top: -18px; font-size: 10px; color: var(--gold);
-      white-space: nowrap; transform: translateX(-50%);
-    }
-    .tl-bl {
-      position: absolute; top: -4px; height: 14px;
-      background: rgba(91,141,232,0.13); border-left: 2px solid rgba(91,141,232,0.4);
-      border-radius: 2px;
-    }
-    .tl-arrow-row { position: relative; height: 34px; margin: 4px 0; }
-    .tl-arrow-label {
-      position: absolute; top: 0; font-size: 11px; color: var(--muted);
-      white-space: nowrap; transform: translateX(-50%);
-    }
-    .tl-dot-from {
-      position: absolute; top: 18px; width: 9px; height: 9px; border-radius: 50%;
-      background: var(--warning); transform: translateX(-50%);
-    }
-    .tl-dot-to {
-      position: absolute; top: 18px; width: 9px; height: 9px; border-radius: 50%;
-      background: var(--success); border: 2px solid var(--surface2);
-      transform: translateX(-50%);
-    }
-    .tl-arrow-line {
-      position: absolute; top: 22px; height: 2px;
-      background: linear-gradient(to right, var(--warning), var(--success));
+    .tl-t0   { position: absolute; left: 0;  top: -13px; font-size: 10px; color: var(--muted); font-family: monospace; }
+    .tl-tend { position: absolute; right: 0; top: -13px; font-size: 10px; color: var(--muted); font-family: monospace; text-align: right; }
+    /* Burst bands — sit on the track */
+    .tl-band {
+      position: absolute; top: 28px; height: 20px;
+      background: rgba(200,166,79,0.15);
+      border-left: 2px solid rgba(200,166,79,0.55);
       border-radius: 1px;
+      pointer-events: none;
     }
-    .tl-arrow-head {
-      position: absolute; top: 17px; width: 0; height: 0;
-      border-top: 6px solid transparent; border-bottom: 6px solid transparent;
-      border-left: 7px solid var(--success);
+    /* Burst label above the track, centered on band */
+    .tl-blabel {
+      position: absolute; top: 0;
+      transform: translateX(-50%);
+      text-align: center;
+      pointer-events: none;
     }
-    .tl-tick-end {
-      position: absolute; right: 0; top: -12px;
-      font-size: 10px; color: var(--muted); font-family: monospace;
+    .tl-blabel-time { display: block; font-size: 10px; color: var(--gold); font-family: monospace; line-height: 1.2; }
+    .tl-blabel-cds  { display: block; font-size: 9px;  color: var(--muted); white-space: nowrap; line-height: 1.2; }
+    /* Hold targets — dot on the track + label below */
+    .tl-hold {
+      position: absolute; top: 32px;
+      transform: translateX(-50%);
+      display: flex; flex-direction: column; align-items: center; gap: 3px;
     }
-    .tl-tick-start {
-      position: absolute; left: 0; top: -12px;
-      font-size: 10px; color: var(--muted); font-family: monospace;
+    .tl-hold-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--success); border: 2px solid var(--surface);
+      flex-shrink: 0;
     }
-    .tl-cd-name {
-      position: absolute; left: 0; top: 0;
-      font-size: 11px; color: var(--muted); font-weight: 600;
-      white-space: nowrap;
-    }
+    .tl-hold-name { font-size: 9px; color: var(--success); white-space: nowrap; line-height: 1; }
 
     .delta-good { color: var(--success); font-weight: 700; }
     .delta-bad  { color: var(--critical); font-weight: 700; }
@@ -640,70 +629,46 @@
   }
 
   function renderTimeline(data, dur) {
-    const bursts  = data.burst_windows || [];
-    const holds   = (data.findings || []).filter(f => f.category === 'hold_suggestion' && f.details?.actual_s != null);
-    const blStart = data.bl_time_s ?? null;
+    const bursts = data.burst_windows || [];
+    const holds  = (data.findings || []).filter(f => f.category === 'hold_suggestion' && f.details?.target_s != null);
 
-    if (!dur || (!bursts.length && !holds.length && blStart === null)) return '';
+    if (!dur || (!bursts.length && !holds.length)) return '';
 
-    const pct = s => `${(s / dur * 100).toFixed(2)}%`;
+    const pct = s => (Math.min(s, dur) / dur * 100).toFixed(2) + '%';
 
-    // Burst bands
-    const burstBands = bursts.map(w => {
-      const left = pct(Math.max(0, w.time_s - 4));
-      const width = pct(Math.min(8, dur - Math.max(0, w.time_s - 4)));
-      const labelLeft = pct(w.time_s);
-      const cds = w.common_cds?.length ? `<br><span style="font-size:9px;color:var(--muted)">${w.common_cds.join(', ')}</span>` : '';
-      return `<div class="tl-burst" style="left:${left};width:${width}">
-        <div class="tl-burst-label" style="left:${labelLeft};transform:translateX(-50%)">
-          ${fmtS(w.time_s)}${cds}
-        </div>
-      </div>`;
-    }).join('');
-
-    // BL band
-    const blBand = blStart !== null ? (() => {
-      const blDur = 40;
-      const left = pct(Math.max(0, blStart));
-      const width = pct(Math.min(blDur, dur - blStart));
-      return `<div class="tl-bl" style="left:${left};width:${width}"></div>`;
-    })() : '';
-
-    // Hold arrows
-    const arrows = holds.map(f => {
-      const from = f.details.actual_s;
-      const to   = f.details.target_s;
-      const fromPct = parseFloat(pct(from));
-      const toPct   = parseFloat(pct(to));
-      const left    = Math.min(fromPct, toPct);
-      const width   = Math.abs(toPct - fromPct);
-      const cdLabel = f.details.cd_name || '';
+    // Burst bands + labels above the track
+    const burstElems = bursts.map(w => {
+      const bandLeft  = pct(Math.max(0, w.time_s - 4));
+      const bandWidth = pct(Math.min(8, dur - Math.max(0, w.time_s - 4)));
+      const cds = w.common_cds?.length ? `<span class="tl-blabel-cds">${w.common_cds.join(', ')}</span>` : '';
       return `
-        <div class="tl-arrow-row">
-          <span class="tl-cd-name">${cdLabel}</span>
-          <div class="tl-dot-from" style="left:${fromPct}%"></div>
-          <div class="tl-arrow-line" style="left:${left}%;width:${width}%"></div>
-          <div class="tl-arrow-head" style="left:${toPct}%"></div>
-          <div class="tl-dot-to"   style="left:${toPct}%"></div>
-          <div class="tl-arrow-label" style="left:${fromPct}%">${fmtS(from)}</div>
-          <div class="tl-arrow-label" style="left:${toPct}%;color:var(--success)">${fmtS(to)}</div>
+        <div class="tl-band"   style="left:${bandLeft};width:${bandWidth}"></div>
+        <div class="tl-blabel" style="left:${pct(w.time_s)}">
+          <span class="tl-blabel-time">${fmtS(w.time_s)}</span>${cds}
         </div>`;
     }).join('');
 
-    const hasArrows = holds.length > 0;
-    const hasBursts = bursts.length > 0;
-    const title = [hasBursts && 'Burst Windows', hasArrows && 'Hold Suggestions'].filter(Boolean).join(' · ');
+    // Hold target dots + label below the track (at target time only — where to be)
+    const holdElems = holds.map(f => {
+      const name = (f.details.cd_name || '').replace(/([A-Z])/g, ' $1').trim();
+      return `
+        <div class="tl-hold" style="left:${pct(f.details.target_s)}">
+          <div class="tl-hold-dot"></div>
+          <div class="tl-hold-name">${name}</div>
+        </div>`;
+    }).join('');
+
+    const title = [bursts.length && 'Burst Windows', holds.length && 'Hold Targets'].filter(Boolean).join(' · ');
 
     return `
       <div class="timeline-card">
         <h3>${title}</h3>
-        <div class="timeline-wrap">
-          ${arrows}
-          <div class="timeline-track">
-            <span class="tl-tick-start">0:00</span>
-            <span class="tl-tick-end">${fmtS(dur)}</span>
-            ${burstBands}
-            ${blBand}
+        <div class="tl-container">
+          ${burstElems}
+          ${holdElems}
+          <div class="tl-track">
+            <span class="tl-t0">0:00</span>
+            <span class="tl-tend">${fmtS(dur)}</span>
           </div>
         </div>
       </div>`;
