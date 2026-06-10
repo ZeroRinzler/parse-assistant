@@ -167,37 +167,44 @@ def _find_burst_windows(
     Returns [{time_s, pct_of_total, active_cds}] sorted by fight time.
     """
     hits = sorted(
-        (e["timestamp"], e.get("amount", 0) + e.get("absorbed", 0))
+        (e["timestamp"], e.get("amount", 0) + e.get("absorbed", 0), e.get("targetID", 0))
         for e in damage_events
         if e.get("type") == "damage" and (e.get("amount", 0) + e.get("absorbed", 0)) > 0
     )
     if not hits:
         return []
-    total = sum(d for _, d in hits)
+    total = sum(d for _, d, _ in hits)
     if not total:
         return []
 
-    # Two-pointer rolling window: for each starting event i, sum all events in [t_i, t_i + window_ms]
+    # Build a parallel list of targetIDs for the window target-count pass
+    hit_ts   = [h[0] for h in hits]
+    hit_dmg  = [h[1] for h in hits]
+    hit_tids = [h[2] for h in hits]
+
     n = len(hits)
     j = 0
     window_sum = 0
     candidates: list[tuple[float, float]] = []
     for i in range(n):
-        while j < n and hits[j][0] <= hits[i][0] + window_ms:
-            window_sum += hits[j][1]
+        while j < n and hit_ts[j] <= hit_ts[i] + window_ms:
+            window_sum += hit_dmg[j]
             j += 1
-        candidates.append((hits[i][0], window_sum))
-        window_sum -= hits[i][1]
+        candidates.append((hit_ts[i], window_sum))
+        window_sum -= hit_dmg[i]
 
     candidates.sort(key=lambda x: -x[1])
     selected: list[dict] = []
     for ts, dmg in candidates:
-        # Skip windows that overlap with an already-selected one
         if not any(abs(ts - (fight_start_ms + s["time_s"] * 1000)) < window_ms for s in selected):
+            # Count unique targets hit in this window
+            t_end = ts + window_ms
+            targets = {hit_tids[k] for k in range(n) if ts <= hit_ts[k] <= t_end and hit_tids[k]}
             selected.append({
                 "time_s": round((ts - fight_start_ms) / 1000, 1),
                 "pct_of_total": round(dmg / total, 3),
-                "active_cds": [],  # filled in by caller
+                "active_cds": [],
+                "target_count": len(targets) if targets else 1,
             })
         if len(selected) >= top_n:
             break

@@ -59,20 +59,12 @@
     .hold-note{background:rgba(232,169,58,0.09);border:1px solid rgba(232,169,58,0.25);border-radius:5px;padding:5px 9px;font-size:12px;color:var(--warning);margin-bottom:6px;line-height:1.4}
     .cd-rule{font-size:12px;color:var(--muted);font-style:italic;line-height:1.4;border-top:1px solid rgba(255,255,255,0.05);padding-top:7px;margin-top:4px}
 
-    .bw-row{display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid rgba(42,47,61,0.5);font-size:13px}
+    .bw-row{display:flex;align-items:center;gap:12px;padding:7px 0;border-bottom:1px solid rgba(42,47,61,0.5);font-size:13px}
     .bw-row:last-child{border-bottom:none}
-    .bw-time{font-family:monospace;font-weight:700;min-width:64px}
-    .bw-bar-wrap{flex:0 0 120px;height:5px;background:var(--surface);border-radius:3px;overflow:hidden}
-    .bw-bar{height:100%;background:linear-gradient(90deg,#9a6f1f,var(--gold));border-radius:3px}
-    .bw-pct{font-weight:600;color:var(--gold);min-width:40px;text-align:right;font-size:12px}
+    .bw-time{font-family:monospace;font-weight:700;min-width:72px}
     .bw-cds{color:var(--muted);font-size:12px;flex:1}
+    .bw-aoe{font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;letter-spacing:.5px;background:rgba(91,141,232,0.15);color:#5b8de8;white-space:nowrap}
 
-    .rule-row{display:flex;gap:10px;padding:7px 0;border-bottom:1px solid rgba(42,47,61,0.4);align-items:flex-start}
-    .rule-row:last-child{border-bottom:none}
-    .rule-badge{font-size:10px;font-weight:800;padding:2px 6px;border-radius:4px;white-space:nowrap;flex-shrink:0;margin-top:2px}
-    .rb-critical{background:rgba(224,82,82,0.18);color:var(--critical)}
-    .rb-high{background:rgba(232,169,58,0.18);color:var(--warning)}
-    .rule-text{font-size:13px;line-height:1.4}
 
     .placeholder-box{background:var(--surface2);border:1px dashed var(--border);border-radius:var(--radius);padding:18px 20px;color:var(--muted);font-size:13px;text-align:center}
 
@@ -249,31 +241,18 @@
     // Burst windows
     let bwSection = '';
     if (data.burst_windows?.length) {
-      const maxPct = Math.max(...data.burst_windows.map(b => b.pct_avg));
       const rows = data.burst_windows.map(bw => {
         const sdStr = bw.stddev_s > 0 ? ` <small style="opacity:.5">±${bw.stddev_s}s</small>` : '';
-        const pct = Math.round(bw.pct_avg / maxPct * 100);
         const cds = bw.common_cds?.length ? bw.common_cds.join(', ') : '<span style="opacity:.5">no tracked CD</span>';
+        const aoe = (bw.avg_targets ?? 1) >= 2 ? '<span class="bw-aoe">AoE</span>' : '';
         return `
           <div class="bw-row">
             <div class="bw-time">${fmt(bw.time_s)}${sdStr}</div>
-            <div class="bw-bar-wrap"><div class="bw-bar" style="width:${pct}%"></div></div>
-            <div class="bw-pct">${(bw.pct_avg*100).toFixed(1)}%</div>
-            <div class="bw-cds">${cds} <span style="opacity:.4">(${bw.count}/${bw.total_samples})</span></div>
+            <div class="bw-cds">${cds}</div>
+            ${aoe}
           </div>`;
       }).join('');
-      bwSection = `<div class="card"><div class="card-title">Burst Windows — be ready to peak here</div>${rows}</div>`;
-    }
-
-    // Rules
-    let rulesSection = '';
-    if (data.top_rules?.length) {
-      const rows = data.top_rules.map(r => `
-        <div class="rule-row">
-          <span class="rule-badge rb-${r.priority}">${r.priority}</span>
-          <span class="rule-text">${r.action || r.description}</span>
-        </div>`).join('');
-      rulesSection = `<div class="card"><div class="card-title">Key Rules</div>${rows}</div>`;
+      bwSection = `<div class="card"><div class="card-title">Burst Windows</div>${rows}</div>`;
     }
 
     // Placeholder — future gear / talent check
@@ -283,7 +262,7 @@
         <div class="placeholder-box">Gear and talent analysis coming soon — add your character name to check bis items, gem choices, and talent builds for this encounter.</div>
       </div>`;
 
-    div.innerHTML = statsHtml + cdSection + bwSection + rulesSection + placeholderSection;
+    div.innerHTML = statsHtml + cdSection + bwSection + placeholderSection;
   }
 </script>
 </body>

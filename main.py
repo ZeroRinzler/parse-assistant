@@ -826,6 +826,7 @@ def _cluster_burst_windows(windows: list[dict], total_samples: int, merge_s: flo
             for name in c.get("active_cds", []):
                 cd_counts[name] += 1
         common_cds = [name for name, cnt in cd_counts.most_common() if cnt >= len(cl) * 0.5]
+        avg_targets = round(statistics.mean(c.get("target_count", 1) for c in cl), 1)
         result.append({
             "time_s": round(statistics.median(times), 1),
             "stddev_s": round(statistics.stdev(times) if len(times) > 1 else 0.0, 1),
@@ -833,6 +834,7 @@ def _cluster_burst_windows(windows: list[dict], total_samples: int, merge_s: flo
             "total_samples": total_samples,
             "pct_avg": round(statistics.mean(pcts), 3),
             "common_cds": common_cds,
+            "avg_targets": avg_targets,
         })
     return sorted(result, key=lambda r: r["time_s"])
 
