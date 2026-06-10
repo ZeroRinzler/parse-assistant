@@ -643,6 +643,7 @@ async def ingest_all_stream(spec: str):
                 continue
 
             rankings = result["rankings"]
+            await db.clear_parse_samples(spec, enc_id)
             boss_done = 0
             for step, r in enumerate(rankings):
                 code = r.get("report_code")

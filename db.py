@@ -201,6 +201,15 @@ async def get_rulebook_row(spec: str) -> Optional[dict]:
 
 # ── Parse samples CRUD ────────────────────────────────────────────────────────
 
+async def clear_parse_samples(spec: str, encounter_id: int) -> None:
+    async with _conn() as db:
+        await db.execute(
+            "DELETE FROM parse_samples WHERE spec=? AND encounter_id=?",
+            (spec, encounter_id),
+        )
+        await db.commit()
+
+
 async def save_parse_sample(
     spec: str,
     encounter_id: int,
