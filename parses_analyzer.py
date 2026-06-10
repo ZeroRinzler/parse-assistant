@@ -80,6 +80,31 @@ query($name: String!, $serverSlug: String!, $serverRegion: String!, $encID: Int!
 }
 """
 
+_SERVER_BY_ID_QUERY = """
+query($id: Int!) {
+  worldData {
+    server(id: $id) { slug region { slug } }
+  }
+}
+"""
+
+# Cache: server_id → (server_slug, region_slug)
+_server_slug_cache: dict[int, tuple[str, str]] = {}
+
+
+async def _resolve_server_slug(wcl: WCLClient, server_id: int) -> tuple[str, str]:
+    """Return (server_slug, region_slug) for a WCL server ID, cached per process lifetime."""
+    if server_id in _server_slug_cache:
+        return _server_slug_cache[server_id]
+    try:
+        data = await wcl.query(_SERVER_BY_ID_QUERY, {"id": server_id})
+        srv = (data.get("worldData") or {}).get("server") or {}
+        result = (str(srv.get("slug") or "").lower(), str((srv.get("region") or {}).get("slug") or "").lower())
+    except Exception:
+        result = ("", "")
+    _server_slug_cache[server_id] = result
+    return result
+
 
 async def _fetch_v2_talent(wcl: WCLClient, name: str, server_slug: str, server_region: str, encounter_id: int) -> str:
     """Fetch v2 talent key for a character from their encounterRankings (most recent kill)."""
@@ -230,19 +255,22 @@ async def fetch_top_rankings(
     rankings_data = json.loads(raw) if isinstance(raw, str) else raw
     rankings = (rankings_data.get("rankings") or [])[:count]
 
-    def _server_slug(r: dict) -> str:
-        return (r.get("server") or {}).get("slug", "") or ""
+    # Resolve server slugs for all ranked players.
+    # characterRankings gives only server.id (+ native name); slug lookup via worldData.server(id).
+    # Deduplicate server IDs and fetch in parallel; results are cached for the process lifetime.
+    unique_sids = {(r.get("server") or {}).get("id") for r in rankings} - {None}
+    sid_to_slugs = dict(zip(
+        unique_sids,
+        await asyncio.gather(*[_resolve_server_slug(wcl, sid) for sid in unique_sids])
+    ))
 
-    def _region_slug(r: dict) -> str:
-        region = (r.get("server") or {}).get("region") or {}
-        # WCL may return region as a plain string ("EU") or as an object {"slug": "eu"}
-        return region.get("slug", "") if isinstance(region, dict) else str(region).lower()
+    def _slugs_for(r: dict) -> tuple[str, str]:
+        sid = (r.get("server") or {}).get("id")
+        return sid_to_slugs.get(sid, ("", ""))
 
     # Fetch v2 talent keys for all ranked players in parallel.
-    # encounterRankings uses a different ID space than characterRankings,
-    # so we query each player individually to get a comparable talent key.
     talent_keys = await asyncio.gather(*[
-        _fetch_v2_talent(wcl, r.get("name", ""), _server_slug(r), _region_slug(r), encounter_id)
+        _fetch_v2_talent(wcl, r.get("name", ""), *_slugs_for(r), encounter_id)
         for r in rankings
     ])
 
