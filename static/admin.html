@@ -142,6 +142,7 @@
             <select id="guide-type">
               <option value="web">Web Page</option>
               <option value="youtube">YouTube</option>
+              <option value="simc">SimC APL File</option>
             </select>
           </div>
           <button class="btn btn-sm" onclick="addGuide()">Add</button>
@@ -152,12 +153,8 @@
         <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
           <span>Guides for <span id="guides-spec-label">—</span></span>
           <div style="display:flex;gap:8px;align-items:center">
-            <select id="gen-encounter-select" style="width:auto;min-width:150px;font-size:12px;padding:5px 8px"
-              title="Optionally include top-parse context from this encounter when generating">
-              <option value="">No parse context</option>
-            </select>
             <button class="btn btn-ghost btn-sm" id="btn-scrape-all" onclick="scrapeAll()">Scrape All</button>
-            <button class="btn btn-sm" id="btn-generate" onclick="generateRulebook()">✨ Generate Rulebook</button>
+            <button class="btn btn-sm" id="btn-copy-prompt" onclick="copyPrompt()">Copy AI Prompt</button>
           </div>
         </div>
 
@@ -172,10 +169,20 @@
           <div class="progress-log" id="scrape-log"></div>
         </div>
 
-        <div class="progress-wrap" id="gen-progress">
-          <div class="progress-header"><span id="gen-progress-label">Generating…</span></div>
-          <div class="progress-bar-track"><div class="progress-bar-fill" id="gen-bar" style="width:30%;animation:pulse 1.2s ease-in-out infinite"></div></div>
-          <div class="progress-log" id="gen-log"></div>
+        <div id="paste-back-panel" style="display:none;margin-top:20px;border-top:1px solid var(--border);padding-top:18px">
+          <div class="card-title" style="margin-bottom:8px">Step 2 — Paste AI Output</div>
+          <p class="muted" style="margin-bottom:10px">
+            Paste the JSON your AI returned. Output must start with <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">{</code> — no code fences or explanation.
+          </p>
+          <textarea id="ai-json-input" rows="14"
+            style="font-family:monospace;font-size:12px;color:#a8d8a8;background:#0d1117"
+            placeholder='{"spec":"SubtletyRogue","major_cooldowns":[...],"rules":[...],"source_summary":"..."}'></textarea>
+          <div style="display:flex;gap:10px;align-items:center;margin-top:10px">
+            <button class="btn" onclick="saveAIRulebook()">💾 Save &amp; Activate</button>
+            <span id="ai-save-status" style="font-size:12px;color:var(--muted)"></span>
+            <button class="btn btn-ghost btn-sm" style="margin-left:auto"
+              onclick="document.getElementById('paste-back-panel').style.display='none'">✕ Cancel</button>
+          </div>
         </div>
       </div>
     </div>
@@ -216,14 +223,14 @@
 
       <div class="card">
         <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
-          <span>Manual Editor</span>
+          <span>Edit Rulebook JSON</span>
           <div style="display:flex;gap:8px">
-            <button class="btn btn-ghost btn-sm" onclick="loadTemplateIntoEditor()">Load Current / Template</button>
+            <button class="btn btn-ghost btn-sm" onclick="loadTemplateIntoEditor()">Load Current</button>
             <button class="btn btn-sm" onclick="saveManualRulebook()">💾 Save &amp; Activate</button>
           </div>
         </div>
         <p class="muted" style="margin-bottom:12px">
-          Paste or edit the rulebook JSON here and click Save — it becomes active immediately without needing an API key.
+          Load the current rulebook to fine-tune it, or paste a fresh JSON and save.
         </p>
         <textarea id="manual-json" rows="22" style="font-family:monospace;font-size:12px;color:#a8d8a8;background:#0d1117"
           placeholder='{"spec":"RetributionPaladin","major_cooldowns":[{"name":"Avenging Wrath","spell_id":31884,"cooldown":120,"duration":20,"align_with_bloodlust":true,"opener_priority":1,"usage_rule":"Cast on pull, align with Bloodlust"}],"rules":[],"source_summary":"Manually defined"}'></textarea>
@@ -370,35 +377,12 @@ async function apiFetch(url,method="GET",body=null){
   }catch(e){ toast(`⚠ ${e.message}`); return null; }
 }
 
-// ── Encounters (cached; populates gen-encounter-select for generate flow) ────
+// ── Encounters (cached — used by parses tab) ──────────────────────────────────
 async function loadEncounters(){
   if(!_encountersCache){
     const data = await apiFetch("/api/admin/encounters");
-    if(!data) return;
-    _encountersCache = data;
+    if(data) _encountersCache = data;
   }
-  _populateEncounterSelect(_encountersCache);
-}
-
-function _populateEncounterSelect(data){
-  const EXCLUDE=/beta|ptr|mythic\+|complete raids|delves|torghast/i;
-  const live=data.encounters.filter(e=>!EXCLUDE.test(e.zone));
-  const currentExp=live.map(e=>e.expansion).find(Boolean);
-  const filtered=live.filter(e=>e.expansion===currentExp);
-
-  const groups={};
-  filtered.forEach(e=>{ (groups[e.zone]||(groups[e.zone]=[])).push(e); });
-
-  const sel=document.getElementById("gen-encounter-select");
-  sel.innerHTML='<option value="">No parse context</option>';
-  Object.entries(groups).forEach(([zone,encs])=>{
-    const og=document.createElement("optgroup"); og.label=zone;
-    encs.forEach(e=>{
-      const opt=document.createElement("option"); opt.value=e.id; opt.textContent=e.name;
-      og.appendChild(opt);
-    });
-    sel.appendChild(og);
-  });
 }
 
 // ── Guides ────────────────────────────────────────────────────────────────────
@@ -488,37 +472,43 @@ async function scrapeAll(){
   btn.disabled=false;
 }
 
-async function generateRulebook(){
-  const btn=document.getElementById("btn-generate");
+async function copyPrompt(){
+  const btn=document.getElementById("btn-copy-prompt");
   btn.disabled=true;
-  clearLog("gen-log");
-  showProgress("gen-progress");
-  document.getElementById("gen-progress-label").textContent="Generating…";
-  document.getElementById("gen-bar").style.animation="pulse 1.2s ease-in-out infinite";
-  document.getElementById("gen-bar").style.width="30%";
-
-  const encId=document.getElementById("gen-encounter-select")?.value;
-  const qs=encId?`?encounter_id=${encId}`:"";
-
-  try{
-    await consumeStream(`/api/admin/rulebook/${currentSpec}/generate-stream${qs}`,"POST",null,(evt)=>{
-      if(evt.type==="status"){
-        document.getElementById("gen-progress-label").textContent=evt.message;
-        addLog("gen-log",evt.message,"info");
-      } else if(evt.type==="error"){
-        addLog("gen-log",`✗ ${evt.error}`,"error");
-        toast(`⚠ ${evt.error}`);
-      } else if(evt.type==="complete"){
-        document.getElementById("gen-bar").style.animation="none";
-        document.getElementById("gen-bar").style.width="100%";
-        document.getElementById("gen-progress-label").textContent="Rulebook generated ✓";
-        addLog("gen-log","Rulebook saved and active immediately.","done");
-        toast("✅ Rulebook generated!");
-        showTab("rulebook"); loadRulebook();
-      }
-    });
-  }catch(e){ toast(`⚠ ${e.message}`); }
+  const data=await apiFetch(`/api/admin/guides/${currentSpec}/prompt`);
   btn.disabled=false;
+  if(!data) return;
+  try{
+    await navigator.clipboard.writeText(data.prompt);
+    toast(`Prompt copied (${data.guide_count} guide(s)) — paste into your AI`);
+    document.getElementById("paste-back-panel").style.display="block";
+    document.getElementById("ai-json-input").value="";
+    document.getElementById("ai-save-status").textContent="";
+    document.getElementById("paste-back-panel").scrollIntoView({behavior:"smooth",block:"nearest"});
+  }catch{
+    toast("⚠ Clipboard write failed — see console for the prompt");
+    console.log(data.prompt);
+  }
+}
+
+async function saveAIRulebook(){
+  const raw=document.getElementById("ai-json-input").value.trim();
+  const status=document.getElementById("ai-save-status");
+  if(!raw){ status.style.color="var(--critical)"; status.textContent="Paste the AI output first."; return; }
+  let parsed;
+  try{ parsed=JSON.parse(raw); }
+  catch(e){ status.style.color="var(--critical)"; status.textContent=`⚠ Invalid JSON: ${e.message}`; return; }
+  status.style.color="var(--muted)"; status.textContent="Saving…";
+  const data=await apiFetch(`/api/admin/rulebook/${currentSpec}`,"PUT",{rulebook:parsed});
+  if(data){
+    status.style.color="var(--success)";
+    status.textContent=`✓ Active — ${(parsed.major_cooldowns||[]).length} cooldown(s) loaded.`;
+    toast("✅ Rulebook saved and active.");
+    document.getElementById("paste-back-panel").style.display="none";
+    showTab("rulebook"); loadRulebook();
+  } else {
+    status.style.color="var(--critical)"; status.textContent="✗ Save failed.";
+  }
 }
 
 // ── Parses overview ──────────────────────────────────────────────────────────
@@ -757,9 +747,19 @@ async function loadRulebook(){
     div.innerHTML='<div class="empty">No rulebook yet. Add guides and generate one.</div>'; return;
   }
   if(data.source==="static"){
+    const cds=data.cooldowns||[];
+    const cdsHtml=cds.map(cd=>`<tr>
+      <td><b>${cd.name}</b></td>
+      <td style="font-family:monospace">${cd.spell_id||"—"}</td>
+      <td>${cd.cooldown}s</td>
+      <td class="muted">${cd.usage_rule||""}</td>
+    </tr>`).join("");
     div.innerHTML=`
-      <p class="muted" style="margin-bottom:14px">Using built-in static rulebook. Generate a dynamic one from guides.</p>
-      <div class="json-box">${JSON.stringify(data.cooldowns,null,2)}</div>`;
+      <p class="muted" style="margin-bottom:14px">Using built-in static rulebook — no dynamic rulebook saved yet.</p>
+      <table>
+        <thead><tr><th>Ability</th><th>Spell ID</th><th>CD</th><th>Usage Rule</th></tr></thead>
+        <tbody>${cdsHtml||'<tr><td colspan="4" class="empty">None</td></tr>'}</tbody>
+      </table>`;
     return;
   }
 
@@ -797,8 +797,7 @@ async function loadRulebook(){
       <thead><tr><th>Priority</th><th>Rule</th><th>Condition</th><th>Action</th></tr></thead>
       <tbody>${rulesHtml}</tbody>
     </table>`:""}
-    <div class="card-title" style="margin:20px 0 10px">Raw JSON</div>
-    <div class="json-box">${JSON.stringify(rb,null,2)}</div>`;
+    `;
 }
 
 // ── Manual rulebook editor ────────────────────────────────────────────────────

@@ -13,17 +13,17 @@ from pydantic import BaseModel
 
 import db
 from analyzer import analyze_player
-from parses_analyzer import get_encounters, fetch_top_rankings, analyze_parse, build_parse_context
+from parses_analyzer import get_encounters, fetch_top_rankings, analyze_parse
 from rulebook import BLOODLUST_SPELL_IDS
 from scraper import scrape
-from llm_parser import parse_guides
 from wcl_client import WCLClient
 
 app = FastAPI(title="WoW Progression Analyzer")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 wcl = WCLClient()
-STATIC_DIR = Path(__file__).parent / "static"
+STATIC_DIR   = Path(__file__).parent / "static"
+PROMPTS_DIR  = Path(__file__).parent / "prompts"
 
 
 @app.on_event("startup")
@@ -418,51 +418,36 @@ async def scrape_all_stream(spec: str):
     )
 
 
-# ── Admin — Rulebook generation ───────────────────────────────────────────────
+# ── Admin — Rulebook prompt assembly ─────────────────────────────────────────
 
-@app.post("/api/admin/rulebook/{spec}/generate-stream")
-async def generate_rulebook_stream(spec: str, encounter_id: Optional[int] = None):
-    """SSE stream for rulebook generation — surfaces each stage to the UI."""
-    def _evt(payload: dict) -> str:
-        return f"data: {json.dumps(payload)}\n\n"
+@app.get("/api/admin/guides/{spec}/prompt")
+async def get_rulebook_prompt(spec: str):
+    """Assemble the AI prompt (skill file + scraped guides) ready to copy-paste."""
+    guides = await db.get_guides(spec)
+    scraped = [g for g in guides if g["status"] == "scraped" and g.get("content")]
+    if not scraped:
+        raise HTTPException(
+            status_code=400,
+            detail="No scraped guides. Add and scrape at least one guide first.",
+        )
 
-    async def generate():
-        guides = await db.get_guides(spec)
-        scraped = [g for g in guides if g["status"] == "scraped" and g.get("content")]
-        if not scraped:
-            yield _evt({"type": "error",
-                        "error": "No scraped guides. Add and scrape at least one guide first."})
-            return
+    skill_path = PROMPTS_DIR / "rulebook_skill.md"
+    if not skill_path.exists():
+        raise HTTPException(status_code=500, detail="Skill file missing: prompts/rulebook_skill.md")
+    template = skill_path.read_text(encoding="utf-8")
 
-        yield _evt({"type": "status", "message": f"Loaded {len(scraped)} guide(s)…",
-                    "guide_count": len(scraped)})
+    sections = []
+    for i, g in enumerate(scraped, 1):
+        title = g.get("title") or g["url"]
+        sections.append(f"### Source {i}: {title}\n\n{g['content'][:60_000]}")
+    guide_content = "\n\n---\n\n".join(sections)
 
-        parse_context = ""
-        if encounter_id:
-            samples = await db.get_parse_samples(spec, encounter_id)
-            if samples:
-                parse_context = build_parse_context([s["cooldown_data"] for s in samples])
-                yield _evt({"type": "status",
-                            "message": f"Including {len(samples)} top-parse sample(s) as context…"})
+    prompt = (template
+              .replace("{{spec}}", spec)
+              .replace("{{guide_count}}", str(len(scraped)))
+              .replace("{{guide_content}}", guide_content))
 
-        yield _evt({"type": "status",
-                    "message": "Sending to Claude — extracting cooldown rules from guide text…"})
-
-        texts = [g["content"] for g in scraped]
-        try:
-            rulebook = await parse_guides(spec, texts, parse_context)
-        except Exception as exc:
-            yield _evt({"type": "error", "error": str(exc)})
-            return
-
-        await db.save_rulebook(spec, rulebook, guide_count=len(scraped))
-        yield _evt({"type": "complete", "rulebook": rulebook})
-
-    return StreamingResponse(
-        generate(),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
+    return {"prompt": prompt, "guide_count": len(scraped), "spec": spec}
 
 
 class ManualRulebookRequest(BaseModel):
