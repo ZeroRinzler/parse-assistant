@@ -221,21 +221,6 @@
         <div id="rulebook-content"><div class="empty">Select a spec to view its rulebook.</div></div>
       </div>
 
-      <div class="card">
-        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
-          <span>Edit Rulebook JSON</span>
-          <div style="display:flex;gap:8px">
-            <button class="btn btn-ghost btn-sm" onclick="loadTemplateIntoEditor()">Load Current</button>
-            <button class="btn btn-sm" onclick="saveManualRulebook()">💾 Save &amp; Activate</button>
-          </div>
-        </div>
-        <p class="muted" style="margin-bottom:12px">
-          Load the current rulebook to fine-tune it, or paste a fresh JSON and save.
-        </p>
-        <textarea id="manual-json" rows="22" style="font-family:monospace;font-size:12px;color:#a8d8a8;background:#0d1117"
-          placeholder='{"spec":"RetributionPaladin","major_cooldowns":[{"name":"Avenging Wrath","spell_id":31884,"cooldown":120,"duration":20,"align_with_bloodlust":true,"opener_priority":1,"usage_rule":"Cast on pull, align with Bloodlust"}],"rules":[],"source_summary":"Manually defined"}'></textarea>
-        <div id="manual-save-status" style="margin-top:8px;font-size:12px;color:var(--muted)"></div>
-      </div>
     </div>
   </main>
 </div>
@@ -800,44 +785,6 @@ async function loadRulebook(){
     `;
 }
 
-// ── Manual rulebook editor ────────────────────────────────────────────────────
-async function loadTemplateIntoEditor(){
-  const data=await apiFetch(`/api/admin/rulebook/${currentSpec}`);
-  if(!data) return;
-  let json;
-  if(data.source==="generated"){
-    json=data.rulebook;
-  } else if(data.source==="static"){
-    json={spec:currentSpec,major_cooldowns:(data.cooldowns||[]).map(cd=>({
-      name:cd.name,spell_id:cd.spell_id,cooldown:cd.cooldown,duration:cd.duration||0,
-      align_with_bloodlust:true,opener_priority:1,usage_rule:""
-    })),rules:[],source_summary:"Manually defined"};
-  } else {
-    json={spec:currentSpec,major_cooldowns:[],rules:[],source_summary:"Manually defined"};
-  }
-  document.getElementById("manual-json").value=JSON.stringify(json,null,2);
-  document.getElementById("manual-save-status").textContent="";
-}
-
-async function saveManualRulebook(){
-  const raw=document.getElementById("manual-json").value.trim();
-  const status=document.getElementById("manual-save-status");
-  let parsed;
-  try{ parsed=JSON.parse(raw); }
-  catch(e){
-    status.style.color="var(--critical)";
-    status.textContent=`⚠ Invalid JSON: ${e.message}`; return;
-  }
-  status.style.color="var(--muted)"; status.textContent="Saving…";
-  const data=await apiFetch(`/api/admin/rulebook/${currentSpec}`,"PUT",{rulebook:parsed});
-  if(data){
-    status.style.color="var(--success)";
-    status.textContent=`✓ Saved and active — ${(parsed.major_cooldowns||[]).length} cooldown(s) loaded.`;
-    loadRulebook(); toast("Rulebook saved and active.");
-  } else {
-    status.style.color="var(--critical)"; status.textContent="✗ Save failed.";
-  }
-}
 </script>
 </body>
 </html>
