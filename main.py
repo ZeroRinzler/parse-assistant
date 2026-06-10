@@ -299,6 +299,7 @@ async def analyze(req: AnalyzeRequest):
     )
     result["spec"] = spec  # override actor.subType with properly resolved spec
     result["rulebook_source"] = rulebook_source
+    result["player_fight_duration_s"] = round(player_fight_dur_s, 1)
 
     # Attach parse comparison
     if encounter_id and spec_cds and samples and agg:
@@ -369,7 +370,6 @@ async def analyze(req: AnalyzeRequest):
                 "sample_count": len(top),
             })
         result["parse_comparison"] = comparison
-        result["player_fight_duration_s"] = round(player_fight_dur_s, 1)
         result["downtime_threshold_ms"] = round(downtime_threshold_ms)
         if top_avg_efficiency is not None:
             result["top_efficiency_pct"] = top_avg_efficiency

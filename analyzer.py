@@ -362,11 +362,16 @@ def analyze_player(
                                 "remedy": (
                                     f"Consider holding {cd_name} until ~{_fmt(target_t)} — "
                                     f"top parsers consistently delay cast {int(cast_idx_str)} here."
-                                )
+                                ),
+                                "actual_s": round(player_t, 1),
+                                "target_s": round(target_t, 1),
+                                "cd_name": cd_name,
                             },
                         })
 
             if cd_issues:
+                for _iss in cd_issues:
+                    _iss["cd_name"] = cd_name
                 findings.extend(cd_issues)
             elif actual_uses > 0:
                 if actual_uses <= expected_uses:
@@ -380,6 +385,7 @@ def analyze_player(
                     "severity": "success",
                     "category": "cooldown_usage",
                     "timestamp_ms": None,
+                    "cd_name": cd_name,
                     "message": f"{cd_name} — {', '.join(parts)}.",
                 })
             if actual_uses > 0:
