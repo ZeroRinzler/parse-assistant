@@ -1,0 +1,1 @@
+Analyze the following codebase to identify areas for simplification, code cleanup, and the removal of unused or redundant elements (such as dead code, uncalled methods, unused variables, or over-engineered abstractions). The core features, behavior, and public APIs must remain completely intact.
