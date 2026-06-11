@@ -211,23 +211,24 @@
 
   // ── WCL auth UI ──────────────────────────────────────────────────────────────
 
+  const _IS_LOCAL = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+
   function _updateWclUI() {
-    if (typeof wclIsLoggedIn === 'undefined') return;
     const btn    = document.getElementById('wcl-btn');
     const banner = document.getElementById('auth-banner');
-    if (wclIsLoggedIn()) {
+    const loggedIn = typeof wclIsLoggedIn !== 'undefined' && wclIsLoggedIn();
+    const showMain = _IS_LOCAL || loggedIn;
+    if (loggedIn) {
       btn.textContent = 'WCL ✓';
       btn.style.color = 'var(--success)';
       btn.style.borderColor = 'var(--success)';
-      btn.style.display = '';
-      banner.style.display = 'none';
     } else {
       btn.textContent = 'Connect WCL';
       btn.style.color = '';
       btn.style.borderColor = '';
-      btn.style.display = '';
-      banner.style.display = '';
     }
+    btn.style.display = '';
+    banner.style.display = showMain ? 'none' : '';
   }
 
   function toggleWclAuth() {
@@ -596,8 +597,8 @@
       let note = '';
 
       const eName = (id, name) => {
-        const n = name || `#${id}`;
-        return `<a href="https://www.wowhead.com/spell=${id}" target="_blank" style="color:inherit;text-decoration:none" title="Wowhead: ${id}">${n}</a>`;
+        const n = name || `Enchant #${id}`;
+        return `<a href="https://www.wowhead.com/enchant=${id}" target="_blank" style="color:inherit;text-decoration:none" title="Wowhead enchant ${id}">${n}</a>`;
       };
       if (!topItems.length) {
         note = playerEnc ? eName(playerEnc.id, playerEnc.name) : '—';

@@ -227,24 +227,29 @@ function _extractCombatantInfo(entry) {
     }
   });
 
-  // Talent key: v2 format from encounterRankings (node IDs nested in class/spec trees)
+  // Talent key extraction — mirrors Python _extract_combatant_info
   let talentKey = '';
-  if (talentsR && typeof talentsR === 'object' && !Array.isArray(talentsR)) {
+  if (typeof talentsR === 'string' && talentsR) {
+    talentKey = talentsR;
+  } else if (Array.isArray(talentsR) && talentsR.length) {
+    // v1 legacy: [{talentID: N, points: P}]
+    const ids = talentsR.filter(t => t?.talentID || t?.id).map(t => t.talentID ?? t.id);
+    if (ids.length) talentKey = 'v1:' + [...ids].sort().join(',');
+  } else if (talentsR && typeof talentsR === 'object') {
+    // Midnight v2: {class: {row_N: [{node:{nodeId:N}}, ...]}, spec: {...}}
     const ids = [];
-    for (const tree of Object.values(talentsR)) {
-      if (!Array.isArray(tree)) continue;
-      for (const row of tree) {
-        for (const node of (row || [])) {
-          const nid = node?.node?.nodeId ?? node?.nodeId;
-          if (nid) ids.push(nid);
+    for (const sectionKey of ['class', 'spec']) {
+      const section = talentsR[sectionKey];
+      if (!section || typeof section !== 'object') continue;
+      for (const rowArr of Object.values(section)) {
+        if (!Array.isArray(rowArr)) continue;
+        for (const entry of rowArr) {
+          const nid = entry?.node?.nodeId ?? entry?.nodeId;
+          if (nid != null) ids.push(nid);
         }
       }
     }
     if (ids.length) talentKey = 'v2:' + [...new Set(ids)].sort((a,b)=>a-b).join(',');
-  } else if (Array.isArray(talentsR) && talentsR.length) {
-    // v1 legacy array format
-    const ids = talentsR.filter(t => t?.talentID).map(t => t.talentID);
-    if (ids.length) talentKey = 'v1:' + ids.join(',');
   }
 
   return {talent_key: talentKey, trinkets, enchants};

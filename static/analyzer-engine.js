@@ -369,7 +369,7 @@ function _findPlayerBurstWindows(dmgEvents, fightStart, specCds, castEvents) {
         }
       }
     }
-    return {time_s:w.time_s, pct_of_total:Math.round(w.total/totalDmg*1000)/10, active_cds:active};
+    return {time_s:w.time_s, pct_of_total:Math.round(w.total/totalDmg*1000)/1000, active_cds:active};
   });
 }
 
@@ -476,7 +476,7 @@ async function runAnalysis({reportCode, fightId, playerId, fights, masterAbiliti
     wclGetAllEvents(reportCode, fightId, 'Casts',       fStart, fEnd, playerId, null),
     wclGetAllEvents(reportCode, fightId, 'Buffs',       fStart, fEnd, null,     playerId),
     wclGetAllEvents(reportCode, fightId, 'DamageDone',  fStart, fEnd, playerId, null),
-    wclGetAllEvents(reportCode, fightId, 'DamageTaken', fStart, fEnd, playerId, null),
+    wclGetAllEvents(reportCode, fightId, 'DamageTaken', fStart, fEnd, null, playerId),
     spec !== 'Unknown' ? loadRulebook(spec) : Promise.resolve(null),
     (encounterID && spec !== 'Unknown') ? loadBenchData(spec, encounterID) : Promise.resolve(null),
   ]);
