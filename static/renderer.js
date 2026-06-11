@@ -227,7 +227,7 @@ function renderResults(data) {
 
   let compHtml = '';
   if (data.parse_comparison?.length) {
-    compHtml = renderParseComparison(data.parse_comparison, data.player_fight_duration_s);
+    compHtml = renderParseComparison(data.parse_comparison, data.player_fight_duration_s, data.cd_spell_ids || {});
   }
 
   let burstHtml = '';
@@ -331,8 +331,8 @@ function renderCDCard(name, bucket, spellId) {
   return `
     <div class="cd-card ${cls} open" onclick="this.classList.toggle('open')">
       <div class="cd-card-header">
-        ${iconSlot}
         <div class="cd-dot"></div>
+        ${iconSlot}
         <span class="cd-name">${name}</span>
         ${meta}
         ${chevron}
@@ -360,7 +360,7 @@ function _delta(player, top, stddev) {
   return `<span class="${cls}">${sign}${diff.toFixed(2)}</span>`;
 }
 
-function renderParseComparison(comparison, playerDurS) {
+function renderParseComparison(comparison, playerDurS, cdSpellIds = {}) {
   const rows = comparison.map(cd => {
     const upmDelta = _delta(cd.player_uses_per_min, cd.top_avg_uses_per_min, cd.top_stddev_uses_per_min);
     const firstDelta = cd.player_first_cast_s != null && cd.top_avg_first_cast_s != null
@@ -369,8 +369,12 @@ function renderParseComparison(comparison, playerDurS) {
     const blCell = cd.top_bl_pct > 0
       ? `${cd.player_bl_offset_s != null ? (cd.player_bl_offset_s >= 0 ? '+' : '') + cd.player_bl_offset_s + 's' : '-'} <span class="delta-ok">/ avg ${cd.top_avg_bl_offset_s != null ? (cd.top_avg_bl_offset_s >= 0 ? '+' : '') + cd.top_avg_bl_offset_s + 's' : '-'}</span>`
       : '<span class="delta-ok">-</span>';
+    const sid = cdSpellIds[cd.name];
+    const nameCell = sid
+      ? `<span class="cd-icon-slot" data-spell-id="${sid}">${spellIconHtml(sid)}</span> <a href="https://www.wowhead.com/spell=${sid}" target="_blank" class="dtk-wowhead" style="font-weight:600">${cd.name}</a>`
+      : `<span style="font-weight:600">${cd.name}</span>`;
     return `<tr>
-      <td style="font-weight:600">${cd.name}</td>
+      <td>${nameCell}</td>
       <td>${cd.player_uses} <span class="delta-ok">(${cd.player_uses_per_min}/min)</span> ${upmDelta}</td>
       <td>${cd.player_first_cast_s != null ? formatDuration(cd.player_first_cast_s) : '-'} ${firstDelta}</td>
       <td>${blCell}</td>

@@ -17,7 +17,7 @@
 .spell-icon-small  { width: 18px; height: 18px; }
 .spell-icon-medium { width: 36px; height: 36px; }
 
-.cd-icon-slot { display: flex; align-items: center; flex-shrink: 0; }
+.cd-icon-slot { display: inline-flex; align-items: center; flex-shrink: 0; vertical-align: middle; }
 
 /* ── Category icons ──────────────────────────────────────────────── */
 .cat-icon { width: 14px; height: 14px; display: inline-block; vertical-align: middle; flex-shrink: 0; }
