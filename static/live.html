@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Live — WoW Analyzer</title>
-  <link rel="stylesheet" href="/static/renderer.css" />
+  <link rel="stylesheet" href="renderer.css" />
   <style>
     :root {
       --bg:#0a0c10; --surface:#13161e; --surface2:#1c202c; --border:#2a2f3d;
@@ -53,9 +53,9 @@
 </head>
 <body>
 <nav class="page-nav">
-  <a href="/pre">Pre-Fight</a>
-  <a href="/live" class="active">Live</a>
-  <a href="/">Post-Raid</a>
+  <a href="pre.html">Pre-Fight</a>
+  <a href="live.html" class="active">Live</a>
+  <a href="index.html">Post-Raid</a>
   <div class="nav-char"><div id="char-chip" class="char-chip"></div></div>
 </nav>
 
@@ -110,7 +110,7 @@
   <div id="results" class="card hidden"></div>
 </div>
 
-<script src="/static/renderer.js"></script>
+<script src="renderer.js"></script>
 <script>
   let reportCode = '';
   let _loadTimer = null;

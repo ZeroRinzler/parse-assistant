@@ -18,7 +18,7 @@ _WCL_CLASS_NAMES = {
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -78,23 +78,23 @@ def _build_spec_map(report: dict) -> dict[int, str]:
 
 @app.get("/", include_in_schema=False)
 async def frontend():
-    return FileResponse(STATIC_DIR / "index.html")
+    return RedirectResponse(url="/static/index.html")
 
 
 @app.get("/admin", include_in_schema=False)
 @app.get("/contribute", include_in_schema=False)
 async def admin_frontend():
-    return FileResponse(STATIC_DIR / "admin.html")
+    return RedirectResponse(url="/static/admin.html")
 
 
 @app.get("/pre", include_in_schema=False)
 async def pre_frontend():
-    return FileResponse(STATIC_DIR / "pre.html")
+    return RedirectResponse(url="/static/pre.html")
 
 
 @app.get("/live", include_in_schema=False)
 async def live_frontend():
-    return FileResponse(STATIC_DIR / "live.html")
+    return RedirectResponse(url="/static/live.html")
 
 
 # ── Player analysis API ───────────────────────────────────────────────────────
