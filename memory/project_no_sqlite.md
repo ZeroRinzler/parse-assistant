@@ -19,4 +19,4 @@ All SQLite/aiosqlite removed. `store.py` replaced `db.py` as the single storage 
 
 **Deleted:** `db.py`, `scripts/export_data_files.py`, `data/warcraft.db`
 
-**Migration:** `scripts/migrate_db_to_files.py` was used once to export from SQLite; keep it for reference but it won't be needed again.
+**Migration:** `scripts/migrate_db_to_files.py` was used once to export from SQLite and has been deleted; migration is complete and verified.

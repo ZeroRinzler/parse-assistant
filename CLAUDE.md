@@ -66,8 +66,7 @@ warcraft-learner/
 │               └── {enc_id}.json  # Raw parse samples — source of truth for bench files
 ├── scripts/
 │   ├── ingest_parses.py       # CLI / GHA: ingest top WCL parses → files
-│   ├── scrape_guides.py       # CLI / GHA: add + scrape a guide → guides.json
-│   └── migrate_db_to_files.py # One-time: export SQLite → file-based storage
+│   └── scrape_guides.py       # CLI / GHA: add + scrape a guide → guides.json
 ├── .env                 # Secrets (gitignored)
 ├── .env.example         # Credential template
 └── requirements.txt
