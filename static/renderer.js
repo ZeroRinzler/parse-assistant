@@ -118,7 +118,7 @@ function categoryIconHtml(category) {
 }
 
 // ── Saved character (localStorage) ───────────────────────────────────────────
-// Stores {name} so the right player is auto-selected when loading reports.
+// Stores {name, url} resolved from a WCL character URL via /api/pre/char-lookup.
 
 const CHAR_STORAGE_KEY = 'wcl_saved_char';
 
@@ -126,8 +126,8 @@ function getSavedChar() {
   try { return JSON.parse(localStorage.getItem(CHAR_STORAGE_KEY)) || null; } catch { return null; }
 }
 
-function saveChar(name) {
-  if (name) localStorage.setItem(CHAR_STORAGE_KEY, JSON.stringify({name: name.trim()}));
+function _saveCharData(data) {
+  localStorage.setItem(CHAR_STORAGE_KEY, JSON.stringify(data));
 }
 
 function clearSavedChar() {
@@ -169,27 +169,42 @@ function promptChangeChar() {
   const modal = document.getElementById('char-modal');
   if (!modal) return;
   const inp = document.getElementById('char-modal-input');
-  if (inp) inp.value = getSavedChar()?.name || '';
+  if (inp) inp.value = getSavedChar()?.url || '';
+  // Reset status
+  const status = document.getElementById('char-modal-status');
+  if (status) { status.textContent = ''; status.className = 'char-modal-status'; }
   modal.classList.remove('hidden');
   inp?.focus();
 }
 
-function closeCharModal(save) {
+async function closeCharModal(save) {
   const modal = document.getElementById('char-modal');
   if (!modal) return;
   if (save) {
-    const name = document.getElementById('char-modal-input')?.value?.trim();
-    if (name) {
-      saveChar(name);
+    const url = document.getElementById('char-modal-input')?.value?.trim();
+    if (!url) {
+      clearSavedChar();
       renderCharChip();
-      // Re-apply selection to current player list
+      modal.classList.add('hidden');
+      return;
+    }
+    // Resolve character from URL via API
+    const status = document.getElementById('char-modal-status');
+    if (status) { status.textContent = 'Looking up…'; status.className = 'char-modal-status'; }
+    try {
+      const res = await fetch(`/api/pre/char-lookup?url=${encodeURIComponent(url)}`);
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      _saveCharData({name: data.name, url, server: data.server, region: data.region, spec: data.spec});
+      renderCharChip();
       const found = autoSelectSavedPlayer();
       _updateCharWarning(found);
       if (found !== false && typeof analyzePlayer === 'function') analyzePlayer();
-    } else {
-      clearSavedChar();
-      renderCharChip();
+      modal.classList.add('hidden');
+    } catch (e) {
+      if (status) { status.textContent = `Not found: ${e.message}`; status.className = 'char-modal-status error'; }
     }
+    return;
   }
   modal.classList.add('hidden');
 }
@@ -451,18 +466,11 @@ function renderParseComparison(comparison, playerDurS) {
 // ── Burst window deep dive ───────────────────────────────────────────────────
 
 function renderBurstWindows(topBws, playerBws) {
-  // Match player burst windows to the closest top-parse window by time
-  function findPlayerWindow(topTimeS) {
-    let best = null, bestDiff = 20;
-    for (const bw of playerBws) {
-      const d = Math.abs(bw.time_s - topTimeS);
-      if (d < bestDiff) { bestDiff = d; best = bw; }
-    }
-    return best;
-  }
-
+  // Match by rank order — fight lengths differ between player and top parses
+  // so time-based matching produces false "no match". Rank order (1st biggest
+  // burst = 1st biggest burst) is a better comparison.
   const cards = topBws.map((bw, idx) => {
-    const playerBw = findPlayerWindow(bw.time_s);
+    const playerBw = playerBws[idx] ?? null;
     const topPct  = bw.pct_avg;
     const playerPct = playerBw?.pct_of_total ?? null;
     const minPct  = bw.pct_min ?? topPct - 0.02;

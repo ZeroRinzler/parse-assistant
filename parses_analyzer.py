@@ -424,7 +424,7 @@ async def analyze_parse(
             wcl.get_all_events(report_code, fight_id, "Casts",       start, end, source_id=player["id"]),
             wcl.get_all_events(report_code, fight_id, "Buffs",       start, end, target_id=player["id"]),
             wcl.get_all_events(report_code, fight_id, "DamageDone",  start, end, source_id=player["id"]),
-            wcl.get_all_events(report_code, fight_id, "DamageTaken", start, end, target_id=player["id"]),
+            wcl.get_all_events(report_code, fight_id, "DamageTaken", start, end, source_id=player["id"]),
         )
     except Exception:
         return None

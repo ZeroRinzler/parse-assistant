@@ -256,6 +256,13 @@
       _charRegion = data.region || '';
       _charGear = null;
 
+      // Persist to shared localStorage so index/live pages auto-select this player
+      try {
+        localStorage.setItem('wcl_saved_char', JSON.stringify({
+          name: data.name, url, server: data.server, region: data.region, spec: data.spec
+        }));
+      } catch (_) {}
+
       // Show character badge
       document.getElementById('char-badge-name').textContent = data.name;
       document.getElementById('char-badge-spec').textContent = fmtSpec(data.spec) + (data.server ? ` — ${data.server}` : '');

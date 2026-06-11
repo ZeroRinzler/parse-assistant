@@ -63,12 +63,14 @@
 <div id="char-modal" class="char-modal-overlay hidden">
   <div class="char-modal-box">
     <h3>Who are you?</h3>
-    <p>Enter your character name and it will be auto-selected in every log you open.</p>
+    <p>Paste your Warcraft Logs character URL and your name will be auto-selected in every log you open.</p>
     <div class="char-modal-row">
-      <input id="char-modal-input" type="text" placeholder="Playername"
+      <input id="char-modal-input" type="text"
+        placeholder="https://www.warcraftlogs.com/character/eu/server/name"
         onkeydown="if(event.key==='Enter') closeCharModal(true)" />
       <button class="char-modal-btn" onclick="closeCharModal(true)">Save</button>
     </div>
+    <div id="char-modal-status" class="char-modal-status"></div>
     <span class="char-modal-skip" onclick="closeCharModal(false)">Skip for now</span>
   </div>
 </div>

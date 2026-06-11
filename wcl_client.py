@@ -1,4 +1,5 @@
 import os
+import time
 from typing import Optional
 import httpx
 from dotenv import load_dotenv
@@ -99,8 +100,13 @@ class WCLClient:
         self.client_secret = os.environ.get("WCL_CLIENT_SECRET", "")
         if not self.client_id or not self.client_secret:
             raise RuntimeError("WCL_CLIENT_ID and WCL_CLIENT_SECRET must be set in .env")
+        self._token: str | None = None
+        self._token_expiry: float = 0.0
 
     async def _get_token(self) -> str:
+        # Reuse cached token until 60s before expiry
+        if self._token and time.time() < self._token_expiry - 60:
+            return self._token
         async with httpx.AsyncClient() as client:
             resp = await client.post(
                 WCL_TOKEN_URL,
@@ -112,7 +118,11 @@ class WCLClient:
                 timeout=15.0,
             )
             resp.raise_for_status()
-            return resp.json()["access_token"]
+            body = resp.json()
+            self._token = body["access_token"]
+            # WCL tokens are valid for 86400s; default to 3600s if not specified
+            self._token_expiry = time.time() + body.get("expires_in", 3600)
+            return self._token
 
     async def query(self, gql: str, variables: dict | None = None) -> dict:
         token = await self._get_token()

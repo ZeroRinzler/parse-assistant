@@ -53,6 +53,11 @@
 .char-modal-btn:hover { opacity: .88; }
 .char-modal-skip { display: block; text-align: center; margin-top: 12px; font-size: 12px; color: var(--muted); cursor: pointer; }
 .char-modal-skip:hover { color: var(--text); }
+.char-modal-box input { font-size: 11px; }
+.char-modal-status { font-size: 12px; min-height: 16px; margin-top: 6px; color: var(--muted); }
+.char-modal-status.error { color: var(--critical); }
+/* Widen modal slightly so URL fits */
+.char-modal-box { width: 420px; }
 
 .char-not-found {
   background: rgba(232,169,58,0.08); border: 1px solid rgba(232,169,58,0.25);
