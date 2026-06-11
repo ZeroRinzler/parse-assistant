@@ -186,9 +186,10 @@
   background: var(--surface2); border: 1px solid var(--border);
   border-radius: var(--radius); overflow: hidden;
 }
-.bw-card.bw-low  { border-color: rgba(224,82,82,0.4); }
-.bw-card.bw-warn { border-color: rgba(232,169,58,0.35); }
-.bw-card.bw-ok   { border-color: rgba(76,175,122,0.3); }
+.bw-card.bw-low    { border-color: rgba(224,82,82,0.4); }
+.bw-card.bw-warn   { border-color: rgba(232,169,58,0.35); }
+.bw-card.bw-ok     { border-color: rgba(76,175,122,0.3); }
+.bw-card.bw-future { border-color: rgba(123,130,160,0.2); opacity: 0.65; }
 
 .bw-card-header {
   display: flex; align-items: center; gap: 10px;
@@ -210,6 +211,7 @@
 .bw-badge-bw-warn    { background: rgba(232,169,58,0.15); color: var(--warning); }
 .bw-badge-bw-low     { background: rgba(224,82,82,0.15); color: var(--critical); }
 .bw-badge-bw-missing { background: rgba(123,130,160,0.15); color: var(--muted); }
+.bw-badge-bw-future  { background: rgba(123,130,160,0.1);  color: var(--muted); }
 
 .bw-cds { font-size: 12px; color: var(--muted); flex: 1; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -262,3 +264,82 @@
 .dtk-ability-table tr:last-child td { border-bottom: none; }
 .dtk-wowhead { color: var(--text); text-decoration: none; }
 .dtk-wowhead:hover { color: var(--gold); }
+
+/* ── Shared comparison chart (.cmp-*) ────────────────────────────── */
+.cmp-chart { display: flex; flex-direction: column; gap: 2px; }
+
+.cmp-legend {
+  display: flex; gap: 16px; margin-bottom: 10px;
+  font-size: 12px; color: var(--muted); flex-wrap: wrap; align-items: center;
+}
+.cmp-leg-item { display: flex; align-items: center; gap: 5px; }
+.cmp-range-note { color: var(--muted); opacity: .7; }
+.cmp-no-data { color: var(--muted); font-style: italic; font-size: 12px; }
+
+/* Colour dot used in legend and row labels */
+.cmp-leg {
+  display: inline-block; width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0;
+}
+.cmp-leg.player { background: var(--gold); }
+.cmp-leg.top    { background: var(--info); opacity: .7; }
+
+/* One row in the comparison chart (player or top-10) */
+.cmp-subrow {
+  display: flex; align-items: center; gap: 8px;
+  padding: 3px 14px;
+}
+
+/* Horizontal bar track */
+.cmp-track {
+  flex: 1; height: 10px; background: var(--surface);
+  border-radius: 5px; position: relative; overflow: visible; min-width: 60px;
+}
+.cmp-fill {
+  position: absolute; left: 0; top: 0; height: 100%;
+  border-radius: 5px; transition: width .3s;
+}
+.cmp-fill.player { background: var(--gold); }
+.cmp-fill.top    { background: rgba(91,141,232,0.45); }
+
+/* Candle range indicator on top track */
+.cmp-candle {
+  position: absolute; top: 1px; height: calc(100% - 2px);
+  background: rgba(91,141,232,0.18); border-radius: 3px;
+  pointer-events: none;
+}
+.cmp-candle-tick {
+  position: absolute; top: -2px; bottom: -2px; width: 2px;
+  background: rgba(91,141,232,0.8); border-radius: 1px;
+  transform: translateX(-50%);
+}
+
+/* Value label to the right of the track */
+.cmp-val { font-size: 12px; color: var(--text); white-space: nowrap; min-width: 60px; }
+.cmp-val.top { color: var(--info); opacity: .85; }
+.cmp-range { font-size: 11px; color: var(--muted); }
+
+/* Per-item wrapper */
+.cmp-item { border-radius: var(--radius); overflow: hidden; }
+.cmp-item + .cmp-item { margin-top: 4px; }
+.cmp-item-label {
+  padding: 6px 14px 2px;
+  font-size: 13px; color: var(--text);
+  display: flex; align-items: center; gap: 6px;
+}
+.cmp-item-bars { padding-bottom: 6px; }
+
+/* Highlighted item (outlier / below range) */
+.cmp-highlight { background: rgba(224,82,82,0.06); border: 1px solid rgba(224,82,82,0.25); }
+
+/* Inside burst-window / defensive cards (no outer chart wrapper) */
+.bw-cmp-wrap { padding: 4px 0 8px; }
+
+/* Outlier badge in damage-taken header */
+.outlier-note {
+  font-size: 12px; font-weight: 600; color: var(--critical);
+  background: rgba(224,82,82,0.1); border: 1px solid rgba(224,82,82,0.25);
+  border-radius: 4px; padding: 2px 8px;
+}
+
+/* delta-warn for defensive use count */
+.delta-warn { color: var(--warning); font-weight: 700; }

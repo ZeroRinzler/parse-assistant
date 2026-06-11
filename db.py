@@ -10,7 +10,18 @@ import aiosqlite
 
 from rulebook import SPEC_COOLDOWNS
 
-DB_PATH = Path(__file__).parent / "data" / "warcraft.db"
+DB_PATH   = Path(__file__).parent / "data" / "warcraft.db"
+SPECS_DIR = Path(__file__).parent / "data" / "specs"
+
+
+def _write_spec_file(spec: str, filename: str, data: object) -> None:
+    """Write JSON to data/specs/{spec}/{filename}. Best-effort — never raises."""
+    try:
+        p = SPECS_DIR / spec
+        p.mkdir(parents=True, exist_ok=True)
+        (p / filename).write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    except Exception:
+        pass
 
 _DDL = """
 CREATE TABLE IF NOT EXISTS guides (
@@ -115,6 +126,13 @@ async def _reload_cache() -> None:
 
 # ── Guide CRUD ────────────────────────────────────────────────────────────────
 
+async def _sync_guides_file(spec: str) -> None:
+    """Rewrite data/specs/{spec}/guides.json from DB (no content field — keeps file readable)."""
+    guides = await get_guides(spec)
+    slim = [{k: v for k, v in g.items() if k != "content"} for g in guides]
+    _write_spec_file(spec, "guides.json", slim)
+
+
 async def add_guide(spec: str, url: str, guide_type: str) -> int:
     async with _conn() as db:
         cur = await db.execute(
@@ -123,6 +141,7 @@ async def add_guide(spec: str, url: str, guide_type: str) -> int:
         )
         await db.commit()
         if cur.lastrowid:
+            await _sync_guides_file(spec)
             return cur.lastrowid
         # Already exists — return existing id
         async with db.execute(
@@ -152,7 +171,7 @@ async def get_guide(guide_id: int) -> Optional[dict]:
 
 
 async def update_guide_content(
-    guide_id: int, title: str, content: str, word_count: int
+    guide_id: int, title: str, content: str, word_count: int, spec: str = ""
 ) -> None:
     async with _conn() as db:
         await db.execute(
@@ -163,9 +182,11 @@ async def update_guide_content(
             (title, content, word_count, guide_id),
         )
         await db.commit()
+    if spec:
+        await _sync_guides_file(spec)
 
 
-async def update_guide_error(guide_id: int, error_msg: str) -> None:
+async def update_guide_error(guide_id: int, error_msg: str, spec: str = "") -> None:
     async with _conn() as db:
         await db.execute(
             """UPDATE guides SET status='error', error_msg=?,
@@ -173,12 +194,16 @@ async def update_guide_error(guide_id: int, error_msg: str) -> None:
             (error_msg, guide_id),
         )
         await db.commit()
+    if spec:
+        await _sync_guides_file(spec)
 
 
-async def delete_guide(guide_id: int) -> None:
+async def delete_guide(guide_id: int, spec: str = "") -> None:
     async with _conn() as db:
         await db.execute("DELETE FROM guides WHERE id=?", (guide_id,))
         await db.commit()
+    if spec:
+        await _sync_guides_file(spec)
 
 
 # ── Rulebook CRUD ─────────────────────────────────────────────────────────────
@@ -200,6 +225,7 @@ async def save_rulebook(
         )
         await db.commit()
     set_cached_rulebook(spec, rulebook)
+    _write_spec_file(spec, "rulebook.json", rulebook)
 
 
 async def get_rulebook_row(spec: str) -> Optional[dict]:
@@ -311,13 +337,3 @@ async def get_cached_spell_icons(spell_ids: list[int]) -> dict[int, dict]:
             return {row["spell_id"]: {"icon": row["icon"], "name": row["name"] or ""} async for row in cur}
 
 
-async def cache_spell_icons(icons: dict[int, dict]) -> None:
-    """Cache {spell_id: {icon, name}} entries."""
-    if not icons:
-        return
-    async with _conn() as db:
-        await db.executemany(
-            "INSERT OR REPLACE INTO spell_icons (spell_id, icon, name) VALUES (?,?,?)",
-            [(sid, data.get("icon", ""), data.get("name", "")) for sid, data in icons.items()],
-        )
-        await db.commit()

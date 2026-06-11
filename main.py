@@ -185,6 +185,15 @@ async def analyze(req: AnalyzeRequest):
     if not player:
         raise HTTPException(status_code=404, detail="Player not found")
 
+    # Build ability lookup from masterData.abilities (includes boss abilities and player spells).
+    # gameData.spell() was removed from the WCL API; masterData is the only reliable source.
+    _ability_map: dict[int, dict] = {
+        a["gameID"]: {"name": a.get("name") or "", "icon": a.get("icon") or ""}
+        for a in (report["masterData"].get("abilities") or [])
+        if a.get("gameID")
+    }
+    _ability_names: dict[int, str] = {gid: v["name"] for gid, v in _ability_map.items() if v["name"]}
+
     start, end = fight["startTime"], fight["endTime"]
     try:
         cast_events, buff_events, damage_events, damage_taken_events = await asyncio.gather(
@@ -505,7 +514,8 @@ async def analyze(req: AnalyzeRequest):
     top_dtk = sorted(ability_dtk.items(), key=lambda x: -x[1])[:10]
     result["player_dmg_taken_segments"] = dtk_segments
     result["player_dmg_taken_by_ability"] = [
-        {"spell_id": sid, "damage": dmg, "pct": round(dmg / total_dtk, 3) if total_dtk else 0}
+        {"spell_id": sid, "name": _ability_names.get(sid, ""), "damage": dmg,
+         "pct": round(dmg / total_dtk, 3) if total_dtk else 0}
         for sid, dmg in top_dtk
     ]
     result["player_total_dmg_taken"] = total_dtk
@@ -514,15 +524,17 @@ async def analyze(req: AnalyzeRequest):
     # Aggregate top-parse defensive data for comparison
     if encounter_id and samples:
         agg_def: dict[str, list[dict]] = {}
-        agg_dtk_segs: list[list[int]] = []
+        agg_dtk_by_ability: dict[int, list[float]] = {}
         for s in samples:
             cd = s.get("cooldown_data") or {}
             for d in cd.get("defensives") or []:
                 agg_def.setdefault(d["name"], []).append(d)
-            seg_data = cd.get("dmg_taken_segments")
-            if seg_data:
-                agg_dtk_segs.append(seg_data)
+            for ab in cd.get("dmg_taken_by_ability") or []:
+                sid = ab["spell_id"]
+                pct = ab.get("pct") or 0.0
+                agg_dtk_by_ability.setdefault(sid, []).append(pct)
 
+        # Defensive usage summary vs top parses
         top_defensives_summary: list[dict] = []
         for defn in spec_defensives:
             dname = defn["name"]
@@ -541,14 +553,32 @@ async def analyze(req: AnalyzeRequest):
         if top_defensives_summary:
             result["top_defensives_summary"] = top_defensives_summary
 
-        # Average damage taken per segment across top parses
-        if agg_dtk_segs:
-            max_segs = max(len(s) for s in agg_dtk_segs)
-            avg_dtk_segs: list[float] = []
-            for i in range(max_segs):
-                vals = [s[i] for s in agg_dtk_segs if i < len(s)]
-                avg_dtk_segs.append(round(statistics.mean(vals)) if vals else 0)
-            result["top_avg_dmg_taken_segments"] = avg_dtk_segs
+        # Per-ability damage taken comparison (outlier detection)
+        min_parses = max(2, len(samples) * 0.4)
+        top_dtk_comparison: list[dict] = []
+        for sid, pcts in agg_dtk_by_ability.items():
+            if len(pcts) < min_parses:
+                continue
+            avg = statistics.mean(pcts)
+            mn = min(pcts)
+            mx = max(pcts)
+            sd = round(statistics.stdev(pcts), 4) if len(pcts) > 1 else 0.0
+            top_dtk_comparison.append({
+                "spell_id": sid,
+                "avg_pct": round(avg, 4),
+                "min_pct": round(mn, 4),
+                "max_pct": round(mx, 4),
+                "stddev_pct": sd,
+                "sample_count": len(pcts),
+            })
+        top_dtk_comparison.sort(key=lambda x: -x["avg_pct"])
+        result["top_dtk_comparison"] = top_dtk_comparison[:12]
+
+    # Include ability icon/name data so the frontend can seed its icon cache without
+    # a separate API call. gameData.spell() was removed from WCL; masterData is the source.
+    result["ability_icons"] = {
+        str(gid): v for gid, v in _ability_map.items() if v.get("icon") or v.get("name")
+    }
 
     return result
 
@@ -557,25 +587,15 @@ async def analyze(req: AnalyzeRequest):
 
 @app.get("/api/spell-icons")
 async def spell_icons_endpoint(ids: str = ""):
-    """Return {spell_id: icon_name} for a comma-separated list of spell IDs."""
+    """Return {spell_id: {icon, name}} from the DB cache only.
+    gameData.spell() was removed from the WCL API; the cache holds legacy icon data."""
     try:
         spell_ids = [int(x.strip()) for x in ids.split(",") if x.strip().isdigit()]
     except ValueError:
         return {}
     if not spell_ids:
         return {}
-
     cached = await db.get_cached_spell_icons(spell_ids)
-    missing = [sid for sid in spell_ids if sid not in cached]
-    if missing:
-        try:
-            fresh = await wcl.get_spell_icons(missing)
-            if fresh:
-                await db.cache_spell_icons(fresh)
-                cached.update(fresh)
-        except Exception:
-            pass  # icons are non-critical, degrade gracefully
-    # Return {str(spell_id): {icon, name}} — JS keys are strings
     return {str(sid): info for sid, info in cached.items()}
 
 
@@ -859,6 +879,18 @@ async def char_gear(name: str, server: str, region: str, encounter_id: int):
     # Use the most recent kill (highest startTime) to get current gear
     most_recent = max(ranks, key=lambda r: r.get("startTime", 0))
     gear = _extract_combatant_info(most_recent)
+
+    # Resolve enchant names via WCL gameData.enchant(id) — permanentEnchantName is never populated
+    enchant_ids = list({e["id"] for e in gear.get("enchants", []) if e.get("id")})
+    if enchant_ids:
+        try:
+            names = await wcl.get_enchant_names(enchant_ids)
+            for e in gear["enchants"]:
+                if not e.get("name"):
+                    e["name"] = names.get(e["id"], "")
+        except Exception:
+            pass
+
     # Build the full SpecClass key used throughout the codebase (e.g. "SubtletyRogue").
     # encounterRankings returns class as a numeric ID, not a name string.
     spec_part = most_recent.get("spec") or ""
@@ -869,6 +901,7 @@ async def char_gear(name: str, server: str, region: str, encounter_id: int):
         "found": True,
         "spec": full_spec,
         "source_report": (most_recent.get("report") or {}).get("code"),
+        "source_time": most_recent.get("startTime"),
         **gear,
     }
 
@@ -877,7 +910,26 @@ async def char_gear(name: str, server: str, region: str, encounter_id: int):
 async def gear_stats(spec: str, encounter_id: int):
     """Return aggregated gear (talents, trinkets, enchants) from top parse samples."""
     samples = await db.get_parse_samples(spec, encounter_id)
-    return _aggregate_gear(samples)
+    result = _aggregate_gear(samples)
+
+    # Resolve enchant names — permanentEnchantName is always empty in WCL, fetch via gameData
+    all_enc_ids = list({
+        item["id"]
+        for slot_data in (result.get("enchants") or {}).values()
+        for item in slot_data
+        if item.get("id")
+    })
+    if all_enc_ids:
+        try:
+            names = await wcl.get_enchant_names(all_enc_ids)
+            for slot_data in result.get("enchants", {}).values():
+                for item in slot_data:
+                    if not item.get("name") and item.get("id"):
+                        item["name"] = names.get(item["id"], "")
+        except Exception:
+            pass
+
+    return result
 
 
 # ── Admin — Guides ────────────────────────────────────────────────────────────
@@ -905,7 +957,7 @@ async def delete_guide(guide_id: int):
     guide = await db.get_guide(guide_id)
     if not guide:
         raise HTTPException(status_code=404, detail="Guide not found")
-    await db.delete_guide(guide_id)
+    await db.delete_guide(guide_id, spec=guide.get("spec", ""))
     return {"message": "Deleted"}
 
 
@@ -918,10 +970,10 @@ async def scrape_guide(guide_id: int):
     try:
         title, content = await scrape(guide["url"], guide["guide_type"])
         word_count = len(content.split())
-        await db.update_guide_content(guide_id, title, content, word_count)
+        await db.update_guide_content(guide_id, title, content, word_count, spec=guide.get("spec", ""))
         return {"status": "scraped", "title": title, "word_count": word_count}
     except Exception as exc:
-        await db.update_guide_error(guide_id, str(exc))
+        await db.update_guide_error(guide_id, str(exc), spec=guide.get("spec", ""))
         raise HTTPException(status_code=422, detail=str(exc))
 
 
@@ -942,12 +994,12 @@ async def scrape_all_stream(spec: str):
             try:
                 title, content = await scrape(g["url"], g["guide_type"])
                 word_count = len(content.split())
-                await db.update_guide_content(g["id"], title, content, word_count)
+                await db.update_guide_content(g["id"], title, content, word_count, spec=spec)
                 scraped += 1
                 yield _evt({"type": "done", "step": i + 1, "total": total,
                             "id": g["id"], "title": title, "word_count": word_count})
             except Exception as exc:
-                await db.update_guide_error(g["id"], str(exc))
+                await db.update_guide_error(g["id"], str(exc), spec=spec)
                 errors += 1
                 yield _evt({"type": "error", "step": i + 1, "total": total,
                             "id": g["id"], "error": str(exc)})

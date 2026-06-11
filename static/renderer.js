@@ -246,7 +246,11 @@ function applyCharacterSelection(autoPlayer = null) {
 function renderResults(data) {
   const el = document.getElementById('results');
 
-  // Pre-fetch icons for all cooldowns + burst window abilities + defensives + dtk abilities
+  // Seed icon cache from masterData.abilities bundled in the response (replaces the
+  // broken gameData.spell() API path). Fall back to the DB-cached /api/spell-icons
+  // for any IDs that weren't in this report's masterData.
+  if (data.ability_icons) Object.assign(_iconCache, data.ability_icons);
+
   const spellIds = Object.values(data.cd_spell_ids || {});
   const bwAbilityIds = (data.burst_windows || []).flatMap(bw =>
     (bw.ability_breakdown || []).map(a => a.spell_id)
@@ -257,7 +261,10 @@ function renderResults(data) {
   const defensiveIds = (data.player_defensives || []).map(d => d.spell_id);
   const dtkIds = (data.player_dmg_taken_by_ability || []).map(a => a.spell_id);
   const allIds = [...new Set([...spellIds, ...bwAbilityIds, ...playerBwIds, ...defensiveIds, ...dtkIds])];
-  if (allIds.length) fetchSpellIcons(allIds).then(() => _refreshIcons(el));
+  // Fetch any IDs not already in cache (legacy DB entries for older spell IDs)
+  const stillMissing = allIds.filter(id => !_iconCache[id] && !_iconCache[String(id)]);
+  const iconPromise = stillMissing.length ? fetchSpellIcons(stillMissing) : Promise.resolve();
+  iconPromise.then(() => _refreshIcons(el));
 
   const byCD = {};
   const ruleFindings = [];
@@ -305,22 +312,24 @@ function renderResults(data) {
 
   let burstHtml = '';
   if (data.burst_windows?.length) {
-    burstHtml = renderBurstWindows(data.burst_windows, data.player_burst_windows || []);
+    burstHtml = renderBurstWindows(data.burst_windows, data.player_burst_windows || [], data.player_fight_duration_s ?? Infinity);
   }
 
   let defHtml = '';
   if (data.player_defensives?.length) {
-    defHtml = renderDefensives(data.player_defensives, data.top_defensives_summary || []);
+    defHtml = renderDefensives(
+      data.player_defensives,
+      data.top_defensives_summary || [],
+      data.player_fight_duration_s || 0,
+    );
   }
 
   let dtkHtml = '';
   if (data.player_dmg_taken_by_ability?.length) {
     dtkHtml = renderDamageTaken(
-      data.player_dmg_taken_segments || [],
-      data.player_dmg_taken_by_ability || [],
+      data.player_dmg_taken_by_ability,
       data.player_total_dmg_taken || 0,
-      data.top_avg_dmg_taken_segments || [],
-      data.dmg_segment_size_s || 30,
+      data.top_dtk_comparison || [],
     );
   }
 
@@ -463,212 +472,315 @@ function renderParseComparison(comparison, playerDurS) {
     </div>`;
 }
 
-// ── Burst window deep dive ───────────────────────────────────────────────────
+// ── Shared comparison chart ───────────────────────────────────────────────────
+// rows: [{labelHtml, playerVal, topAvg?, topMin?, topMax?, highlight?}]
+// opts: {higherIsBetter, unit ('pct'|'k'), noDataText}
 
-function renderBurstWindows(topBws, playerBws) {
-  // Match by rank order — fight lengths differ between player and top parses
-  // so time-based matching produces false "no match". Rank order (1st biggest
-  // burst = 1st biggest burst) is a better comparison.
-  const cards = topBws.map((bw, idx) => {
-    const playerBw = playerBws[idx] ?? null;
-    const topPct  = bw.pct_avg;
-    const playerPct = playerBw?.pct_of_total ?? null;
-    const minPct  = bw.pct_min ?? topPct - 0.02;
-    const maxPct  = bw.pct_max ?? topPct + 0.02;
+function renderComparisonChart(rows, opts = {}) {
+  const { higherIsBetter = true, unit = 'pct', noDataText = 'Re-ingest parses to compare with top 10' } = opts;
 
-    let statusClass = 'bw-ok';
-    let statusLabel = 'On Par';
-    if (playerPct === null) {
-      statusClass = 'bw-missing'; statusLabel = 'No data';
-    } else if (playerPct < minPct - (bw.pct_stddev || 0.01)) {
-      statusClass = 'bw-low'; statusLabel = 'Below range';
-    } else if (playerPct >= topPct - (bw.pct_stddev || 0.005)) {
-      statusClass = 'bw-ok'; statusLabel = 'On Par';
-    } else {
-      statusClass = 'bw-warn'; statusLabel = 'Slightly below';
+  function fmtV(v) {
+    if (v == null) return '—';
+    return unit === 'pct' ? (v * 100).toFixed(1) + '%' : formatNumber(v);
+  }
+
+  const allVals = rows.flatMap(r => [r.playerVal, r.topAvg, r.topMax].filter(v => v != null));
+  const maxVal = opts.maxVal ?? Math.max(...allVals, 0.001);
+  const hasTopData = rows.some(r => r.topAvg != null);
+
+  const items = rows.map(r => {
+    const pPct  = r.playerVal != null ? Math.min(r.playerVal / maxVal * 100, 100) : null;
+    const tPct  = r.topAvg    != null ? Math.min(r.topAvg    / maxVal * 100, 100) : null;
+    const tMinP = r.topMin    != null ? Math.min(r.topMin    / maxVal * 100, 100) : null;
+    const tMaxP = r.topMax    != null ? Math.min(r.topMax    / maxVal * 100, 100) : null;
+
+    // delta class for player value
+    let dCls = '';
+    if (r.playerVal != null && r.topAvg != null) {
+      const lo = r.topMin ?? r.topAvg * 0.8, hi = r.topMax ?? r.topAvg * 1.2;
+      if (higherIsBetter) dCls = r.playerVal >= r.topAvg ? 'delta-good' : r.playerVal >= lo ? 'delta-warn' : 'delta-bad';
+      else                dCls = r.playerVal <= r.topAvg ? 'delta-good' : r.playerVal <= hi ? 'delta-warn' : 'delta-bad';
     }
 
-    const cdsStr = bw.common_cds?.length ? bw.common_cds.join(', ') : '—';
-    const playerPctStr = playerPct != null ? (playerPct * 100).toFixed(1) + '%' : '—';
-    const topPctStr = (topPct * 100).toFixed(1) + '%';
+    // Candle range indicator on the top bar track
+    let candle = '';
+    if (tMinP != null && tMaxP != null && tMaxP > tMinP) {
+      const rW = tMaxP - tMinP;
+      const avgOff = tPct != null ? Math.min(((tPct - tMinP) / rW) * 100, 100) : 50;
+      candle = `<div class="cmp-candle" style="left:${tMinP.toFixed(1)}%;width:${rW.toFixed(1)}%">` +
+               `<div class="cmp-candle-tick" style="left:${avgOff.toFixed(1)}%"></div></div>`;
+    }
 
-    // Ability breakdown — shown only when expanded and player is below range
-    const showBreakdown = playerPct !== null && playerPct < maxPct;
+    const playerRow = `<div class="cmp-subrow">
+      <span class="cmp-leg player"></span>
+      <div class="cmp-track">${pPct != null ? `<div class="cmp-fill player" style="width:${pPct.toFixed(1)}%"></div>` : ''}</div>
+      <span class="cmp-val ${dCls}">${fmtV(r.playerVal)}</span>
+    </div>`;
+
+    const topRow = hasTopData ? `<div class="cmp-subrow">
+      <span class="cmp-leg top"></span>
+      <div class="cmp-track">${tPct != null ? candle + `<div class="cmp-fill top" style="width:${tPct.toFixed(1)}%"></div>` : ''}</div>
+      <span class="cmp-val top">${fmtV(r.topAvg)}${r.topMin != null ? ` <span class="cmp-range">${fmtV(r.topMin)}–${fmtV(r.topMax)}</span>` : ''}</span>
+    </div>` : '';
+
+    return `<div class="cmp-item${r.highlight ? ' cmp-highlight' : ''}">
+      <div class="cmp-item-label">${r.labelHtml}</div>
+      <div class="cmp-item-bars">${playerRow}${topRow}</div>
+    </div>`;
+  });
+
+  const legend = `<div class="cmp-legend">
+    <span class="cmp-leg-item"><span class="cmp-leg player"></span> You</span>
+    ${hasTopData ? `<span class="cmp-leg-item"><span class="cmp-leg top"></span> Top 10 avg <span class="cmp-range-note">(shaded range)</span></span>` : `<span class="cmp-no-data">${noDataText}</span>`}
+  </div>`;
+
+  return `<div class="cmp-chart">${legend}${items.join('')}</div>`;
+}
+
+// ── Burst windows ─────────────────────────────────────────────────────────────
+// Rank-order matching: fight lengths differ between player and top parses, so
+// time-based proximity fails. 1st biggest burst = 1st biggest burst.
+
+function renderBurstWindows(topBws, playerBws, fightDurS) {
+  if (!topBws.length) return '';
+
+  const allVals = topBws.flatMap((bw, i) => {
+    const p = playerBws[i]?.pct_of_total;
+    return [bw.pct_avg, bw.pct_max, p].filter(v => v != null);
+  });
+  const maxVal = Math.max(...allVals, 0.01);
+
+  const cards = topBws.map((bw, idx) => {
+    const notReached = bw.time_s > fightDurS;
+    const playerBw  = notReached ? null : (playerBws[idx] ?? null);
+    const topPct    = bw.pct_avg;
+    const playerPct = playerBw?.pct_of_total ?? null;
+    const minPct    = bw.pct_min ?? topPct * 0.7;
+    const maxPct    = bw.pct_max ?? topPct * 1.3;
+
+    let borderCls = 'bw-ok', badge = 'On Par', badgeCls = 'bw-badge-bw-ok';
+    if (notReached) {
+      borderCls = 'bw-future'; badge = 'Not reached'; badgeCls = 'bw-badge-bw-future';
+    } else if (playerPct === null) {
+      borderCls = 'bw-missing'; badge = 'No data'; badgeCls = 'bw-badge-bw-missing';
+    } else if (playerPct < minPct - (bw.pct_stddev ?? 0.01)) {
+      borderCls = 'bw-low'; badge = 'Below range'; badgeCls = 'bw-badge-bw-low';
+    } else if (playerPct < topPct - (bw.pct_stddev ?? 0.005)) {
+      borderCls = 'bw-warn'; badge = 'Slightly below'; badgeCls = 'bw-badge-bw-warn';
+    }
+
+    const pBar  = playerPct != null ? Math.min(playerPct / maxVal * 100, 100) : 0;
+    const tBar  = Math.min(topPct / maxVal * 100, 100);
+    const tMinP = Math.min(minPct / maxVal * 100, 100);
+    const tMaxP = Math.min(maxPct / maxVal * 100, 100);
+    const rW    = tMaxP - tMinP;
+    const avgOff = rW > 0 ? Math.min(((tBar - tMinP) / rW) * 100, 100) : 50;
+
+    const candleHtml = rW > 0.5
+      ? `<div class="cmp-candle" style="left:${tMinP.toFixed(1)}%;width:${rW.toFixed(1)}%"><div class="cmp-candle-tick" style="left:${avgOff.toFixed(1)}%"></div></div>`
+      : '';
+
+    // For "not reached" windows: show only the top-parse bar as context, no player row
+    let cmpHtml;
+    if (notReached) {
+      cmpHtml = `<div class="bw-cmp-wrap bw-future-wrap">
+        <div class="cmp-subrow">
+          <span class="cmp-leg top"></span>
+          <div class="cmp-track">${candleHtml}<div class="cmp-fill top" style="width:${tBar.toFixed(1)}%"></div></div>
+          <span class="cmp-val top">${(topPct*100).toFixed(1)}% avg</span>
+        </div>
+      </div>`;
+    } else {
+      cmpHtml = `<div class="bw-cmp-wrap">
+        <div class="cmp-subrow">
+          <span class="cmp-leg player"></span>
+          <div class="cmp-track"><div class="cmp-fill player" style="width:${pBar.toFixed(1)}%"></div></div>
+          <span class="cmp-val">${playerPct != null ? (playerPct*100).toFixed(1)+'%' : '—'}</span>
+        </div>
+        <div class="cmp-subrow">
+          <span class="cmp-leg top"></span>
+          <div class="cmp-track">${candleHtml}<div class="cmp-fill top" style="width:${tBar.toFixed(1)}%"></div></div>
+          <span class="cmp-val top">${(topPct*100).toFixed(1)}% <span class="cmp-range">${(minPct*100).toFixed(1)}%–${(maxPct*100).toFixed(1)}%</span></span>
+        </div>
+      </div>`;
+    }
+
     let breakdownHtml = '';
-    if (showBreakdown && bw.ability_breakdown?.length) {
-      // Merge top-parse abilities with player abilities
+    if (bw.ability_breakdown?.length) {
       const playerAbMap = {};
       for (const a of (playerBw?.ability_breakdown || [])) playerAbMap[a.spell_id] = a;
 
-      const rows = bw.ability_breakdown.map(topAb => {
+      const abRows = bw.ability_breakdown.map(topAb => {
         const sid = topAb.spell_id;
-        const playerAb = playerAbMap[sid];
-        const topPctStr = (topAb.avg_pct * 100).toFixed(1) + '%';
-        const plPctStr  = playerAb ? (playerAb.pct * 100).toFixed(1) + '%' : '—';
+        const playerAb = notReached ? null : playerAbMap[sid];
         const diff = playerAb ? playerAb.pct - topAb.avg_pct : null;
-        const diffCls = diff === null ? 'delta-ok' : diff >= 0 ? 'delta-good' : 'delta-bad';
-        const diffStr = diff !== null ? `<span class="${diffCls}">${diff >= 0 ? '+' : ''}${(diff*100).toFixed(1)}%</span>` : '';
-        const iconSlot = `<span data-spell-id="${sid}">${spellIconHtml(sid)}</span>`;
+        const diffCls = diff === null ? '' : diff >= 0 ? 'delta-good' : 'delta-bad';
+        const diffStr = diff !== null ? ` <span class="${diffCls}">${diff >= 0 ? '+' : ''}${(diff*100).toFixed(1)}%</span>` : '';
         return `<tr>
-          <td>${iconSlot} <span class="bw-ab-name" data-wowhead="spell=${sid}"></span></td>
-          <td>${plPctStr} ${diffStr}</td>
-          <td class="delta-ok">${topPctStr}</td>
+          <td><span class="cd-icon-slot" data-spell-id="${sid}">${spellIconHtml(sid)}</span> <a href="https://www.wowhead.com/spell=${sid}" target="_blank" class="dtk-wowhead"><span data-spell-id-name="${sid}">${spellName(sid) || 'Spell ' + sid}</span></a></td>
+          ${notReached ? '' : `<td>${playerAb ? (playerAb.pct*100).toFixed(1)+'%' : '—'}${diffStr}</td>`}
+          <td class="delta-ok">${(topAb.avg_pct*100).toFixed(1)}%</td>
         </tr>`;
       }).join('');
 
-      // Also add player-only abilities not in top-parse breakdown
-      const topIds = new Set(bw.ability_breakdown.map(a => a.spell_id));
-      for (const pa of (playerBw?.ability_breakdown || [])) {
-        if (!topIds.has(pa.spell_id)) {
-          const sid = pa.spell_id;
-          rows + `<tr>
-            <td><span data-spell-id="${sid}">${spellIconHtml(sid)}</span></td>
-            <td>${(pa.pct * 100).toFixed(1)}% <span class="delta-good">+top</span></td>
-            <td class="delta-ok">—</td>
-          </tr>`;
-        }
-      }
-
-      breakdownHtml = `
-        <div class="bw-breakdown">
-          <table class="bw-ab-table">
-            <thead><tr><th>Ability</th><th>You</th><th>Top avg</th></tr></thead>
-            <tbody>${rows}</tbody>
-          </table>
-        </div>`;
+      breakdownHtml = `<div class="bw-breakdown">
+        <table class="bw-ab-table">
+          <thead><tr><th>Ability</th>${notReached ? '' : '<th>You</th>'}<th>Top avg</th></tr></thead>
+          <tbody>${abRows}</tbody>
+        </table>
+      </div>`;
     }
 
-    const expandBtn = showBreakdown && bw.ability_breakdown?.length
+    const expandBtn = bw.ability_breakdown?.length
       ? `<button class="bw-expand-btn" onclick="this.closest('.bw-card').classList.toggle('expanded')">Detail ▾</button>`
       : '';
 
-    return `
-      <div class="bw-card ${statusClass}" id="bw-card-${idx}">
-        <div class="bw-card-header">
-          <span class="bw-time">${formatDuration(bw.time_s)}</span>
-          <div class="bw-bar-wrap">
-            <div class="bw-bar" style="--top:${Math.min(topPct*400, 100)}%;--player:${playerPct != null ? Math.min(playerPct*400,100) : 0}%"></div>
-          </div>
-          <span class="bw-pct-player">${playerPctStr}</span>
-          <span class="bw-pct-sep">/</span>
-          <span class="bw-pct-top">${topPctStr}</span>
-          <span class="bw-status-badge bw-badge-${statusClass}">${statusLabel}</span>
-          <span class="bw-cds">${cdsStr}</span>
-          ${expandBtn}
-        </div>
-        ${breakdownHtml}
-      </div>`;
+    const cdsStr = bw.common_cds?.length ? bw.common_cds.join(', ') : '—';
+
+    return `<div class="bw-card ${borderCls}">
+      <div class="bw-card-header">
+        <span class="bw-time">${formatDuration(bw.time_s)}</span>
+        <span class="bw-status-badge ${badgeCls}">${badge}</span>
+        <span class="bw-cds">${cdsStr}</span>
+        ${expandBtn}
+      </div>
+      ${cmpHtml}
+      ${breakdownHtml}
+    </div>`;
   }).join('');
 
   return `
     <p class="section-label" style="margin-top:20px">Burst Windows</p>
-    <div class="bw-legend">
-      <span class="bw-legend-item"><span class="bw-dot bw-dot-player"></span> You</span>
-      <span class="bw-legend-item"><span class="bw-dot bw-dot-top"></span> Top parse avg</span>
+    <div class="cmp-legend">
+      <span class="cmp-leg-item"><span class="cmp-leg player"></span> You</span>
+      <span class="cmp-leg-item"><span class="cmp-leg top"></span> Top 10 avg <span class="cmp-range-note">(shaded range)</span></span>
     </div>
     <div class="bw-list">${cards}</div>`;
 }
 
-function renderDefensives(playerDefs, topSummary) {
-  const topByName = {};
-  for (const t of topSummary) topByName[t.name] = t;
+function renderDefensives(playerDefs, topSummary, fightDurS) {
+  if (!playerDefs?.length) return '';
 
-  const rows = playerDefs.map(def => {
-    const top = topByName[def.name];
-    const topAvg = top ? top.avg_uses.toFixed(1) : '—';
-    const usesClass = top
-      ? (def.uses >= top.avg_uses ? 'delta-good' : 'delta-bad')
+  const topBySpellId = {};
+  for (const t of (topSummary || [])) topBySpellId[t.spell_id] = t;
+
+  const cards = playerDefs.map(def => {
+    const top = topBySpellId[def.spell_id];
+    const expected = def.cooldown > 0 ? Math.floor(fightDurS / def.cooldown) : null;
+
+    const maxVal = Math.max(def.uses, top?.max_uses ?? 0, expected ?? 0, 1);
+    const pBar   = Math.min(def.uses / maxVal * 100, 100);
+    const tBar   = top ? Math.min(top.avg_uses / maxVal * 100, 100) : null;
+    const tMinP  = top?.min_uses != null ? Math.min(top.min_uses / maxVal * 100, 100) : null;
+    const tMaxP  = top?.max_uses != null ? Math.min(top.max_uses / maxVal * 100, 100) : null;
+    const rW     = (tMinP != null && tMaxP != null && tMaxP > tMinP) ? tMaxP - tMinP : 0;
+    const avgOff = rW > 0 && tBar != null ? Math.min(((tBar - tMinP) / rW) * 100, 100) : 50;
+
+    let pValCls = '';
+    if (top) pValCls = def.uses >= top.avg_uses ? 'delta-good' : def.uses >= top.min_uses ? 'delta-warn' : 'delta-bad';
+
+    const candleHtml = rW > 0.5
+      ? `<div class="cmp-candle" style="left:${tMinP.toFixed(1)}%;width:${rW.toFixed(1)}%"><div class="cmp-candle-tick" style="left:${avgOff.toFixed(1)}%"></div></div>`
       : '';
-    const totalDmg = def.windows.reduce((s, w) => s + (w.dmg_during || 0), 0);
-    const dmgStr = totalDmg > 0 ? formatNumber(totalDmg) : '—';
+
+    const expStr    = expected != null ? ` / ~${expected} expected` : '';
+    const topValStr = top ? `${top.avg_uses.toFixed(1)} avg <span class="cmp-range">(${top.min_uses}–${top.max_uses})</span>` : '';
+
+    const cmpHtml = `<div class="bw-cmp-wrap">
+      <div class="cmp-subrow">
+        <span class="cmp-leg player"></span>
+        <div class="cmp-track"><div class="cmp-fill player" style="width:${pBar.toFixed(1)}%"></div></div>
+        <span class="cmp-val ${pValCls}">${def.uses} use${def.uses !== 1 ? 's' : ''}${expStr}</span>
+      </div>
+      ${tBar != null
+        ? `<div class="cmp-subrow">
+          <span class="cmp-leg top"></span>
+          <div class="cmp-track">${candleHtml}<div class="cmp-fill top" style="width:${tBar.toFixed(1)}%"></div></div>
+          <span class="cmp-val top">${topValStr}</span>
+        </div>`
+        : `<div class="cmp-subrow"><span class="cmp-no-data">Re-ingest to compare</span></div>`}
+    </div>`;
 
     const windowsList = def.windows.length
-      ? def.windows.map(w => `<span class="def-window">${formatDuration(w.start_s)}–${formatDuration(w.end_s)} <small>${formatNumber(w.dmg_during)}</small></span>`).join(' ')
+      ? def.windows.map(w => {
+          const dmgStr = w.dmg_during > 0 ? ` <small>${formatNumber(w.dmg_during)} absorbed</small>` : '';
+          return `<span class="def-window">${formatDuration(w.start_s)}–${formatDuration(w.end_s)}${dmgStr}</span>`;
+        }).join(' ')
       : '<span class="def-none">not used</span>';
 
-    return `<tr>
-      <td class="def-icon-name">
-        <span data-spell-id="${def.spell_id}">${spellIconHtml(def.spell_id, 20)}</span>
-        ${def.name}
-      </td>
-      <td class="${usesClass}">${def.uses}</td>
-      <td>${topAvg}</td>
-      <td>${dmgStr}</td>
-      <td class="def-windows-cell">${windowsList}</td>
-    </tr>`;
+    const name = def.name || spellName(def.spell_id) || `Spell ${def.spell_id}`;
+    const lowUse = expected != null && def.uses < (top?.min_uses ?? expected);
+
+    return `<div class="bw-card${lowUse ? ' bw-low' : ''}">
+      <div class="bw-card-header" style="cursor:default">
+        <span class="cd-icon-slot" data-spell-id="${def.spell_id}">${spellIconHtml(def.spell_id)}</span>
+        <a href="https://www.wowhead.com/spell=${def.spell_id}" target="_blank" class="cd-name" style="flex:0 0 auto;text-decoration:none">${name}</a>
+        <span class="bw-cds">${windowsList}</span>
+      </div>
+      ${cmpHtml}
+    </div>`;
   }).join('');
 
   return `
     <p class="section-label" style="margin-top:20px">Defensives</p>
-    <div class="def-table-wrap">
-      <table class="def-table">
-        <thead>
-          <tr>
-            <th>Spell</th>
-            <th>Uses</th>
-            <th>Top avg</th>
-            <th>Dmg absorbed</th>
-            <th>Usage windows</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>`;
+    <div class="cmp-legend">
+      <span class="cmp-leg-item"><span class="cmp-leg player"></span> You</span>
+      <span class="cmp-leg-item"><span class="cmp-leg top"></span> Top 10 avg <span class="cmp-range-note">(shaded range)</span></span>
+    </div>
+    <div class="bw-list">${cards}</div>`;
 }
 
-function renderDamageTaken(segments, byAbility, total, topAvgSegs, segSizeS) {
-  if (!segments.length) return '';
+function renderDamageTaken(byAbility, total, topComparison) {
+  if (!byAbility?.length) return '';
 
-  // Bar chart of damage taken per 30s segment
-  const maxVal = Math.max(1, ...segments, ...topAvgSegs);
-  const barCells = segments.map((val, i) => {
-    const topVal = topAvgSegs[i] ?? 0;
-    const pct = Math.round(val / maxVal * 100);
-    const topPct = Math.round(topVal / maxVal * 100);
-    const t = i * segSizeS;
-    return `<div class="dtk-bar-group" title="${formatDuration(t)}: ${formatNumber(val)}">
-      <div class="dtk-bar-top" style="height:${topPct}%" title="Top avg: ${formatNumber(topVal)}"></div>
-      <div class="dtk-bar-player" style="height:${pct}%"></div>
-      <div class="dtk-bar-label">${formatDuration(t)}</div>
-    </div>`;
-  }).join('');
+  const topMap = {};
+  for (const t of (topComparison || [])) topMap[t.spell_id] = t;
 
-  // Ability breakdown table with Wowhead tooltips
-  const abilityRows = byAbility.map(a => {
-    const sid = a.spell_id;
-    return `<tr>
-      <td>
-        <span data-spell-id="${sid}">${spellIconHtml(sid, 20)}</span>
-        <a class="dtk-wowhead" href="https://www.wowhead.com/spell=${sid}" target="_blank" rel="noreferrer"
-           data-wowhead="spell=${sid}"><span class="bw-ab-name" data-spell-id-name="${sid}">${sid}</span></a>
-      </td>
-      <td>${formatNumber(a.damage)}</td>
-      <td>${(a.pct * 100).toFixed(1)}%</td>
-    </tr>`;
-  }).join('');
+  const tagged = byAbility.map(ab => {
+    const top = topMap[ab.spell_id];
+    const isOutlier = top != null && (ab.pct > top.avg_pct + Math.max(top.stddev_pct ?? 0, 0.02));
+    return { ...ab, top, isOutlier };
+  });
+
+  tagged.sort((a, b) => {
+    if (a.isOutlier !== b.isOutlier) return a.isOutlier ? -1 : 1;
+    return b.pct - a.pct;
+  });
+
+  const outliers = tagged.filter(a => a.isOutlier);
+  const allVals = tagged.flatMap(a => [a.pct, a.top?.avg_pct, a.top?.max_pct].filter(v => v != null));
+  const maxVal  = Math.max(...allVals, 0.01);
+
+  const rows = tagged.map(ab => {
+    const sid = ab.spell_id;
+    return {
+      labelHtml: `<span style="display:flex;align-items:center;gap:6px">
+        <span class="cd-icon-slot" data-spell-id="${sid}">${spellIconHtml(sid)}</span>
+        <a href="https://www.wowhead.com/spell=${sid}" target="_blank" class="dtk-wowhead"><span data-spell-id-name="${sid}">${ab.name || spellName(sid) || 'Spell ' + sid}</span></a>
+      </span>`,
+      playerVal: ab.pct,
+      topAvg:    ab.top?.avg_pct ?? null,
+      topMin:    ab.top?.min_pct ?? null,
+      topMax:    ab.top?.max_pct ?? null,
+      highlight: ab.isOutlier,
+    };
+  });
+
+  const chart = renderComparisonChart(rows, { higherIsBetter: false, unit: 'pct', maxVal,
+    noDataText: 'Re-ingest parses to compare with top 10' });
+
+  const totalStr   = total > 0 ? `Total: <strong>${formatNumber(total)}</strong>` : '';
+  const outlierNote = outliers.length
+    ? `<span class="outlier-note">${outliers.length} ${outliers.length === 1 ? 'source' : 'sources'} above top-10 avg</span>`
+    : (topComparison?.length ? `<span class="cmp-no-data">No significant outliers vs top 10</span>` : '');
 
   return `
     <p class="section-label" style="margin-top:20px">Damage Taken</p>
     <div class="dtk-section">
-      <div class="dtk-total">Total: <strong>${formatNumber(total)}</strong></div>
-      <div class="dtk-legend">
-        <span class="dtk-dot dtk-dot-player"></span> You &nbsp;
-        <span class="dtk-dot dtk-dot-top"></span> Top avg
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:8px;">
+        <span class="dtk-total">${totalStr}</span>
+        ${outlierNote}
       </div>
-      <div class="dtk-bars">${barCells}</div>
-      <p class="section-sublabel">Top sources</p>
-      <table class="dtk-ability-table">
-        <thead><tr><th>Ability</th><th>Damage</th><th>% of total</th></tr></thead>
-        <tbody>${abilityRows}</tbody>
-      </table>
+      ${chart}
     </div>`;
-}
-
-// Update ability name spans after icons load
-function _applyAbilityNames(container) {
-  container.querySelectorAll('[data-spell-id-name]').forEach(el => {
-    const sid = el.getAttribute('data-spell-id-name');
-    const info = _iconCache[sid];
-    if (info?.name) el.textContent = info.name;
-  });
 }

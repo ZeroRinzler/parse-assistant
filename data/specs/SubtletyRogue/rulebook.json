@@ -1,0 +1,98 @@
+{
+  "spec": "SubtletyRogue",
+  "major_cooldowns": [
+    {
+      "name": "Shadow Blades",
+      "spell_id": 121471,
+      "cooldown": 90,
+      "duration": 20,
+      "align_with_bloodlust": true,
+      "opener_priority": 3,
+      "usage_rule": "Use in combination with Shadow Dance when both are available, delaying the final use to align with Algeth'ar Puzzle Box if equipped."
+    },
+    {
+      "name": "Shadow Dance",
+      "spell_id": 185313,
+      "cooldown": 60,
+      "duration": 9,
+      "align_with_bloodlust": true,
+      "opener_priority": 2,
+      "usage_rule": "Cast with very low or max combo points only when Secret Technique is ready, or when extending a Shadow Blades window."
+    },
+    {
+      "name": "Secret Technique",
+      "spell_id": 280719,
+      "cooldown": 60,
+      "align_with_bloodlust": true,
+      "opener_priority": 4,
+      "usage_rule": "Cast as your highest priority finisher immediately upon entering Shadow Dance to benefit from damage modifiers and Supercharger."
+    },
+    {
+      "name": "Vanish",
+      "spell_id": 1856,
+      "cooldown": 120,
+      "align_with_bloodlust": false,
+      "usage_rule": "Use on cooldown at 0 combo points to generate a full combo point bar via Premeditation and access Shadowstrike."
+    },
+    {
+      "name": "Algeth'ar Puzzle Box",
+      "spell_id": 388688,
+      "cooldown": 180,
+      "align_with_bloodlust": true,
+      "opener_priority": 1,
+      "usage_rule": "Channel this trinket for 2 seconds before going into your major cooldowns."
+    }
+  ],
+  "rules": [
+    {
+      "type": "cooldown_pairing",
+      "priority": "critical",
+      "description": "Pair Secret Technique with Shadow Dance",
+      "condition": {
+        "kind": "cast_without_prior",
+        "spell_id": 280719,
+        "spell_name": "Secret Technique",
+        "required_spell_id": 185313,
+        "required_spell_name": "Shadow Dance",
+        "window_s": 9
+      },
+      "action": "Always cast Secret Technique within your Shadow Dance window to maximize burst damage and utilize supercharged combo points."
+    },
+    {
+      "type": "cd_hold",
+      "priority": "high",
+      "description": "Delay 2nd Dance in Shadow Blades",
+      "condition": null,
+      "action": "Delay your second Shadow Dance cast until Shadow Blades has less than 10 seconds remaining, ensuring you can fit another Secret Technique inside the window."
+    },
+    {
+      "type": "rotation",
+      "priority": "critical",
+      "description": "Finisher Combo Point Threshold",
+      "condition": null,
+      "action": "Always cast your finishing moves at 6 or more combo points to avoid wasting energy and globals."
+    },
+    {
+      "type": "rotation",
+      "priority": "high",
+      "description": "Shadow Dance Entry Combo Points",
+      "condition": null,
+      "action": "Enter Shadow Dance at either exactly 0 combo points or maximum combo points to ensure you get full value out of the Premeditation talent."
+    },
+    {
+      "type": "aoe_switch",
+      "priority": "high",
+      "description": "AoE Builder and Finisher Priority",
+      "condition": null,
+      "action": "Swap your builder to Shuriken Storm at 2+ targets (3+ during Dance) and your finisher to Black Powder at 3+ targets."
+    },
+    {
+      "type": "positioning",
+      "priority": "medium",
+      "description": "Backstab Positioning",
+      "condition": null,
+      "action": "Always position yourself behind the target to benefit from increased Backstab damage and to prevent the boss from parrying your attacks."
+    }
+  ],
+  "source_summary": "Subtlety Rogue revolves around intensely stacking major cooldowns, specifically aligning Secret Technique and Shadow Dance inside of Shadow Blades windows. Outside of cooldowns, the rotation focuses on managing energy and combo points to pool resources for the next burst. Extreme precision is required to avoid casting cooldowns on the global cooldown and entering burst windows with the correct combo point thresholds."
+}

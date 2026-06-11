@@ -38,14 +38,15 @@ async def main(spec: str, url: str, guide_type: str):
 
     print(f"Scraping {url} ...", flush=True)
     try:
-        content = await scrape(url, guide_type)
+        title, content = await scrape(url, guide_type)
     except Exception as exc:
-        await db.update_guide_error(guide_id, str(exc))
+        await db.update_guide_error(guide_id, str(exc), spec=spec)
         print(f"ERROR: {exc}", flush=True)
         sys.exit(1)
 
-    await db.update_guide_content(guide_id, content)
-    print(f"Done. Stored {len(content)} chars for {spec}.", flush=True)
+    word_count = len(content.split())
+    await db.update_guide_content(guide_id, title, content, word_count, spec=spec)
+    print(f"Done. Stored {len(content)} chars for {spec} (title: {title!r}).", flush=True)
 
 
 if __name__ == "__main__":

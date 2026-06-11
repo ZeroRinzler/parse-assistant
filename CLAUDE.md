@@ -54,7 +54,11 @@ warcraft-learner/
 │   ├── live.html        # Live analysis UI — polls for new pulls during raid
 │   └── admin.html       # Admin guide management UI (vanilla JS)
 ├── data/
-│   └── warcraft.db      # SQLite DB (tracked; refreshed by GitHub Actions daily)
+│   ├── warcraft.db      # SQLite DB (tracked; refreshed by GitHub Actions daily)
+│   └── specs/           # Human-readable JSON exports (dual-written alongside SQLite)
+│       └── {Spec}/
+│           ├── rulebook.json   # Generated rulebook — written on every save
+│           └── guides.json     # Guide metadata (no content) — written on add/scrape/delete
 ├── .env                 # Secrets (gitignored)
 ├── .env.example         # Credential template
 └── requirements.txt
@@ -79,8 +83,9 @@ warcraft-learner/
    - `hold_cooldown_for_anchor` — flags casts of `spell_ids` within `hold_window_s` before each non-opener cast of `anchor_spell_id`.
    Rule findings include a `details.remedy` field with the rule's `action` text, rendered as a coaching callout in the UI.
 6. Response includes: **Needs Improvement** (critical/warning), **Timing Suggestions** (info/hold_suggestion), and **Doing Well** (success). Also includes `rulebook_source` ("generated", "static", or "none") shown under the player name.
-7. If parse samples exist for the fight's encounter, a **vs Top N Parses** comparison table is appended. Uses **uses-per-minute** (not raw counts) to normalize across kill-time differences between the player and top performers. A **Burst Windows** card shows the top recurring 8s damage spikes across top parses with the CDs active in them.
-8. Cooldown rules come from the **dynamic rulebook** if one exists (SQLite + in-memory cache in `db.py`), otherwise from the static `SPEC_COOLDOWNS` dict in `rulebook.py`.
+7. If parse samples exist for the fight's encounter, a **vs Top N Parses** comparison table is appended. Uses **uses-per-minute** (not raw counts) to normalize across kill-time differences between the player and top performers. A **Burst Windows** card shows the top recurring 8s damage spikes across top parses with the CDs active in them. Windows beyond the player's fight duration are shown in a dimmed "Not reached" state rather than "No data".
+8. The response includes `ability_icons` — a `{spell_id: {icon, name}}` map extracted from `masterData.abilities` in the report. The frontend seeds its icon cache from this data. WCL removed `gameData.spell()` so this is now the only reliable source of spell icons and names for report abilities.
+9. Cooldown rules come from the **dynamic rulebook** if one exists (SQLite + in-memory cache in `db.py`), otherwise from the static `SPEC_COOLDOWNS` dict in `rulebook.py`.
 
 ### Ingestion pipeline (`/admin`)
 1. **Add guides** — POST `/api/admin/guides` with `{spec, url, guide_type}`. Type is `"web"`, `"youtube"`, or `"simc"`. GitHub blob URLs are auto-converted to raw.githubusercontent.com. Up to 60 k chars stored per guide.
@@ -187,7 +192,7 @@ These are non-obvious and have caused bugs before — read before touching gear 
 | **Gear array is positionally indexed** | WCL returns gear as a bare array; the array index (0-based) IS the slot number. There is no `slot` field on each item. |
 | **Weapon slots shifted in Midnight** | In Midnight-era content the gear array has 17 entries (0–16). Weapons land at index 15 (Main Hand) and 16 (Off Hand). Index 14 is Back/Cloak (no enchant in modern WoW). Earlier code assumed 14/15 — this was wrong. |
 | **Trinket slots are 12 and 13** | Confirmed from both `characterRankings` and `encounterRankings` responses. |
-| **`permanentEnchant` is a string** | WCL returns it as a string even though it's a numeric ID. Cast with `int()`. `permanentEnchantName` is never populated. `pre.html` has a hardcoded `ENCHANT_NAMES` lookup dict for common IDs. |
+| **`permanentEnchant` is a string** | WCL returns it as a string even though it's a numeric ID. Cast with `int()`. `permanentEnchantName` is never populated. Enchant names are resolved at request time via `wcl.get_enchant_names()` which uses `gameData.enchant(id)` — the only WCL API that maps enchant IDs to names. |
 | **Two incompatible talent formats** | `characterRankings` returns the old format (`{talentID: N, points: P}` list) → stored as `v1:` key. `encounterRankings` returns the Midnight format (`{class: {row: [{node: {nodeId: N}}]}, spec: {...}}` dict) → stored as `v2:` key. The ID spaces are genuinely different (v1: IDs are 112 000+; v2: IDs are 90 000–110 000). They cannot be compared directly. |
 | **Solving the talent format problem** | During parse ingestion, `fetch_top_rankings` fires a parallel `encounterRankings` query per ranked player to obtain their `v2:` talent key. This overwrites the `v1:` key that would otherwise come from the `characterRankings` entry, ensuring top-parse talent keys use the same format as the player's gear (also fetched via `encounterRankings`). |
 | **`server.region` may be a string** | In the `characterRankings` JSON blob, `server.region` is sometimes a plain string (`"EU"`) rather than an object (`{slug: "eu"}`). The `_region_slug()` helper in `parses_analyzer.py` handles both forms. |
@@ -272,9 +277,10 @@ Source: `design-doc.md` (architecture blueprint) + `intial-research.md` (researc
 | AoE burst window analysis | ✅ Done | Top 4 non-overlapping 8s damage peaks per parse; clustered across parses; "Burst Windows" card in UI |
 | Per-fight player filtering | ✅ Done | `friendlyPlayers` from WCL per fight; player dropdown updates on fight change |
 | Fight dropdown attempt numbering | ✅ Done | Wipes show `✗ #N` per-boss; kills show `✓` |
-| Pre-fight gear check | ✅ Done | `/pre` page; character URL input; talents/trinkets/enchants vs top-parse aggregates; gear data stored per sample during ingestion |
+| Pre-fight gear check | ✅ Done | `/pre` page; character URL input; talents/trinkets/enchants vs top-parse aggregates; enchant names resolved live via `gameData.enchant(id)` — no hardcoding |
 | Defensive cooldown analysis | ✅ Done | `SPEC_DEFENSIVES` in rulebook.py; player usage with damage absorbed per window; comparison vs top-parse avg; 30s damage-taken segments |
 | GitHub Actions ingestion pipeline | ✅ Done | `.github/workflows/ingest-parses.yml` (daily schedule + manual); `scripts/ingest_parses.py` and `scripts/scrape_guides.py` work identically locally |
+| File-based storage for guides/rulebooks | ✅ Done | `data/specs/{Spec}/rulebook.json` and `guides.json` dual-written alongside SQLite; all guide CRUD endpoints sync the files; both GHA workflows commit `data/specs/**`; `scripts/export_data_files.py` bootstraps from existing DB |
 
 ### Gaps — from design-doc.md
 

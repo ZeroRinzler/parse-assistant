@@ -1,0 +1,50 @@
+[
+  {
+    "id": 4,
+    "spec": "SubtletyRogue",
+    "title": "apl_rogue.cpp",
+    "url": "https://github.com/simulationcraft/simc/blob/midnight/engine/class_modules/apl/apl_rogue.cpp",
+    "guide_type": "simc",
+    "word_count": 1613,
+    "status": "scraped",
+    "error_msg": null,
+    "created_at": "2026-06-10 09:01:11",
+    "updated_at": "2026-06-10 09:01:13"
+  },
+  {
+    "id": 3,
+    "spec": "SubtletyRogue",
+    "title": "subtlety.simc",
+    "url": "https://github.com/simulationcraft/simc/blob/midnight/engine/class_modules/apl/rogue/subtlety.simc",
+    "guide_type": "simc",
+    "word_count": 159,
+    "status": "scraped",
+    "error_msg": null,
+    "created_at": "2026-06-10 09:01:00",
+    "updated_at": "2026-06-10 09:01:13"
+  },
+  {
+    "id": 2,
+    "spec": "SubtletyRogue",
+    "title": "YouTube: f47eMkLV0HA",
+    "url": "https://www.youtube.com/watch?v=f47eMkLV0HA",
+    "guide_type": "youtube",
+    "word_count": 4993,
+    "status": "scraped",
+    "error_msg": null,
+    "created_at": "2026-06-09 18:18:10",
+    "updated_at": "2026-06-10 09:01:14"
+  },
+  {
+    "id": 1,
+    "spec": "SubtletyRogue",
+    "title": "Subtlety Rogue Rotation Guide - Midnight - Wowhead",
+    "url": "https://www.wowhead.com/guide/classes/rogue/subtlety/rotation-cooldowns-pve-dps",
+    "guide_type": "web",
+    "word_count": 4436,
+    "status": "scraped",
+    "error_msg": null,
+    "created_at": "2026-06-09 18:17:30",
+    "updated_at": "2026-06-10 09:01:14"
+  }
+]

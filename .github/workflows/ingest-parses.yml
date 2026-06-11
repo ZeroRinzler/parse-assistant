@@ -45,10 +45,10 @@ jobs:
             python3 scripts/ingest_parses.py --all --top-n "$TOP_N"
           fi
 
-      - name: Commit updated database
+      - name: Commit updated database and spec files
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: 'chore: refresh parse samples [skip ci]'
-          file_pattern: 'data/warcraft.db'
+          file_pattern: 'data/warcraft.db data/specs/**'
           commit_user_name: 'github-actions[bot]'
           commit_user_email: 'github-actions[bot]@users.noreply.github.com'
