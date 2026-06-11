@@ -446,7 +446,6 @@ function _analyzeDamageTaken(dtEvents, abilityMap, fightStart, fightEnd) {
   const segs  = Array(nSegs).fill(0);
   const byAb  = {};
   for (const e of dtEvents) {
-    if (e.type!=='damage') continue;
     const amt=(e.amount||0)+(e.absorbed||0); if(!amt) continue;
     const tS=(e.timestamp-fightStart)/1000;
     segs[Math.min(Math.floor(tS/segS),nSegs-1)] += amt;

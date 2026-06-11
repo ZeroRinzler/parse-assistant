@@ -402,8 +402,6 @@ async def analyze(req: AnalyzeRequest):
     ability_dtk: dict[int, int] = {}
 
     for e in damage_taken_events:
-        if e.get("type") != "damage":
-            continue
         amt = e.get("amount", 0) + e.get("absorbed", 0)
         if not amt:
             continue
