@@ -333,11 +333,11 @@ function _buildComparison(specCds, castEvents, fightStart, fightEnd, bench, buff
 // ── Player burst windows ──────────────────────────────────────────────────────
 
 function _findPlayerBurstWindows(dmgEvents, fightStart, specCds, castEvents) {
-  if (!dmgEvents?.length) return [];
-  // WCL DamageDone events can have various `type` values (damage, absorbed, etc.)
-  // Filter by damage amount rather than type to ensure we capture all hits.
+  if (!dmgEvents?.length) { console.warn('[BurstWindows] dmgEvents empty'); return []; }
   const sorted = dmgEvents.filter(e=>e.timestamp>=fightStart&&((e.amount||0)+(e.absorbed||0))>0)
     .sort((a,b)=>a.timestamp-b.timestamp);
+  if (dmgEvents.length > 0 && sorted.length === 0)
+    console.warn('[BurstWindows] all events filtered out — sample:', JSON.stringify(dmgEvents[0]));
   if (!sorted.length) return [];
 
   const WINDOW_S = 8;
@@ -485,6 +485,7 @@ async function runAnalysis({reportCode, fightId, playerId, fights, masterAbiliti
   const specCds = rulebook?.major_cooldowns ?? null;
   const rules   = rulebook?.rules ?? [];
   const rbSrc   = rulebook ? 'generated' : (spec !== 'Unknown' ? 'none' : 'none');
+  console.log(`[Analysis] spec=${spec} cast=${castEvents.length} buff=${buffEvents.length} dmg=${dmgEvents.length} dtk=${dtEvents.length}`);
 
   const result = _analyzePlayerCore({
     playerName: pName, spec, fightStart: fStart, fightEnd: fEnd,

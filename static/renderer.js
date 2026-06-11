@@ -107,7 +107,8 @@ async function fetchSpellIcons(spellIds) {
 function spellIconHtml(spellId, size = 'small') {
   const info = _iconCache[spellId] || _iconCache[String(spellId)];
   if (!info?.icon) return '';
-  return `<img class="spell-icon spell-icon-${size}" src="https://wow.zamimg.com/images/wow/icons/${size}/${info.icon}.jpg" alt="${info.name || ''}" loading="lazy" onerror="this.style.display='none'" />`;
+  const icon = info.icon.replace(/\.jpg$/i, '');
+  return `<img class="spell-icon spell-icon-${size}" src="https://wow.zamimg.com/images/wow/icons/${size}/${icon}.jpg" alt="${info.name || ''}" loading="lazy" onerror="this.style.display='none'" />`;
 }
 
 function spellName(spellId) {
@@ -376,7 +377,7 @@ function _refreshIcons(container) {
     if (info?.icon && !el.querySelector('img')) {
       const img = document.createElement('img');
       img.className = 'spell-icon spell-icon-small';
-      img.src = `https://wow.zamimg.com/images/wow/icons/small/${info.icon}.jpg`;
+      img.src = `https://wow.zamimg.com/images/wow/icons/small/${info.icon.replace(/\.jpg$/i, '')}.jpg`;
       img.alt = info.name || '';
       img.loading = 'lazy';
       img.onerror = () => img.style.display = 'none';
