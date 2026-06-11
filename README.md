@@ -51,7 +51,7 @@ Set `WCL_CLIENT_ID` and `WCL_CLIENT_SECRET` as repository secrets. The workflows
 
 | Secret | Where to get it |
 |---|---|
-| `WCL_CLIENT_ID` + `WCL_CLIENT_SECRET` | [Warcraft Logs API clients](https://www.warcraftlogs.com/api/clients/) |
+| `WCL_CLIENT_ID` | [Warcraft Logs API clients](https://www.warcraftlogs.com/api/clients/) |
 
 No Anthropic API key is required. The rulebook generation workflow uses a copy-prompt → paste-back flow that works with any LLM.
 
@@ -99,53 +99,3 @@ static/admin.html  — Admin UI (vanilla JS)
 ```
 
 See `CLAUDE.md` for full technical reference including data models, API endpoints, rulebook JSON schema, and the rule condition engine.
-
-## Hosting assessment: GitHub Pages migration
-
-The current stack (FastAPI + SQLite + Python scraping) cannot run on GitHub Pages — it only serves static files. This section documents what a static rewrite would look like and where the open questions are.
-
-### What is incompatible with GitHub Pages
-
-| Component | Technology | Reason |
-|---|---|---|
-| Web server | FastAPI + uvicorn | Python ASGI server — no server-side execution |
-| Database | SQLite via aiosqlite | Requires a running process |
-| WCL authentication | OAuth2 client credentials | Needs a server to hold the `WCL_CLIENT_SECRET` safely |
-| Admin ingestion pipeline | All `/api/admin/*` routes | Depend on the Python backend and DB |
-| Web scraping | BeautifulSoup / lxml | Python library, server-side only |
-| YouTube transcript fetching | `youtube-transcript-api` | Python library, server-side only |
-| Parse ingestion streaming | SSE endpoint | Requires a persistent HTTP connection to a running server |
-| All WCL GraphQL queries | `/api/analyze` + parse fetch | Go through the Python backend which holds WCL credentials |
-
-### Proposed static architecture
-
-**Data layer — JSON files in the repo**
-
-Rulebooks, parse samples, burst windows, and hold patterns are all naturally JSON. They would be committed to the repo under a `data/` directory and fetched client-side at runtime. No database process needed.
-
-**Scraping and ingestion — GitHub Actions**
-
-GitHub Actions can run the existing Python scraper and WCL ingestion scripts on a schedule or via manual trigger (`workflow_dispatch`). The Action writes output as JSON files and commits them back to the repo. GitHub Pages then serves the updated files on next deploy. WCL credentials and other secrets live in GitHub Actions secrets — never in client-side JS.
-
-Trade-off: parse data is only as fresh as the last Action run. For a tool used between raid nights this is acceptable.
-
-**Analysis engine — rewrite in JavaScript**
-
-`analyzer.py` logic would be ported to JS and run entirely in the browser against the pre-fetched JSON data.
-
-**WCL live report analysis — open question**
-
-The current backend fetches WCL data on behalf of the user using client credentials (client ID + secret). A static site cannot hold a secret safely. Two options:
-
-1. **PKCE flow** — WCL may support OAuth2 authorization code flow with PKCE, which is browser-safe and requires no secret. The user would log in via WCL and grant access. This needs to be confirmed against WCL's API documentation before building around it.
-2. **Minimal proxy** — a single serverless function (Cloudflare Worker, Netlify Function, etc.) handles only the token exchange. All other logic stays static. This avoids a full backend while keeping the secret off the client.
-
-### Summary
-
-| Piece | Approach |
-|---|---|
-| Rulebooks / parse data | JSON files in repo, fetched client-side |
-| Scraping / ingestion | GitHub Actions (scheduled or manual), commits JSON back |
-| Analysis engine | Port `analyzer.py` to JS, runs in browser |
-| Admin UI | Replaced by GitHub Actions manual triggers |
-| WCL live report fetch | Needs PKCE support confirmed — or a small proxy function |

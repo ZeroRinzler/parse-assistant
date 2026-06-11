@@ -1,4 +1,0 @@
-I want to improve the UX by using icons. Please include icons for all the spells used or displayed. Also for each category of help create a custom icon to faster recognize which type it is.
-I also want to improve the UX by changing how the player selects his character. He will be first asked to choose his character on any page. From there this will be stored in the local storage. The user can still change this later. All the player dropdowns should then be hidden and replaced by this character. Display an error message when the entered player is not part of the log.
-
-On the admin page change the dropdown to be class then the spec in a second dropdown.
