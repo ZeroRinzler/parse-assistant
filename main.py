@@ -197,7 +197,7 @@ async def analyze(req: AnalyzeRequest):
             wcl.get_all_events(code, req.fight_id, "Casts", start, end, source_id=req.player_id),
             wcl.get_all_events(code, req.fight_id, "Buffs", start, end, target_id=req.player_id),
             wcl.get_all_events(code, req.fight_id, "DamageDone", start, end, source_id=req.player_id),
-            wcl.get_all_events(code, req.fight_id, "DamageTaken", start, end, target_id=req.player_id),
+            wcl.get_all_events(code, req.fight_id, "DamageTaken", start, end, source_id=req.player_id),
         )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Event fetch failed: {exc}")
