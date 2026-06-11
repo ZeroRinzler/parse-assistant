@@ -3,9 +3,9 @@ You are a World of Warcraft theorycrafting assistant. Read the guide content at 
 ## Instructions
 
 1. Extract all major cooldowns - abilities with a cooldown ≥ 30 s that meaningfully affect damage output (or healing/tanking if applicable). Include on-use trinkets when the guide mentions specific timing for them.
-2. Every cooldown entry **must include a `spell_id`**. Use your knowledge of WoW spell IDs to fill this in - do not leave it out because the guide text did not mention it. You can verify spell IDs at `wowhead.com/spell=<id>`. If you are genuinely unsure of the ID, make your best guess and note it in `usage_rule`.
+2. Every cooldown entry **must include a `spell_id`**. Use your knowledge of WoW spell IDs to fill this in - prioritize the Active Ability Cast ID rather than a passive Aura or Talent Node ID. You can verify spell IDs at `wowhead.com/spell=<id>`. If you are genuinely unsure of the ID, make your best guess and note it in `usage_rule`.
 3. Extract rotation and cooldown usage rules - when to pair abilities, when to hold for Bloodlust, opener sequence, phase notes, pooling requirements, etc.
-4. Output **only** the JSON object. No markdown code fences, no explanation, no preamble. The first character of your reply must be `{` and the last must be `}`.
+4. Output **only** the raw JSON object. Do NOT wrap the output in markdown code fences (e.g., do not use ```json). No explanation, no preamble. The first character of your reply must be `{` and the last must be `}`.
 
 ---
 
@@ -55,7 +55,7 @@ You are a World of Warcraft theorycrafting assistant. Read the guide content at 
 | Field | Required | Notes |
 |---|---|---|
 | `type` | yes | One of: `cooldown_pairing`, `cd_hold`, `opener`, `rotation`, `positioning`, `aoe_switch` |
-| `priority` | yes | One of: `critical`, `high`, `medium`, `low` |
+| `priority` | yes | `critical` (fundamentally breaks the spec if ignored), `high` (major DPS loss), `medium` (moderate optimization), `low` (minor min-maxing). |
 | `description` | yes | Short title shown in the UI (≤ 60 chars) |
 | `condition` | no | Machine-readable trigger - see below. Use `null` when unsure |
 | `action` | yes | Second-person prescriptive instruction. Must tell the player what to *do*, not describe what the rule checks. Example: "Always cast Secret Technique within 5 s of Shadow Dance." |
@@ -66,7 +66,8 @@ You are a World of Warcraft theorycrafting assistant. Read the guide content at 
 
 Only populate `condition` when you are confident the rule maps cleanly to one of these two kinds.
 
-**cast_without_prior** - flag each cast of `spell_id` that is not preceded by `required_spell_id` within `window_s` seconds:
+**cast_without_prior** - flag each cast of `spell_id` that is not paired with `required_spell_id` within `window_s` seconds. 
+*Optional `exception`: You can exempt casts that occur within a specific context window (e.g. exempt a cast if it happens during a major 2-minute cooldown window).*
 
 ```json
 {
@@ -75,7 +76,12 @@ Only populate `condition` when you are confident the rule maps cleanly to one of
   "spell_name": "Shadow Dance",
   "required_spell_id": 280719,
   "required_spell_name": "Secret Technique",
-  "window_s": 5
+  "window_s": 5,
+  "exception": {
+    "context_spell_id": 121471,
+    "context_window_s": 20,
+    "position": "before"
+  }
 }
 ```
 
