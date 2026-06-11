@@ -245,9 +245,9 @@ function renderResults(data) {
   }
 
   let dtkHtml = '';
-  if (data.player_dmg_taken_by_ability?.length) {
+  if (data.player_dmg_taken_by_ability?.length || data.top_dtk_comparison?.length) {
     dtkHtml = renderDamageTaken(
-      data.player_dmg_taken_by_ability,
+      data.player_dmg_taken_by_ability || [],
       data.player_total_dmg_taken || 0,
       data.top_dtk_comparison || [],
       data.player_dmg_taken_segment_pcts || [],
@@ -653,7 +653,7 @@ function renderDefensives(playerDefs, topSummary, fightDurS) {
 }
 
 function renderDamageTaken(byAbility, total, topComparison, segmentPcts, topSegments) {
-  if (!byAbility?.length) return '';
+  if (!byAbility?.length && !topComparison?.length) return '';
 
   // ── Segment bar chart ─────────────────────────────────────────────────────
   let segHtml = '';
@@ -668,18 +668,19 @@ function renderDamageTaken(byAbility, total, topComparison, segmentPcts, topSegm
     const segMax = Math.max(...allSegVals, 0.01);
 
     const hasTopSegs = topSegments?.length > 0;
+    const BAR_AREA_PX = 78; // container 100px − padding-bottom 22px
     const barCells = segmentPcts.map((pct, i) => {
       const top = topSegMap[i];
-      const playerH = Math.round(pct / segMax * 100);
-      const topH    = top ? Math.round(top.avg_pct / segMax * 100) : 0;
+      const playerH = Math.round(pct / segMax * BAR_AREA_PX);
+      const topH    = top ? Math.round(top.avg_pct / segMax * BAR_AREA_PX) : 0;
       const isHigh  = top != null && pct > top.avg_pct + Math.max(top.stddev_pct ?? 0, 0.02);
       const t       = i * 30;
       const title   = top
         ? `${formatDuration(t)}: You ${(pct*100).toFixed(1)}% vs top avg ${(top.avg_pct*100).toFixed(1)}%`
         : `${formatDuration(t)}: ${(pct*100).toFixed(1)}% of total damage`;
       return `<div class="dtk-bar-group${isHigh ? ' dtk-bar-high' : ''}" title="${title}">
-        ${hasTopSegs && top ? `<div class="dtk-bar-top" style="height:${topH}%"></div>` : ''}
-        <div class="dtk-bar-player" style="height:${playerH}%"></div>
+        ${hasTopSegs && top ? `<div class="dtk-bar-top" style="height:${topH}px"></div>` : ''}
+        <div class="dtk-bar-player" style="height:${playerH}px"></div>
         <div class="dtk-bar-label">${formatDuration(t)}</div>
       </div>`;
     }).join('');
@@ -696,15 +697,24 @@ function renderDamageTaken(byAbility, total, topComparison, segmentPcts, topSegm
   const topMap = {};
   for (const t of (topComparison || [])) topMap[t.spell_id] = t;
 
-  const tagged = byAbility.map(ab => {
-    const top = topMap[ab.spell_id];
+  // Merge player spells and top-parse spells so both sides always appear
+  const playerMap = {};
+  for (const ab of (byAbility || [])) playerMap[ab.spell_id] = ab;
+  const mergedIds = new Set([...Object.keys(playerMap).map(Number), ...Object.keys(topMap).map(Number)]);
+
+  const tagged = [...mergedIds].map(sid => {
+    const ab  = playerMap[sid] ?? { spell_id: sid, name: '', damage: 0, pct: 0 };
+    const top = topMap[sid];
     const isOutlier = top != null && (ab.pct > top.avg_pct + Math.max(top.stddev_pct ?? 0, 0.02));
     return { ...ab, top, isOutlier };
   });
 
   tagged.sort((a, b) => {
     if (a.isOutlier !== b.isOutlier) return a.isOutlier ? -1 : 1;
-    return b.pct - a.pct;
+    // Sort by whichever is larger: player pct or top avg_pct
+    const aVal = Math.max(a.pct, a.top?.avg_pct ?? 0);
+    const bVal = Math.max(b.pct, b.top?.avg_pct ?? 0);
+    return bVal - aVal;
   });
 
   const outliers = tagged.filter(a => a.isOutlier);
