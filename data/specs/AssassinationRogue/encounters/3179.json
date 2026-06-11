@@ -1,0 +1,400 @@
+{
+  "spec": "AssassinationRogue",
+  "encounter_id": 3179,
+  "encounter_name": "Fallen-King Salhadaar",
+  "sample_count": 9,
+  "downtime_threshold_ms": 1255,
+  "top_avg_efficiency": 73.0,
+  "top_efficiency_stddev": 7.9,
+  "per_cd_benchmarks": {
+    "Deathmark": {
+      "avg_first_cast_s": 7.5,
+      "stddev_first_cast_s": 1.7,
+      "avg_gap_s": 127.1,
+      "stddev_gap_s": 13.3,
+      "avg_bl_offset_s": null,
+      "stddev_bl_offset_s": null,
+      "hold_targets": {},
+      "uses_per_min": {
+        "avg": 0.586,
+        "stddev": 0.074,
+        "min": 0.485,
+        "max": 0.691
+      }
+    },
+    "Kingsbane": {
+      "avg_first_cast_s": 8.5,
+      "stddev_first_cast_s": 1.7,
+      "avg_gap_s": 69.3,
+      "stddev_gap_s": 24.4,
+      "avg_bl_offset_s": null,
+      "stddev_bl_offset_s": null,
+      "hold_targets": {
+        "4": {
+          "target_s": 228.7,
+          "stddev_s": 79.1,
+          "count": 4,
+          "total_samples": 9
+        }
+      },
+      "uses_per_min": {
+        "avg": 1.003,
+        "stddev": 0.173,
+        "min": 0.647,
+        "max": 1.199
+      }
+    },
+    "Vanish": {
+      "avg_first_cast_s": 84.5,
+      "stddev_first_cast_s": 54.5,
+      "avg_gap_s": 130.4,
+      "stddev_gap_s": 17.0,
+      "avg_bl_offset_s": null,
+      "stddev_bl_offset_s": null,
+      "hold_targets": {},
+      "uses_per_min": {
+        "avg": 0.431,
+        "stddev": 0.125,
+        "min": 0.3,
+        "max": 0.691
+      }
+    }
+  },
+  "burst_windows": [
+    {
+      "time_s": 12.7,
+      "stddev_s": 5.3,
+      "count": 15,
+      "total_samples": 9,
+      "pct_avg": 0.078,
+      "pct_stddev": 0.02,
+      "pct_min": 0.049,
+      "pct_max": 0.118,
+      "common_cds": [
+        "Kingsbane",
+        "Deathmark"
+      ],
+      "avg_targets": 1.5,
+      "ability_breakdown": [
+        {
+          "spell_id": 703,
+          "avg_pct": 0.153,
+          "count": 15
+        },
+        {
+          "spell_id": 32645,
+          "avg_pct": 0.148,
+          "count": 15
+        },
+        {
+          "spell_id": 385627,
+          "avg_pct": 0.145,
+          "count": 13
+        },
+        {
+          "spell_id": 1943,
+          "avg_pct": 0.105,
+          "count": 14
+        },
+        {
+          "spell_id": 113780,
+          "avg_pct": 0.081,
+          "count": 9
+        }
+      ]
+    },
+    {
+      "time_s": 138.9,
+      "stddev_s": 5.3,
+      "count": 9,
+      "total_samples": 9,
+      "pct_avg": 0.09,
+      "pct_stddev": 0.028,
+      "pct_min": 0.056,
+      "pct_max": 0.136,
+      "common_cds": [
+        "Kingsbane"
+      ],
+      "avg_targets": 2.8,
+      "ability_breakdown": [
+        {
+          "spell_id": 703,
+          "avg_pct": 0.181,
+          "count": 9
+        },
+        {
+          "spell_id": 32645,
+          "avg_pct": 0.155,
+          "count": 9
+        },
+        {
+          "spell_id": 421979,
+          "avg_pct": 0.142,
+          "count": 5
+        },
+        {
+          "spell_id": 385627,
+          "avg_pct": 0.139,
+          "count": 9
+        },
+        {
+          "spell_id": 1943,
+          "avg_pct": 0.132,
+          "count": 8
+        },
+        {
+          "spell_id": 383414,
+          "avg_pct": 0.061,
+          "count": 5
+        }
+      ]
+    },
+    {
+      "time_s": 253.8,
+      "stddev_s": 5.3,
+      "count": 5,
+      "total_samples": 9,
+      "pct_avg": 0.077,
+      "pct_stddev": 0.019,
+      "pct_min": 0.057,
+      "pct_max": 0.104,
+      "common_cds": [
+        "Deathmark",
+        "Kingsbane"
+      ],
+      "avg_targets": 1.8,
+      "ability_breakdown": [
+        {
+          "spell_id": 32645,
+          "avg_pct": 0.154,
+          "count": 5
+        },
+        {
+          "spell_id": 703,
+          "avg_pct": 0.154,
+          "count": 5
+        },
+        {
+          "spell_id": 385627,
+          "avg_pct": 0.146,
+          "count": 5
+        },
+        {
+          "spell_id": 1943,
+          "avg_pct": 0.109,
+          "count": 5
+        },
+        {
+          "spell_id": 113780,
+          "avg_pct": 0.08,
+          "count": 3
+        }
+      ]
+    }
+  ],
+  "gear": {
+    "sample_count": 9,
+    "talent_builds": [
+      {
+        "key": "v2:110433,110433,110433,90640,90692,90748,90749,90750,90751,90752,90756,90758,90759,90760,90766,90767,90768,90770,90771,90777,90784,90785,90786,94552,94553",
+        "count": 8,
+        "pct": 89,
+        "report_code": "rnQqC3LJtK8V4WjF",
+        "fight_id": 237,
+        "player_name": "Янеформалка"
+      },
+      {
+        "key": "v2:110433,110433,110433,90640,90692,90748,90749,90750,90751,90752,90756,90758,90759,90760,90766,90767,90768,90770,90775,90776,90777,90784,90785,94553",
+        "count": 1,
+        "pct": 11,
+        "report_code": "vdhG9XMWnLHc4Q13",
+        "fight_id": 37,
+        "player_name": "Yumaa"
+      }
+    ],
+    "trinkets": {
+      "12": [
+        {
+          "id": 193701,
+          "name": "Algeth'ar Puzzle Box",
+          "count": 7,
+          "pct": 78
+        },
+        {
+          "id": 249343,
+          "name": "Gaze of the Alnseer",
+          "count": 2,
+          "pct": 22
+        }
+      ],
+      "13": [
+        {
+          "id": 249343,
+          "name": "Gaze of the Alnseer",
+          "count": 6,
+          "pct": 67
+        },
+        {
+          "id": 249344,
+          "name": "Light Company Guidon",
+          "count": 1,
+          "pct": 11
+        },
+        {
+          "id": 249806,
+          "name": "Radiant Plume",
+          "count": 1,
+          "pct": 11
+        },
+        {
+          "id": 193701,
+          "name": "Algeth'ar Puzzle Box",
+          "count": 1,
+          "pct": 11
+        }
+      ]
+    },
+    "enchants": {
+      "0": [
+        {
+          "id": 8017,
+          "name": "",
+          "count": 5,
+          "pct": 56
+        },
+        {
+          "id": 7961,
+          "name": "",
+          "count": 3,
+          "pct": 33
+        },
+        {
+          "id": 7991,
+          "name": "",
+          "count": 1,
+          "pct": 11
+        }
+      ],
+      "2": [
+        {
+          "id": 8001,
+          "name": "",
+          "count": 4,
+          "pct": 44
+        },
+        {
+          "id": 8031,
+          "name": "",
+          "count": 2,
+          "pct": 22
+        },
+        {
+          "id": 7999,
+          "name": "",
+          "count": 1,
+          "pct": 11
+        }
+      ],
+      "4": [
+        {
+          "id": 7987,
+          "name": "",
+          "count": 9,
+          "pct": 100
+        }
+      ],
+      "6": [
+        {
+          "id": 8159,
+          "name": "",
+          "count": 9,
+          "pct": 100
+        }
+      ],
+      "7": [
+        {
+          "id": 7963,
+          "name": "",
+          "count": 5,
+          "pct": 56
+        },
+        {
+          "id": 7993,
+          "name": "",
+          "count": 2,
+          "pct": 22
+        },
+        {
+          "id": 8019,
+          "name": "",
+          "count": 1,
+          "pct": 11
+        }
+      ],
+      "10": [
+        {
+          "id": 7967,
+          "name": "",
+          "count": 9,
+          "pct": 100
+        }
+      ],
+      "11": [
+        {
+          "id": 7967,
+          "name": "",
+          "count": 9,
+          "pct": 100
+        }
+      ],
+      "15": [
+        {
+          "id": 8039,
+          "name": "",
+          "count": 6,
+          "pct": 67
+        },
+        {
+          "id": 7981,
+          "name": "",
+          "count": 2,
+          "pct": 22
+        },
+        {
+          "id": 7983,
+          "name": "",
+          "count": 1,
+          "pct": 11
+        }
+      ],
+      "16": [
+        {
+          "id": 8039,
+          "name": "",
+          "count": 6,
+          "pct": 67
+        },
+        {
+          "id": 7981,
+          "name": "",
+          "count": 2,
+          "pct": 22
+        },
+        {
+          "id": 7983,
+          "name": "",
+          "count": 1,
+          "pct": 11
+        }
+      ],
+      "9": [
+        {
+          "id": 2841,
+          "name": "",
+          "count": 2,
+          "pct": 22
+        }
+      ]
+    }
+  }
+}

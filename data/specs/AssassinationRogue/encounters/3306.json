@@ -1,0 +1,328 @@
+{
+  "spec": "AssassinationRogue",
+  "encounter_id": 3306,
+  "encounter_name": "Chimaerus, the Undreamt God",
+  "sample_count": 10,
+  "downtime_threshold_ms": 1070,
+  "top_avg_efficiency": 73.9,
+  "top_efficiency_stddev": 8.8,
+  "per_cd_benchmarks": {
+    "Deathmark": {
+      "avg_first_cast_s": 8.4,
+      "stddev_first_cast_s": 1.4,
+      "avg_gap_s": 122.8,
+      "stddev_gap_s": 1.4,
+      "avg_bl_offset_s": null,
+      "stddev_bl_offset_s": null,
+      "hold_targets": {},
+      "uses_per_min": {
+        "avg": 0.815,
+        "stddev": 0.01,
+        "min": 0.801,
+        "max": 0.829
+      }
+    },
+    "Kingsbane": {
+      "avg_first_cast_s": 9.4,
+      "stddev_first_cast_s": 1.4,
+      "avg_gap_s": 61.4,
+      "stddev_gap_s": 1.4,
+      "avg_bl_offset_s": null,
+      "stddev_bl_offset_s": null,
+      "hold_targets": {},
+      "uses_per_min": {
+        "avg": 1.222,
+        "stddev": 0.015,
+        "min": 1.202,
+        "max": 1.244
+      }
+    },
+    "Vanish": {
+      "avg_first_cast_s": 40.4,
+      "stddev_first_cast_s": 46.3,
+      "avg_gap_s": 122.0,
+      "stddev_gap_s": 2.2,
+      "avg_bl_offset_s": null,
+      "stddev_bl_offset_s": null,
+      "hold_targets": {},
+      "uses_per_min": {
+        "avg": 0.653,
+        "stddev": 0.213,
+        "min": 0.401,
+        "max": 0.829
+      }
+    }
+  },
+  "burst_windows": [
+    {
+      "time_s": 14.8,
+      "stddev_s": 6.9,
+      "count": 24,
+      "total_samples": 10,
+      "pct_avg": 0.119,
+      "pct_stddev": 0.021,
+      "pct_min": 0.085,
+      "pct_max": 0.152,
+      "common_cds": [
+        "Kingsbane"
+      ],
+      "avg_targets": 1.5,
+      "ability_breakdown": [
+        {
+          "spell_id": 703,
+          "avg_pct": 0.186,
+          "count": 24
+        },
+        {
+          "spell_id": 385627,
+          "avg_pct": 0.152,
+          "count": 20
+        },
+        {
+          "spell_id": 32645,
+          "avg_pct": 0.139,
+          "count": 20
+        },
+        {
+          "spell_id": 1943,
+          "avg_pct": 0.118,
+          "count": 19
+        },
+        {
+          "spell_id": 383414,
+          "avg_pct": 0.089,
+          "count": 19
+        },
+        {
+          "spell_id": 113780,
+          "avg_pct": 0.088,
+          "count": 13
+        }
+      ]
+    },
+    {
+      "time_s": 134.0,
+      "stddev_s": 4.3,
+      "count": 14,
+      "total_samples": 10,
+      "pct_avg": 0.109,
+      "pct_stddev": 0.021,
+      "pct_min": 0.074,
+      "pct_max": 0.149,
+      "common_cds": [
+        "Deathmark",
+        "Kingsbane"
+      ],
+      "avg_targets": 1,
+      "ability_breakdown": [
+        {
+          "spell_id": 32645,
+          "avg_pct": 0.194,
+          "count": 13
+        },
+        {
+          "spell_id": 385627,
+          "avg_pct": 0.165,
+          "count": 14
+        },
+        {
+          "spell_id": 452538,
+          "avg_pct": 0.114,
+          "count": 9
+        },
+        {
+          "spell_id": 703,
+          "avg_pct": 0.113,
+          "count": 14
+        },
+        {
+          "spell_id": 1943,
+          "avg_pct": 0.091,
+          "count": 11
+        },
+        {
+          "spell_id": 113780,
+          "avg_pct": 0.087,
+          "count": 12
+        }
+      ]
+    }
+  ],
+  "gear": {
+    "sample_count": 10,
+    "talent_builds": [
+      {
+        "key": "v2:110433,110433,110433,90640,90692,90748,90749,90750,90751,90752,90756,90758,90759,90760,90766,90767,90768,90770,90771,90777,90784,90785,90786,94552,94553",
+        "count": 6,
+        "pct": 60,
+        "report_code": "tPCXcAd6Jkmry3NL",
+        "fight_id": 3,
+        "player_name": "Izanami"
+      },
+      {
+        "key": "v2:110433,110433,110433,90640,90692,90748,90749,90750,90751,90752,90756,90758,90759,90760,90766,90767,90768,90770,90771,90776,90777,90784,90785,90786,94553",
+        "count": 3,
+        "pct": 30,
+        "report_code": "B8dhM9ynR7W4GcHJ",
+        "fight_id": 46,
+        "player_name": "鱼塘鱼多多"
+      },
+      {
+        "key": "v1:112509,112510,112511,112513,112518,112521,112526,112572,112574,112575,112580,112583,112585,112630,112633,112634,112635,112636,112638,112639,112640,112642,112643,112644,112646,112648,112649,112650,112651,112652,112654,112655,112657,112659,112660,112661,112662,112663,112664,112665,112670,112672,112673,112676,112677,112678,112679,114737,117106,117130,117131,117133,117137,117139,117145,117704,117711,117716,117717,117719,117722,117724,117726,117727,117735,117736,117740,123371,125615,134840,136024,136025,136026,136881,137065,137066,137067",
+        "count": 1,
+        "pct": 10,
+        "report_code": "PGbfVzFWQLqHBKtM",
+        "fight_id": 1,
+        "player_name": "世纪梦魇"
+      }
+    ],
+    "trinkets": {
+      "12": [
+        {
+          "id": 193701,
+          "name": "Algeth'ar Puzzle Box",
+          "count": 7,
+          "pct": 70
+        },
+        {
+          "id": 249343,
+          "name": "Gaze of the Alnseer",
+          "count": 3,
+          "pct": 30
+        }
+      ],
+      "13": [
+        {
+          "id": 249343,
+          "name": "Gaze of the Alnseer",
+          "count": 7,
+          "pct": 70
+        },
+        {
+          "id": 193701,
+          "name": "Algeth'ar Puzzle Box",
+          "count": 3,
+          "pct": 30
+        }
+      ]
+    },
+    "enchants": {
+      "0": [
+        {
+          "id": 8017,
+          "name": "",
+          "count": 8,
+          "pct": 80
+        },
+        {
+          "id": 7961,
+          "name": "",
+          "count": 2,
+          "pct": 20
+        }
+      ],
+      "2": [
+        {
+          "id": 8001,
+          "name": "",
+          "count": 8,
+          "pct": 80
+        },
+        {
+          "id": 8031,
+          "name": "",
+          "count": 1,
+          "pct": 10
+        },
+        {
+          "id": 4250,
+          "name": "",
+          "count": 1,
+          "pct": 10
+        }
+      ],
+      "4": [
+        {
+          "id": 7987,
+          "name": "",
+          "count": 10,
+          "pct": 100
+        }
+      ],
+      "6": [
+        {
+          "id": 8159,
+          "name": "",
+          "count": 10,
+          "pct": 100
+        }
+      ],
+      "7": [
+        {
+          "id": 7963,
+          "name": "",
+          "count": 8,
+          "pct": 80
+        },
+        {
+          "id": 7993,
+          "name": "",
+          "count": 1,
+          "pct": 10
+        }
+      ],
+      "10": [
+        {
+          "id": 7967,
+          "name": "",
+          "count": 10,
+          "pct": 100
+        }
+      ],
+      "11": [
+        {
+          "id": 7967,
+          "name": "",
+          "count": 10,
+          "pct": 100
+        }
+      ],
+      "15": [
+        {
+          "id": 8039,
+          "name": "",
+          "count": 6,
+          "pct": 60
+        },
+        {
+          "id": 7981,
+          "name": "",
+          "count": 4,
+          "pct": 40
+        }
+      ],
+      "16": [
+        {
+          "id": 8039,
+          "name": "",
+          "count": 7,
+          "pct": 70
+        },
+        {
+          "id": 7981,
+          "name": "",
+          "count": 3,
+          "pct": 30
+        }
+      ],
+      "9": [
+        {
+          "id": 2841,
+          "name": "",
+          "count": 1,
+          "pct": 10
+        }
+      ]
+    }
+  }
+}

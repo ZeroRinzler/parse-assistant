@@ -57,8 +57,10 @@ warcraft-learner/
 │   ├── warcraft.db      # SQLite DB (tracked; refreshed by GitHub Actions daily)
 │   └── specs/           # Human-readable JSON exports (dual-written alongside SQLite)
 │       └── {Spec}/
-│           ├── rulebook.json   # Generated rulebook — written on every save
-│           └── guides.json     # Guide metadata (no content) — written on add/scrape/delete
+│           ├── rulebook.json       # Generated rulebook — written on every save
+│           ├── guides.json         # Guide metadata (no content) — written on add/scrape/delete
+│           └── encounters/
+│               └── {enc_id}.json  # Pre-computed bench data — written after each boss ingestion
 ├── .env                 # Secrets (gitignored)
 ├── .env.example         # Credential template
 └── requirements.txt
@@ -281,6 +283,7 @@ Source: `design-doc.md` (architecture blueprint) + `intial-research.md` (researc
 | Defensive cooldown analysis | ✅ Done | `SPEC_DEFENSIVES` in rulebook.py; player usage with damage absorbed per window; comparison vs top-parse avg; 30s damage-taken segments |
 | GitHub Actions ingestion pipeline | ✅ Done | `.github/workflows/ingest-parses.yml` (daily schedule + manual); `scripts/ingest_parses.py` and `scripts/scrape_guides.py` work identically locally |
 | File-based storage for guides/rulebooks | ✅ Done | `data/specs/{Spec}/rulebook.json` and `guides.json` dual-written alongside SQLite; all guide CRUD endpoints sync the files; both GHA workflows commit `data/specs/**`; `scripts/export_data_files.py` bootstraps from existing DB |
+| Pre-computed encounter bench files | ✅ Done | `data/specs/{Spec}/encounters/{enc_id}.json` written after each boss ingestion (both in-app and GHA script); contains per-CD thresholds, burst windows, gear aggregates; `scripts/export_data_files.py` backfills all; `analysis_utils.py` holds the shared clustering/aggregation logic |
 
 ### Gaps — from design-doc.md
 

@@ -1,0 +1,385 @@
+{
+  "spec": "AssassinationRogue",
+  "encounter_id": 3177,
+  "encounter_name": "Vorasius",
+  "sample_count": 10,
+  "downtime_threshold_ms": 1061,
+  "top_avg_efficiency": 73.8,
+  "top_efficiency_stddev": 6.7,
+  "per_cd_benchmarks": {
+    "Deathmark": {
+      "avg_first_cast_s": 8.3,
+      "stddev_first_cast_s": 1.5,
+      "avg_gap_s": 124.4,
+      "stddev_gap_s": 3.8,
+      "avg_bl_offset_s": null,
+      "stddev_bl_offset_s": null,
+      "hold_targets": {},
+      "uses_per_min": {
+        "avg": 0.61,
+        "stddev": 0.054,
+        "min": 0.539,
+        "max": 0.686
+      }
+    },
+    "Kingsbane": {
+      "avg_first_cast_s": 9.3,
+      "stddev_first_cast_s": 1.5,
+      "avg_gap_s": 62.0,
+      "stddev_gap_s": 2.9,
+      "avg_bl_offset_s": null,
+      "stddev_bl_offset_s": null,
+      "hold_targets": {},
+      "uses_per_min": {
+        "avg": 1.102,
+        "stddev": 0.078,
+        "min": 0.915,
+        "max": 1.188
+      }
+    },
+    "Vanish": {
+      "avg_first_cast_s": 68.5,
+      "stddev_first_cast_s": 61.7,
+      "avg_gap_s": 122.6,
+      "stddev_gap_s": 1.9,
+      "avg_bl_offset_s": null,
+      "stddev_bl_offset_s": null,
+      "hold_targets": {},
+      "uses_per_min": {
+        "avg": 0.479,
+        "stddev": 0.152,
+        "min": 0.27,
+        "max": 0.684
+      }
+    }
+  },
+  "burst_windows": [
+    {
+      "time_s": 13.5,
+      "stddev_s": 5.1,
+      "count": 21,
+      "total_samples": 10,
+      "pct_avg": 0.09,
+      "pct_stddev": 0.019,
+      "pct_min": 0.057,
+      "pct_max": 0.13,
+      "common_cds": [
+        "Kingsbane"
+      ],
+      "avg_targets": 1,
+      "ability_breakdown": [
+        {
+          "spell_id": 385627,
+          "avg_pct": 0.141,
+          "count": 19
+        },
+        {
+          "spell_id": 32645,
+          "avg_pct": 0.139,
+          "count": 19
+        },
+        {
+          "spell_id": 703,
+          "avg_pct": 0.137,
+          "count": 21
+        },
+        {
+          "spell_id": 383414,
+          "avg_pct": 0.101,
+          "count": 19
+        },
+        {
+          "spell_id": 1943,
+          "avg_pct": 0.099,
+          "count": 15
+        },
+        {
+          "spell_id": 113780,
+          "avg_pct": 0.098,
+          "count": 17
+        }
+      ]
+    },
+    {
+      "time_s": 139.6,
+      "stddev_s": 6.8,
+      "count": 14,
+      "total_samples": 10,
+      "pct_avg": 0.082,
+      "pct_stddev": 0.015,
+      "pct_min": 0.061,
+      "pct_max": 0.109,
+      "common_cds": [
+        "Kingsbane",
+        "Deathmark"
+      ],
+      "avg_targets": 1,
+      "ability_breakdown": [
+        {
+          "spell_id": 32645,
+          "avg_pct": 0.171,
+          "count": 14
+        },
+        {
+          "spell_id": 385627,
+          "avg_pct": 0.171,
+          "count": 14
+        },
+        {
+          "spell_id": 452538,
+          "avg_pct": 0.145,
+          "count": 7
+        },
+        {
+          "spell_id": 703,
+          "avg_pct": 0.131,
+          "count": 14
+        },
+        {
+          "spell_id": 383414,
+          "avg_pct": 0.098,
+          "count": 10
+        },
+        {
+          "spell_id": 1943,
+          "avg_pct": 0.088,
+          "count": 11
+        }
+      ]
+    },
+    {
+      "time_s": 252.0,
+      "stddev_s": 6.7,
+      "count": 5,
+      "total_samples": 10,
+      "pct_avg": 0.075,
+      "pct_stddev": 0.012,
+      "pct_min": 0.06,
+      "pct_max": 0.087,
+      "common_cds": [
+        "Deathmark",
+        "Kingsbane"
+      ],
+      "avg_targets": 1,
+      "ability_breakdown": [
+        {
+          "spell_id": 385627,
+          "avg_pct": 0.175,
+          "count": 5
+        },
+        {
+          "spell_id": 32645,
+          "avg_pct": 0.171,
+          "count": 5
+        },
+        {
+          "spell_id": 703,
+          "avg_pct": 0.121,
+          "count": 5
+        },
+        {
+          "spell_id": 113780,
+          "avg_pct": 0.094,
+          "count": 5
+        },
+        {
+          "spell_id": 1943,
+          "avg_pct": 0.094,
+          "count": 4
+        },
+        {
+          "spell_id": 383414,
+          "avg_pct": 0.087,
+          "count": 3
+        }
+      ]
+    }
+  ],
+  "gear": {
+    "sample_count": 10,
+    "talent_builds": [
+      {
+        "key": "v2:110433,110433,110433,90640,90692,90748,90749,90750,90751,90752,90756,90758,90759,90760,90766,90767,90768,90770,90771,90777,90784,90785,90786,94552,94553",
+        "count": 9,
+        "pct": 90,
+        "report_code": "YpdKVTDk4rcQnZNh",
+        "fight_id": 18,
+        "player_name": "Ærri"
+      },
+      {
+        "key": "v2:110433,110433,110433,90692,90748,90749,90750,90751,90752,90756,90758,90759,90760,90766,90767,90768,90770,90771,90777,90784,90785,90786,94552,94553",
+        "count": 1,
+        "pct": 10,
+        "report_code": "2ytAP8n4YXvwaGhm",
+        "fight_id": 10,
+        "player_name": "Cyphixr"
+      }
+    ],
+    "trinkets": {
+      "12": [
+        {
+          "id": 193701,
+          "name": "Algeth'ar Puzzle Box",
+          "count": 7,
+          "pct": 70
+        },
+        {
+          "id": 249343,
+          "name": "Gaze of the Alnseer",
+          "count": 3,
+          "pct": 30
+        }
+      ],
+      "13": [
+        {
+          "id": 249343,
+          "name": "Gaze of the Alnseer",
+          "count": 7,
+          "pct": 70
+        },
+        {
+          "id": 193701,
+          "name": "Algeth'ar Puzzle Box",
+          "count": 2,
+          "pct": 20
+        },
+        {
+          "id": 249344,
+          "name": "Light Company Guidon",
+          "count": 1,
+          "pct": 10
+        }
+      ]
+    },
+    "enchants": {
+      "0": [
+        {
+          "id": 8017,
+          "name": "",
+          "count": 7,
+          "pct": 70
+        },
+        {
+          "id": 7991,
+          "name": "",
+          "count": 1,
+          "pct": 10
+        },
+        {
+          "id": 7961,
+          "name": "",
+          "count": 1,
+          "pct": 10
+        }
+      ],
+      "2": [
+        {
+          "id": 8001,
+          "name": "",
+          "count": 7,
+          "pct": 70
+        },
+        {
+          "id": 7973,
+          "name": "",
+          "count": 2,
+          "pct": 20
+        },
+        {
+          "id": 8031,
+          "name": "",
+          "count": 1,
+          "pct": 10
+        }
+      ],
+      "4": [
+        {
+          "id": 7987,
+          "name": "",
+          "count": 10,
+          "pct": 100
+        }
+      ],
+      "6": [
+        {
+          "id": 8159,
+          "name": "",
+          "count": 10,
+          "pct": 100
+        }
+      ],
+      "7": [
+        {
+          "id": 7963,
+          "name": "",
+          "count": 5,
+          "pct": 50
+        },
+        {
+          "id": 8019,
+          "name": "",
+          "count": 3,
+          "pct": 30
+        },
+        {
+          "id": 7993,
+          "name": "",
+          "count": 2,
+          "pct": 20
+        }
+      ],
+      "10": [
+        {
+          "id": 7967,
+          "name": "",
+          "count": 10,
+          "pct": 100
+        }
+      ],
+      "11": [
+        {
+          "id": 7967,
+          "name": "",
+          "count": 10,
+          "pct": 100
+        }
+      ],
+      "15": [
+        {
+          "id": 8039,
+          "name": "",
+          "count": 6,
+          "pct": 60
+        },
+        {
+          "id": 7981,
+          "name": "",
+          "count": 4,
+          "pct": 40
+        }
+      ],
+      "16": [
+        {
+          "id": 8039,
+          "name": "",
+          "count": 9,
+          "pct": 90
+        },
+        {
+          "id": 7983,
+          "name": "",
+          "count": 1,
+          "pct": 10
+        }
+      ],
+      "9": [
+        {
+          "id": 2841,
+          "name": "",
+          "count": 1,
+          "pct": 10
+        }
+      ]
+    }
+  }
+}

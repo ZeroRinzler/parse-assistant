@@ -1,0 +1,459 @@
+{
+  "spec": "SubtletyRogue",
+  "encounter_id": 3178,
+  "encounter_name": "Vaelgor & Ezzorak",
+  "sample_count": 10,
+  "downtime_threshold_ms": 1510,
+  "top_avg_efficiency": 72.9,
+  "top_efficiency_stddev": 3.4,
+  "per_cd_benchmarks": {
+    "Shadow Blades": {
+      "avg_first_cast_s": 3.9,
+      "stddev_first_cast_s": 1.8,
+      "avg_gap_s": 101.0,
+      "stddev_gap_s": 7.2,
+      "avg_bl_offset_s": null,
+      "stddev_bl_offset_s": null,
+      "hold_targets": {
+        "3": {
+          "target_s": 206.0,
+          "stddev_s": 4.8,
+          "count": 9,
+          "total_samples": 10
+        },
+        "4": {
+          "target_s": 308.1,
+          "stddev_s": 7.2,
+          "count": 10,
+          "total_samples": 10
+        }
+      },
+      "uses_per_min": {
+        "avg": 0.671,
+        "stddev": 0.037,
+        "min": 0.614,
+        "max": 0.748
+      }
+    },
+    "Shadow Dance": {
+      "avg_first_cast_s": 4.0,
+      "stddev_first_cast_s": 1.8,
+      "avg_gap_s": 19.9,
+      "stddev_gap_s": 6.4,
+      "avg_bl_offset_s": null,
+      "stddev_bl_offset_s": null,
+      "hold_targets": {},
+      "uses_per_min": {
+        "avg": 3.083,
+        "stddev": 0.113,
+        "min": 2.844,
+        "max": 3.2
+      }
+    },
+    "Secret Technique": {
+      "avg_first_cast_s": 4.1,
+      "stddev_first_cast_s": 1.8,
+      "avg_gap_s": 20.6,
+      "stddev_gap_s": 4.4,
+      "avg_bl_offset_s": null,
+      "stddev_bl_offset_s": null,
+      "hold_targets": {},
+      "uses_per_min": {
+        "avg": 2.97,
+        "stddev": 0.077,
+        "min": 2.842,
+        "max": 3.064
+      }
+    },
+    "Vanish": {
+      "avg_first_cast_s": 21.9,
+      "stddev_first_cast_s": 19.6,
+      "avg_gap_s": 180.4,
+      "stddev_gap_s": 84.8,
+      "avg_bl_offset_s": null,
+      "stddev_bl_offset_s": null,
+      "hold_targets": {
+        "2": {
+          "target_s": 203.4,
+          "stddev_s": 106.4,
+          "count": 7,
+          "total_samples": 10
+        },
+        "3": {
+          "target_s": 304.0,
+          "stddev_s": 36.2,
+          "count": 5,
+          "total_samples": 10
+        }
+      },
+      "uses_per_min": {
+        "avg": 0.396,
+        "stddev": 0.146,
+        "min": 0.161,
+        "max": 0.599
+      }
+    },
+    "Algeth'ar Puzzle Box": {
+      "avg_first_cast_s": null,
+      "stddev_first_cast_s": null,
+      "avg_gap_s": null,
+      "stddev_gap_s": null,
+      "avg_bl_offset_s": null,
+      "stddev_bl_offset_s": null,
+      "hold_targets": {},
+      "uses_per_min": {}
+    }
+  },
+  "burst_windows": [
+    {
+      "time_s": 78.6,
+      "stddev_s": 0.4,
+      "count": 6,
+      "total_samples": 10,
+      "pct_avg": 0.067,
+      "pct_stddev": 0.003,
+      "pct_min": 0.062,
+      "pct_max": 0.072,
+      "common_cds": [
+        "Shadow Dance"
+      ],
+      "avg_targets": 3,
+      "ability_breakdown": [
+        {
+          "spell_id": 459497,
+          "avg_pct": 0.249,
+          "count": 6
+        },
+        {
+          "spell_id": 319175,
+          "avg_pct": 0.211,
+          "count": 6
+        },
+        {
+          "spell_id": 282449,
+          "avg_pct": 0.156,
+          "count": 6
+        },
+        {
+          "spell_id": 319190,
+          "avg_pct": 0.096,
+          "count": 6
+        },
+        {
+          "spell_id": 280720,
+          "avg_pct": 0.069,
+          "count": 4
+        },
+        {
+          "spell_id": 197835,
+          "avg_pct": 0.069,
+          "count": 5
+        }
+      ]
+    },
+    {
+      "time_s": 206.4,
+      "stddev_s": 1.4,
+      "count": 9,
+      "total_samples": 10,
+      "pct_avg": 0.089,
+      "pct_stddev": 0.018,
+      "pct_min": 0.062,
+      "pct_max": 0.119,
+      "common_cds": [
+        "Shadow Blades",
+        "Shadow Dance"
+      ],
+      "avg_targets": 3,
+      "ability_breakdown": [
+        {
+          "spell_id": 459497,
+          "avg_pct": 0.237,
+          "count": 8
+        },
+        {
+          "spell_id": 279043,
+          "avg_pct": 0.187,
+          "count": 9
+        },
+        {
+          "spell_id": 319175,
+          "avg_pct": 0.181,
+          "count": 9
+        },
+        {
+          "spell_id": 282449,
+          "avg_pct": 0.138,
+          "count": 8
+        },
+        {
+          "spell_id": 319190,
+          "avg_pct": 0.076,
+          "count": 9
+        }
+      ]
+    },
+    {
+      "time_s": 286.4,
+      "stddev_s": 0.4,
+      "count": 6,
+      "total_samples": 10,
+      "pct_avg": 0.072,
+      "pct_stddev": 0.021,
+      "pct_min": 0.05,
+      "pct_max": 0.107,
+      "common_cds": [
+        "Shadow Dance"
+      ],
+      "avg_targets": 3,
+      "ability_breakdown": [
+        {
+          "spell_id": 459497,
+          "avg_pct": 0.224,
+          "count": 5
+        },
+        {
+          "spell_id": 319175,
+          "avg_pct": 0.206,
+          "count": 6
+        },
+        {
+          "spell_id": 282449,
+          "avg_pct": 0.2,
+          "count": 6
+        },
+        {
+          "spell_id": 319190,
+          "avg_pct": 0.09,
+          "count": 6
+        },
+        {
+          "spell_id": 280720,
+          "avg_pct": 0.07,
+          "count": 3
+        },
+        {
+          "spell_id": 197835,
+          "avg_pct": 0.067,
+          "count": 5
+        }
+      ]
+    },
+    {
+      "time_s": 308.3,
+      "stddev_s": 0.6,
+      "count": 9,
+      "total_samples": 10,
+      "pct_avg": 0.098,
+      "pct_stddev": 0.018,
+      "pct_min": 0.067,
+      "pct_max": 0.123,
+      "common_cds": [
+        "Shadow Blades",
+        "Shadow Dance"
+      ],
+      "avg_targets": 2,
+      "ability_breakdown": [
+        {
+          "spell_id": 282449,
+          "avg_pct": 0.225,
+          "count": 9
+        },
+        {
+          "spell_id": 459497,
+          "avg_pct": 0.212,
+          "count": 9
+        },
+        {
+          "spell_id": 279043,
+          "avg_pct": 0.191,
+          "count": 9
+        },
+        {
+          "spell_id": 319175,
+          "avg_pct": 0.107,
+          "count": 9
+        },
+        {
+          "spell_id": 319190,
+          "avg_pct": 0.056,
+          "count": 5
+        },
+        {
+          "spell_id": 280720,
+          "avg_pct": 0.049,
+          "count": 6
+        }
+      ]
+    }
+  ],
+  "gear": {
+    "sample_count": 10,
+    "talent_builds": [
+      {
+        "key": "v2:110432,110432,110432,90638,90639,90640,90692,90704,90706,90713,90716,90718,90720,90721,90724,90730,90732,90738,90748,90749,90750,90751,90752,90758,90760,94580",
+        "count": 9,
+        "pct": 90,
+        "report_code": "qyd4V3RmZ2zhwcDM",
+        "fight_id": 48,
+        "player_name": "Leseryang"
+      },
+      {
+        "key": "v2:110432,110432,110432,90638,90639,90640,90692,90704,90706,90713,90716,90720,90721,90724,90730,90732,90738,90748,90749,90750,90751,90752,90758,90760,94580",
+        "count": 1,
+        "pct": 10,
+        "report_code": "a8A6FBJbYWTV9mgZ",
+        "fight_id": 24,
+        "player_name": "慌啦"
+      }
+    ],
+    "trinkets": {
+      "12": [
+        {
+          "id": 249344,
+          "name": "Light Company Guidon",
+          "count": 8,
+          "pct": 80
+        },
+        {
+          "id": 249343,
+          "name": "Gaze of the Alnseer",
+          "count": 2,
+          "pct": 20
+        }
+      ],
+      "13": [
+        {
+          "id": 249343,
+          "name": "Gaze of the Alnseer",
+          "count": 8,
+          "pct": 80
+        },
+        {
+          "id": 249344,
+          "name": "Light Company Guidon",
+          "count": 2,
+          "pct": 20
+        }
+      ]
+    },
+    "enchants": {
+      "0": [
+        {
+          "id": 8017,
+          "name": "",
+          "count": 9,
+          "pct": 90
+        },
+        {
+          "id": 7959,
+          "name": "",
+          "count": 1,
+          "pct": 10
+        }
+      ],
+      "2": [
+        {
+          "id": 8001,
+          "name": "",
+          "count": 7,
+          "pct": 70
+        },
+        {
+          "id": 8031,
+          "name": "",
+          "count": 2,
+          "pct": 20
+        },
+        {
+          "id": 8028,
+          "name": "",
+          "count": 1,
+          "pct": 10
+        }
+      ],
+      "4": [
+        {
+          "id": 7987,
+          "name": "",
+          "count": 10,
+          "pct": 100
+        }
+      ],
+      "6": [
+        {
+          "id": 8159,
+          "name": "",
+          "count": 10,
+          "pct": 100
+        }
+      ],
+      "7": [
+        {
+          "id": 7963,
+          "name": "",
+          "count": 8,
+          "pct": 80
+        },
+        {
+          "id": 7993,
+          "name": "",
+          "count": 2,
+          "pct": 20
+        }
+      ],
+      "10": [
+        {
+          "id": 7967,
+          "name": "",
+          "count": 10,
+          "pct": 100
+        }
+      ],
+      "11": [
+        {
+          "id": 7967,
+          "name": "",
+          "count": 10,
+          "pct": 100
+        }
+      ],
+      "15": [
+        {
+          "id": 8039,
+          "name": "",
+          "count": 8,
+          "pct": 80
+        },
+        {
+          "id": 8041,
+          "name": "",
+          "count": 2,
+          "pct": 20
+        }
+      ],
+      "16": [
+        {
+          "id": 8039,
+          "name": "",
+          "count": 8,
+          "pct": 80
+        },
+        {
+          "id": 8041,
+          "name": "",
+          "count": 2,
+          "pct": 20
+        }
+      ],
+      "9": [
+        {
+          "id": 2841,
+          "name": "",
+          "count": 1,
+          "pct": 10
+        }
+      ]
+    }
+  }
+}

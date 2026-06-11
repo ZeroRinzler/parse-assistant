@@ -1,0 +1,429 @@
+{
+  "spec": "SubtletyRogue",
+  "encounter_id": 3180,
+  "encounter_name": "Lightblinded Vanguard",
+  "sample_count": 10,
+  "downtime_threshold_ms": 1474,
+  "top_avg_efficiency": 73.2,
+  "top_efficiency_stddev": 1.8,
+  "per_cd_benchmarks": {
+    "Shadow Blades": {
+      "avg_first_cast_s": 2.5,
+      "stddev_first_cast_s": 1.1,
+      "avg_gap_s": 101.3,
+      "stddev_gap_s": 9.5,
+      "avg_bl_offset_s": null,
+      "stddev_bl_offset_s": null,
+      "hold_targets": {
+        "5": {
+          "target_s": 397.6,
+          "stddev_s": 15.0,
+          "count": 4,
+          "total_samples": 10
+        },
+        "3": {
+          "target_s": 215.4,
+          "stddev_s": 11.0,
+          "count": 8,
+          "total_samples": 10
+        },
+        "4": {
+          "target_s": 307.5,
+          "stddev_s": 18.7,
+          "count": 9,
+          "total_samples": 10
+        },
+        "2": {
+          "target_s": 103.7,
+          "stddev_s": 3.1,
+          "count": 5,
+          "total_samples": 10
+        }
+      },
+      "uses_per_min": {
+        "avg": 0.694,
+        "stddev": 0.062,
+        "min": 0.57,
+        "max": 0.759
+      }
+    },
+    "Shadow Dance": {
+      "avg_first_cast_s": 2.6,
+      "stddev_first_cast_s": 1.1,
+      "avg_gap_s": 19.1,
+      "stddev_gap_s": 5.9,
+      "avg_bl_offset_s": null,
+      "stddev_bl_offset_s": null,
+      "hold_targets": {},
+      "uses_per_min": {
+        "avg": 3.196,
+        "stddev": 0.065,
+        "min": 3.098,
+        "max": 3.281
+      }
+    },
+    "Secret Technique": {
+      "avg_first_cast_s": 2.6,
+      "stddev_first_cast_s": 1.1,
+      "avg_gap_s": 19.3,
+      "stddev_gap_s": 4.0,
+      "avg_bl_offset_s": null,
+      "stddev_bl_offset_s": null,
+      "hold_targets": {},
+      "uses_per_min": {
+        "avg": 3.149,
+        "stddev": 0.093,
+        "min": 3.015,
+        "max": 3.281
+      }
+    },
+    "Vanish": {
+      "avg_first_cast_s": 54.0,
+      "stddev_first_cast_s": 90.6,
+      "avg_gap_s": 149.9,
+      "stddev_gap_s": 26.9,
+      "avg_bl_offset_s": null,
+      "stddev_bl_offset_s": null,
+      "hold_targets": {
+        "2": {
+          "target_s": 183.2,
+          "stddev_s": 33.0,
+          "count": 6,
+          "total_samples": 10
+        },
+        "3": {
+          "target_s": 339.6,
+          "stddev_s": 43.8,
+          "count": 6,
+          "total_samples": 10
+        }
+      },
+      "uses_per_min": {
+        "avg": 0.423,
+        "stddev": 0.096,
+        "min": 0.172,
+        "max": 0.518
+      }
+    },
+    "Algeth'ar Puzzle Box": {
+      "avg_first_cast_s": null,
+      "stddev_first_cast_s": null,
+      "avg_gap_s": null,
+      "stddev_gap_s": null,
+      "avg_bl_offset_s": null,
+      "stddev_bl_offset_s": null,
+      "hold_targets": {},
+      "uses_per_min": {}
+    }
+  },
+  "burst_windows": [
+    {
+      "time_s": 8.5,
+      "stddev_s": 5.1,
+      "count": 19,
+      "total_samples": 10,
+      "pct_avg": 0.078,
+      "pct_stddev": 0.01,
+      "pct_min": 0.065,
+      "pct_max": 0.107,
+      "common_cds": [
+        "Shadow Blades",
+        "Shadow Dance"
+      ],
+      "avg_targets": 3,
+      "ability_breakdown": [
+        {
+          "spell_id": 279043,
+          "avg_pct": 0.206,
+          "count": 19
+        },
+        {
+          "spell_id": 282449,
+          "avg_pct": 0.177,
+          "count": 19
+        },
+        {
+          "spell_id": 459497,
+          "avg_pct": 0.125,
+          "count": 17
+        },
+        {
+          "spell_id": 319175,
+          "avg_pct": 0.121,
+          "count": 18
+        },
+        {
+          "spell_id": 319190,
+          "avg_pct": 0.057,
+          "count": 14
+        }
+      ]
+    },
+    {
+      "time_s": 218.2,
+      "stddev_s": 3.2,
+      "count": 5,
+      "total_samples": 10,
+      "pct_avg": 0.06,
+      "pct_stddev": 0.007,
+      "pct_min": 0.048,
+      "pct_max": 0.068,
+      "common_cds": [
+        "Shadow Blades",
+        "Shadow Dance"
+      ],
+      "avg_targets": 3,
+      "ability_breakdown": [
+        {
+          "spell_id": 279043,
+          "avg_pct": 0.203,
+          "count": 5
+        },
+        {
+          "spell_id": 282449,
+          "avg_pct": 0.185,
+          "count": 5
+        },
+        {
+          "spell_id": 459497,
+          "avg_pct": 0.16,
+          "count": 5
+        },
+        {
+          "spell_id": 319175,
+          "avg_pct": 0.119,
+          "count": 4
+        },
+        {
+          "spell_id": 1269205,
+          "avg_pct": 0.059,
+          "count": 5
+        },
+        {
+          "spell_id": 319190,
+          "avg_pct": 0.056,
+          "count": 3
+        }
+      ]
+    },
+    {
+      "time_s": 332.8,
+      "stddev_s": 7.2,
+      "count": 4,
+      "total_samples": 10,
+      "pct_avg": 0.057,
+      "pct_stddev": 0.005,
+      "pct_min": 0.05,
+      "pct_max": 0.06,
+      "common_cds": [
+        "Shadow Blades"
+      ],
+      "avg_targets": 3,
+      "ability_breakdown": [
+        {
+          "spell_id": 282449,
+          "avg_pct": 0.225,
+          "count": 4
+        },
+        {
+          "spell_id": 279043,
+          "avg_pct": 0.215,
+          "count": 4
+        },
+        {
+          "spell_id": 459497,
+          "avg_pct": 0.104,
+          "count": 4
+        },
+        {
+          "spell_id": 319175,
+          "avg_pct": 0.082,
+          "count": 4
+        },
+        {
+          "spell_id": 280720,
+          "avg_pct": 0.051,
+          "count": 3
+        },
+        {
+          "spell_id": 1264397,
+          "avg_pct": 0.05,
+          "count": 2
+        }
+      ]
+    }
+  ],
+  "gear": {
+    "sample_count": 10,
+    "talent_builds": [
+      {
+        "key": "v2:110432,110432,110432,90638,90639,90640,90692,90704,90706,90713,90716,90718,90720,90721,90724,90730,90732,90738,90748,90749,90750,90751,90752,90758,90760,94580",
+        "count": 10,
+        "pct": 100,
+        "report_code": "TYahq612VF8AKByc",
+        "fight_id": 31,
+        "player_name": "彗声彗色"
+      }
+    ],
+    "trinkets": {
+      "12": [
+        {
+          "id": 249344,
+          "name": "Light Company Guidon",
+          "count": 8,
+          "pct": 80
+        },
+        {
+          "id": 249343,
+          "name": "Gaze of the Alnseer",
+          "count": 2,
+          "pct": 20
+        }
+      ],
+      "13": [
+        {
+          "id": 249343,
+          "name": "Gaze of the Alnseer",
+          "count": 8,
+          "pct": 80
+        },
+        {
+          "id": 249344,
+          "name": "Light Company Guidon",
+          "count": 2,
+          "pct": 20
+        }
+      ]
+    },
+    "enchants": {
+      "0": [
+        {
+          "id": 8017,
+          "name": "",
+          "count": 7,
+          "pct": 70
+        },
+        {
+          "id": 7961,
+          "name": "",
+          "count": 2,
+          "pct": 20
+        },
+        {
+          "id": 8015,
+          "name": "",
+          "count": 1,
+          "pct": 10
+        }
+      ],
+      "2": [
+        {
+          "id": 8001,
+          "name": "",
+          "count": 7,
+          "pct": 70
+        },
+        {
+          "id": 8031,
+          "name": "",
+          "count": 2,
+          "pct": 20
+        },
+        {
+          "id": 4205,
+          "name": "",
+          "count": 1,
+          "pct": 10
+        }
+      ],
+      "4": [
+        {
+          "id": 7987,
+          "name": "",
+          "count": 10,
+          "pct": 100
+        }
+      ],
+      "6": [
+        {
+          "id": 8159,
+          "name": "",
+          "count": 10,
+          "pct": 100
+        }
+      ],
+      "7": [
+        {
+          "id": 7963,
+          "name": "",
+          "count": 9,
+          "pct": 90
+        },
+        {
+          "id": 7993,
+          "name": "",
+          "count": 1,
+          "pct": 10
+        }
+      ],
+      "10": [
+        {
+          "id": 7967,
+          "name": "",
+          "count": 10,
+          "pct": 100
+        }
+      ],
+      "11": [
+        {
+          "id": 7967,
+          "name": "",
+          "count": 9,
+          "pct": 90
+        },
+        {
+          "id": 7969,
+          "name": "",
+          "count": 1,
+          "pct": 10
+        }
+      ],
+      "15": [
+        {
+          "id": 8039,
+          "name": "",
+          "count": 9,
+          "pct": 90
+        },
+        {
+          "id": 8041,
+          "name": "",
+          "count": 1,
+          "pct": 10
+        }
+      ],
+      "16": [
+        {
+          "id": 8039,
+          "name": "",
+          "count": 9,
+          "pct": 90
+        },
+        {
+          "id": 8041,
+          "name": "",
+          "count": 1,
+          "pct": 10
+        }
+      ],
+      "9": [
+        {
+          "id": 2841,
+          "name": "",
+          "count": 1,
+          "pct": 10
+        }
+      ]
+    }
+  }
+}

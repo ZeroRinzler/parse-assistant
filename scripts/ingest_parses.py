@@ -78,6 +78,8 @@ async def ingest_spec(wcl: WCLClient, spec: str, top_n: int = 10) -> int:
                 )
                 boss_saved += 1
         total_saved += boss_saved
+        if boss_saved:
+            await db.sync_encounter_file(spec, enc_id)
         print(f" → {boss_saved}/{len(rankings)} saved", flush=True)
 
     return total_saved

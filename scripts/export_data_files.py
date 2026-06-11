@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Export existing SQLite rulebooks and guide metadata to data/specs/ JSON files.
-Run once to bootstrap the file-based storage from an existing warcraft.db.
+Export existing SQLite data to data/specs/ JSON files.
+Run once to bootstrap file-based storage from an existing warcraft.db,
+or re-run at any time to re-sync everything.
 
     python3 scripts/export_data_files.py
 """
@@ -24,13 +25,15 @@ async def main() -> None:
         print(f"DB not found: {DB_PATH}")
         return
 
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
+    import db as _db
+    await _db.init_db()
+
+    async with aiosqlite.connect(DB_PATH) as conn:
+        conn.row_factory = aiosqlite.Row
 
         # Export rulebooks
-        async with db.execute("SELECT spec, rulebook FROM generated_rulebooks") as cur:
+        async with conn.execute("SELECT spec, rulebook FROM generated_rulebooks") as cur:
             rows = await cur.fetchall()
-
         for row in rows:
             spec = row["spec"]
             try:
@@ -44,13 +47,10 @@ async def main() -> None:
             print(f"  rulebook -> {out.relative_to(ROOT)}")
 
         # Export guide metadata (no content)
-        async with db.execute(
-            "SELECT DISTINCT spec FROM guides ORDER BY spec"
-        ) as cur:
-            specs = [r[0] async for r in cur]
-
-        for spec in specs:
-            async with db.execute(
+        async with conn.execute("SELECT DISTINCT spec FROM guides ORDER BY spec") as cur:
+            guide_specs = [r[0] async for r in cur]
+        for spec in guide_specs:
+            async with conn.execute(
                 "SELECT id, spec, title, url, guide_type, word_count, status, error_msg, created_at, updated_at "
                 "FROM guides WHERE spec=? ORDER BY created_at DESC",
                 (spec,),
@@ -60,6 +60,17 @@ async def main() -> None:
             out.parent.mkdir(parents=True, exist_ok=True)
             out.write_text(json.dumps(guides, indent=2, ensure_ascii=False))
             print(f"  guides   -> {out.relative_to(ROOT)}")
+
+        # Export encounter bench files (pre-computed from parse samples)
+        async with conn.execute(
+            "SELECT DISTINCT spec, encounter_id FROM parse_samples ORDER BY spec, encounter_id"
+        ) as cur:
+            enc_rows = [(r[0], r[1]) async for r in cur]
+    for spec, enc_id in enc_rows:
+        await _db.sync_encounter_file(spec, enc_id)
+        out = SPECS_DIR / spec / "encounters" / f"{enc_id}.json"
+        if out.exists():
+            print(f"  encounter -> {out.relative_to(ROOT)}")
 
     print("Done.")
 
