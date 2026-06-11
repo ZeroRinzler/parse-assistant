@@ -18,34 +18,30 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from dotenv import load_dotenv
 load_dotenv()
 
-import db
+import store
 from scraper import scrape
 
 
 async def main(spec: str, url: str, guide_type: str):
-    await db.init_db()
+    store.init_store()
 
-    # Check if this URL already exists for the spec
-    guides = await db.get_guides(spec)
-    existing = next((g for g in guides if g["url"] == url), None)
-
-    if existing:
-        guide_id = existing["id"]
+    guide_id = store.add_guide(spec, url, guide_type)
+    guide = store.get_guide(guide_id)
+    if guide and guide.get("status") == "scraped":
         print(f"Guide already exists (id={guide_id}), re-scraping...", flush=True)
     else:
-        guide_id = await db.add_guide(spec, url, guide_type)
         print(f"Added guide id={guide_id} for {spec}", flush=True)
 
     print(f"Scraping {url} ...", flush=True)
     try:
         title, content = await scrape(url, guide_type)
     except Exception as exc:
-        await db.update_guide_error(guide_id, str(exc), spec=spec)
+        store.update_guide_error(guide_id, str(exc), spec=spec)
         print(f"ERROR: {exc}", flush=True)
         sys.exit(1)
 
     word_count = len(content.split())
-    await db.update_guide_content(guide_id, title, content, word_count, spec=spec)
+    store.update_guide_content(guide_id, title, content, word_count, spec=spec)
     print(f"Done. Stored {len(content)} chars for {spec} (title: {title!r}).", flush=True)
 
 

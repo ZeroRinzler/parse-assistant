@@ -6,5 +6,4 @@ pydantic>=2.0
 anthropic
 beautifulsoup4
 lxml
-aiosqlite
 youtube-transcript-api

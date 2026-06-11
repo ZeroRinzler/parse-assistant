@@ -5,7 +5,7 @@ import asyncio
 import json
 from typing import Optional
 
-import db
+import store
 from rulebook import BLOODLUST_SPELL_IDS, SPEC_COOLDOWNS, SPEC_DEFENSIVES
 from wcl_client import WCLClient
 
@@ -436,7 +436,7 @@ async def analyze_parse(
             bl_time_s = (e["timestamp"] - start) / 1000
             break
 
-    spec_cds = db.get_spec_cooldowns(spec) or []
+    spec_cds = store.get_spec_cooldowns(spec) or []
     cd_summary: list[dict] = []
 
     for cd in spec_cds:

@@ -4,11 +4,13 @@
   "encounter_name": "Vaelgor & Ezzorak",
   "sample_count": 10,
   "avg_duration_s": 384.2,
+  "last_ingested": "2026-06-11 15:20:55",
   "downtime_threshold_ms": 1510,
   "top_avg_efficiency": 72.9,
   "top_efficiency_stddev": 3.4,
   "per_cd_benchmarks": {
     "Shadow Blades": {
+      "sample_count": 10,
       "avg_first_cast_s": 3.9,
       "stddev_first_cast_s": 1.8,
       "avg_gap_s": 101.0,
@@ -41,6 +43,7 @@
       "majority_hold": true
     },
     "Shadow Dance": {
+      "sample_count": 10,
       "avg_first_cast_s": 4.0,
       "stddev_first_cast_s": 1.8,
       "avg_gap_s": 19.9,
@@ -60,6 +63,7 @@
       "majority_hold": false
     },
     "Secret Technique": {
+      "sample_count": 10,
       "avg_first_cast_s": 4.1,
       "stddev_first_cast_s": 1.8,
       "avg_gap_s": 20.6,
@@ -79,6 +83,7 @@
       "majority_hold": false
     },
     "Vanish": {
+      "sample_count": 10,
       "avg_first_cast_s": 21.9,
       "stddev_first_cast_s": 19.6,
       "avg_gap_s": 180.4,
@@ -111,6 +116,7 @@
       "majority_hold": true
     },
     "Algeth'ar Puzzle Box": {
+      "sample_count": 10,
       "avg_first_cast_s": null,
       "stddev_first_cast_s": null,
       "avg_gap_s": null,
@@ -315,9 +321,9 @@
         "key": "v2:110432,110432,110432,90638,90639,90640,90692,90704,90706,90713,90716,90718,90720,90721,90724,90730,90732,90738,90748,90749,90750,90751,90752,90758,90760,94580",
         "count": 9,
         "pct": 90,
-        "report_code": "qyd4V3RmZ2zhwcDM",
-        "fight_id": 48,
-        "player_name": "Leseryang"
+        "report_code": "DMjA3tVv6hQcGyKa",
+        "fight_id": 30,
+        "player_name": "Monsterabuse"
       },
       {
         "key": "v2:110432,110432,110432,90638,90639,90640,90692,90704,90706,90713,90716,90720,90721,90724,90730,90732,90738,90748,90749,90750,90751,90752,90758,90760,94580",
@@ -423,6 +429,14 @@
           "pct": 20
         }
       ],
+      "9": [
+        {
+          "id": 2841,
+          "name": "",
+          "count": 1,
+          "pct": 10
+        }
+      ],
       "10": [
         {
           "id": 7967,
@@ -466,14 +480,6 @@
           "count": 2,
           "pct": 20
         }
-      ],
-      "9": [
-        {
-          "id": 2841,
-          "name": "",
-          "count": 1,
-          "pct": 10
-        }
       ]
     }
   },
@@ -493,6 +499,80 @@
       "min_uses": 1,
       "max_uses": 3,
       "sample_count": 3
+    }
+  ],
+  "top_dtk_comparison": [
+    {
+      "spell_id": 1259275,
+      "avg_pct": 0.2249,
+      "min_pct": 0.165,
+      "max_pct": 0.319,
+      "stddev_pct": 0.0475,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1250071,
+      "avg_pct": 0.1695,
+      "min_pct": 0.155,
+      "max_pct": 0.198,
+      "stddev_pct": 0.0151,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1285954,
+      "avg_pct": 0.1397,
+      "min_pct": 0.116,
+      "max_pct": 0.156,
+      "stddev_pct": 0.0139,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1245175,
+      "avg_pct": 0.0865,
+      "min_pct": 0.041,
+      "max_pct": 0.13,
+      "stddev_pct": 0.033,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1245302,
+      "avg_pct": 0.0791,
+      "min_pct": 0.05,
+      "max_pct": 0.112,
+      "stddev_pct": 0.0182,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1245500,
+      "avg_pct": 0.0757,
+      "min_pct": 0.06,
+      "max_pct": 0.086,
+      "stddev_pct": 0.0093,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1244413,
+      "avg_pct": 0.0582,
+      "min_pct": 0.045,
+      "max_pct": 0.066,
+      "stddev_pct": 0.0064,
+      "sample_count": 9
+    },
+    {
+      "spell_id": 1283712,
+      "avg_pct": 0.056,
+      "min_pct": 0.039,
+      "max_pct": 0.095,
+      "stddev_pct": 0.0224,
+      "sample_count": 5
+    },
+    {
+      "spell_id": 1249748,
+      "avg_pct": 0.0432,
+      "min_pct": 0.039,
+      "max_pct": 0.047,
+      "stddev_pct": 0.0036,
+      "sample_count": 5
     }
   ]
 }

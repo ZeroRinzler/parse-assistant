@@ -4,11 +4,13 @@
   "encounter_name": "Belo'ren, Child of Al'ar",
   "sample_count": 10,
   "avg_duration_s": 290.5,
+  "last_ingested": "2026-06-11 15:20:55",
   "downtime_threshold_ms": 1500,
   "top_avg_efficiency": 72.7,
   "top_efficiency_stddev": 3.5,
   "per_cd_benchmarks": {
     "Shadow Blades": {
+      "sample_count": 10,
       "avg_first_cast_s": 17.3,
       "stddev_first_cast_s": 8.0,
       "avg_gap_s": 96.9,
@@ -35,6 +37,7 @@
       "majority_hold": true
     },
     "Shadow Dance": {
+      "sample_count": 10,
       "avg_first_cast_s": 1.9,
       "stddev_first_cast_s": 0.7,
       "avg_gap_s": 19.2,
@@ -54,6 +57,7 @@
       "majority_hold": false
     },
     "Secret Technique": {
+      "sample_count": 10,
       "avg_first_cast_s": 1.9,
       "stddev_first_cast_s": 0.7,
       "avg_gap_s": 19.8,
@@ -73,6 +77,7 @@
       "majority_hold": false
     },
     "Vanish": {
+      "sample_count": 10,
       "avg_first_cast_s": 52.2,
       "stddev_first_cast_s": 69.9,
       "avg_gap_s": 130.6,
@@ -105,6 +110,7 @@
       "majority_hold": true
     },
     "Algeth'ar Puzzle Box": {
+      "sample_count": 10,
       "avg_first_cast_s": null,
       "stddev_first_cast_s": null,
       "avg_gap_s": null,
@@ -269,9 +275,9 @@
         "key": "v2:110432,110432,110432,90638,90639,90640,90692,90704,90706,90713,90716,90720,90721,90724,90730,90732,90738,90748,90749,90750,90751,90752,90758,90760,94580",
         "count": 10,
         "pct": 100,
-        "report_code": "kdJPBQRMr8aWHcCh",
-        "fight_id": 9,
-        "player_name": "만장대"
+        "report_code": "bJt36pcTyM7rkBm2",
+        "fight_id": 3,
+        "player_name": "綾瀬沙季"
       }
     ],
     "trinkets": {
@@ -357,13 +363,13 @@
           "pct": 80
         },
         {
-          "id": 7993,
+          "id": 8019,
           "name": "",
           "count": 1,
           "pct": 10
         },
         {
-          "id": 8019,
+          "id": 7993,
           "name": "",
           "count": 1,
           "pct": 10
@@ -439,6 +445,64 @@
       "min_uses": 1,
       "max_uses": 1,
       "sample_count": 1
+    }
+  ],
+  "top_dtk_comparison": [
+    {
+      "spell_id": 1264650,
+      "avg_pct": 0.2895,
+      "min_pct": 0.247,
+      "max_pct": 0.322,
+      "stddev_pct": 0.0256,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1242815,
+      "avg_pct": 0.2451,
+      "min_pct": 0.149,
+      "max_pct": 0.448,
+      "stddev_pct": 0.1162,
+      "sample_count": 8
+    },
+    {
+      "spell_id": 1242803,
+      "avg_pct": 0.2351,
+      "min_pct": 0.152,
+      "max_pct": 0.37,
+      "stddev_pct": 0.0823,
+      "sample_count": 8
+    },
+    {
+      "spell_id": 1241932,
+      "avg_pct": 0.2127,
+      "min_pct": 0.151,
+      "max_pct": 0.261,
+      "stddev_pct": 0.0348,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1241333,
+      "avg_pct": 0.0314,
+      "min_pct": 0.023,
+      "max_pct": 0.045,
+      "stddev_pct": 0.0079,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1244348,
+      "avg_pct": 0.0195,
+      "min_pct": 0.008,
+      "max_pct": 0.033,
+      "stddev_pct": 0.0091,
+      "sample_count": 6
+    },
+    {
+      "spell_id": 1262573,
+      "avg_pct": 0.0166,
+      "min_pct": 0.013,
+      "max_pct": 0.018,
+      "stddev_pct": 0.0019,
+      "sample_count": 7
     }
   ]
 }

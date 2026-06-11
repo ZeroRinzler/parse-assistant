@@ -14,13 +14,12 @@ import re
 import sys
 from pathlib import Path
 
-# Allow running from the repo root or from scripts/
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from dotenv import load_dotenv
 load_dotenv()
 
-import db
+import store
 from parses_analyzer import get_encounters, fetch_top_rankings, analyze_parse
 from wcl_client import WCLClient
 
@@ -50,7 +49,7 @@ async def ingest_spec(wcl: WCLClient, spec: str, top_n: int = 10) -> int:
             continue
 
         rankings = result.get("rankings") or []
-        await db.clear_parse_samples(spec, enc_id)
+        store.clear_parse_samples(spec, enc_id)
         boss_saved = 0
         for r in rankings:
             code = r.get("report_code")
@@ -67,7 +66,7 @@ async def ingest_spec(wcl: WCLClient, spec: str, top_n: int = 10) -> int:
                 print(f"\n    skip {r.get('player')}: {exc}", flush=True)
                 continue
             if summary:
-                await db.save_parse_sample(
+                store.save_parse_sample(
                     spec=spec,
                     encounter_id=enc_id,
                     encounter_name=enc_name,
@@ -79,20 +78,18 @@ async def ingest_spec(wcl: WCLClient, spec: str, top_n: int = 10) -> int:
                 boss_saved += 1
         total_saved += boss_saved
         if boss_saved:
-            await db.sync_encounter_file(spec, enc_id)
+            store.sync_encounter_file(spec, enc_id)
         print(f" → {boss_saved}/{len(rankings)} saved", flush=True)
 
     return total_saved
 
 
 async def main(specs: list[str], top_n: int = 10):
-    await db.init_db()
+    store.init_store()
     wcl = WCLClient()
 
     if not specs:
-        # Default: ingest all specs that currently have any parse samples
-        all_samples = await db.list_specs_with_samples()
-        specs = all_samples or []
+        specs = store.list_specs_with_samples()
         if not specs:
             print("No specs with existing samples found. Pass --spec <SpecName> to start.", flush=True)
             return
@@ -115,14 +112,10 @@ if __name__ == "__main__":
     parser.add_argument("--top-n", type=int, default=10, help="Number of top parses per boss (default: 10)")
     args = parser.parse_args()
 
-    async def _list():
-        await db.init_db()
-        specs = await db.list_specs_with_samples()
-        for s in (specs or []):
-            print(s)
-
     if args.list_specs:
-        asyncio.run(_list())
+        store.init_store()
+        for s in (store.list_specs_with_samples() or []):
+            print(s)
     else:
         specs = [args.spec] if args.spec else []
         asyncio.run(main(specs, top_n=args.top_n))

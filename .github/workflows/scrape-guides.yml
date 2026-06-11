@@ -43,10 +43,10 @@ jobs:
             --url "${{ github.event.inputs.url }}" \
             --type "${{ github.event.inputs.guide_type }}"
 
-      - name: Commit updated database and spec files
+      - name: Commit updated spec files
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: 'chore: add guide for ${{ github.event.inputs.spec }} [skip ci]'
-          file_pattern: 'data/warcraft.db data/specs/**'
+          file_pattern: 'data/specs/**'
           commit_user_name: 'github-actions[bot]'
           commit_user_email: 'github-actions[bot]@users.noreply.github.com'

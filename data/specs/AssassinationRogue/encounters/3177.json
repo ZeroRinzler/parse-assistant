@@ -4,11 +4,13 @@
   "encounter_name": "Vorasius",
   "sample_count": 10,
   "avg_duration_s": 234.1,
+  "last_ingested": "2026-06-11 15:20:55",
   "downtime_threshold_ms": 1061,
   "top_avg_efficiency": 73.8,
   "top_efficiency_stddev": 6.7,
   "per_cd_benchmarks": {
     "Deathmark": {
+      "sample_count": 10,
       "avg_first_cast_s": 8.3,
       "stddev_first_cast_s": 1.5,
       "avg_gap_s": 124.4,
@@ -28,6 +30,7 @@
       "majority_hold": false
     },
     "Kingsbane": {
+      "sample_count": 10,
       "avg_first_cast_s": 9.3,
       "stddev_first_cast_s": 1.5,
       "avg_gap_s": 62.0,
@@ -47,6 +50,7 @@
       "majority_hold": false
     },
     "Vanish": {
+      "sample_count": 10,
       "avg_first_cast_s": 68.5,
       "stddev_first_cast_s": 61.7,
       "avg_gap_s": 122.6,
@@ -215,9 +219,9 @@
         "key": "v2:110433,110433,110433,90640,90692,90748,90749,90750,90751,90752,90756,90758,90759,90760,90766,90767,90768,90770,90771,90777,90784,90785,90786,94552,94553",
         "count": 9,
         "pct": 90,
-        "report_code": "YpdKVTDk4rcQnZNh",
-        "fight_id": 18,
-        "player_name": "Ærri"
+        "report_code": "zj7qDRHfk8VGNWvC",
+        "fight_id": 12,
+        "player_name": "Piihii"
       },
       {
         "key": "v2:110433,110433,110433,90692,90748,90749,90750,90751,90752,90756,90758,90759,90760,90766,90767,90768,90770,90771,90777,90784,90785,90786,94552,94553",
@@ -273,13 +277,13 @@
           "pct": 70
         },
         {
-          "id": 7991,
+          "id": 7961,
           "name": "",
           "count": 1,
           "pct": 10
         },
         {
-          "id": 7961,
+          "id": 7991,
           "name": "",
           "count": 1,
           "pct": 10
@@ -411,6 +415,72 @@
       "min_uses": 1,
       "max_uses": 1,
       "sample_count": 3
+    }
+  ],
+  "top_dtk_comparison": [
+    {
+      "spell_id": 1272950,
+      "avg_pct": 0.2923,
+      "min_pct": 0.278,
+      "max_pct": 0.311,
+      "stddev_pct": 0.0101,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1280101,
+      "avg_pct": 0.1422,
+      "min_pct": 0.105,
+      "max_pct": 0.2,
+      "stddev_pct": 0.0316,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1241808,
+      "avg_pct": 0.1314,
+      "min_pct": 0.103,
+      "max_pct": 0.153,
+      "stddev_pct": 0.0145,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1259186,
+      "avg_pct": 0.1181,
+      "min_pct": 0.064,
+      "max_pct": 0.172,
+      "stddev_pct": 0.0319,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1272328,
+      "avg_pct": 0.1141,
+      "min_pct": 0.09,
+      "max_pct": 0.139,
+      "stddev_pct": 0.0162,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1275558,
+      "avg_pct": 0.0905,
+      "min_pct": 0.015,
+      "max_pct": 0.137,
+      "stddev_pct": 0.0375,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1260052,
+      "avg_pct": 0.0705,
+      "min_pct": 0.062,
+      "max_pct": 0.079,
+      "stddev_pct": 0.0056,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1243270,
+      "avg_pct": 0.0382,
+      "min_pct": 0.008,
+      "max_pct": 0.091,
+      "stddev_pct": 0.0367,
+      "sample_count": 4
     }
   ]
 }

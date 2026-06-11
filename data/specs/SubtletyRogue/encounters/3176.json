@@ -4,11 +4,13 @@
   "encounter_name": "Imperator Averzian",
   "sample_count": 10,
   "avg_duration_s": 260.6,
+  "last_ingested": "2026-06-11 15:20:55",
   "downtime_threshold_ms": 1572,
   "top_avg_efficiency": 74.9,
   "top_efficiency_stddev": 4.6,
   "per_cd_benchmarks": {
     "Shadow Blades": {
+      "sample_count": 10,
       "avg_first_cast_s": 1.8,
       "stddev_first_cast_s": 0.7,
       "avg_gap_s": 106.6,
@@ -41,6 +43,7 @@
       "majority_hold": true
     },
     "Shadow Dance": {
+      "sample_count": 10,
       "avg_first_cast_s": 1.9,
       "stddev_first_cast_s": 0.7,
       "avg_gap_s": 19.2,
@@ -60,6 +63,7 @@
       "majority_hold": false
     },
     "Secret Technique": {
+      "sample_count": 10,
       "avg_first_cast_s": 2.0,
       "stddev_first_cast_s": 0.6,
       "avg_gap_s": 19.9,
@@ -79,6 +83,7 @@
       "majority_hold": false
     },
     "Vanish": {
+      "sample_count": 10,
       "avg_first_cast_s": 35.1,
       "stddev_first_cast_s": 42.6,
       "avg_gap_s": 133.3,
@@ -105,6 +110,7 @@
       "majority_hold": true
     },
     "Algeth'ar Puzzle Box": {
+      "sample_count": 10,
       "avg_first_cast_s": null,
       "stddev_first_cast_s": null,
       "avg_gap_s": null,
@@ -351,9 +357,9 @@
         "key": "v2:110432,110432,110432,90638,90639,90640,90692,90704,90706,90713,90716,90720,90721,90724,90730,90732,90738,90748,90749,90750,90751,90752,90758,90760,94580",
         "count": 9,
         "pct": 90,
-        "report_code": "PZD2VdTmkWtcLFaG",
-        "fight_id": 12,
-        "player_name": "칼런스"
+        "report_code": "jh79ZDwAzN3kxBgP",
+        "fight_id": 79,
+        "player_name": "侯对对"
       },
       {
         "key": "v2:110432,110432,110432,90638,90639,90640,90691,90692,90704,90706,90713,90716,90720,90721,90724,90730,90732,90738,90748,90749,90750,90751,90752,90760,94580",
@@ -409,7 +415,7 @@
           "pct": 30
         },
         {
-          "id": 7959,
+          "id": 8015,
           "name": "",
           "count": 1,
           "pct": 10
@@ -429,7 +435,7 @@
           "pct": 20
         },
         {
-          "id": 4205,
+          "id": 8031,
           "name": "",
           "count": 1,
           "pct": 10
@@ -469,14 +475,6 @@
           "name": "",
           "count": 1,
           "pct": 10
-        }
-      ],
-      "9": [
-        {
-          "id": 2841,
-          "name": "",
-          "count": 2,
-          "pct": 20
         }
       ],
       "10": [
@@ -522,6 +520,14 @@
           "count": 1,
           "pct": 10
         }
+      ],
+      "9": [
+        {
+          "id": 2841,
+          "name": "",
+          "count": 2,
+          "pct": 20
+        }
       ]
     }
   },
@@ -532,6 +538,48 @@
       "avg_uses": 1.5,
       "min_uses": 1,
       "max_uses": 3,
+      "sample_count": 6
+    }
+  ],
+  "top_dtk_comparison": [
+    {
+      "spell_id": 1259903,
+      "avg_pct": 0.8161,
+      "min_pct": 0.723,
+      "max_pct": 0.885,
+      "stddev_pct": 0.0595,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1280075,
+      "avg_pct": 0.086,
+      "min_pct": 0.046,
+      "max_pct": 0.159,
+      "stddev_pct": 0.0513,
+      "sample_count": 4
+    },
+    {
+      "spell_id": 1249251,
+      "avg_pct": 0.0732,
+      "min_pct": 0.054,
+      "max_pct": 0.084,
+      "stddev_pct": 0.0108,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1249262,
+      "avg_pct": 0.0606,
+      "min_pct": 0.032,
+      "max_pct": 0.092,
+      "stddev_pct": 0.0173,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1274846,
+      "avg_pct": 0.0122,
+      "min_pct": 0.006,
+      "max_pct": 0.026,
+      "stddev_pct": 0.0075,
       "sample_count": 6
     }
   ]

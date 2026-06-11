@@ -4,11 +4,13 @@
   "encounter_name": "Fallen-King Salhadaar",
   "sample_count": 10,
   "avg_duration_s": 285.9,
+  "last_ingested": "2026-06-11 15:20:55",
   "downtime_threshold_ms": 1538,
   "top_avg_efficiency": 74.2,
   "top_efficiency_stddev": 4.0,
   "per_cd_benchmarks": {
     "Shadow Blades": {
+      "sample_count": 10,
       "avg_first_cast_s": 3.4,
       "stddev_first_cast_s": 1.8,
       "avg_gap_s": 102.1,
@@ -16,10 +18,10 @@
       "avg_bl_offset_s": null,
       "stddev_bl_offset_s": null,
       "hold_targets": {
-        "2": {
-          "target_s": 103.7,
-          "stddev_s": 1.5,
-          "count": 5,
+        "4": {
+          "target_s": 317.4,
+          "stddev_s": 4.9,
+          "count": 6,
           "total_samples": 10
         },
         "3": {
@@ -28,10 +30,10 @@
           "count": 7,
           "total_samples": 10
         },
-        "4": {
-          "target_s": 317.4,
-          "stddev_s": 4.9,
-          "count": 6,
+        "2": {
+          "target_s": 103.7,
+          "stddev_s": 1.5,
+          "count": 5,
           "total_samples": 10
         }
       },
@@ -47,6 +49,7 @@
       "majority_hold": true
     },
     "Shadow Dance": {
+      "sample_count": 10,
       "avg_first_cast_s": 3.4,
       "stddev_first_cast_s": 1.8,
       "avg_gap_s": 19.0,
@@ -66,6 +69,7 @@
       "majority_hold": false
     },
     "Secret Technique": {
+      "sample_count": 10,
       "avg_first_cast_s": 3.6,
       "stddev_first_cast_s": 1.7,
       "avg_gap_s": 21.2,
@@ -85,6 +89,7 @@
       "majority_hold": false
     },
     "Vanish": {
+      "sample_count": 10,
       "avg_first_cast_s": 26.7,
       "stddev_first_cast_s": 40.3,
       "avg_gap_s": 165.1,
@@ -111,6 +116,7 @@
       "majority_hold": true
     },
     "Algeth'ar Puzzle Box": {
+      "sample_count": 10,
       "avg_first_cast_s": null,
       "stddev_first_cast_s": null,
       "avg_gap_s": null,
@@ -366,17 +372,17 @@
         "key": "v2:110432,110432,110432,90638,90639,90640,90692,90704,90706,90713,90716,90720,90721,90724,90730,90732,90738,90748,90749,90750,90751,90752,90758,90760,94580",
         "count": 8,
         "pct": 80,
-        "report_code": "9nYt4BVyrhCGX8v6",
-        "fight_id": 51,
-        "player_name": "浑浑噩噩楠楠"
+        "report_code": "YcNpjQ7nKqJrkF2P",
+        "fight_id": 15,
+        "player_name": "Arknights"
       },
       {
         "key": "v2:110432,110432,110432,90638,90639,90640,90692,90704,90706,90713,90716,90718,90720,90721,90724,90730,90732,90738,90748,90749,90750,90751,90752,90758,90760,94580",
         "count": 2,
         "pct": 20,
-        "report_code": "QWBX4HJ3ypP1D8Vw",
-        "fight_id": 24,
-        "player_name": "刺客之魂"
+        "report_code": "rqCkyFNp4BbGWK6R",
+        "fight_id": 20,
+        "player_name": "鳄鱼大大"
       }
     ],
     "trinkets": {
@@ -558,6 +564,56 @@
       "min_uses": 1,
       "max_uses": 2,
       "sample_count": 5
+    }
+  ],
+  "top_dtk_comparison": [
+    {
+      "spell_id": 1250686,
+      "avg_pct": 0.4211,
+      "min_pct": 0.36,
+      "max_pct": 0.461,
+      "stddev_pct": 0.0392,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1285504,
+      "avg_pct": 0.2993,
+      "min_pct": 0.258,
+      "max_pct": 0.374,
+      "stddev_pct": 0.0323,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1254018,
+      "avg_pct": 0.175,
+      "min_pct": 0.138,
+      "max_pct": 0.217,
+      "stddev_pct": 0.027,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1245592,
+      "avg_pct": 0.0478,
+      "min_pct": 0.011,
+      "max_pct": 0.107,
+      "stddev_pct": 0.0305,
+      "sample_count": 8
+    },
+    {
+      "spell_id": 1260835,
+      "avg_pct": 0.0447,
+      "min_pct": 0.015,
+      "max_pct": 0.099,
+      "stddev_pct": 0.0259,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1250828,
+      "avg_pct": 0.0279,
+      "min_pct": 0.013,
+      "max_pct": 0.05,
+      "stddev_pct": 0.0145,
+      "sample_count": 7
     }
   ]
 }

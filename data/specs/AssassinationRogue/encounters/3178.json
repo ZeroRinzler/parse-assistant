@@ -4,11 +4,13 @@
   "encounter_name": "Vaelgor & Ezzorak",
   "sample_count": 10,
   "avg_duration_s": 401.9,
+  "last_ingested": "2026-06-11 15:20:55",
   "downtime_threshold_ms": 1492,
   "top_avg_efficiency": 74.7,
   "top_efficiency_stddev": 4.2,
   "per_cd_benchmarks": {
     "Deathmark": {
+      "sample_count": 10,
       "avg_first_cast_s": 10.7,
       "stddev_first_cast_s": 6.1,
       "avg_gap_s": 136.4,
@@ -47,6 +49,7 @@
       "majority_hold": true
     },
     "Kingsbane": {
+      "sample_count": 10,
       "avg_first_cast_s": 12.0,
       "stddev_first_cast_s": 6.0,
       "avg_gap_s": 68.2,
@@ -97,6 +100,7 @@
       "majority_hold": true
     },
     "Vanish": {
+      "sample_count": 10,
       "avg_first_cast_s": 52.9,
       "stddev_first_cast_s": 59.8,
       "avg_gap_s": 143.4,
@@ -404,17 +408,17 @@
         "key": "v2:110433,110433,110433,90640,90692,90748,90749,90750,90751,90752,90756,90758,90759,90760,90766,90768,90770,90775,90776,90784,90785,94551",
         "count": 7,
         "pct": 70,
-        "report_code": "q1VgzcWMnCTAa2r6",
-        "fight_id": 11,
-        "player_name": "Róniepikerin"
+        "report_code": "tk9FLNgA2R4JnZd8",
+        "fight_id": 26,
+        "player_name": "Backshotbot"
       },
       {
         "key": "v2:110433,110433,110433,90622,90640,90692,90748,90749,90750,90751,90752,90756,90758,90759,90760,90766,90768,90770,90775,90776,90777,90784,90785,94551",
         "count": 2,
         "pct": 20,
-        "report_code": "j3LT8yVqJgXZaRWr",
-        "fight_id": 28,
-        "player_name": "Sleepypuppy"
+        "report_code": "71CVfgZhkayrdKGt",
+        "fight_id": 32,
+        "player_name": "骗你干嘛"
       },
       {
         "key": "v2:110433,110433,110433,90622,90692,90748,90749,90750,90751,90752,90756,90758,90759,90760,90768,90770,90775,90776,90777,90784,90785,94551,94552",
@@ -448,14 +452,14 @@
           "pct": 80
         },
         {
-          "id": 193701,
-          "name": "Algeth'ar Puzzle Box",
+          "id": 249344,
+          "name": "Light Company Guidon",
           "count": 1,
           "pct": 10
         },
         {
-          "id": 249344,
-          "name": "Light Company Guidon",
+          "id": 193701,
+          "name": "Algeth'ar Puzzle Box",
           "count": 1,
           "pct": 10
         }
@@ -526,6 +530,14 @@
           "pct": 40
         }
       ],
+      "9": [
+        {
+          "id": 2841,
+          "name": "",
+          "count": 1,
+          "pct": 10
+        }
+      ],
       "10": [
         {
           "id": 7967,
@@ -581,14 +593,6 @@
           "count": 2,
           "pct": 20
         }
-      ],
-      "9": [
-        {
-          "id": 2841,
-          "name": "",
-          "count": 1,
-          "pct": 10
-        }
       ]
     }
   },
@@ -608,6 +612,72 @@
       "min_uses": 1,
       "max_uses": 1,
       "sample_count": 2
+    }
+  ],
+  "top_dtk_comparison": [
+    {
+      "spell_id": 1259275,
+      "avg_pct": 0.2168,
+      "min_pct": 0.194,
+      "max_pct": 0.269,
+      "stddev_pct": 0.0236,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1250071,
+      "avg_pct": 0.1483,
+      "min_pct": 0.129,
+      "max_pct": 0.174,
+      "stddev_pct": 0.0157,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1285954,
+      "avg_pct": 0.1273,
+      "min_pct": 0.099,
+      "max_pct": 0.152,
+      "stddev_pct": 0.0165,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1245175,
+      "avg_pct": 0.1206,
+      "min_pct": 0.078,
+      "max_pct": 0.19,
+      "stddev_pct": 0.0331,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1245302,
+      "avg_pct": 0.0746,
+      "min_pct": 0.059,
+      "max_pct": 0.094,
+      "stddev_pct": 0.0112,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1245500,
+      "avg_pct": 0.0693,
+      "min_pct": 0.054,
+      "max_pct": 0.089,
+      "stddev_pct": 0.0089,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1244413,
+      "avg_pct": 0.0611,
+      "min_pct": 0.042,
+      "max_pct": 0.1,
+      "stddev_pct": 0.0157,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1283712,
+      "avg_pct": 0.0571,
+      "min_pct": 0.041,
+      "max_pct": 0.075,
+      "stddev_pct": 0.0127,
+      "sample_count": 8
     }
   ]
 }

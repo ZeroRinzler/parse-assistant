@@ -21,8 +21,8 @@ venv/
 env/
 ENV/
 
-# Database — tracked so GitHub Actions can commit refreshed parse samples
-# data/warcraft.db is committed; exclude only transient files
+# Data — all persistent data is file-based under data/specs/ (no SQLite)
+data/*.db
 data/*.log
 data/tmp/
 

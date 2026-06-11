@@ -4,11 +4,13 @@
   "encounter_name": "Midnight Falls",
   "sample_count": 10,
   "avg_duration_s": 539.4,
+  "last_ingested": "2026-06-11 15:20:55",
   "downtime_threshold_ms": 1501,
   "top_avg_efficiency": 72.4,
   "top_efficiency_stddev": 4.7,
   "per_cd_benchmarks": {
     "Shadow Blades": {
+      "sample_count": 10,
       "avg_first_cast_s": 2.3,
       "stddev_first_cast_s": 0.7,
       "avg_gap_s": 94.0,
@@ -53,6 +55,7 @@
       "majority_hold": true
     },
     "Shadow Dance": {
+      "sample_count": 10,
       "avg_first_cast_s": 2.3,
       "stddev_first_cast_s": 0.7,
       "avg_gap_s": 19.9,
@@ -72,6 +75,7 @@
       "majority_hold": false
     },
     "Secret Technique": {
+      "sample_count": 10,
       "avg_first_cast_s": 2.8,
       "stddev_first_cast_s": 1.2,
       "avg_gap_s": 21.1,
@@ -91,6 +95,7 @@
       "majority_hold": false
     },
     "Vanish": {
+      "sample_count": 10,
       "avg_first_cast_s": 56.8,
       "stddev_first_cast_s": 92.7,
       "avg_gap_s": 143.7,
@@ -129,6 +134,7 @@
       "majority_hold": true
     },
     "Algeth'ar Puzzle Box": {
+      "sample_count": 10,
       "avg_first_cast_s": null,
       "stddev_first_cast_s": null,
       "avg_gap_s": null,
@@ -289,9 +295,9 @@
         "key": "v2:110432,110432,110432,90638,90639,90640,90692,90704,90706,90713,90716,90720,90721,90724,90730,90732,90738,90748,90749,90750,90751,90752,90758,90760,94580",
         "count": 9,
         "pct": 90,
-        "report_code": "PrpZwxC6N4XtR7bV",
-        "fight_id": 15,
-        "player_name": "Хокей"
+        "report_code": "YLyG4dmr2cX1gqFb",
+        "fight_id": 40,
+        "player_name": "Slasharama"
       },
       {
         "key": "v2:110432,110432,110432,90638,90639,90640,90691,90692,90704,90706,90713,90716,90720,90721,90724,90730,90732,90738,90748,90749,90750,90751,90752,90760,94580",
@@ -473,6 +479,72 @@
       "min_uses": 1,
       "max_uses": 2,
       "sample_count": 5
+    }
+  ],
+  "top_dtk_comparison": [
+    {
+      "spell_id": 1249797,
+      "avg_pct": 0.6893,
+      "min_pct": 0.666,
+      "max_pct": 0.709,
+      "stddev_pct": 0.0151,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1249594,
+      "avg_pct": 0.0323,
+      "min_pct": 0.026,
+      "max_pct": 0.039,
+      "stddev_pct": 0.0037,
+      "sample_count": 9
+    },
+    {
+      "spell_id": 1251649,
+      "avg_pct": 0.0308,
+      "min_pct": 0.019,
+      "max_pct": 0.038,
+      "stddev_pct": 0.0056,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1249582,
+      "avg_pct": 0.0275,
+      "min_pct": 0.023,
+      "max_pct": 0.039,
+      "stddev_pct": 0.0051,
+      "sample_count": 8
+    },
+    {
+      "spell_id": 1254644,
+      "avg_pct": 0.0263,
+      "min_pct": 0.021,
+      "max_pct": 0.032,
+      "stddev_pct": 0.0034,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1281473,
+      "avg_pct": 0.0262,
+      "min_pct": 0.021,
+      "max_pct": 0.032,
+      "stddev_pct": 0.0047,
+      "sample_count": 5
+    },
+    {
+      "spell_id": 1282425,
+      "avg_pct": 0.0244,
+      "min_pct": 0.02,
+      "max_pct": 0.028,
+      "stddev_pct": 0.0023,
+      "sample_count": 8
+    },
+    {
+      "spell_id": 1285827,
+      "avg_pct": 0.0222,
+      "min_pct": 0.017,
+      "max_pct": 0.025,
+      "stddev_pct": 0.0024,
+      "sample_count": 10
     }
   ]
 }

@@ -4,11 +4,13 @@
   "encounter_name": "Vorasius",
   "sample_count": 10,
   "avg_duration_s": 215.2,
+  "last_ingested": "2026-06-11 15:20:55",
   "downtime_threshold_ms": 1271,
   "top_avg_efficiency": 76.8,
   "top_efficiency_stddev": 4.6,
   "per_cd_benchmarks": {
     "Shadow Blades": {
+      "sample_count": 10,
       "avg_first_cast_s": 2.7,
       "stddev_first_cast_s": 1.1,
       "avg_gap_s": 93.8,
@@ -35,6 +37,7 @@
       "majority_hold": false
     },
     "Shadow Dance": {
+      "sample_count": 10,
       "avg_first_cast_s": 2.7,
       "stddev_first_cast_s": 1.0,
       "avg_gap_s": 18.6,
@@ -54,6 +57,7 @@
       "majority_hold": false
     },
     "Secret Technique": {
+      "sample_count": 10,
       "avg_first_cast_s": 3.3,
       "stddev_first_cast_s": 1.1,
       "avg_gap_s": 20.5,
@@ -73,6 +77,7 @@
       "majority_hold": false
     },
     "Vanish": {
+      "sample_count": 10,
       "avg_first_cast_s": 49.3,
       "stddev_first_cast_s": 54.4,
       "avg_gap_s": 133.3,
@@ -99,6 +104,7 @@
       "majority_hold": false
     },
     "Algeth'ar Puzzle Box": {
+      "sample_count": 10,
       "avg_first_cast_s": null,
       "stddev_first_cast_s": null,
       "avg_gap_s": null,
@@ -258,9 +264,9 @@
         "key": "v2:110432,110432,110432,90638,90639,90640,90692,90704,90706,90713,90716,90720,90721,90724,90730,90732,90738,90748,90749,90750,90751,90752,90758,90760,94580",
         "count": 10,
         "pct": 100,
-        "report_code": "YpdKVTDk4rcQnZNh",
-        "fight_id": 18,
-        "player_name": "Pokz"
+        "report_code": "nwNtzkPDV3QBXhAm",
+        "fight_id": 31,
+        "player_name": "Arar"
       }
     ],
     "trinkets": {
@@ -302,13 +308,13 @@
           "pct": 70
         },
         {
-          "id": 7961,
+          "id": 8015,
           "name": "",
           "count": 1,
           "pct": 10
         },
         {
-          "id": 8015,
+          "id": 7961,
           "name": "",
           "count": 1,
           "pct": 10
@@ -358,13 +364,13 @@
           "pct": 60
         },
         {
-          "id": 7993,
+          "id": 8019,
           "name": "",
           "count": 2,
           "pct": 20
         },
         {
-          "id": 8019,
+          "id": 7993,
           "name": "",
           "count": 2,
           "pct": 20
@@ -432,6 +438,64 @@
       "min_uses": 1,
       "max_uses": 1,
       "sample_count": 5
+    }
+  ],
+  "top_dtk_comparison": [
+    {
+      "spell_id": 1272950,
+      "avg_pct": 0.2788,
+      "min_pct": 0.257,
+      "max_pct": 0.312,
+      "stddev_pct": 0.0165,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1280101,
+      "avg_pct": 0.138,
+      "min_pct": 0.113,
+      "max_pct": 0.19,
+      "stddev_pct": 0.028,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1241808,
+      "avg_pct": 0.1294,
+      "min_pct": 0.116,
+      "max_pct": 0.154,
+      "stddev_pct": 0.0116,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1259186,
+      "avg_pct": 0.1263,
+      "min_pct": 0.099,
+      "max_pct": 0.152,
+      "stddev_pct": 0.0193,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1272328,
+      "avg_pct": 0.1194,
+      "min_pct": 0.106,
+      "max_pct": 0.141,
+      "stddev_pct": 0.0113,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1275558,
+      "avg_pct": 0.1126,
+      "min_pct": 0.048,
+      "max_pct": 0.155,
+      "stddev_pct": 0.0338,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1260052,
+      "avg_pct": 0.0643,
+      "min_pct": 0.051,
+      "max_pct": 0.081,
+      "stddev_pct": 0.0088,
+      "sample_count": 10
     }
   ]
 }

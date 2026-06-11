@@ -4,11 +4,13 @@
   "encounter_name": "Crown of the Cosmos",
   "sample_count": 9,
   "avg_duration_s": 497.3,
+  "last_ingested": "2026-06-11 15:20:55",
   "downtime_threshold_ms": 1128,
   "top_avg_efficiency": 65.2,
   "top_efficiency_stddev": 3.1,
   "per_cd_benchmarks": {
     "Deathmark": {
+      "sample_count": 9,
       "avg_first_cast_s": 22.5,
       "stddev_first_cast_s": 1.8,
       "avg_gap_s": 138.1,
@@ -47,6 +49,7 @@
       "majority_hold": true
     },
     "Kingsbane": {
+      "sample_count": 9,
       "avg_first_cast_s": 23.6,
       "stddev_first_cast_s": 1.8,
       "avg_gap_s": 67.5,
@@ -54,6 +57,12 @@
       "avg_bl_offset_s": null,
       "stddev_bl_offset_s": null,
       "hold_targets": {
+        "2": {
+          "target_s": 101.4,
+          "stddev_s": 4.8,
+          "count": 7,
+          "total_samples": 9
+        },
         "3": {
           "target_s": 180.6,
           "stddev_s": 1.1,
@@ -89,12 +98,6 @@
           "stddev_s": 4.6,
           "count": 6,
           "total_samples": 9
-        },
-        "2": {
-          "target_s": 101.4,
-          "stddev_s": 4.8,
-          "count": 7,
-          "total_samples": 9
         }
       },
       "uses_per_min": {
@@ -109,6 +112,7 @@
       "majority_hold": true
     },
     "Vanish": {
+      "sample_count": 9,
       "avg_first_cast_s": 16.1,
       "stddev_first_cast_s": 3.5,
       "avg_gap_s": 139.3,
@@ -248,9 +252,9 @@
         "key": "v2:110433,110433,110433,90640,90692,90748,90749,90750,90751,90752,90756,90758,90759,90760,90766,90767,90768,90770,90771,90777,90784,90785,90786,94552,94553",
         "count": 9,
         "pct": 100,
-        "report_code": "rnQqC3LJtK8V4WjF",
-        "fight_id": 251,
-        "player_name": "Янеформалка"
+        "report_code": "n6mNCzhVXH8FPtq7",
+        "fight_id": 34,
+        "player_name": "Важнаяписька"
       }
     ],
     "trinkets": {
@@ -436,6 +440,72 @@
       "min_uses": 1,
       "max_uses": 2,
       "sample_count": 4
+    }
+  ],
+  "top_dtk_comparison": [
+    {
+      "spell_id": 1237040,
+      "avg_pct": 0.2547,
+      "min_pct": 0.128,
+      "max_pct": 0.303,
+      "stddev_pct": 0.0507,
+      "sample_count": 9
+    },
+    {
+      "spell_id": 1281707,
+      "avg_pct": 0.1359,
+      "min_pct": 0.114,
+      "max_pct": 0.168,
+      "stddev_pct": 0.017,
+      "sample_count": 9
+    },
+    {
+      "spell_id": 1261289,
+      "avg_pct": 0.1127,
+      "min_pct": 0.087,
+      "max_pct": 0.148,
+      "stddev_pct": 0.019,
+      "sample_count": 9
+    },
+    {
+      "spell_id": 1260027,
+      "avg_pct": 0.098,
+      "min_pct": 0.049,
+      "max_pct": 0.152,
+      "stddev_pct": 0.0363,
+      "sample_count": 9
+    },
+    {
+      "spell_id": 1260019,
+      "avg_pct": 0.0978,
+      "min_pct": 0.078,
+      "max_pct": 0.13,
+      "stddev_pct": 0.0195,
+      "sample_count": 9
+    },
+    {
+      "spell_id": 1233826,
+      "avg_pct": 0.0837,
+      "min_pct": 0.077,
+      "max_pct": 0.094,
+      "stddev_pct": 0.0052,
+      "sample_count": 9
+    },
+    {
+      "spell_id": 1239095,
+      "avg_pct": 0.069,
+      "min_pct": 0.052,
+      "max_pct": 0.086,
+      "stddev_pct": 0.0095,
+      "sample_count": 9
+    },
+    {
+      "spell_id": 1259869,
+      "avg_pct": 0.0366,
+      "min_pct": 0.028,
+      "max_pct": 0.045,
+      "stddev_pct": 0.0078,
+      "sample_count": 5
     }
   ]
 }

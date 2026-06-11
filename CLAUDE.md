@@ -41,30 +41,39 @@ Example: `/admin?spec=SubtletyRogue&tab=rulebook`
 ```
 warcraft-learner/
 ├── main.py              # FastAPI app — all routes (player API + admin API + pre-fight API)
+├── store.py             # File-based storage — guides, rulebooks, parse samples, encounter bench
 ├── analyzer.py          # Rules engine — evaluates cast events against a rulebook
 ├── wcl_client.py        # Warcraft Logs OAuth2 + GraphQL client (handles pagination)
 ├── rulebook.py          # Static fallback cooldowns for 22+ DPS specs
-├── db.py                # SQLite via aiosqlite — guide CRUD, generated rulebook cache
 ├── scraper.py           # Web (BeautifulSoup/lxml) + YouTube transcript scraping
 ├── llm_parser.py        # Claude API — converts guide text → structured JSON rulebook
 ├── parses_analyzer.py   # WCL characterRankings + per-parse cooldown timing analysis + gear extraction
+├── analysis_utils.py    # Shared aggregation — cluster_burst_windows, aggregate_gear
 ├── static/
 │   ├── index.html       # Post-raid player analyzer UI (vanilla JS)
 │   ├── pre.html         # Pre-fight gear check UI (vanilla JS)
 │   ├── live.html        # Live analysis UI — polls for new pulls during raid
 │   └── admin.html       # Admin guide management UI (vanilla JS)
 ├── data/
-│   ├── warcraft.db      # SQLite DB (tracked; refreshed by GitHub Actions daily)
-│   └── specs/           # Human-readable JSON exports (dual-written alongside SQLite)
+│   └── specs/           # All persistent data — no SQLite
 │       └── {Spec}/
-│           ├── rulebook.json       # Generated rulebook — written on every save
-│           ├── guides.json         # Guide metadata (no content) — written on add/scrape/delete
-│           └── encounters/
-│               └── {enc_id}.json  # Pre-computed bench data — written after each boss ingestion
+│           ├── rulebook.json       # Generated rulebook (includes guide_count, saved_at metadata)
+│           ├── guides.json         # Guide list WITH scraped content
+│           ├── encounters.json     # Index: [{id, name, sample_count}]
+│           ├── encounters/
+│           │   └── {enc_id}.json  # Pre-computed bench data (thresholds, burst windows, gear, dtk)
+│           └── parse_samples/
+│               └── {enc_id}.json  # Raw parse samples — source of truth for bench files
+├── scripts/
+│   ├── ingest_parses.py       # CLI / GHA: ingest top WCL parses → files
+│   ├── scrape_guides.py       # CLI / GHA: add + scrape a guide → guides.json
+│   └── migrate_db_to_files.py # One-time: export SQLite → file-based storage
 ├── .env                 # Secrets (gitignored)
 ├── .env.example         # Credential template
 └── requirements.txt
 ```
+
+**No SQLite.** All data is file-based under `data/specs/`. The server reads from pre-computed files at request time — no on-the-fly aggregation from raw samples. `store.py` owns all file I/O and the in-memory rulebook cache.
 
 ## Key flows
 
@@ -87,13 +96,13 @@ warcraft-learner/
 6. Response includes: **Needs Improvement** (critical/warning), **Timing Suggestions** (info/hold_suggestion), and **Doing Well** (success). Also includes `rulebook_source` ("generated", "static", or "none") shown under the player name.
 7. If parse samples exist for the fight's encounter, a **vs Top N Parses** comparison table is appended. Uses **uses-per-minute** (not raw counts) to normalize across kill-time differences between the player and top performers. A **Burst Windows** card shows the top recurring 8s damage spikes across top parses with the CDs active in them. Windows beyond the player's fight duration are shown in a dimmed "Not reached" state rather than "No data".
 8. The response includes `ability_icons` — a `{spell_id: {icon, name}}` map extracted from `masterData.abilities` in the report. The frontend seeds its icon cache from this data. WCL removed `gameData.spell()` so this is now the only reliable source of spell icons and names for report abilities.
-9. Cooldown rules come from the **dynamic rulebook** if one exists (SQLite + in-memory cache in `db.py`), otherwise from the static `SPEC_COOLDOWNS` dict in `rulebook.py`.
+9. Cooldown rules come from the **dynamic rulebook** if one exists (loaded from `data/specs/{spec}/rulebook.json` into the in-memory cache in `store.py` on startup), otherwise from the static `SPEC_COOLDOWNS` dict in `rulebook.py`.
 
 ### Ingestion pipeline (`/admin`)
 1. **Add guides** — POST `/api/admin/guides` with `{spec, url, guide_type}`. Type is `"web"`, `"youtube"`, or `"simc"`. GitHub blob URLs are auto-converted to raw.githubusercontent.com. Up to 60 k chars stored per guide.
 2. **Scrape** — POST `/api/admin/guides/{id}/scrape`. `scraper.py` fetches page text (BeautifulSoup), YouTube transcript (`youtube-transcript-api`), or raw file (GitHub/SimC APL).
 3. **Copy AI Prompt** — GET `/api/admin/guides/{spec}/prompt`. Assembles the skill file (`prompts/rulebook_skill.md`) with all scraped guide content into a ready-to-paste prompt. No LLM API call — the user pastes into their own LLM.
-4. **Save AI output** — PUT `/api/admin/rulebook/{spec}`. Client-side schema validation runs first (checks for `spell_id` on every cooldown, etc.); then persists JSON to `generated_rulebooks` table and live-loads into in-memory cache.
+4. **Save AI output** — PUT `/api/admin/rulebook/{spec}`. Client-side schema validation runs first (checks for `spell_id` on every cooldown, etc.); then persists JSON to `data/specs/{spec}/rulebook.json` and live-loads into in-memory cache.
 5. **Top parses** — Single "Ingest All Bosses" button on the parses tab. Streams progress via `GET /api/admin/parses/ingest-all-stream/{spec}` (SSE). Always ingests top 10 per boss; **overwrites** existing samples for that spec+encounter on each run. Each parse now also stores:
    - `cooldowns[].hold_windows` — per-CD list of casts delayed >8s past on-cooldown time
    - `cooldowns[].cast_pattern` — "hold" or "on_cooldown"
@@ -105,7 +114,7 @@ warcraft-learner/
 2. User selects an encounter from the dropdown (same filtered encounter list as the parses tab).
 3. Three parallel requests fire on encounter change:
    - `GET /api/pre/char-gear?name&server&region&encounter_id` — queries `characterData.character.encounterRankings(includeCombatantInfo: true)` and extracts gear/talents from the player's most recent ranked kill.
-   - `GET /api/pre/gear-stats/{spec}/{encounter_id}` — returns aggregated talent builds, trinket usage, and enchant usage from stored parse samples.
+   - `GET /api/pre/gear-stats/{spec}/{encounter_id}` — returns pre-aggregated talent builds, trinket usage, and enchant usage from the encounter bench file.
    - `GET /api/pre/brief?spec&encounter_id` — returns the cooldown brief text.
 4. Three cards rendered client-side:
    - **Talents** — compares player's `v2:` talent fingerprint against the distribution from top parses.
@@ -121,24 +130,27 @@ The parses tab shows all current-expansion bosses in a table with sample counts 
 
 ## Data models
 
-### `guides` table
+### `guides.json` (`data/specs/{spec}/guides.json`)
+List of guide objects. Includes scraped content (used server-side for prompt generation).
+
 | field | notes |
 |---|---|
+| id | Auto-incrementing integer — max existing + 1 on add |
 | spec | WCL actor subType, e.g. `SubtletyRogue` |
 | url | Source URL |
-| guide_type | `web` or `youtube` |
+| guide_type | `web`, `youtube`, or `simc` |
 | content | Scraped text (up to 60 k chars) |
-| status | `pending` → `scraped` → (used in generation) |
+| status | `pending` → `scraped` → `error` |
 
-### `generated_rulebooks` table
-| field | notes |
-|---|---|
-| spec | Unique per spec |
-| rulebook | Full JSON blob from LLM or manual editor |
-| guide_count | Number of guides used |
+### `rulebook.json` (`data/specs/{spec}/rulebook.json`)
+Generated rulebook stored with metadata. Loaded into the in-memory cache at startup.
 
-### `parse_samples` table
-Stores per-fight cooldown timing summaries for top WCL performers. Used for the vs-top-parses comparison on the analyzer page and as grounding context for LLM rulebook generation.
+Extra top-level fields added by `store.save_rulebook`: `guide_count`, `saved_at`.
+
+### `parse_samples/{enc_id}.json` (`data/specs/{spec}/parse_samples/{enc_id}.json`)
+List of raw parse samples for an encounter. Written during ingestion; read only by `sync_encounter_file` to recompute bench data.
+
+Stores per-fight cooldown timing summaries for top WCL performers.
 
 Key fields stored inside the `cooldown_data` JSON blob:
 
@@ -282,15 +294,15 @@ Source: `design-doc.md` (architecture blueprint) + `intial-research.md` (researc
 | Pre-fight gear check | ✅ Done | `/pre` page; character URL input; talents/trinkets/enchants vs top-parse aggregates; enchant names resolved live via `gameData.enchant(id)` — no hardcoding |
 | Defensive cooldown analysis | ✅ Done | `SPEC_DEFENSIVES` in rulebook.py; player usage with damage absorbed per window; comparison vs top-parse avg; 30s damage-taken segments |
 | GitHub Actions ingestion pipeline | ✅ Done | `.github/workflows/ingest-parses.yml` (daily schedule + manual); `scripts/ingest_parses.py` and `scripts/scrape_guides.py` work identically locally |
-| File-based storage for guides/rulebooks | ✅ Done | `data/specs/{Spec}/rulebook.json` and `guides.json` dual-written alongside SQLite; all guide CRUD endpoints sync the files; both GHA workflows commit `data/specs/**`; `scripts/export_data_files.py` bootstraps from existing DB |
-| Pre-computed encounter bench files | ✅ Done | `data/specs/{Spec}/encounters/{enc_id}.json` written after each boss ingestion (both in-app and GHA script); contains per-CD thresholds, burst windows, gear aggregates; `scripts/export_data_files.py` backfills all; `analysis_utils.py` holds the shared clustering/aggregation logic |
+| File-based storage — no SQLite | ✅ Done | `store.py` replaces `db.py`; all data in `data/specs/`; guides stored WITH content; parse samples in `parse_samples/{enc_id}.json`; encounter bench files pre-computed with full aggregation; GHA commits `data/specs/**` only |
+| Pre-computed encounter bench files | ✅ Done | `data/specs/{Spec}/encounters/{enc_id}.json` written after each boss ingestion; contains per-CD thresholds (with sample_count), burst windows, gear aggregates, defensive summary, and top_dtk_comparison; `analysis_utils.py` holds shared clustering/aggregation logic |
 
 ### Gaps — from design-doc.md
 
 | Original goal | Status | Notes |
 |---|---|---|
 | **Frontend**: Next.js + Tailwind | ❌ Not started | Currently vanilla JS in a single HTML file |
-| **Database**: PostgreSQL | ❌ Not started | Currently SQLite; functional but not production-grade |
+| **Database**: PostgreSQL | ❌ Not started | Currently file-based JSON; functional at this scale |
 | **Positional data**: X/Y coordinates from WCL events | ❌ Not started | WCL does provide coordinates; would enable "died 15 yards from safe zone" checks |
 | **Data pipeline**: DuckDB + dbt for analytical processing | ❌ Not started | Direct Python dict processing; fine at this scale |
 | **Workflow 3**: VOD synchronization (Warcraft Recorder timestamps) | ❌ Not started | Design doc's primary differentiator — click a finding → scrub to that moment in VOD |

@@ -4,11 +4,13 @@
   "encounter_name": "Fallen-King Salhadaar",
   "sample_count": 9,
   "avg_duration_s": 277.4,
+  "last_ingested": "2026-06-11 15:20:55",
   "downtime_threshold_ms": 1255,
   "top_avg_efficiency": 73.0,
   "top_efficiency_stddev": 7.9,
   "per_cd_benchmarks": {
     "Deathmark": {
+      "sample_count": 9,
       "avg_first_cast_s": 7.5,
       "stddev_first_cast_s": 1.7,
       "avg_gap_s": 127.1,
@@ -28,6 +30,7 @@
       "majority_hold": false
     },
     "Kingsbane": {
+      "sample_count": 9,
       "avg_first_cast_s": 8.5,
       "stddev_first_cast_s": 1.7,
       "avg_gap_s": 69.3,
@@ -54,6 +57,7 @@
       "majority_hold": false
     },
     "Vanish": {
+      "sample_count": 9,
       "avg_first_cast_s": 84.5,
       "stddev_first_cast_s": 54.5,
       "avg_gap_s": 130.4,
@@ -212,9 +216,9 @@
         "key": "v2:110433,110433,110433,90640,90692,90748,90749,90750,90751,90752,90756,90758,90759,90760,90766,90767,90768,90770,90771,90777,90784,90785,90786,94552,94553",
         "count": 8,
         "pct": 89,
-        "report_code": "rnQqC3LJtK8V4WjF",
-        "fight_id": 237,
-        "player_name": "Янеформалка"
+        "report_code": "ZRGXBJWd31TFMY2a",
+        "fight_id": 24,
+        "player_name": "Phaxos"
       },
       {
         "key": "v2:110433,110433,110433,90640,90692,90748,90749,90750,90751,90752,90756,90758,90759,90760,90766,90767,90768,90770,90775,90776,90777,90784,90785,94553",
@@ -248,8 +252,8 @@
           "pct": 67
         },
         {
-          "id": 249344,
-          "name": "Light Company Guidon",
+          "id": 193701,
+          "name": "Algeth'ar Puzzle Box",
           "count": 1,
           "pct": 11
         },
@@ -260,8 +264,8 @@
           "pct": 11
         },
         {
-          "id": 193701,
-          "name": "Algeth'ar Puzzle Box",
+          "id": 249344,
+          "name": "Light Company Guidon",
           "count": 1,
           "pct": 11
         }
@@ -302,7 +306,7 @@
           "pct": 22
         },
         {
-          "id": 7999,
+          "id": 7973,
           "name": "",
           "count": 1,
           "pct": 11
@@ -322,26 +326,6 @@
           "name": "",
           "count": 9,
           "pct": 100
-        }
-      ],
-      "7": [
-        {
-          "id": 7963,
-          "name": "",
-          "count": 5,
-          "pct": 56
-        },
-        {
-          "id": 7993,
-          "name": "",
-          "count": 2,
-          "pct": 22
-        },
-        {
-          "id": 8019,
-          "name": "",
-          "count": 1,
-          "pct": 11
         }
       ],
       "10": [
@@ -400,6 +384,26 @@
           "pct": 11
         }
       ],
+      "7": [
+        {
+          "id": 7963,
+          "name": "",
+          "count": 5,
+          "pct": 56
+        },
+        {
+          "id": 7993,
+          "name": "",
+          "count": 2,
+          "pct": 22
+        },
+        {
+          "id": 8019,
+          "name": "",
+          "count": 1,
+          "pct": 11
+        }
+      ],
       "9": [
         {
           "id": 2841,
@@ -426,6 +430,56 @@
       "min_uses": 1,
       "max_uses": 2,
       "sample_count": 3
+    }
+  ],
+  "top_dtk_comparison": [
+    {
+      "spell_id": 1250686,
+      "avg_pct": 0.402,
+      "min_pct": 0.332,
+      "max_pct": 0.481,
+      "stddev_pct": 0.0412,
+      "sample_count": 9
+    },
+    {
+      "spell_id": 1285504,
+      "avg_pct": 0.2883,
+      "min_pct": 0.232,
+      "max_pct": 0.346,
+      "stddev_pct": 0.0338,
+      "sample_count": 9
+    },
+    {
+      "spell_id": 1254018,
+      "avg_pct": 0.2044,
+      "min_pct": 0.162,
+      "max_pct": 0.259,
+      "stddev_pct": 0.035,
+      "sample_count": 9
+    },
+    {
+      "spell_id": 1245592,
+      "avg_pct": 0.0491,
+      "min_pct": 0.013,
+      "max_pct": 0.082,
+      "stddev_pct": 0.0271,
+      "sample_count": 8
+    },
+    {
+      "spell_id": 1260835,
+      "avg_pct": 0.0403,
+      "min_pct": 0.013,
+      "max_pct": 0.075,
+      "stddev_pct": 0.0246,
+      "sample_count": 9
+    },
+    {
+      "spell_id": 1250828,
+      "avg_pct": 0.017,
+      "min_pct": 0.008,
+      "max_pct": 0.035,
+      "stddev_pct": 0.0106,
+      "sample_count": 5
     }
   ]
 }

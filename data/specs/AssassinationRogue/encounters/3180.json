@@ -4,11 +4,13 @@
   "encounter_name": "Lightblinded Vanguard",
   "sample_count": 9,
   "avg_duration_s": 396.3,
+  "last_ingested": "2026-06-11 15:20:55",
   "downtime_threshold_ms": 1403,
   "top_avg_efficiency": 78.0,
   "top_efficiency_stddev": 5.3,
   "per_cd_benchmarks": {
     "Deathmark": {
+      "sample_count": 9,
       "avg_first_cast_s": 9.5,
       "stddev_first_cast_s": 0.7,
       "avg_gap_s": 126.8,
@@ -41,6 +43,7 @@
       "majority_hold": true
     },
     "Kingsbane": {
+      "sample_count": 9,
       "avg_first_cast_s": 10.5,
       "stddev_first_cast_s": 0.7,
       "avg_gap_s": 63.7,
@@ -85,6 +88,7 @@
       "majority_hold": true
     },
     "Vanish": {
+      "sample_count": 9,
       "avg_first_cast_s": 38.8,
       "stddev_first_cast_s": 50.2,
       "avg_gap_s": 125.6,
@@ -267,9 +271,9 @@
         "key": "v2:110433,110433,110433,90640,90692,90748,90749,90750,90751,90752,90756,90758,90759,90760,90766,90767,90768,90770,90775,90776,90777,90784,90785,94553",
         "count": 8,
         "pct": 89,
-        "report_code": "yAtdNG2qBbLFHWTJ",
-        "fight_id": 5,
-        "player_name": "墨燃"
+        "report_code": "KpTYGNCM4APqzLnt",
+        "fight_id": 37,
+        "player_name": "Kinkou"
       },
       {
         "key": "v2:110434,110434,110434,90638,90639,90640,90652,90653,90654,90655,90664,90665,90666,90667,90668,90670,90692,90750,90751,90752,90756,90758,90759,90760,94565",
@@ -461,6 +465,80 @@
       "min_uses": 1,
       "max_uses": 2,
       "sample_count": 3
+    }
+  ],
+  "top_dtk_comparison": [
+    {
+      "spell_id": 1258661,
+      "avg_pct": 0.3363,
+      "min_pct": 0.276,
+      "max_pct": 0.378,
+      "stddev_pct": 0.033,
+      "sample_count": 9
+    },
+    {
+      "spell_id": 1255739,
+      "avg_pct": 0.2409,
+      "min_pct": 0.213,
+      "max_pct": 0.273,
+      "stddev_pct": 0.0179,
+      "sample_count": 9
+    },
+    {
+      "spell_id": 1246749,
+      "avg_pct": 0.1653,
+      "min_pct": 0.143,
+      "max_pct": 0.182,
+      "stddev_pct": 0.0122,
+      "sample_count": 9
+    },
+    {
+      "spell_id": 1246765,
+      "avg_pct": 0.0957,
+      "min_pct": 0.079,
+      "max_pct": 0.112,
+      "stddev_pct": 0.0111,
+      "sample_count": 9
+    },
+    {
+      "spell_id": 1246502,
+      "avg_pct": 0.0576,
+      "min_pct": 0.019,
+      "max_pct": 0.136,
+      "stddev_pct": 0.0347,
+      "sample_count": 9
+    },
+    {
+      "spell_id": 1249024,
+      "avg_pct": 0.0464,
+      "min_pct": 0.033,
+      "max_pct": 0.075,
+      "stddev_pct": 0.0129,
+      "sample_count": 9
+    },
+    {
+      "spell_id": 1248652,
+      "avg_pct": 0.0243,
+      "min_pct": 0.022,
+      "max_pct": 0.031,
+      "stddev_pct": 0.0045,
+      "sample_count": 4
+    },
+    {
+      "spell_id": 1249135,
+      "avg_pct": 0.0232,
+      "min_pct": 0.015,
+      "max_pct": 0.033,
+      "stddev_pct": 0.0077,
+      "sample_count": 5
+    },
+    {
+      "spell_id": 1272310,
+      "avg_pct": 0.021,
+      "min_pct": 0.019,
+      "max_pct": 0.026,
+      "stddev_pct": 0.0026,
+      "sample_count": 7
     }
   ]
 }

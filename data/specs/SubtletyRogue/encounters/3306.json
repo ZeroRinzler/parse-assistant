@@ -4,11 +4,13 @@
   "encounter_name": "Chimaerus, the Undreamt God",
   "sample_count": 10,
   "avg_duration_s": 145.3,
+  "last_ingested": "2026-06-11 15:20:55",
   "downtime_threshold_ms": 1285,
   "top_avg_efficiency": 76.9,
   "top_efficiency_stddev": 6.5,
   "per_cd_benchmarks": {
     "Shadow Blades": {
+      "sample_count": 10,
       "avg_first_cast_s": 5.6,
       "stddev_first_cast_s": 8.3,
       "avg_gap_s": 94.9,
@@ -28,6 +30,7 @@
       "majority_hold": false
     },
     "Shadow Dance": {
+      "sample_count": 10,
       "avg_first_cast_s": 2.9,
       "stddev_first_cast_s": 0.9,
       "avg_gap_s": 17.7,
@@ -47,6 +50,7 @@
       "majority_hold": false
     },
     "Secret Technique": {
+      "sample_count": 10,
       "avg_first_cast_s": 3.1,
       "stddev_first_cast_s": 1.0,
       "avg_gap_s": 18.6,
@@ -66,6 +70,7 @@
       "majority_hold": false
     },
     "Vanish": {
+      "sample_count": 10,
       "avg_first_cast_s": 29.8,
       "stddev_first_cast_s": 29.8,
       "avg_gap_s": 125.4,
@@ -85,6 +90,7 @@
       "majority_hold": false
     },
     "Algeth'ar Puzzle Box": {
+      "sample_count": 10,
       "avg_first_cast_s": null,
       "stddev_first_cast_s": null,
       "avg_gap_s": null,
@@ -241,9 +247,9 @@
         "key": "v2:110432,110432,110432,90638,90639,90640,90692,90704,90706,90713,90716,90720,90721,90724,90730,90732,90738,90748,90749,90750,90751,90752,90758,90760,94580",
         "count": 10,
         "pct": 100,
-        "report_code": "VnahpvcwkqgY2Q6x",
-        "fight_id": 9,
-        "player_name": "情绪"
+        "report_code": "v1fc3CrkZm2QPGDN",
+        "fight_id": 33,
+        "player_name": "無上流沙丶"
       }
     ],
     "trinkets": {
@@ -291,7 +297,7 @@
           "pct": 30
         },
         {
-          "id": 7959,
+          "id": 7991,
           "name": "",
           "count": 1,
           "pct": 10
@@ -361,13 +367,13 @@
           "pct": 80
         },
         {
-          "id": 7965,
+          "id": 8025,
           "name": "",
           "count": 1,
           "pct": 10
         },
         {
-          "id": 8025,
+          "id": 7965,
           "name": "",
           "count": 1,
           "pct": 10
@@ -381,13 +387,13 @@
           "pct": 80
         },
         {
-          "id": 7965,
+          "id": 8025,
           "name": "",
           "count": 1,
           "pct": 10
         },
         {
-          "id": 8025,
+          "id": 7965,
           "name": "",
           "count": 1,
           "pct": 10
@@ -441,6 +447,48 @@
       "min_uses": 1,
       "max_uses": 1,
       "sample_count": 2
+    }
+  ],
+  "top_dtk_comparison": [
+    {
+      "spell_id": 1246653,
+      "avg_pct": 0.5643,
+      "min_pct": 0.489,
+      "max_pct": 0.633,
+      "stddev_pct": 0.0402,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1273112,
+      "avg_pct": 0.2168,
+      "min_pct": 0.148,
+      "max_pct": 0.276,
+      "stddev_pct": 0.0446,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1258610,
+      "avg_pct": 0.0942,
+      "min_pct": 0.083,
+      "max_pct": 0.107,
+      "stddev_pct": 0.0083,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1262305,
+      "avg_pct": 0.0431,
+      "min_pct": 0.019,
+      "max_pct": 0.065,
+      "stddev_pct": 0.0147,
+      "sample_count": 7
+    },
+    {
+      "spell_id": 1249207,
+      "avg_pct": 0.0352,
+      "min_pct": 0.019,
+      "max_pct": 0.065,
+      "stddev_pct": 0.0176,
+      "sample_count": 5
     }
   ]
 }

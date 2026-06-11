@@ -4,11 +4,13 @@
   "encounter_name": "Lightblinded Vanguard",
   "sample_count": 10,
   "avg_duration_s": 381.4,
+  "last_ingested": "2026-06-11 15:20:55",
   "downtime_threshold_ms": 1474,
   "top_avg_efficiency": 73.2,
   "top_efficiency_stddev": 1.8,
   "per_cd_benchmarks": {
     "Shadow Blades": {
+      "sample_count": 10,
       "avg_first_cast_s": 2.5,
       "stddev_first_cast_s": 1.1,
       "avg_gap_s": 101.3,
@@ -16,6 +18,12 @@
       "avg_bl_offset_s": null,
       "stddev_bl_offset_s": null,
       "hold_targets": {
+        "2": {
+          "target_s": 103.7,
+          "stddev_s": 3.1,
+          "count": 5,
+          "total_samples": 10
+        },
         "3": {
           "target_s": 215.4,
           "stddev_s": 11.0,
@@ -33,12 +41,6 @@
           "stddev_s": 15.0,
           "count": 4,
           "total_samples": 10
-        },
-        "2": {
-          "target_s": 103.7,
-          "stddev_s": 3.1,
-          "count": 5,
-          "total_samples": 10
         }
       },
       "uses_per_min": {
@@ -53,6 +55,7 @@
       "majority_hold": true
     },
     "Shadow Dance": {
+      "sample_count": 10,
       "avg_first_cast_s": 2.6,
       "stddev_first_cast_s": 1.1,
       "avg_gap_s": 19.1,
@@ -72,6 +75,7 @@
       "majority_hold": false
     },
     "Secret Technique": {
+      "sample_count": 10,
       "avg_first_cast_s": 2.6,
       "stddev_first_cast_s": 1.1,
       "avg_gap_s": 19.3,
@@ -91,6 +95,7 @@
       "majority_hold": false
     },
     "Vanish": {
+      "sample_count": 10,
       "avg_first_cast_s": 54.0,
       "stddev_first_cast_s": 90.6,
       "avg_gap_s": 149.9,
@@ -123,6 +128,7 @@
       "majority_hold": true
     },
     "Algeth'ar Puzzle Box": {
+      "sample_count": 10,
       "avg_first_cast_s": null,
       "stddev_first_cast_s": null,
       "avg_gap_s": null,
@@ -281,9 +287,9 @@
         "key": "v2:110432,110432,110432,90638,90639,90640,90692,90704,90706,90713,90716,90718,90720,90721,90724,90730,90732,90738,90748,90749,90750,90751,90752,90758,90760,94580",
         "count": 10,
         "pct": 100,
-        "report_code": "YAcL9NC8QR4xkWfF",
-        "fight_id": 38,
-        "player_name": "숏묵"
+        "report_code": "cbLXpxNk3ByGAqHJ",
+        "fight_id": 34,
+        "player_name": "Yrjc"
       }
     ],
     "trinkets": {
@@ -463,6 +469,80 @@
       "min_uses": 1,
       "max_uses": 2,
       "sample_count": 3
+    }
+  ],
+  "top_dtk_comparison": [
+    {
+      "spell_id": 1258661,
+      "avg_pct": 0.3246,
+      "min_pct": 0.273,
+      "max_pct": 0.358,
+      "stddev_pct": 0.028,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1255739,
+      "avg_pct": 0.2514,
+      "min_pct": 0.223,
+      "max_pct": 0.273,
+      "stddev_pct": 0.0177,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1246749,
+      "avg_pct": 0.1667,
+      "min_pct": 0.146,
+      "max_pct": 0.19,
+      "stddev_pct": 0.0136,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1246765,
+      "avg_pct": 0.1032,
+      "min_pct": 0.091,
+      "max_pct": 0.119,
+      "stddev_pct": 0.0088,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1249024,
+      "avg_pct": 0.0555,
+      "min_pct": 0.033,
+      "max_pct": 0.077,
+      "stddev_pct": 0.0136,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1248652,
+      "avg_pct": 0.0418,
+      "min_pct": 0.022,
+      "max_pct": 0.064,
+      "stddev_pct": 0.0163,
+      "sample_count": 5
+    },
+    {
+      "spell_id": 1246502,
+      "avg_pct": 0.0347,
+      "min_pct": 0.015,
+      "max_pct": 0.081,
+      "stddev_pct": 0.0215,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1249135,
+      "avg_pct": 0.0226,
+      "min_pct": 0.014,
+      "max_pct": 0.038,
+      "stddev_pct": 0.0094,
+      "sample_count": 7
+    },
+    {
+      "spell_id": 1272310,
+      "avg_pct": 0.0195,
+      "min_pct": 0.011,
+      "max_pct": 0.027,
+      "stddev_pct": 0.0057,
+      "sample_count": 8
     }
   ]
 }

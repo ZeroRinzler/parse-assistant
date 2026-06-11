@@ -4,11 +4,13 @@
   "encounter_name": "Midnight Falls",
   "sample_count": 10,
   "avg_duration_s": 539.5,
+  "last_ingested": "2026-06-11 15:20:55",
   "downtime_threshold_ms": 1276,
   "top_avg_efficiency": 68.4,
   "top_efficiency_stddev": 5.2,
   "per_cd_benchmarks": {
     "Deathmark": {
+      "sample_count": 10,
       "avg_first_cast_s": 9.6,
       "stddev_first_cast_s": 1.9,
       "avg_gap_s": 126.1,
@@ -41,6 +43,7 @@
       "majority_hold": true
     },
     "Kingsbane": {
+      "sample_count": 10,
       "avg_first_cast_s": 10.7,
       "stddev_first_cast_s": 1.9,
       "avg_gap_s": 64.7,
@@ -79,6 +82,7 @@
       "majority_hold": true
     },
     "Vanish": {
+      "sample_count": 10,
       "avg_first_cast_s": 59.4,
       "stddev_first_cast_s": 56.9,
       "avg_gap_s": 132.6,
@@ -92,15 +96,15 @@
           "count": 9,
           "total_samples": 10
         },
-        "5": {
-          "target_s": 509.1,
-          "stddev_s": 2.8,
-          "count": 4,
-          "total_samples": 10
-        },
         "3": {
           "target_s": 323.1,
           "stddev_s": 68.2,
+          "count": 4,
+          "total_samples": 10
+        },
+        "5": {
+          "target_s": 509.1,
+          "stddev_s": 2.8,
           "count": 4,
           "total_samples": 10
         }
@@ -258,22 +262,22 @@
         "key": "v2:110433,110433,110433,90640,90692,90748,90749,90750,90751,90752,90756,90758,90759,90760,90766,90767,90768,90770,90771,90777,90784,90785,90786,94552,94553",
         "count": 10,
         "pct": 100,
-        "report_code": "bhvW2BayTYMV4tRp",
-        "fight_id": 7,
-        "player_name": "Azmologue"
+        "report_code": "RmNwWZ4YVGPTChBL",
+        "fight_id": 30,
+        "player_name": "Boli"
       }
     ],
     "trinkets": {
       "12": [
         {
-          "id": 249343,
-          "name": "Gaze of the Alnseer",
+          "id": 193701,
+          "name": "Algeth'ar Puzzle Box",
           "count": 5,
           "pct": 50
         },
         {
-          "id": 193701,
-          "name": "Algeth'ar Puzzle Box",
+          "id": 249343,
+          "name": "Gaze of the Alnseer",
           "count": 5,
           "pct": 50
         }
@@ -376,14 +380,6 @@
           "pct": 10
         }
       ],
-      "9": [
-        {
-          "id": 2841,
-          "name": "",
-          "count": 1,
-          "pct": 10
-        }
-      ],
       "10": [
         {
           "id": 7967,
@@ -439,6 +435,14 @@
           "count": 2,
           "pct": 20
         }
+      ],
+      "9": [
+        {
+          "id": 2841,
+          "name": "",
+          "count": 1,
+          "pct": 10
+        }
       ]
     }
   },
@@ -458,6 +462,72 @@
       "min_uses": 1,
       "max_uses": 2,
       "sample_count": 2
+    }
+  ],
+  "top_dtk_comparison": [
+    {
+      "spell_id": 1249797,
+      "avg_pct": 0.6837,
+      "min_pct": 0.569,
+      "max_pct": 0.744,
+      "stddev_pct": 0.0491,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1251649,
+      "avg_pct": 0.0296,
+      "min_pct": 0.026,
+      "max_pct": 0.033,
+      "stddev_pct": 0.0025,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1249594,
+      "avg_pct": 0.0274,
+      "min_pct": 0.02,
+      "max_pct": 0.034,
+      "stddev_pct": 0.0052,
+      "sample_count": 8
+    },
+    {
+      "spell_id": 1281473,
+      "avg_pct": 0.0262,
+      "min_pct": 0.022,
+      "max_pct": 0.029,
+      "stddev_pct": 0.0031,
+      "sample_count": 4
+    },
+    {
+      "spell_id": 1249582,
+      "avg_pct": 0.0255,
+      "min_pct": 0.018,
+      "max_pct": 0.037,
+      "stddev_pct": 0.0068,
+      "sample_count": 8
+    },
+    {
+      "spell_id": 1254644,
+      "avg_pct": 0.0254,
+      "min_pct": 0.021,
+      "max_pct": 0.03,
+      "stddev_pct": 0.0027,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1282425,
+      "avg_pct": 0.0246,
+      "min_pct": 0.02,
+      "max_pct": 0.029,
+      "stddev_pct": 0.0024,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1285827,
+      "avg_pct": 0.018,
+      "min_pct": 0.016,
+      "max_pct": 0.02,
+      "stddev_pct": 0.0017,
+      "sample_count": 6
     }
   ]
 }
