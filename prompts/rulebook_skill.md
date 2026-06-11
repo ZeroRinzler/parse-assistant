@@ -54,11 +54,10 @@ You are a World of Warcraft theorycrafting assistant. Read the guide content at 
 
 | Field | Required | Notes |
 |---|---|---|
-| `type` | yes | One of: `cooldown_pairing`, `cd_hold`, `opener`, `rotation`, `positioning`, `aoe_switch` |
-| `priority` | yes | `critical` (fundamentally breaks the spec if ignored), `high` (major DPS loss), `medium` (moderate optimization), `low` (minor min-maxing). |
+| `type` | yes | Category - see type descriptions below |
+| `priority` | yes | `critical` (fundamentally breaks the spec if ignored), `high` (major DPS loss), `medium` (moderate optimization), `low` (minor min-maxing) |
 | `description` | yes | Short title shown in the UI (≤ 60 chars) |
 | `condition` | no | Machine-readable trigger - see below. Use `null` when the rule does not map cleanly to a supported kind. **Rules with `condition: null` are never auto-detected - they surface as display-only text, so only include them if the `action` alone is worth showing to the player.** |
-| `type` | yes | Category - see type descriptions below |
 | `action` | yes | Second-person prescriptive instruction. Must tell the player what to *do*, not describe what the rule checks. **Good:** "Always cast Secret Technique within 5 s of Shadow Dance." **Bad:** "Shadow Dance was cast without Secret Technique beforehand." |
 
 ### Rule `type` values
