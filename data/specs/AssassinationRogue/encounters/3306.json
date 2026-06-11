@@ -329,5 +329,15 @@
         }
       ]
     }
-  }
+  },
+  "top_defensives_summary": [
+    {
+      "name": "Cloak of Shadows",
+      "spell_id": 31224,
+      "avg_uses": 1,
+      "min_uses": 1,
+      "max_uses": 1,
+      "sample_count": 7
+    }
+  ]
 }

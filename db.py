@@ -242,6 +242,28 @@ async def sync_encounter_file(spec: str, encounter_id: int) -> None:
     # ── Gear ──────────────────────────────────────────────────────────────────
     gear = aggregate_gear(samples)
 
+    # ── Defensive benchmark ────────────────────────────────────────────────────
+    from rulebook import SPEC_DEFENSIVES as _SPEC_DEFENSIVES
+    spec_defensives = _SPEC_DEFENSIVES.get(spec) or []
+    agg_def_uses: dict[str, list[int]] = {}
+    for s in samples:
+        for d in (s.get("cooldown_data") or {}).get("defensives") or []:
+            agg_def_uses.setdefault(d["name"], []).append(d["uses"])
+
+    top_defensives_summary = []
+    for defn in spec_defensives:
+        uses = agg_def_uses.get(defn["name"])
+        if not uses:
+            continue
+        top_defensives_summary.append({
+            "name": defn["name"],
+            "spell_id": defn["spell_id"],
+            "avg_uses": round(statistics.mean(uses), 1),
+            "min_uses": min(uses),
+            "max_uses": max(uses),
+            "sample_count": len(uses),
+        })
+
     out = {
         "spec": spec,
         "encounter_id": encounter_id,
@@ -254,6 +276,7 @@ async def sync_encounter_file(spec: str, encounter_id: int) -> None:
         "per_cd_benchmarks": per_cd_benchmarks,
         "burst_windows": burst_windows,
         "gear": gear,
+        "top_defensives_summary": top_defensives_summary,
     }
     enc_dir = SPECS_DIR / spec / "encounters"
     try:

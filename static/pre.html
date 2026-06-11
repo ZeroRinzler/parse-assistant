@@ -211,13 +211,10 @@
 
   // ── WCL auth UI ──────────────────────────────────────────────────────────────
 
-  const _IS_LOCAL = ['localhost', '127.0.0.1'].includes(window.location.hostname);
-
   function _updateWclUI() {
     const btn    = document.getElementById('wcl-btn');
     const banner = document.getElementById('auth-banner');
     const loggedIn = typeof wclIsLoggedIn !== 'undefined' && wclIsLoggedIn();
-    const showMain = _IS_LOCAL || loggedIn;
     if (loggedIn) {
       btn.textContent = 'WCL ✓';
       btn.style.color = 'var(--success)';
@@ -228,7 +225,7 @@
       btn.style.borderColor = '';
     }
     btn.style.display = '';
-    banner.style.display = showMain ? 'none' : '';
+    banner.style.display = loggedIn ? 'none' : '';
   }
 
   function toggleWclAuth() {

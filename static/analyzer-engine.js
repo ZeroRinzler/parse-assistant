@@ -334,7 +334,9 @@ function _buildComparison(specCds, castEvents, fightStart, fightEnd, bench, buff
 
 function _findPlayerBurstWindows(dmgEvents, fightStart, specCds, castEvents) {
   if (!dmgEvents?.length) return [];
-  const sorted = dmgEvents.filter(e=>e.type==='damage'&&e.timestamp>=fightStart)
+  // WCL DamageDone events can have various `type` values (damage, absorbed, etc.)
+  // Filter by damage amount rather than type to ensure we capture all hits.
+  const sorted = dmgEvents.filter(e=>e.timestamp>=fightStart&&((e.amount||0)+(e.absorbed||0))>0)
     .sort((a,b)=>a.timestamp-b.timestamp);
   if (!sorted.length) return [];
 
@@ -507,6 +509,7 @@ async function runAnalysis({reportCode, fightId, playerId, fights, masterAbiliti
 
   result.player_burst_windows        = _findPlayerBurstWindows(dmgEvents, fStart, specCds, castEvents);
   result.player_defensives           = _analyzeDefensives(spec, castEvents, buffEvents, dtEvents, fStart, fEnd);
+  if (bench?.top_defensives_summary?.length) result.top_defensives_summary = bench.top_defensives_summary;
   const dtk                           = _analyzeDamageTaken(dtEvents, abilityMap, fStart, fEnd);
   result.player_dmg_taken_segments   = dtk.segments;
   result.player_dmg_taken_by_ability = dtk.top;

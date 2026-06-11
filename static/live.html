@@ -145,16 +145,13 @@
 
   // ── WCL auth UI ──────────────────────────────────────────────────────────────
 
-  const _IS_LOCAL = ['localhost', '127.0.0.1'].includes(window.location.hostname);
-
   function _updateWclUI() {
     const btn    = document.getElementById('wcl-btn');
     const banner = document.getElementById('auth-banner');
     const mainUi = document.getElementById('main-ui');
     const loggedIn = typeof wclIsLoggedIn !== 'undefined' && wclIsLoggedIn();
-    const showMain = _IS_LOCAL || loggedIn;
-    mainUi.classList.toggle('hidden', !showMain);
-    banner.classList.toggle('hidden', showMain);
+    mainUi.classList.toggle('hidden', !loggedIn);
+    banner.classList.toggle('hidden', loggedIn);
     if (loggedIn) {
       btn.textContent = 'WCL ✓';
       btn.classList.add('connected');
