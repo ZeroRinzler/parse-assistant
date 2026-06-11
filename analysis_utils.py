@@ -1,6 +1,6 @@
 """
 Pure analysis helpers shared between main.py (request-time) and db.py (ingestion-time).
-No FastAPI, no DB, no WCL — only standard library.
+No FastAPI, no DB, no WCL - only standard library.
 """
 import statistics
 from collections import Counter, defaultdict

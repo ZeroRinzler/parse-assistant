@@ -3,7 +3,7 @@
 Ingest top WCL parse samples for one or all specs.
 
 Used by:
-  - GitHub Actions  (daily schedule — see .github/workflows/ingest-parses.yml)
+  - GitHub Actions  (daily schedule - see .github/workflows/ingest-parses.yml)
   - Local dev       (python3 scripts/ingest_parses.py --spec SubtletyRogue)
 
 WCL_CLIENT_ID and WCL_CLIENT_SECRET must be set (via .env or environment).

@@ -7,7 +7,7 @@ from curl_cffi.requests import AsyncSession
 
 _EXECUTOR = ThreadPoolExecutor(max_workers=4)
 
-# curl_cffi impersonates Chrome at TLS level — bypasses Cloudflare (Wowhead, etc.)
+# curl_cffi impersonates Chrome at TLS level - bypasses Cloudflare (Wowhead, etc.)
 _IMPERSONATE = "chrome120"
 
 _GITHUB_BLOB_RE = re.compile(
@@ -54,7 +54,7 @@ async def scrape_web(url: str) -> tuple[str, str]:
 
 
 async def scrape_youtube(url: str) -> tuple[str, str]:
-    """Extract a YouTube transcript — (title, transcript_text).
+    """Extract a YouTube transcript - (title, transcript_text).
     Uses youtube-transcript-api 1.x instance API."""
     from youtube_transcript_api import YouTubeTranscriptApi
     from youtube_transcript_api._errors import TranscriptsDisabled, NoTranscriptFound

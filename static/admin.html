@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>WoW Analyzer — Contribute</title>
+  <title>WoW Analyzer - Contribute</title>
   <style>
     :root {
       --bg:#0a0c10;--surface:#13161e;--surface2:#1c202c;--border:#2a2f3d;
@@ -111,7 +111,7 @@
 
   <main class="main">
     <div class="page-title">Contribute</div>
-    <div class="page-sub">Help keep spec data up to date — add guides, generate rulebooks, and refresh top-parse benchmarks. Parse ingestion runs automatically via GitHub Actions daily; use this page to add guides or trigger a manual refresh.</div>
+    <div class="page-sub">Help keep spec data up to date - add guides, generate rulebooks, and refresh top-parse benchmarks. Parse ingestion runs automatically via GitHub Actions daily; use this page to add guides or trigger a manual refresh.</div>
 
     <div class="card">
       <div class="spec-bar">
@@ -157,7 +157,7 @@
 
       <div class="card">
         <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
-          <span>Guides for <span id="guides-spec-label">—</span></span>
+          <span>Guides for <span id="guides-spec-label">-</span></span>
           <div style="display:flex;gap:8px;align-items:center">
             <button class="btn btn-ghost btn-sm" id="btn-scrape-all" onclick="scrapeAll()">Scrape All</button>
             <button class="btn btn-sm" id="btn-copy-prompt" onclick="copyPrompt()">Copy AI Prompt</button>
@@ -176,9 +176,9 @@
         </div>
 
         <div id="paste-back-panel" style="display:none;margin-top:20px;border-top:1px solid var(--border);padding-top:18px">
-          <div class="card-title" style="margin-bottom:8px">Step 2 — Paste AI Output</div>
+          <div class="card-title" style="margin-bottom:8px">Step 2 - Paste AI Output</div>
           <p class="muted" style="margin-bottom:10px">
-            Paste the JSON your AI returned. Output must start with <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">{</code> — no code fences or explanation.
+            Paste the JSON your AI returned. Output must start with <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">{</code> - no code fences or explanation.
           </p>
           <textarea id="ai-json-input" rows="14"
             style="font-family:monospace;font-size:12px;color:#a8d8a8;background:#0d1117"
@@ -193,7 +193,7 @@
       </div>
 
       <div class="card">
-        <div class="card-title">Current Rulebook — <span id="rulebook-spec-label">—</span></div>
+        <div class="card-title">Current Rulebook - <span id="rulebook-spec-label">-</span></div>
         <div id="rulebook-content"><div class="empty">Select a spec to see its rulebook.</div></div>
       </div>
     </div>
@@ -203,8 +203,8 @@
       <div class="card">
         <div class="ingest-header">
           <div>
-            <div class="card-title" style="margin-bottom:4px">Parse Ingestion — <span id="parses-spec-label">—</span></div>
-            <div class="muted">Always top 10 &nbsp;·&nbsp; Last ingested: <span id="spec-last-ingested" style="color:var(--text)">—</span>
+            <div class="card-title" style="margin-bottom:4px">Parse Ingestion - <span id="parses-spec-label">-</span></div>
+            <div class="muted">Always top 10 &nbsp;·&nbsp; Last ingested: <span id="spec-last-ingested" style="color:var(--text)">-</span>
               &nbsp;·&nbsp; <span style="color:var(--info);font-size:11px">Auto-refreshed daily via GitHub Actions</span>
             </div>
           </div>
@@ -220,7 +220,7 @@
       </div>
 
       <div class="card">
-        <div class="card-title">Current Expansion — Boss Overview</div>
+        <div class="card-title">Current Expansion - Boss Overview</div>
         <div id="boss-table-wrap"><div class="empty"><span class="spinner-inline"></span> Loading…</div></div>
       </div>
 
@@ -265,7 +265,7 @@ let currentClass = "Rogue";
 let currentTab  = "guides";
 
 // Parses tab state
-let _currentEncounters = [];  // [{id,name,zone,expansion}] — current expansion only
+let _currentEncounters = [];  // [{id,name,zone,expansion}] - current expansion only
 let _parseStats        = {};  // {encounter_id: {sample_count, last_ingested}}
 let _bossIngestState   = {};  // {encounter_id: {status,step,total,analyzed,error}}
 let _ingestRunning     = false;
@@ -275,7 +275,7 @@ let _encountersCache   = null;
 function fmtSpec(s){ return s.replace(/([A-Z])/g," $1").trim(); }
 function fmtDur(s){ return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,"0")}`; }
 function fmtDate(dt){
-  if(!dt) return "—";
+  if(!dt) return "-";
   const d = new Date(dt.replace(" ","T")+"Z");
   return d.toLocaleString(undefined,{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"});
 }
@@ -417,7 +417,7 @@ async function apiFetch(url,method="GET",body=null){
   }catch(e){ toast(`⚠ ${e.message}`); return null; }
 }
 
-// ── Encounters (cached — used by parses tab) ──────────────────────────────────
+// ── Encounters (cached - used by parses tab) ──────────────────────────────────
 async function loadEncounters(){
   if(!_encountersCache){
     const data = await apiFetch("/api/admin/encounters");
@@ -443,7 +443,7 @@ function renderGuidesTable(guides){
         <tr id="grow-${g.id}">
           <td><span class="badge badge-${g.guide_type}">${g.guide_type}</span></td>
           <td class="url-cell" title="${g.url}">${g.title||g.url}</td>
-          <td>${g.word_count?g.word_count.toLocaleString():"—"}</td>
+          <td>${g.word_count?g.word_count.toLocaleString():"-"}</td>
           <td>
             <span class="badge badge-${g.status}">${g.status}</span>
             ${g.error_msg?`<span class="muted" style="margin-left:4px" title="${g.error_msg}">⚠</span>`:""}
@@ -497,13 +497,13 @@ async function scrapeAll(){
         addLog("scrape-log",`Scraping: ${evt.url}`,"info");
       } else if(evt.type==="done"){
         setBar("scrape-bar",Math.round(evt.step/evt.total*100));
-        addLog("scrape-log",`✓ ${evt.title} — ${evt.word_count?.toLocaleString()} words`,"done");
+        addLog("scrape-log",`✓ ${evt.title} - ${evt.word_count?.toLocaleString()} words`,"done");
       } else if(evt.type==="error"){
         addLog("scrape-log",`✗ ${evt.error}`,"error");
       } else if(evt.type==="complete"){
         setBar("scrape-bar",100);
         document.getElementById("scrape-progress-label").textContent=
-          `Done — ${evt.scraped} scraped, ${evt.errors} errors`;
+          `Done - ${evt.scraped} scraped, ${evt.errors} errors`;
         loadGuides();
         toast(`Scrape complete: ${evt.scraped} OK, ${evt.errors} failed`);
       }
@@ -520,13 +520,13 @@ async function copyPrompt(){
   if(!data) return;
   try{
     await navigator.clipboard.writeText(data.prompt);
-    toast(`Prompt copied (${data.guide_count} guide(s)) — paste into your AI`);
+    toast(`Prompt copied (${data.guide_count} guide(s)) - paste into your AI`);
     document.getElementById("paste-back-panel").style.display="block";
     document.getElementById("ai-json-input").value="";
     document.getElementById("ai-save-status").textContent="";
     document.getElementById("paste-back-panel").scrollIntoView({behavior:"smooth",block:"nearest"});
   }catch{
-    toast("⚠ Clipboard write failed — see console for the prompt");
+    toast("⚠ Clipboard write failed - see console for the prompt");
     console.log(data.prompt);
   }
 }
@@ -569,7 +569,7 @@ async function saveAIRulebook(){
   const data=await apiFetch(`/api/admin/rulebook/${currentSpec}`,"PUT",{rulebook:parsed});
   if(data){
     status.style.color="var(--success)";
-    status.textContent=`✓ Active — ${(parsed.major_cooldowns||[]).length} cooldown(s) loaded.`;
+    status.textContent=`✓ Active - ${(parsed.major_cooldowns||[]).length} cooldown(s) loaded.`;
     toast("✅ Rulebook saved and active.");
     document.getElementById("paste-back-panel").style.display="none";
     loadRulebook();
@@ -581,7 +581,7 @@ async function saveAIRulebook(){
 // ── Parses overview ──────────────────────────────────────────────────────────
 async function loadParseOverview(){
   document.getElementById("parses-spec-label").textContent = fmtSpec(currentSpec);
-  document.getElementById("spec-last-ingested").textContent = "—";
+  document.getElementById("spec-last-ingested").textContent = "-";
   document.getElementById("boss-table-wrap").innerHTML =
     '<div class="empty"><span class="spinner-inline"></span> Loading…</div>';
   document.getElementById("boss-detail-panels").innerHTML = "";
@@ -661,7 +661,7 @@ function _bossStatusCell(enc,stat,state){
   const safeName=enc.name.replace(/'/g,"\\'");
   return n
     ? `<button class="btn btn-ghost btn-sm" onclick="viewBossSamples(${enc.id},'${safeName}')">View ${n}</button>`
-    : '<span class="muted">—</span>';
+    : '<span class="muted">-</span>';
 }
 
 function _updateBossRow(encId){
@@ -724,7 +724,7 @@ async function ingestAll(){
         } else if(evt.type==="complete"){
           setBar("ingest-bar",100);
           document.getElementById("ingest-progress-label").textContent=
-            `Done — ${evt.total_analyzed} parses ingested`;
+            `Done - ${evt.total_analyzed} parses ingested`;
           document.getElementById("ingest-progress-frac").textContent="";
           toast(`✅ Ingest complete: ${evt.total_analyzed} parses`);
         } else if(evt.type==="error"){
@@ -769,7 +769,7 @@ async function viewBossSamples(encId, encName){
     const cdMap={}; (cd.cooldowns||[]).forEach(c=>{ cdMap[c.name]=c; });
     const cdCells=cdNames.map(n=>{
       const c=cdMap[n];
-      if(!c) return '<td class="muted">—</td>';
+      if(!c) return '<td class="muted">-</td>';
       const offStr=c.bl_offset_s!=null
         ? ` <span class="muted">BL${c.bl_offset_s>=0?"+":""}${c.bl_offset_s}s</span>` : "";
       const patternStyle=c.cast_pattern==="hold"?"color:var(--warning)":"color:var(--success)";
@@ -777,22 +777,22 @@ async function viewBossSamples(encId, encName){
         ? ` <span style="${patternStyle};font-size:11px;font-weight:700">${c.cast_pattern==="hold"?"HOLD":"CD"}</span>` : "";
       const holdInfo=c.hold_windows?.length>0
         ? ` <span class="muted">(${c.hold_windows.length} hold${c.hold_windows.length>1?"s":""})</span>` : "";
-      return `<td><span class="muted">×${c.total_uses}</span> first:${c.first_cast_s??"?"}s${offStr} BL:${c.bl_aligned?"✓":"—"}${patternBadge}${holdInfo}</td>`;
+      return `<td><span class="muted">×${c.total_uses}</span> first:${c.first_cast_s??"?"}s${offStr} BL:${c.bl_aligned?"✓":"-"}${patternBadge}${holdInfo}</td>`;
     });
     return `<tr>
       <td><b>${s.player_name||"?"}</b></td>
       <td>${fmtDur(cd.fight_duration_s||0)}</td>
-      <td>${cd.cast_efficiency_pct!=null?cd.cast_efficiency_pct+"%":"—"}</td>
+      <td>${cd.cast_efficiency_pct!=null?cd.cast_efficiency_pct+"%":"-"}</td>
       ${cdCells.join("")}
     </tr>`;
   }).join("");
 
-  // Burst windows summary — cluster by time across samples
+  // Burst windows summary - cluster by time across samples
   const allBurst=samples.flatMap(s=>(s.cooldown_data?.burst_windows||[]).map(bw=>({...bw,player:s.player_name})));
   let burstHtml="";
   if(allBurst.length>0){
     const burstRows=allBurst.map(bw=>{
-      const activeCds=bw.active_cds?.length>0?bw.active_cds.join(", "):"—";
+      const activeCds=bw.active_cds?.length>0?bw.active_cds.join(", "):"-";
       return `<tr>
         <td class="muted">${bw.player||"?"}</td>
         <td>${fmt(bw.time_s)}</td>
@@ -816,7 +816,7 @@ async function viewBossSamples(encId, encName){
   panels.innerHTML=`
     <div class="card">
       <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <span>${encName} — ${fmtSpec(currentSpec)} · ${samples.length} sample(s)</span>
+        <span>${encName} - ${fmtSpec(currentSpec)} · ${samples.length} sample(s)</span>
         <button class="btn btn-ghost btn-sm" onclick="${closeJs}">✕ Close</button>
       </div>
       <div style="overflow-x:auto">
@@ -849,12 +849,12 @@ async function loadRulebook(){
     const cds=data.cooldowns||[];
     const cdsHtml=cds.map(cd=>`<tr>
       <td><b>${cd.name}</b></td>
-      <td style="font-family:monospace">${cd.spell_id||"—"}</td>
+      <td style="font-family:monospace">${cd.spell_id||"-"}</td>
       <td>${cd.cooldown}s</td>
       <td class="muted">${cd.usage_rule||""}</td>
     </tr>`).join("");
     div.innerHTML=`
-      <p class="muted" style="margin-bottom:14px">Using built-in static rulebook — no dynamic rulebook saved yet.</p>
+      <p class="muted" style="margin-bottom:14px">Using built-in static rulebook - no dynamic rulebook saved yet.</p>
       <table>
         <thead><tr><th>Ability</th><th>Spell ID</th><th>CD</th><th>Usage Rule</th></tr></thead>
         <tbody>${cdsHtml||'<tr><td colspan="4" class="empty">None</td></tr>'}</tbody>
@@ -865,11 +865,11 @@ async function loadRulebook(){
   const rb=data.rulebook;
   const cdsHtml=(rb.major_cooldowns||[]).map(cd=>`<tr>
     <td><b>${cd.name}</b></td>
-    <td style="font-family:monospace">${cd.spell_id||"—"}</td>
+    <td style="font-family:monospace">${cd.spell_id||"-"}</td>
     <td>${cd.cooldown}s</td>
-    <td>${cd.duration?cd.duration+"s":"—"}</td>
-    <td>${cd.align_with_bloodlust?'<span style="color:var(--info)">✓ yes</span>':"—"}</td>
-    <td>${cd.opener_priority||"—"}</td>
+    <td>${cd.duration?cd.duration+"s":"-"}</td>
+    <td>${cd.align_with_bloodlust?'<span style="color:var(--info)">✓ yes</span>':"-"}</td>
+    <td>${cd.opener_priority||"-"}</td>
     <td class="muted">${cd.usage_rule||""}</td>
   </tr>`).join("");
 

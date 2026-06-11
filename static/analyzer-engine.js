@@ -150,7 +150,7 @@ function _analyzePlayerCore({playerName, spec, fightStart, fightEnd,
 
   if (!specCds) {
     findings.push({severity:'info', category:'unsupported_spec', timestamp_ms:null,
-      message:`${spec} is not yet in the rulebook — cooldown rules will be added soon. Cast efficiency analysis still applies.`});
+      message:`${spec} is not yet in the rulebook - cooldown rules will be added soon. Cast efficiency analysis still applies.`});
   } else {
     for (const cd of specCds) {
       const {spell_id: spellId, name: cdName, cooldown: cooldownS} = cd;
@@ -167,7 +167,7 @@ function _analyzePlayerCore({playerName, spec, fightStart, fightEnd,
       } else if (actual < expected) {
         const lost = expected - actual;
         cdIssues.push({severity:'critical', category:'lost_cooldown', timestamp_ms:null,
-          message:`${cdName} — ${actual} of ${expected} expected casts. Lost ${lost} use(s) in a ${_fmt(fightDurS)} fight (${cooldownS}s cooldown) — roughly ${Math.round(lost/expected*100)}% of this CD's potential.`});
+          message:`${cdName} - ${actual} of ${expected} expected casts. Lost ${lost} use(s) in a ${_fmt(fightDurS)} fight (${cooldownS}s cooldown) - roughly ${Math.round(lost/expected*100)}% of this CD's potential.`});
       }
 
       const b = perCdBench[cdName];
@@ -179,7 +179,7 @@ function _analyzePlayerCore({playerName, spec, fightStart, fightEnd,
           const avgF = b.avg_first_cast_s, sdF = b.stddev_first_cast_s ?? 10;
           if (firstS > avgF + 2 * sdF) cdIssues.push({severity:'warning', category:'cooldown_delay',
             timestamp_ms: rel(cdCasts[0].timestamp),
-            message:`${cdName} opener at ${_fmt(firstS)} — ${(firstS-avgF).toFixed(0)}s later than top parsers (${_fmt(avgF)} avg ±${sdF.toFixed(0)}s on this encounter). A delayed opener on a ${cooldownS}s cooldown risks losing a use later.`});
+            message:`${cdName} opener at ${_fmt(firstS)} - ${(firstS-avgF).toFixed(0)}s later than top parsers (${_fmt(avgF)} avg ±${sdF.toFixed(0)}s on this encounter). A delayed opener on a ${cooldownS}s cooldown risks losing a use later.`});
         } else if (firstS > 30) {
           cdIssues.push({severity:'warning', category:'cooldown_delay',
             timestamp_ms: rel(cdCasts[0].timestamp),
@@ -199,7 +199,7 @@ function _analyzePlayerCore({playerName, spec, fightStart, fightEnd,
           const firstS = rel(cdCasts[0].timestamp)/1000;
           cdIssues.push({severity:'critical', category:'cooldown_alignment',
             timestamp_ms: rel(cdCasts[0].timestamp),
-            message:`${cdName} missed Bloodlust (BL at ${_fmt(blTimeS)}, first cast at ${_fmt(firstS)} — ${Math.abs(firstS-blTimeS).toFixed(0)}s apart). Stacking all major CDs inside BL multiplies their value by ~30%.`});
+            message:`${cdName} missed Bloodlust (BL at ${_fmt(blTimeS)}, first cast at ${_fmt(firstS)} - ${Math.abs(firstS-blTimeS).toFixed(0)}s apart). Stacking all major CDs inside BL multiplies their value by ~30%.`});
         } else if (blAligned && wantsBL && b) {
           const offsets = blWin.map(c => rel(c.timestamp)/1000 - blTimeS);
           const po = offsets.reduce((best,x) => Math.abs(x)<Math.abs(best)?x:best);
@@ -210,7 +210,7 @@ function _analyzePlayerCore({playerName, spec, fightStart, fightEnd,
               const sign = v => v >= 0 ? `+${v.toFixed(0)}` : v.toFixed(0);
               cdIssues.push({severity:'warning', category:'cooldown_alignment',
                 timestamp_ms: rel(blWin[0].timestamp),
-                message:`${cdName} used at BL ${sign(po)}s — top parsers use it at BL ${sign(b.avg_bl_offset_s)}s (±${sd.toFixed(0)}s) on this encounter. Using it ${dir} in the Bloodlust window reduces overlap with the damage buff.`});
+                message:`${cdName} used at BL ${sign(po)}s - top parsers use it at BL ${sign(b.avg_bl_offset_s)}s (±${sd.toFixed(0)}s) on this encounter. Using it ${dir} in the Bloodlust window reduces overlap with the damage buff.`});
             }
           }
         }
@@ -242,8 +242,8 @@ function _analyzePlayerCore({playerName, spec, fightStart, fightEnd,
           const playerT = times[k], tol = Math.max(target.stddev_s ?? 20, 15);
           if (playerT < target.target_s - tol) cdSugg.push({severity:'info', category:'hold_suggestion',
             timestamp_ms: rel(cdCasts[k].timestamp),
-            message:`${cdName} cast ${idxStr} used at ${_fmt(playerT)} — ${target.count}/${target.total_samples} top parsers hold until ~${_fmt(target.target_s)} here. A burst window or mechanic at ~${_fmt(target.target_s)} likely makes this optimal.`,
-            details:{remedy:`Consider holding ${cdName} until ~${_fmt(target.target_s)} — top parsers consistently delay cast ${idxStr} here.`, actual_s:Math.round(playerT*10)/10, target_s:Math.round(target.target_s*10)/10, cd_name:cdName}});
+            message:`${cdName} cast ${idxStr} used at ${_fmt(playerT)} - ${target.count}/${target.total_samples} top parsers hold until ~${_fmt(target.target_s)} here. A burst window or mechanic at ~${_fmt(target.target_s)} likely makes this optimal.`,
+            details:{remedy:`Consider holding ${cdName} until ~${_fmt(target.target_s)} - top parsers consistently delay cast ${idxStr} here.`, actual_s:Math.round(playerT*10)/10, target_s:Math.round(target.target_s*10)/10, cd_name:cdName}});
         }
       }
 
@@ -254,7 +254,7 @@ function _analyzePlayerCore({playerName, spec, fightStart, fightEnd,
         const parts = [actual <= expected ? `${actual}/${expected} casts on cooldown` : `${actual} casts`];
         if (blTimeS !== null && wantsBL) parts.push(blAligned ? 'BL-aligned' : 'note: no BL overlap');
         findings.push({severity:'success', category:'cooldown_usage', timestamp_ms:null, cd_name:cdName,
-          message:`${cdName} — ${parts.join(', ')}.`});
+          message:`${cdName} - ${parts.join(', ')}.`});
       }
       if (actual > 0) findings.push(...cdSugg);
     }
@@ -274,14 +274,14 @@ function _analyzePlayerCore({playerName, spec, fightStart, fightEnd,
     if (totalDtS > 5) {
       const worst    = [...gaps].sort((a,b) => b.duration_ms-a.duration_ms).slice(0,3);
       const worstStr = worst.map(g => `${_fmt(g.start_ms/1000)} (${(g.duration_ms/1000).toFixed(1)}s gap)`).join(', ');
-      let severity = 'warning', benchStr = 'no benchmark — run top-parse analysis for context';
+      let severity = 'warning', benchStr = 'no benchmark - run top-parse analysis for context';
       if (topEffPct != null) {
         const delta = effPct - topEffPct;
         benchStr = `top parses avg ${topEffPct.toFixed(0)}%`;
         severity = delta >= 0 ? 'success' : (topEffStdev != null && delta >= -topEffStdev ? 'warning' : (delta >= -7 ? 'warning' : 'critical'));
       }
       findings.push({severity, category:'cast_efficiency', timestamp_ms:null,
-        message:`Cast efficiency: ${effPct.toFixed(1)}% (${benchStr}) — ${totalDtS.toFixed(1)}s in gaps >${(downtimeThreshMs/1000).toFixed(1)}s. Worst: ${worstStr}.`,
+        message:`Cast efficiency: ${effPct.toFixed(1)}% (${benchStr}) - ${totalDtS.toFixed(1)}s in gaps >${(downtimeThreshMs/1000).toFixed(1)}s. Worst: ${worstStr}.`,
         details:{efficiency_pct:Math.round(effPct*10)/10, top_efficiency_pct:topEffPct, total_downtime_s:Math.round(totalDtS*10)/10, gap_count:gaps.length}});
     }
   }
@@ -337,7 +337,7 @@ function _findPlayerBurstWindows(dmgEvents, fightStart, specCds, castEvents) {
   const sorted = dmgEvents.filter(e=>e.timestamp>=fightStart&&((e.amount||0)+(e.absorbed||0))>0)
     .sort((a,b)=>a.timestamp-b.timestamp);
   if (dmgEvents.length > 0 && sorted.length === 0)
-    console.warn('[BurstWindows] all events filtered out — sample:', JSON.stringify(dmgEvents[0]));
+    console.warn('[BurstWindows] all events filtered out - sample:', JSON.stringify(dmgEvents[0]));
   if (!sorted.length) return [];
 
   const WINDOW_S = 8;
@@ -371,7 +371,21 @@ function _findPlayerBurstWindows(dmgEvents, fightStart, specCds, castEvents) {
         }
       }
     }
-    return {time_s:w.time_s, pct_of_total:Math.round(w.total/totalDmg*1000)/1000, active_cds:active};
+    // Per-ability breakdown within this 8s window
+    const winEvents = sorted.filter(e => {
+      const tS = (e.timestamp-fightStart)/1000;
+      return tS >= w.time_s && tS < w.time_s + WINDOW_S;
+    });
+    const winTotal = winEvents.reduce((s,e)=>s+(e.amount||0)+(e.absorbed||0),0) || 1;
+    const byAb = {};
+    for (const e of winEvents) {
+      if (e.abilityGameID) byAb[e.abilityGameID] = (byAb[e.abilityGameID]||0) + (e.amount||0) + (e.absorbed||0);
+    }
+    const ability_breakdown = Object.entries(byAb)
+      .sort((a,b)=>b[1]-a[1]).slice(0,10)
+      .map(([sid,dmg])=>({spell_id:parseInt(sid,10), pct:Math.round(dmg/winTotal*1000)/1000}));
+
+    return {time_s:w.time_s, pct_of_total:Math.round(w.total/totalDmg*1000)/1000, active_cds:active, ability_breakdown};
   });
 }
 

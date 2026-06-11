@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Live — WoW Analyzer</title>
+  <title>Live - WoW Analyzer</title>
   <link rel="stylesheet" href="renderer.css" />
   <style>
     :root {
@@ -257,7 +257,7 @@
   function startPolling() {
     if (_pollInterval) clearInterval(_pollInterval);
     _pollInterval = setInterval(pollForNewPulls, POLL_MS);
-    setPollStatus('watching', `Watching for new pulls — checks every ${POLL_MS / 1000}s`);
+    setPollStatus('watching', `Watching for new pulls - checks every ${POLL_MS / 1000}s`);
   }
 
   async function pollForNewPulls() {
@@ -273,12 +273,12 @@
         _masterAbilities = abilities;
         populateFights(fights, String(fights[fights.length - 1].id));
         filterAndPopulatePlayers();
-        setPollStatus('watching', 'New pull detected — analysing…');
+        setPollStatus('watching', 'New pull detected - analysing…');
         await analyzePlayer();
       }
       setPollStatus('watching', `Watching · last checked ${new Date().toLocaleTimeString()}`);
     } catch {
-      setPollStatus('error', 'Poll error — will retry');
+      setPollStatus('error', 'Poll error - will retry');
     }
   }
 </script>

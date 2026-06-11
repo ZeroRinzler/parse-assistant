@@ -492,7 +492,7 @@ async def analyze_parse(
             }
         )
 
-    # Cast efficiency — store full sorted gap list so main.py can derive the threshold
+    # Cast efficiency - store full sorted gap list so main.py can derive the threshold
     completed = sorted(
         [e for e in cast_events if e.get("type") == "cast"],
         key=lambda e: e["timestamp"],
@@ -509,7 +509,7 @@ async def analyze_parse(
         downtime_ms = sum(g for g in cast_gap_list_ms if g > 1500)
         cast_eff_pct = round(max(0.0, (1 - downtime_ms / 1000 / fight_dur_s) * 100), 1)
 
-    # Burst windows — top non-overlapping 8s damage peaks
+    # Burst windows - top non-overlapping 8s damage peaks
     burst_windows = _find_burst_windows(damage_events, start)
     for bw in burst_windows:
         bw_t = bw["time_s"]

@@ -9,7 +9,7 @@ from typing import Optional
 # WCL gear array indices (0-based positional, same order as WoW's paper doll)
 _TRINKET_SLOTS = {12, 13}
 
-# WCL gameData.classes { id name } — class field in encounterRankings is this numeric ID
+# WCL gameData.classes { id name } - class field in encounterRankings is this numeric ID
 _WCL_CLASS_NAMES = {
     1: "DeathKnight", 2: "Druid", 3: "Hunter", 4: "Mage", 5: "Monk",
     6: "Paladin", 7: "Priest", 8: "Rogue", 9: "Shaman", 10: "Warlock",
@@ -439,7 +439,7 @@ async def analyze(req: AnalyzeRequest):
 
 @app.get("/api/spell-icons")
 async def spell_icons_endpoint(ids: str = ""):
-    """Legacy endpoint stub — gameData.spell() was removed from WCL; icons come from ability_icons in the analyze response."""
+    """Legacy endpoint stub - gameData.spell() was removed from WCL; icons come from ability_icons in the analyze response."""
     return {}
 
 
@@ -637,7 +637,7 @@ async def gear_stats(spec: str, encounter_id: int):
     return result
 
 
-# ── Admin — Guides ────────────────────────────────────────────────────────────
+# ── Admin - Guides ────────────────────────────────────────────────────────────
 
 class AddGuideRequest(BaseModel):
     spec: str
@@ -684,7 +684,7 @@ async def scrape_guide(guide_id: int):
 
 @app.get("/api/admin/guides/spec/{spec}/scrape-stream")
 async def scrape_all_stream(spec: str):
-    """SSE stream — yields one event per guide as it is scraped."""
+    """SSE stream - yields one event per guide as it is scraped."""
     def _evt(payload: dict) -> str:
         return f"data: {json.dumps(payload)}\n\n"
 
@@ -717,7 +717,7 @@ async def scrape_all_stream(spec: str):
     )
 
 
-# ── Admin — Rulebook prompt assembly ─────────────────────────────────────────
+# ── Admin - Rulebook prompt assembly ─────────────────────────────────────────
 
 @app.get("/api/admin/guides/{spec}/prompt")
 async def get_rulebook_prompt(spec: str):
@@ -785,7 +785,7 @@ async def get_rulebook(spec: str):
     return {"source": "none", "spec": spec}
 
 
-# ── Admin — Top parses ────────────────────────────────────────────────────────
+# ── Admin - Top parses ────────────────────────────────────────────────────────
 
 @app.get("/api/admin/encounters")
 async def list_encounters():
@@ -813,7 +813,7 @@ async def fetch_parses(req: FetchParsesRequest):
 
 @app.post("/api/admin/parses/analyze-stream")
 async def analyze_parses_stream(req: FetchParsesRequest):
-    """SSE stream — fetches rankings then deep-analyzes each parse one by one."""
+    """SSE stream - fetches rankings then deep-analyzes each parse one by one."""
     def _evt(payload: dict) -> str:
         return f"data: {json.dumps(payload)}\n\n"
 
@@ -886,7 +886,7 @@ async def parse_samples_endpoint(spec: str, encounter_id: int):
 
 @app.get("/api/admin/parses/ingest-all-stream/{spec}")
 async def ingest_all_stream(spec: str):
-    """SSE — ingests top 10 parses for every current-expansion boss sequentially."""
+    """SSE - ingests top 10 parses for every current-expansion boss sequentially."""
     def _evt(payload: dict) -> str:
         return f"data: {json.dumps(payload)}\n\n"
 

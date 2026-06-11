@@ -3,7 +3,7 @@
 Add and scrape a guide for a spec.
 
 Used by:
-  - GitHub Actions  (on workflow_dispatch — see .github/workflows/scrape-guides.yml)
+  - GitHub Actions  (on workflow_dispatch - see .github/workflows/scrape-guides.yml)
   - Local dev       (python3 scripts/scrape_guides.py --spec SubtletyRogue --url https://... --type web)
 
 This mirrors the admin page's Add + Scrape workflow in a CLI-friendly form.

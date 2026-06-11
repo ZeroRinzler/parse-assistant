@@ -1,4 +1,4 @@
-// Shared rendering — used by index.html (post-raid) and live.html (live)
+// Shared rendering - used by index.html (post-raid) and live.html (live)
 
 // ── API fetch helper ──────────────────────────────────────────────────────────
 // Wraps fetch+json with a clear error when the backend is unavailable (e.g. on
@@ -69,7 +69,7 @@ function filterAndPopulatePlayers(autoPlayer = null) {
   visible.forEach(p => {
     const opt = document.createElement('option');
     opt.value = p.id;
-    opt.textContent = `${p.name} — ${formatSpec(p.spec)}`;
+    opt.textContent = `${p.name} - ${formatSpec(p.spec)}`;
     sel.appendChild(opt);
   });
   if (autoPlayer) sel.value = autoPlayer;
@@ -144,7 +144,7 @@ function autoSelectLinkedPlayer() {
   const sel = document.getElementById('player-select');
   if (!sel) return false;
   for (const opt of sel.options) {
-    if (names.has(opt.textContent.split(' — ')[0].toLowerCase())) {
+    if (names.has(opt.textContent.split(' - ')[0].toLowerCase())) {
       sel.value = opt.value;
       return true;
     }
@@ -257,7 +257,7 @@ function renderResults(data) {
 
   el.innerHTML = `
     <div class="result-header">
-      <h2>${data.player} — ${formatSpec(data.spec)}</h2>
+      <h2>${data.player} - ${formatSpec(data.spec)}</h2>
     </div>
     <div class="cd-list">${cdHtml}</div>
     ${rulesHtml}
@@ -352,7 +352,7 @@ function renderRuleItem(f) {
 // ── Parse comparison table ───────────────────────────────────────────────────
 
 function _delta(player, top, stddev) {
-  if (player == null || top == null) return '<span class="delta-ok">—</span>';
+  if (player == null || top == null) return '<span class="delta-ok">-</span>';
   const diff = player - top;
   const sd = stddev || 0.05;
   const cls = diff >= 0 ? 'delta-good' : Math.abs(diff) > sd ? 'delta-bad' : 'delta-ok';
@@ -365,14 +365,14 @@ function renderParseComparison(comparison, playerDurS) {
     const upmDelta = _delta(cd.player_uses_per_min, cd.top_avg_uses_per_min, cd.top_stddev_uses_per_min);
     const firstDelta = cd.player_first_cast_s != null && cd.top_avg_first_cast_s != null
       ? _delta(-(cd.player_first_cast_s - cd.top_avg_first_cast_s), 0, cd.top_stddev_first_cast_s)
-      : '<span class="delta-ok">—</span>';
+      : '<span class="delta-ok">-</span>';
     const blCell = cd.top_bl_pct > 0
-      ? `${cd.player_bl_offset_s != null ? (cd.player_bl_offset_s >= 0 ? '+' : '') + cd.player_bl_offset_s + 's' : '—'} <span class="delta-ok">/ avg ${cd.top_avg_bl_offset_s != null ? (cd.top_avg_bl_offset_s >= 0 ? '+' : '') + cd.top_avg_bl_offset_s + 's' : '—'}</span>`
-      : '<span class="delta-ok">—</span>';
+      ? `${cd.player_bl_offset_s != null ? (cd.player_bl_offset_s >= 0 ? '+' : '') + cd.player_bl_offset_s + 's' : '-'} <span class="delta-ok">/ avg ${cd.top_avg_bl_offset_s != null ? (cd.top_avg_bl_offset_s >= 0 ? '+' : '') + cd.top_avg_bl_offset_s + 's' : '-'}</span>`
+      : '<span class="delta-ok">-</span>';
     return `<tr>
       <td style="font-weight:600">${cd.name}</td>
       <td>${cd.player_uses} <span class="delta-ok">(${cd.player_uses_per_min}/min)</span> ${upmDelta}</td>
-      <td>${cd.player_first_cast_s != null ? formatDuration(cd.player_first_cast_s) : '—'} ${firstDelta}</td>
+      <td>${cd.player_first_cast_s != null ? formatDuration(cd.player_first_cast_s) : '-'} ${firstDelta}</td>
       <td>${blCell}</td>
       <td class="delta-ok">${cd.sample_count}</td>
     </tr>`;
@@ -402,7 +402,7 @@ function renderComparisonChart(rows, opts = {}) {
   const { higherIsBetter = true, unit = 'pct', noDataText = 'Re-ingest parses to compare with top 10' } = opts;
 
   function fmtV(v) {
-    if (v == null) return '—';
+    if (v == null) return '-';
     return unit === 'pct' ? (v * 100).toFixed(1) + '%' : formatNumber(v);
   }
 
@@ -517,7 +517,7 @@ function renderBurstWindows(topBws, playerBws, fightDurS) {
         <div class="cmp-subrow">
           <span class="cmp-leg player"></span>
           <div class="cmp-track"><div class="cmp-fill player" style="width:${pBar.toFixed(1)}%"></div></div>
-          <span class="cmp-val">${playerPct != null ? (playerPct*100).toFixed(1)+'%' : '—'}</span>
+          <span class="cmp-val">${playerPct != null ? (playerPct*100).toFixed(1)+'%' : '-'}</span>
         </div>
         <div class="cmp-subrow">
           <span class="cmp-leg top"></span>
@@ -540,7 +540,7 @@ function renderBurstWindows(topBws, playerBws, fightDurS) {
         const diffStr = diff !== null ? ` <span class="${diffCls}">${diff >= 0 ? '+' : ''}${(diff*100).toFixed(1)}%</span>` : '';
         return `<tr>
           <td><span class="cd-icon-slot" data-spell-id="${sid}">${spellIconHtml(sid)}</span> <a href="https://www.wowhead.com/spell=${sid}" target="_blank" class="dtk-wowhead"><span data-spell-id-name="${sid}">${spellName(sid) || 'Spell ' + sid}</span></a></td>
-          ${notReached ? '' : `<td>${playerAb ? (playerAb.pct*100).toFixed(1)+'%' : '—'}${diffStr}</td>`}
+          ${notReached ? '' : `<td>${playerAb ? (playerAb.pct*100).toFixed(1)+'%' : '-'}${diffStr}</td>`}
           <td class="delta-ok">${(topAb.avg_pct*100).toFixed(1)}%</td>
         </tr>`;
       }).join('');
@@ -557,7 +557,7 @@ function renderBurstWindows(topBws, playerBws, fightDurS) {
       ? `<button class="bw-expand-btn" onclick="this.closest('.bw-card').classList.toggle('expanded')">Detail ▾</button>`
       : '';
 
-    const cdsStr = bw.common_cds?.length ? bw.common_cds.join(', ') : '—';
+    const cdsStr = bw.common_cds?.length ? bw.common_cds.join(', ') : '-';
 
     return `<div class="bw-card ${borderCls}">
       <div class="bw-card-header">

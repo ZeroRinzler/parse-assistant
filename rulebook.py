@@ -1,7 +1,7 @@
 BLOODLUST_SPELL_IDS = {2825, 32182, 80353, 90355, 264667, 390386}
 BLOODLUST_DURATION_S = 40
 
-# Major defensive cooldowns by spec — used for defensive usage analysis.
+# Major defensive cooldowns by spec - used for defensive usage analysis.
 # duration: buff/effect duration in seconds (for damage-prevented estimate).
 SPEC_DEFENSIVES: dict[str, list[dict]] = {
     # Warriors

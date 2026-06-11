@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pre-Fight Brief — WoW Analyzer</title>
+  <title>Pre-Fight Brief - WoW Analyzer</title>
   <link rel="stylesheet" href="renderer.css" />
   <style>
-    /* auth-banner on this page is outside the container — give it breathing room */
+    /* auth-banner on this page is outside the container - give it breathing room */
     .auth-banner { margin:20px auto; max-width:900px; }
     :root {
       --bg:#0a0c10;--surface:#13161e;--surface2:#1c202c;--border:#2a2f3d;
@@ -148,7 +148,7 @@
       <div class="form-group">
         <label for="enc-sel">Encounter</label>
         <select id="enc-sel" onchange="onEncChange()" disabled>
-          <option value="">— select encounter —</option>
+          <option value="">- select encounter -</option>
         </select>
       </div>
     </div>
@@ -265,7 +265,7 @@
       chars.forEach(c => {
         const o = document.createElement('option');
         o.value = JSON.stringify({name: c.name, server: c.serverSlug, region: c.serverRegion});
-        o.textContent = `${c.name} — ${c.serverSlug}`;
+        o.textContent = `${c.name} - ${c.serverSlug}`;
         sel.appendChild(o);
       });
       document.getElementById('char-select-row').classList.remove('hidden');
@@ -298,7 +298,7 @@
     _charRegion = data.region || '';
 
     document.getElementById('char-badge-name').textContent = data.name;
-    document.getElementById('char-badge-spec').textContent = fmtSpec(data.spec) + (data.server ? ` — ${data.server}` : '');
+    document.getElementById('char-badge-spec').textContent = fmtSpec(data.spec) + (data.server ? ` - ${data.server}` : '');
     document.getElementById('char-badge-report').textContent = data.source_report ? `from ${data.source_report}` : '';
     document.getElementById('char-badge').classList.remove('hidden');
     document.getElementById('gear-grid').innerHTML = '';
@@ -357,9 +357,9 @@
       }
     }
 
-    encSel.innerHTML = '<option value="">— select encounter —</option>';
+    encSel.innerHTML = '<option value="">- select encounter -</option>';
     if (!encounters.length) {
-      encSel.innerHTML = '<option value="">No data — run Parse Ingestion in Admin first</option>';
+      encSel.innerHTML = '<option value="">No data - run Parse Ingestion in Admin first</option>';
       encSel.disabled = false; return;
     }
     encounters.forEach(e => {
@@ -415,7 +415,7 @@
     const grid = document.getElementById('gear-grid');
     if (!_charGear) {
       if (!topStats) { grid.innerHTML = ''; return; }
-      // No char gear but have top stats — show "no ranked data" state in each card
+      // No char gear but have top stats - show "no ranked data" state in each card
       grid.innerHTML = ['Talents', 'Trinkets', 'Enchants'].map(title => `
         <div class="gear-card">
           <div class="gear-card-head">
@@ -438,7 +438,7 @@
     if (status === 'ok')      return '<span class="ok">✓</span>';
     if (status === 'warn')    return '<span class="warn">⚠</span>';
     if (status === 'missing') return '<span class="missing">✗</span>';
-    return '<span class="unknown">—</span>';
+    return '<span class="unknown">-</span>';
   }
 
   function overallStatus(statuses) {
@@ -456,7 +456,7 @@
     let bodyHtml = '';
 
     if (!builds.length) {
-      bodyHtml = '<p class="no-data-note">No talent data yet — re-run Parse Ingestion.</p>';
+      bodyHtml = '<p class="no-data-note">No talent data yet - re-run Parse Ingestion.</p>';
     } else if (!playerKey) {
       bodyHtml = '<p class="no-data-note">Talent data not available from WCL for this character.</p>';
     } else {
@@ -465,9 +465,9 @@
       const topVersion = (builds[0]?.key || '').split(':')[0];
 
       if (playerVersion !== topVersion) {
-        // v1 (characterRankings) and v2 (encounterRankings) use different ID spaces — not comparable
+        // v1 (characterRankings) and v2 (encounterRankings) use different ID spaces - not comparable
         status = 'unknown';
-        bodyHtml = `<div class="gear-item"><span class="unknown">—</span> Talent comparison unavailable — WCL uses different talent ID formats for different query types.</div>`;
+        bodyHtml = `<div class="gear-item"><span class="unknown">-</span> Talent comparison unavailable - WCL uses different talent ID formats for different query types.</div>`;
       } else {
         const match = builds.find(b => b.key === playerKey);
         const matchPct = match?.pct ?? 0;
@@ -482,9 +482,9 @@
               ? `https://www.warcraftlogs.com/reports/${top.report_code}?fight=${top.fight_id}&type=summary`
               : `https://www.warcraftlogs.com/reports/${top.report_code}`;
             const label = top.player_name ? `View ${top.player_name} on WCL` : 'View on WCL';
-            wclLink = ` — <a href="${href}" target="_blank" rel="noopener" class="wcl-link">${label}</a>`;
+            wclLink = ` - <a href="${href}" target="_blank" rel="noopener" class="wcl-link">${label}</a>`;
           }
-          bodyHtml = `<div class="gear-item"><span class="warn">⚠</span> Build differs — most common used by ${top?.pct ?? 0}% of top parsers${wclLink}</div>`;
+          bodyHtml = `<div class="gear-item"><span class="warn">⚠</span> Build differs - most common used by ${top?.pct ?? 0}% of top parsers${wclLink}</div>`;
         }
       }
     }
@@ -512,7 +512,7 @@
       let note = '';
 
       if (!topItems.length) {
-        note = playerItem ? playerItem.name || `Item #${playerItem.id}` : '—';
+        note = playerItem ? playerItem.name || `Item #${playerItem.id}` : '-';
         status = 'unknown';
       } else if (!playerItem) {
         note = `<span class="missing">missing</span>`;
@@ -561,7 +561,7 @@
           <div class="gear-status-dot unknown"></div>
           <span class="gear-card-title">Enchants</span>
         </div>
-        <p class="no-data-note">No enchant data yet — re-run Parse Ingestion.</p>
+        <p class="no-data-note">No enchant data yet - re-run Parse Ingestion.</p>
       </div>`;
     }
 
@@ -579,7 +579,7 @@
         return `<a href="https://www.wowhead.com/enchant=${id}" target="_blank" style="color:inherit;text-decoration:none" title="Wowhead enchant ${id}">${n}</a>`;
       };
       if (!topItems.length) {
-        note = playerEnc ? eName(playerEnc.id, playerEnc.name) : '—';
+        note = playerEnc ? eName(playerEnc.id, playerEnc.name) : '-';
         status = 'unknown';
       } else if (!playerEnc) {
         if (topEnc && topEnc.pct >= 70) {
@@ -587,7 +587,7 @@
           note = `<span class="missing">missing</span><div class="gear-top">Top: ${eName(topEnc.id, topEnc.name)} (${topEnc.pct}%)</div>`;
         } else {
           status = 'ok';
-          note = '—';
+          note = '-';
         }
       } else if (topEnc && playerEnc.id === topEnc.id) {
         status = 'ok';
@@ -618,7 +618,7 @@
         <span class="gear-card-title">Enchants</span>
       </div>
       ${sourceNote}
-      ${bodyHtml || '<p class="no-data-note">No enchant data yet — re-run Parse Ingestion.</p>'}
+      ${bodyHtml || '<p class="no-data-note">No enchant data yet - re-run Parse Ingestion.</p>'}
     </div>`;
   }
 
@@ -651,7 +651,7 @@
         const rbCd = rb_cds[name] || {};
         const openStr = cd.avg_first_cast_s != null
           ? `~${fmt(cd.avg_first_cast_s)}${cd.stddev_first_cast_s != null ? ` <small style="opacity:.6">±${cd.stddev_first_cast_s}s</small>` : ''}`
-          : '—';
+          : '-';
         const pattern = cd.majority_hold
           ? '<span class="badge badge-hold">hold</span>'
           : '<span class="badge badge-cd">on cd</span>';
@@ -670,15 +670,15 @@
           </div>
           <div class="cd-stats-row">
             <div class="cd-stat"><div class="cd-stat-val">${openStr}</div><div class="cd-stat-lbl">Opener</div></div>
-            <div class="cd-stat"><div class="cd-stat-val">${cd.avg_uses ?? '—'}</div><div class="cd-stat-lbl">Avg uses</div></div>
-            <div class="cd-stat"><div class="cd-stat-val">${cd.avg_uses_per_min ?? '—'}<small style="opacity:.6">/min</small></div><div class="cd-stat-lbl">Rate</div></div>
+            <div class="cd-stat"><div class="cd-stat-val">${cd.avg_uses ?? '-'}</div><div class="cd-stat-lbl">Avg uses</div></div>
+            <div class="cd-stat"><div class="cd-stat-val">${cd.avg_uses_per_min ?? '-'}<small style="opacity:.6">/min</small></div><div class="cd-stat-lbl">Rate</div></div>
             ${alignBL ? `<div class="cd-stat"><div class="cd-stat-val">${cd.bl_pct}%</div><div class="cd-stat-lbl">BL aligned</div></div>` : ''}
           </div>
           ${holdNotes}
           ${rbCd.usage_rule ? `<div class="cd-rule">"${rbCd.usage_rule}"</div>` : ''}
         </div>`;
       }).join('');
-      cdSection = `<div class="card"><div class="card-title">Cooldown Guide — what the best do</div><div class="cd-grid">${cards}</div></div>`;
+      cdSection = `<div class="card"><div class="card-title">Cooldown Guide - what the best do</div><div class="cd-grid">${cards}</div></div>`;
     }
 
     let bwSection = '';

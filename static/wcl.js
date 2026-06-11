@@ -1,4 +1,4 @@
-// WCL PKCE OAuth2 + GraphQL client — no secrets, browser-safe.
+// WCL PKCE OAuth2 + GraphQL client - no secrets, browser-safe.
 
 const WCL_CLIENT_ID  = 'a1ff2833-d873-4e41-9965-eea3f622586f';
 const WCL_AUTH_URL   = 'https://www.warcraftlogs.com/oauth/authorize';
@@ -101,7 +101,7 @@ async function wclLogin() {
 
 async function wclExchangeCode(code) {
   const verifier = sessionStorage.getItem('wcl_code_verifier');
-  if (!verifier) throw new Error('No code verifier — auth flow was not started in this browser tab');
+  if (!verifier) throw new Error('No code verifier - auth flow was not started in this browser tab');
   const resp = await fetch(WCL_TOKEN_URL, {
     method: 'POST',
     headers: {'Content-Type': 'application/x-www-form-urlencoded'},
@@ -121,13 +121,13 @@ async function wclExchangeCode(code) {
 
 async function wclQuery(gql, variables = {}) {
   const token = wclGetToken();
-  if (!token) { wclClearToken(); throw new Error('Not logged in to WCL — click "Connect WCL" to authorize.'); }
+  if (!token) { wclClearToken(); throw new Error('Not logged in to WCL - click "Connect WCL" to authorize.'); }
   const resp = await fetch(WCL_API_URL, {
     method: 'POST',
     headers: {'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json'},
     body: JSON.stringify({query: gql, variables}),
   });
-  if (resp.status === 401) { wclClearToken(); throw new Error('WCL session expired — click "Connect WCL" to log in again.'); }
+  if (resp.status === 401) { wclClearToken(); throw new Error('WCL session expired - click "Connect WCL" to log in again.'); }
   if (!resp.ok) throw new Error(`WCL API error (${resp.status})`);
   const body = await resp.json();
   if (body.errors?.length) throw new Error(body.errors[0].message || 'WCL GraphQL error');
@@ -274,7 +274,7 @@ function _extractCombatantInfo(entry) {
     }
   });
 
-  // Talent key extraction — mirrors Python _extract_combatant_info
+  // Talent key extraction - mirrors Python _extract_combatant_info
   let talentKey = '';
   if (typeof talentsR === 'string' && talentsR) {
     talentKey = talentsR;

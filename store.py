@@ -1,7 +1,7 @@
 """
 File-based storage for guides, rulebooks, and parse samples.
 Owns the in-memory rulebook cache used by the analyzer at runtime.
-No SQLite dependency — all data lives under data/specs/.
+No SQLite dependency - all data lives under data/specs/.
 """
 import json
 import statistics
@@ -450,7 +450,7 @@ def sync_encounter_file(spec: str, encounter_id: int) -> None:
 
 
 def _sync_encounters_index(spec: str, enc_dir: Path) -> None:
-    """Write data/specs/{spec}/encounters.json — index of available encounters."""
+    """Write data/specs/{spec}/encounters.json - index of available encounters."""
     entries = []
     for p in sorted(enc_dir.glob("*.json")):
         try:
