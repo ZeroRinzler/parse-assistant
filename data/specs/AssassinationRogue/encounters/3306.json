@@ -4,7 +4,7 @@
   "encounter_name": "Chimaerus, the Undreamt God",
   "sample_count": 10,
   "avg_duration_s": 147.3,
-  "last_ingested": "2026-06-11 15:20:55",
+  "last_ingested": "2026-06-11 17:08:35",
   "downtime_threshold_ms": 1070,
   "top_avg_efficiency": 73.9,
   "top_efficiency_stddev": 8.8,
@@ -384,6 +384,38 @@
       "max_pct": 0.031,
       "stddev_pct": 0.0035,
       "sample_count": 5
+    }
+  ],
+  "top_dtk_segments": [
+    {
+      "seg_index": 0,
+      "avg_pct": 0.0947,
+      "stddev_pct": 0.0281,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 1,
+      "avg_pct": 0.2078,
+      "stddev_pct": 0.0315,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 2,
+      "avg_pct": 0.296,
+      "stddev_pct": 0.0371,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 3,
+      "avg_pct": 0.1396,
+      "stddev_pct": 0.0203,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 4,
+      "avg_pct": 0.2619,
+      "stddev_pct": 0.0627,
+      "sample_count": 10
     }
   ]
 }

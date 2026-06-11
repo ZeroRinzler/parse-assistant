@@ -4,7 +4,7 @@
   "encounter_name": "Crown of the Cosmos",
   "sample_count": 10,
   "avg_duration_s": 490.0,
-  "last_ingested": "2026-06-11 15:20:55",
+  "last_ingested": "2026-06-11 17:08:35",
   "downtime_threshold_ms": 1802,
   "top_avg_efficiency": 66.8,
   "top_efficiency_stddev": 5.1,
@@ -553,6 +553,116 @@
       "max_pct": 0.055,
       "stddev_pct": 0.0089,
       "sample_count": 5
+    }
+  ],
+  "top_dtk_segments": [
+    {
+      "seg_index": 0,
+      "avg_pct": 0.0645,
+      "stddev_pct": 0.0119,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 1,
+      "avg_pct": 0.0643,
+      "stddev_pct": 0.0151,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 2,
+      "avg_pct": 0.0529,
+      "stddev_pct": 0.0072,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 3,
+      "avg_pct": 0.0463,
+      "stddev_pct": 0.0158,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 4,
+      "avg_pct": 0.0159,
+      "stddev_pct": 0.005,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 5,
+      "avg_pct": 0.0337,
+      "stddev_pct": 0.0117,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 6,
+      "avg_pct": 0.065,
+      "stddev_pct": 0.0157,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 7,
+      "avg_pct": 0.0694,
+      "stddev_pct": 0.0181,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 8,
+      "avg_pct": 0.085,
+      "stddev_pct": 0.0187,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 9,
+      "avg_pct": 0.0785,
+      "stddev_pct": 0.0226,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 10,
+      "avg_pct": 0.0726,
+      "stddev_pct": 0.0136,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 11,
+      "avg_pct": 0.0534,
+      "stddev_pct": 0.0094,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 12,
+      "avg_pct": 0.0597,
+      "stddev_pct": 0.0158,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 13,
+      "avg_pct": 0.069,
+      "stddev_pct": 0.0167,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 14,
+      "avg_pct": 0.0735,
+      "stddev_pct": 0.0187,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 15,
+      "avg_pct": 0.0683,
+      "stddev_pct": 0.0151,
+      "sample_count": 9
+    },
+    {
+      "seg_index": 16,
+      "avg_pct": 0.0464,
+      "stddev_pct": 0.0245,
+      "sample_count": 7
+    },
+    {
+      "seg_index": 17,
+      "avg_pct": 0.0076,
+      "stddev_pct": 0.0082,
+      "sample_count": 3
     }
   ]
 }

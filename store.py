@@ -395,6 +395,31 @@ def sync_encounter_file(spec: str, encounter_id: int) -> None:
     top_dtk_comparison.sort(key=lambda x: -x["avg_pct"])
     top_dtk_comparison = top_dtk_comparison[:12]
 
+    # ── Per-segment damage taken comparison ──────────────────────────────────
+    seg_pct_lists: list[list[float]] = []
+    for s in samples:
+        cd = s.get("cooldown_data") or {}
+        segs = cd.get("dmg_taken_segments") or []
+        total = cd.get("total_dmg_taken") or sum(segs) or 0
+        if total > 0:
+            seg_pct_lists.append([seg / total for seg in segs])
+
+    top_dtk_segments: list[dict] = []
+    if seg_pct_lists:
+        max_segs = max(len(s) for s in seg_pct_lists)
+        for i in range(max_segs):
+            vals = [s[i] for s in seg_pct_lists if i < len(s)]
+            if not vals:
+                continue
+            avg = statistics.mean(vals)
+            sd = round(statistics.stdev(vals), 4) if len(vals) > 1 else 0.0
+            top_dtk_segments.append({
+                "seg_index": i,
+                "avg_pct": round(avg, 4),
+                "stddev_pct": sd,
+                "sample_count": len(vals),
+            })
+
     out = {
         "spec": spec,
         "encounter_id": encounter_id,
@@ -410,6 +435,7 @@ def sync_encounter_file(spec: str, encounter_id: int) -> None:
         "gear": gear,
         "top_defensives_summary": top_defensives_summary,
         "top_dtk_comparison": top_dtk_comparison,
+        "top_dtk_segments": top_dtk_segments,
     }
 
     enc_dir = SPECS_DIR / spec / "encounters"

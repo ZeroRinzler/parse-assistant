@@ -4,7 +4,7 @@
   "encounter_name": "Fallen-King Salhadaar",
   "sample_count": 10,
   "avg_duration_s": 285.9,
-  "last_ingested": "2026-06-11 15:20:55",
+  "last_ingested": "2026-06-11 17:08:35",
   "downtime_threshold_ms": 1538,
   "top_avg_efficiency": 74.2,
   "top_efficiency_stddev": 4.0,
@@ -614,6 +614,80 @@
       "max_pct": 0.05,
       "stddev_pct": 0.0145,
       "sample_count": 7
+    }
+  ],
+  "top_dtk_segments": [
+    {
+      "seg_index": 0,
+      "avg_pct": 0.0496,
+      "stddev_pct": 0.019,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 1,
+      "avg_pct": 0.115,
+      "stddev_pct": 0.0356,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 2,
+      "avg_pct": 0.1163,
+      "stddev_pct": 0.039,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 3,
+      "avg_pct": 0.157,
+      "stddev_pct": 0.0493,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 4,
+      "avg_pct": 0.0588,
+      "stddev_pct": 0.0237,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 5,
+      "avg_pct": 0.1372,
+      "stddev_pct": 0.0379,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 6,
+      "avg_pct": 0.1075,
+      "stddev_pct": 0.0321,
+      "sample_count": 9
+    },
+    {
+      "seg_index": 7,
+      "avg_pct": 0.1125,
+      "stddev_pct": 0.0381,
+      "sample_count": 9
+    },
+    {
+      "seg_index": 8,
+      "avg_pct": 0.0469,
+      "stddev_pct": 0.0093,
+      "sample_count": 6
+    },
+    {
+      "seg_index": 9,
+      "avg_pct": 0.1195,
+      "stddev_pct": 0.0156,
+      "sample_count": 6
+    },
+    {
+      "seg_index": 10,
+      "avg_pct": 0.0946,
+      "stddev_pct": 0.0349,
+      "sample_count": 6
+    },
+    {
+      "seg_index": 11,
+      "avg_pct": 0.0191,
+      "stddev_pct": 0.0168,
+      "sample_count": 6
     }
   ]
 }

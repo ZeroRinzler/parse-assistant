@@ -4,7 +4,7 @@
   "encounter_name": "Vaelgor & Ezzorak",
   "sample_count": 10,
   "avg_duration_s": 401.9,
-  "last_ingested": "2026-06-11 15:20:55",
+  "last_ingested": "2026-06-11 17:08:35",
   "downtime_threshold_ms": 1492,
   "top_avg_efficiency": 74.7,
   "top_efficiency_stddev": 4.2,
@@ -678,6 +678,104 @@
       "max_pct": 0.075,
       "stddev_pct": 0.0127,
       "sample_count": 8
+    }
+  ],
+  "top_dtk_segments": [
+    {
+      "seg_index": 0,
+      "avg_pct": 0.0271,
+      "stddev_pct": 0.015,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 1,
+      "avg_pct": 0.0791,
+      "stddev_pct": 0.0213,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 2,
+      "avg_pct": 0.0624,
+      "stddev_pct": 0.0144,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 3,
+      "avg_pct": 0.0774,
+      "stddev_pct": 0.0137,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 4,
+      "avg_pct": 0.1071,
+      "stddev_pct": 0.0284,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 5,
+      "avg_pct": 0.0874,
+      "stddev_pct": 0.0183,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 6,
+      "avg_pct": 0.0669,
+      "stddev_pct": 0.0153,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 7,
+      "avg_pct": 0.0813,
+      "stddev_pct": 0.0292,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 8,
+      "avg_pct": 0.0892,
+      "stddev_pct": 0.0265,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 9,
+      "avg_pct": 0.0786,
+      "stddev_pct": 0.0159,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 10,
+      "avg_pct": 0.1413,
+      "stddev_pct": 0.0174,
+      "sample_count": 9
+    },
+    {
+      "seg_index": 11,
+      "avg_pct": 0.0167,
+      "stddev_pct": 0.0094,
+      "sample_count": 9
+    },
+    {
+      "seg_index": 12,
+      "avg_pct": 0.053,
+      "stddev_pct": 0.0134,
+      "sample_count": 8
+    },
+    {
+      "seg_index": 13,
+      "avg_pct": 0.0447,
+      "stddev_pct": 0.0227,
+      "sample_count": 8
+    },
+    {
+      "seg_index": 14,
+      "avg_pct": 0.0709,
+      "stddev_pct": 0.0177,
+      "sample_count": 3
+    },
+    {
+      "seg_index": 15,
+      "avg_pct": 0.0177,
+      "stddev_pct": 0.0,
+      "sample_count": 1
     }
   ]
 }

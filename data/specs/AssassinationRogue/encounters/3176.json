@@ -4,7 +4,7 @@
   "encounter_name": "Imperator Averzian",
   "sample_count": 10,
   "avg_duration_s": 229.3,
-  "last_ingested": "2026-06-11 15:20:55",
+  "last_ingested": "2026-06-11 17:08:35",
   "downtime_threshold_ms": 1217,
   "top_avg_efficiency": 74.5,
   "top_efficiency_stddev": 8.2,
@@ -436,6 +436,68 @@
       "max_pct": 0.063,
       "stddev_pct": 0.011,
       "sample_count": 10
+    }
+  ],
+  "top_dtk_segments": [
+    {
+      "seg_index": 0,
+      "avg_pct": 0.115,
+      "stddev_pct": 0.0247,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 1,
+      "avg_pct": 0.1717,
+      "stddev_pct": 0.0351,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 2,
+      "avg_pct": 0.117,
+      "stddev_pct": 0.026,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 3,
+      "avg_pct": 0.1555,
+      "stddev_pct": 0.0417,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 4,
+      "avg_pct": 0.1298,
+      "stddev_pct": 0.0226,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 5,
+      "avg_pct": 0.1116,
+      "stddev_pct": 0.0171,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 6,
+      "avg_pct": 0.1096,
+      "stddev_pct": 0.0314,
+      "sample_count": 9
+    },
+    {
+      "seg_index": 7,
+      "avg_pct": 0.0899,
+      "stddev_pct": 0.0469,
+      "sample_count": 7
+    },
+    {
+      "seg_index": 8,
+      "avg_pct": 0.0894,
+      "stddev_pct": 0.012,
+      "sample_count": 3
+    },
+    {
+      "seg_index": 9,
+      "avg_pct": 0.0368,
+      "stddev_pct": 0.0237,
+      "sample_count": 3
     }
   ]
 }

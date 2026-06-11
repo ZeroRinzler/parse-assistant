@@ -250,6 +250,8 @@ function renderResults(data) {
       data.player_dmg_taken_by_ability,
       data.player_total_dmg_taken || 0,
       data.top_dtk_comparison || [],
+      data.player_dmg_taken_segment_pcts || [],
+      data.top_dtk_segments || [],
     );
   }
 
@@ -650,9 +652,47 @@ function renderDefensives(playerDefs, topSummary, fightDurS) {
     <div class="bw-list">${cards}</div>`;
 }
 
-function renderDamageTaken(byAbility, total, topComparison) {
+function renderDamageTaken(byAbility, total, topComparison, segmentPcts, topSegments) {
   if (!byAbility?.length) return '';
 
+  // ── Segment bar chart ─────────────────────────────────────────────────────
+  let segHtml = '';
+  if (segmentPcts?.length) {
+    const topSegMap = {};
+    for (const s of (topSegments || [])) topSegMap[s.seg_index] = s;
+
+    const allSegVals = segmentPcts.flatMap((p, i) => {
+      const t = topSegMap[i];
+      return [p, t?.avg_pct, t ? (t.avg_pct + t.stddev_pct) : null].filter(v => v != null);
+    });
+    const segMax = Math.max(...allSegVals, 0.01);
+
+    const hasTopSegs = topSegments?.length > 0;
+    const barCells = segmentPcts.map((pct, i) => {
+      const top = topSegMap[i];
+      const playerH = Math.round(pct / segMax * 100);
+      const topH    = top ? Math.round(top.avg_pct / segMax * 100) : 0;
+      const isHigh  = top != null && pct > top.avg_pct + Math.max(top.stddev_pct ?? 0, 0.02);
+      const t       = i * 30;
+      const title   = top
+        ? `${formatDuration(t)}: You ${(pct*100).toFixed(1)}% vs top avg ${(top.avg_pct*100).toFixed(1)}%`
+        : `${formatDuration(t)}: ${(pct*100).toFixed(1)}% of total damage`;
+      return `<div class="dtk-bar-group${isHigh ? ' dtk-bar-high' : ''}" title="${title}">
+        ${hasTopSegs && top ? `<div class="dtk-bar-top" style="height:${topH}%"></div>` : ''}
+        <div class="dtk-bar-player" style="height:${playerH}%"></div>
+        <div class="dtk-bar-label">${formatDuration(t)}</div>
+      </div>`;
+    }).join('');
+
+    segHtml = `
+      <div class="dtk-legend">
+        <span class="dtk-dot dtk-dot-player"></span> You &nbsp;
+        ${hasTopSegs ? `<span class="dtk-dot dtk-dot-top"></span> Top avg` : ''}
+      </div>
+      <div class="dtk-bars">${barCells}</div>`;
+  }
+
+  // ── Ability comparison chart ───────────────────────────────────────────────
   const topMap = {};
   for (const t of (topComparison || [])) topMap[t.spell_id] = t;
 
@@ -689,7 +729,7 @@ function renderDamageTaken(byAbility, total, topComparison) {
   const chart = renderComparisonChart(rows, { higherIsBetter: false, unit: 'pct', maxVal,
     noDataText: 'Re-ingest parses to compare with top 10' });
 
-  const totalStr   = total > 0 ? `Total: <strong>${formatNumber(total)}</strong>` : '';
+  const totalStr    = total > 0 ? `Total: <strong>${formatNumber(total)}</strong>` : '';
   const outlierNote = outliers.length
     ? `<span class="outlier-note">${outliers.length} ${outliers.length === 1 ? 'source' : 'sources'} above top-10 avg</span>`
     : (topComparison?.length ? `<span class="cmp-no-data">No significant outliers vs top 10</span>` : '');
@@ -701,6 +741,8 @@ function renderDamageTaken(byAbility, total, topComparison) {
         <span class="dtk-total">${totalStr}</span>
         ${outlierNote}
       </div>
+      ${segHtml}
+      <p class="section-sublabel" style="margin-top:${segHtml ? '16px' : '4px'}">Top sources</p>
       ${chart}
     </div>`;
 }

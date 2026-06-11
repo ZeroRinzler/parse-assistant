@@ -314,6 +314,8 @@ async def analyze(req: AnalyzeRequest):
             result["top_defensives_summary"] = enc_data["top_defensives_summary"]
         if enc_data.get("top_dtk_comparison"):
             result["top_dtk_comparison"] = enc_data["top_dtk_comparison"]
+        if enc_data.get("top_dtk_segments"):
+            result["top_dtk_segments"] = enc_data["top_dtk_segments"]
 
     # Player burst windows
     from parses_analyzer import _find_burst_windows as _player_find_bw
@@ -415,6 +417,9 @@ async def analyze(req: AnalyzeRequest):
     total_dtk = sum(dtk_segments)
     top_dtk = sorted(ability_dtk.items(), key=lambda x: -x[1])[:10]
     result["player_dmg_taken_segments"] = dtk_segments
+    result["player_dmg_taken_segment_pcts"] = [
+        round(seg / total_dtk, 4) if total_dtk else 0.0 for seg in dtk_segments
+    ]
     result["player_dmg_taken_by_ability"] = [
         {"spell_id": sid, "name": _ability_names.get(sid, ""), "damage": dmg,
          "pct": round(dmg / total_dtk, 3) if total_dtk else 0}

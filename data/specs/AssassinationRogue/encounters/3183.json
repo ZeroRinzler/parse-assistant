@@ -4,7 +4,7 @@
   "encounter_name": "Midnight Falls",
   "sample_count": 10,
   "avg_duration_s": 539.5,
-  "last_ingested": "2026-06-11 15:20:55",
+  "last_ingested": "2026-06-11 17:08:35",
   "downtime_threshold_ms": 1276,
   "top_avg_efficiency": 68.4,
   "top_efficiency_stddev": 5.2,
@@ -528,6 +528,122 @@
       "max_pct": 0.02,
       "stddev_pct": 0.0017,
       "sample_count": 6
+    }
+  ],
+  "top_dtk_segments": [
+    {
+      "seg_index": 0,
+      "avg_pct": 0.0483,
+      "stddev_pct": 0.0042,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 1,
+      "avg_pct": 0.0414,
+      "stddev_pct": 0.0088,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 2,
+      "avg_pct": 0.0456,
+      "stddev_pct": 0.0025,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 3,
+      "avg_pct": 0.0464,
+      "stddev_pct": 0.0069,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 4,
+      "avg_pct": 0.0503,
+      "stddev_pct": 0.0068,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 5,
+      "avg_pct": 0.0454,
+      "stddev_pct": 0.0065,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 6,
+      "avg_pct": 0.0397,
+      "stddev_pct": 0.0053,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 7,
+      "avg_pct": 0.0322,
+      "stddev_pct": 0.0074,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 8,
+      "avg_pct": 0.0623,
+      "stddev_pct": 0.0038,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 9,
+      "avg_pct": 0.0627,
+      "stddev_pct": 0.0066,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 10,
+      "avg_pct": 0.0592,
+      "stddev_pct": 0.005,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 11,
+      "avg_pct": 0.0585,
+      "stddev_pct": 0.0082,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 12,
+      "avg_pct": 0.0578,
+      "stddev_pct": 0.0141,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 13,
+      "avg_pct": 0.0481,
+      "stddev_pct": 0.0039,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 14,
+      "avg_pct": 0.0426,
+      "stddev_pct": 0.0045,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 15,
+      "avg_pct": 0.05,
+      "stddev_pct": 0.0187,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 16,
+      "avg_pct": 0.1017,
+      "stddev_pct": 0.0277,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 17,
+      "avg_pct": 0.092,
+      "stddev_pct": 0.0264,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 18,
+      "avg_pct": 0.0392,
+      "stddev_pct": 0.0341,
+      "sample_count": 4
     }
   ]
 }

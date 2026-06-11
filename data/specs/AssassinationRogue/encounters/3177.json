@@ -4,7 +4,7 @@
   "encounter_name": "Vorasius",
   "sample_count": 10,
   "avg_duration_s": 234.1,
-  "last_ingested": "2026-06-11 15:20:55",
+  "last_ingested": "2026-06-11 17:08:35",
   "downtime_threshold_ms": 1061,
   "top_avg_efficiency": 73.8,
   "top_efficiency_stddev": 6.7,
@@ -481,6 +481,68 @@
       "max_pct": 0.091,
       "stddev_pct": 0.0367,
       "sample_count": 4
+    }
+  ],
+  "top_dtk_segments": [
+    {
+      "seg_index": 0,
+      "avg_pct": 0.0763,
+      "stddev_pct": 0.0153,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 1,
+      "avg_pct": 0.0925,
+      "stddev_pct": 0.0175,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 2,
+      "avg_pct": 0.1517,
+      "stddev_pct": 0.0342,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 3,
+      "avg_pct": 0.1705,
+      "stddev_pct": 0.0462,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 4,
+      "avg_pct": 0.1096,
+      "stddev_pct": 0.0289,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 5,
+      "avg_pct": 0.1222,
+      "stddev_pct": 0.0316,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 6,
+      "avg_pct": 0.1404,
+      "stddev_pct": 0.0492,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 7,
+      "avg_pct": 0.1259,
+      "stddev_pct": 0.0526,
+      "sample_count": 7
+    },
+    {
+      "seg_index": 8,
+      "avg_pct": 0.0958,
+      "stddev_pct": 0.0205,
+      "sample_count": 4
+    },
+    {
+      "seg_index": 9,
+      "avg_pct": 0.0512,
+      "stddev_pct": 0.0217,
+      "sample_count": 2
     }
   ]
 }

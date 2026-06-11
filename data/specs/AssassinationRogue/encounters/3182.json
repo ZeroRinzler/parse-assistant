@@ -4,7 +4,7 @@
   "encounter_name": "Belo'ren, Child of Al'ar",
   "sample_count": 10,
   "avg_duration_s": 312.2,
-  "last_ingested": "2026-06-11 15:20:55",
+  "last_ingested": "2026-06-11 17:08:35",
   "downtime_threshold_ms": 1232,
   "top_avg_efficiency": 69.0,
   "top_efficiency_stddev": 4.6,
@@ -514,6 +514,74 @@
       "max_pct": 0.021,
       "stddev_pct": 0.0066,
       "sample_count": 5
+    }
+  ],
+  "top_dtk_segments": [
+    {
+      "seg_index": 0,
+      "avg_pct": 0.0761,
+      "stddev_pct": 0.008,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 1,
+      "avg_pct": 0.0849,
+      "stddev_pct": 0.0129,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 2,
+      "avg_pct": 0.0368,
+      "stddev_pct": 0.0093,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 3,
+      "avg_pct": 0.0816,
+      "stddev_pct": 0.0175,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 4,
+      "avg_pct": 0.1881,
+      "stddev_pct": 0.0241,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 5,
+      "avg_pct": 0.0996,
+      "stddev_pct": 0.0181,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 6,
+      "avg_pct": 0.0602,
+      "stddev_pct": 0.0186,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 7,
+      "avg_pct": 0.0792,
+      "stddev_pct": 0.0172,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 8,
+      "avg_pct": 0.0782,
+      "stddev_pct": 0.0261,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 9,
+      "avg_pct": 0.1455,
+      "stddev_pct": 0.0323,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 10,
+      "avg_pct": 0.0698,
+      "stddev_pct": 0.0529,
+      "sample_count": 10
     }
   ]
 }

@@ -452,9 +452,10 @@ function _analyzeDamageTaken(dtEvents, abilityMap, fightStart, fightEnd) {
     if (e.abilityGameID) byAb[e.abilityGameID]=(byAb[e.abilityGameID]||0)+amt;
   }
   const total = segs.reduce((a,b)=>a+b,0);
+  const segmentPcts = segs.map(s => total ? Math.round(s/total*10000)/10000 : 0);
   const top = Object.entries(byAb).sort((a,b)=>b[1]-a[1]).slice(0,10)
     .map(([sid,dmg])=>({spell_id:parseInt(sid,10), name:abilityMap[sid]?.name||'', damage:Math.round(dmg), pct:total?Math.round(dmg/total*1000)/1000:0}));
-  return {segments:segs, top, total:Math.round(total)};
+  return {segments:segs, segmentPcts, top, total:Math.round(total)};
 }
 
 // ── Main entry point ──────────────────────────────────────────────────────────
@@ -510,11 +511,14 @@ async function runAnalysis({reportCode, fightId, playerId, fights, masterAbiliti
   result.player_burst_windows        = _findPlayerBurstWindows(dmgEvents, fStart, specCds, castEvents);
   result.player_defensives           = _analyzeDefensives(spec, castEvents, buffEvents, dtEvents, fStart, fEnd);
   if (bench?.top_defensives_summary?.length) result.top_defensives_summary = bench.top_defensives_summary;
-  const dtk                           = _analyzeDamageTaken(dtEvents, abilityMap, fStart, fEnd);
-  result.player_dmg_taken_segments   = dtk.segments;
-  result.player_dmg_taken_by_ability = dtk.top;
-  result.player_total_dmg_taken      = dtk.total;
-  result.dmg_segment_size_s          = 30;
+  if (bench?.top_dtk_comparison?.length)    result.top_dtk_comparison     = bench.top_dtk_comparison;
+  if (bench?.top_dtk_segments?.length)      result.top_dtk_segments       = bench.top_dtk_segments;
+  const dtk                                = _analyzeDamageTaken(dtEvents, abilityMap, fStart, fEnd);
+  result.player_dmg_taken_segments        = dtk.segments;
+  result.player_dmg_taken_segment_pcts    = dtk.segmentPcts;
+  result.player_dmg_taken_by_ability      = dtk.top;
+  result.player_total_dmg_taken           = dtk.total;
+  result.dmg_segment_size_s               = 30;
 
   return result;
 }
