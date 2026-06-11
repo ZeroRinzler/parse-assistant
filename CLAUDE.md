@@ -41,10 +41,8 @@ Example: `/admin?spec=SubtletyRogue&tab=rulebook`
 ```
 warcraft-learner/
 ├── main.py              # FastAPI app - all routes (player API + admin API + pre-fight API)
-├── store.py             # File-based storage - guides, rulebooks, parse samples, encounter bench
 ├── analyzer.py          # Rules engine - evaluates cast events against a rulebook
 ├── wcl_client.py        # Warcraft Logs OAuth2 + GraphQL client (handles pagination)
-├── rulebook.py          # Static fallback cooldowns for 22+ DPS specs
 ├── scraper.py           # Web (BeautifulSoup/lxml) + YouTube transcript scraping
 ├── parses_analyzer.py   # WCL characterRankings + per-parse cooldown timing analysis + gear extraction
 ├── analysis_utils.py    # Shared aggregation - cluster_burst_windows, aggregate_gear
@@ -71,8 +69,6 @@ warcraft-learner/
 └── requirements.txt
 ```
 
-**No SQLite.** All data is file-based under `data/specs/`. The server reads from pre-computed files at request time - no on-the-fly aggregation from raw samples. `store.py` owns all file I/O and the in-memory rulebook cache.
-
 ## Key flows
 
 ### Player analysis (`/api/analyze`)
@@ -94,7 +90,7 @@ warcraft-learner/
 6. Response includes: **Needs Improvement** (critical/warning), **Timing Suggestions** (info/hold_suggestion), and **Doing Well** (success). Also includes `rulebook_source` ("generated", "static", or "none") shown under the player name.
 7. If parse samples exist for the fight's encounter, a **vs Top N Parses** comparison table is appended. Uses **uses-per-minute** (not raw counts) to normalize across kill-time differences between the player and top performers. A **Burst Windows** card shows the top recurring 8s damage spikes across top parses with the CDs active in them. Windows beyond the player's fight duration are shown in a dimmed "Not reached" state rather than "No data".
 8. The response includes `ability_icons` - a `{spell_id: {icon, name}}` map extracted from `masterData.abilities` in the report. The frontend seeds its icon cache from this data. WCL removed `gameData.spell()` so this is now the only reliable source of spell icons and names for report abilities.
-9. Cooldown rules come from the **dynamic rulebook** if one exists (loaded from `data/specs/{spec}/rulebook.json` into the in-memory cache in `store.py` on startup), otherwise from the static `SPEC_COOLDOWNS` dict in `rulebook.py`.
+9. Cooldown rules come from the **dynamic rulebook** if one exists (loaded from `data/specs/{spec}/rulebook.json`.
 
 ### Ingestion pipeline (`/admin`)
 1. **Add guides** - POST `/api/admin/guides` with `{spec, url, guide_type}`. Type is `"web"`, `"youtube"`, or `"simc"`. GitHub blob URLs are auto-converted to raw.githubusercontent.com. Up to 60 k chars stored per guide.
@@ -291,7 +287,7 @@ Source: `design-doc.md` (architecture blueprint) + `intial-research.md` (researc
 | Pre-fight gear check | ✅ Done | `/pre` page; character URL input; talents/trinkets/enchants vs top-parse aggregates; enchant names resolved live via `gameData.enchant(id)` - no hardcoding |
 | Defensive cooldown analysis | ✅ Done | `SPEC_DEFENSIVES` in rulebook.py; player usage with damage absorbed per window; comparison vs top-parse avg; 30s damage-taken segments |
 | GitHub Actions ingestion pipeline | ✅ Done | `.github/workflows/ingest-parses.yml` (daily schedule + manual); `scripts/ingest_parses.py` and `scripts/scrape_guides.py` work identically locally |
-| File-based storage - no SQLite | ✅ Done | `store.py` replaces `db.py`; all data in `data/specs/`; guides stored WITH content; parse samples in `parse_samples/{enc_id}.json`; encounter bench files pre-computed with full aggregation; GHA commits `data/specs/**` only |
+| File-based storage | ✅ Done | all data in `data/specs/`; guides stored WITH content; parse samples in `parse_samples/{enc_id}.json`; encounter bench files pre-computed with full aggregation; GHA commits `data/specs/**` only |
 | Pre-computed encounter bench files | ✅ Done | `data/specs/{Spec}/encounters/{enc_id}.json` written after each boss ingestion; contains per-CD thresholds (with sample_count), burst windows, gear aggregates, defensive summary, and top_dtk_comparison; `analysis_utils.py` holds shared clustering/aggregation logic |
 
 ### Gaps - from design-doc.md

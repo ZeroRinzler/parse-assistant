@@ -89,7 +89,6 @@ main.py            - FastAPI app, all API routes
 analyzer.py        - Deterministic rules engine (cooldown checks + hold suggestions)
 parses_analyzer.py - WCL rankings fetcher, per-parse timing + hold pattern + burst window analysis
 wcl_client.py      - WCL OAuth2 + GraphQL client (with friendlyPlayers per-fight)
-rulebook.py        - Static fallback cooldown definitions (22+ DPS specs)
 db.py              - SQLite persistence + in-memory rulebook cache
 scraper.py         - Web page + YouTube transcript + GitHub raw file scraping
 prompts/
