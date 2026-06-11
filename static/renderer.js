@@ -225,11 +225,6 @@ function renderResults(data) {
       <div class="rule-list">${ruleFindings.map(renderRuleItem).join('')}</div>`;
   }
 
-  let compHtml = '';
-  if (data.parse_comparison?.length) {
-    compHtml = renderParseComparison(data.parse_comparison, data.player_fight_duration_s, data.cd_spell_ids || {});
-  }
-
   let burstHtml = '';
   if (data.burst_windows?.length) {
     burstHtml = renderBurstWindows(data.burst_windows, data.player_burst_windows || [], data.player_fight_duration_s ?? Infinity);
@@ -261,7 +256,6 @@ function renderResults(data) {
     </div>
     <div class="cd-list">${cdHtml}</div>
     ${rulesHtml}
-    ${compHtml}
     ${burstHtml}
     ${defHtml}
     ${dtkHtml}
@@ -347,55 +341,6 @@ function renderRuleItem(f) {
   const remedy = f.details?.remedy ? `<div class="rule-remedy">${f.details.remedy}</div>` : '';
   const sev = f.severity === 'warning' ? 'sev-warning' : '';
   return `<div class="rule-item ${sev}">${icon}${ts}<span class="rule-item-msg">${f.message}</span>${remedy}</div>`;
-}
-
-// ── Parse comparison table ───────────────────────────────────────────────────
-
-function _delta(player, top, stddev) {
-  if (player == null || top == null) return '<span class="delta-ok">-</span>';
-  const diff = player - top;
-  const sd = stddev || 0.05;
-  const cls = diff >= 0 ? 'delta-good' : Math.abs(diff) > sd ? 'delta-bad' : 'delta-ok';
-  const sign = diff >= 0 ? '+' : '';
-  return `<span class="${cls}">${sign}${diff.toFixed(2)}</span>`;
-}
-
-function renderParseComparison(comparison, playerDurS, cdSpellIds = {}) {
-  const rows = comparison.map(cd => {
-    const upmDelta = _delta(cd.player_uses_per_min, cd.top_avg_uses_per_min, cd.top_stddev_uses_per_min);
-    const firstDelta = cd.player_first_cast_s != null && cd.top_avg_first_cast_s != null
-      ? _delta(-(cd.player_first_cast_s - cd.top_avg_first_cast_s), 0, cd.top_stddev_first_cast_s)
-      : '<span class="delta-ok">-</span>';
-    const blCell = cd.top_bl_pct > 0
-      ? `${cd.player_bl_offset_s != null ? (cd.player_bl_offset_s >= 0 ? '+' : '') + cd.player_bl_offset_s + 's' : '-'} <span class="delta-ok">/ avg ${cd.top_avg_bl_offset_s != null ? (cd.top_avg_bl_offset_s >= 0 ? '+' : '') + cd.top_avg_bl_offset_s + 's' : '-'}</span>`
-      : '<span class="delta-ok">-</span>';
-    const sid = cdSpellIds[cd.name];
-    const nameCell = sid
-      ? `<span class="cd-icon-slot" data-spell-id="${sid}">${spellIconHtml(sid)}</span> <a href="https://www.wowhead.com/spell=${sid}" target="_blank" class="dtk-wowhead" style="font-weight:600">${cd.name}</a>`
-      : `<span style="font-weight:600">${cd.name}</span>`;
-    return `<tr>
-      <td>${nameCell}</td>
-      <td>${cd.player_uses} <span class="delta-ok">(${cd.player_uses_per_min}/min)</span> ${upmDelta}</td>
-      <td>${cd.player_first_cast_s != null ? formatDuration(cd.player_first_cast_s) : '-'} ${firstDelta}</td>
-      <td>${blCell}</td>
-      <td class="delta-ok">${cd.sample_count}</td>
-    </tr>`;
-  }).join('');
-
-  return `
-    <p class="section-label" style="margin-top:20px">vs Top ${comparison[0]?.sample_count || ''} Parses</p>
-    <div class="comp-table-wrap">
-      <table class="comp-table">
-        <thead><tr>
-          <th>Cooldown</th>
-          <th>Uses/min</th>
-          <th>First cast</th>
-          <th>BL offset</th>
-          <th>Samples</th>
-        </tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>`;
 }
 
 // ── Shared comparison chart ───────────────────────────────────────────────────

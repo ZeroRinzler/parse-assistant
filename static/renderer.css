@@ -132,14 +132,6 @@
 .delta-bad  { color: var(--critical); font-weight: 700; }
 .delta-ok   { color: var(--muted); }
 
-/* ── Parse comparison table ──────────────────────────────────────── */
-.comp-table-wrap { overflow-x: auto; }
-.comp-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.comp-table th { text-align: left; padding: 7px 10px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .7px; border-bottom: 1px solid var(--border); }
-.comp-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); }
-.comp-table tr:last-child td { border-bottom: none; }
-.comp-table tr:hover td { background: var(--surface2); }
-
 /* ── Burst windows ───────────────────────────────────────────────── */
 .bw-legend { display: flex; gap: 16px; margin-bottom: 8px; font-size: 12px; color: var(--muted); }
 .bw-legend-item { display: flex; align-items: center; gap: 5px; }

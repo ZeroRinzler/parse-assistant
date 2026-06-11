@@ -296,40 +296,6 @@ function _analyzePlayerCore({playerName, spec, fightStart, fightEnd,
   };
 }
 
-// ── Comparison table ──────────────────────────────────────────────────────────
-
-function _buildComparison(specCds, castEvents, fightStart, fightEnd, bench, buffEvents) {
-  if (!bench?.per_cd_benchmarks) return null;
-  const fightDurS = (fightEnd-fightStart)/1000;
-  const rel = ts => ts-fightStart;
-  let blTimeS = null;
-  for (const e of buffEvents) {
-    if (e.type==='applybuff' && BLOODLUST_SPELL_IDS.has(e.abilityGameID)
-        && e.timestamp>=fightStart && e.timestamp<=fightEnd) { blTimeS=rel(e.timestamp)/1000; break; }
-  }
-  return specCds.map(cd => {
-    const b = bench.per_cd_benchmarks[cd.name]; if (!b) return null;
-    const casts = castEvents.filter(c => c.type==='cast' && c.abilityGameID===cd.spell_id
-                                        && c.timestamp>=fightStart && c.timestamp<=fightEnd);
-    const playerFirst = casts.length ? Math.round(rel(casts[0].timestamp)/1000*10)/10 : null;
-    const playerUPM   = Math.round(casts.length/(fightDurS/60)*100)/100;
-    let blOff = null;
-    if (blTimeS!=null && casts.length) {
-      const offs = casts.map(c=>rel(c.timestamp)/1000-blTimeS).filter(o=>o>=-30&&o<=BLOODLUST_DURATION_S+15);
-      if (offs.length) blOff = Math.round(offs.reduce((best,x)=>Math.abs(x)<Math.abs(best)?x:best)*10)/10;
-    }
-    return {
-      name: cd.name,
-      player_uses: casts.length, player_uses_per_min: playerUPM, player_first_cast_s: playerFirst,
-      top_avg_uses_per_min: b.uses_per_min?.avg ?? null, top_stddev_uses_per_min: b.uses_per_min?.stddev ?? null,
-      top_avg_first_cast_s: b.avg_first_cast_s ?? null, top_stddev_first_cast_s: b.stddev_first_cast_s ?? null,
-      top_bl_pct: 0, player_bl_offset_s: blOff,
-      top_avg_bl_offset_s: b.avg_bl_offset_s ?? null, top_stddev_bl_offset_s: b.stddev_bl_offset_s ?? null,
-      sample_count: bench.sample_count ?? 0,
-    };
-  }).filter(Boolean);
-}
-
 // ── Player burst windows ──────────────────────────────────────────────────────
 
 function _findPlayerBurstWindows(dmgEvents, fightStart, specCds, castEvents) {
@@ -512,13 +478,9 @@ async function runAnalysis({reportCode, fightId, playerId, fights, masterAbiliti
   result.ability_icons          = abilityMap;
 
   if (bench && specCds) {
-    const comp = _buildComparison(specCds, castEvents, fStart, fEnd, bench, buffEvents);
-    if (comp?.length) {
-      result.parse_comparison     = comp;
-      result.downtime_threshold_ms = bench.downtime_threshold_ms;
-      if (bench.top_avg_efficiency  != null) result.top_efficiency_pct   = bench.top_avg_efficiency;
-      if (bench.top_efficiency_stddev!=null) result.top_efficiency_stddev = bench.top_efficiency_stddev;
-    }
+    if (bench.downtime_threshold_ms != null) result.downtime_threshold_ms = bench.downtime_threshold_ms;
+    if (bench.top_avg_efficiency  != null) result.top_efficiency_pct   = bench.top_avg_efficiency;
+    if (bench.top_efficiency_stddev!=null) result.top_efficiency_stddev = bench.top_efficiency_stddev;
     if (bench.burst_windows?.length) result.burst_windows = bench.burst_windows;
   }
 

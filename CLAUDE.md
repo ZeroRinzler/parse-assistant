@@ -261,6 +261,22 @@ All thresholds are now derived from top-parse data when samples exist for the en
 | Comparison table green/red (uses/min) | `top_stddev_uses_per_min` per CD | ±0.05 uses/min |
 | Comparison table green/red (first cast) | `top_stddev_first_cast_s` per CD | ±3 s |
 
+### Burst window definition
+
+Burst windows are computed in two layers.
+
+**Per-parse** (`_find_burst_windows` in `parses_analyzer.py`):
+1. Collect all `type: "damage"` events with `amount + absorbed > 0`.
+2. Slide an **8-second window** across every event timestamp; for each start position, sum all damage whose timestamp falls within `[ts, ts + 8000ms]`.
+3. Pick the **top 4 non-overlapping** windows by total damage — two windows must be ≥8s apart to both qualify.
+4. Each window stores: `time_s` (relative to fight start), `pct_of_total` (fraction of the parse's total damage), `window_damage`, `target_count`, and a per-ability breakdown (top 6 abilities by damage, each with their fraction of window damage).
+
+**Across parses** (`cluster_burst_windows` in `analysis_utils.py`):
+1. Pool all per-parse windows from every ingested sample.
+2. Group windows whose `time_s` falls within **15s of the running cluster median** — greedy, first-fit.
+3. Discard clusters present in fewer than **max(2, 35% of samples)** parses.
+4. For surviving clusters, surface CDs active in ≥50% of member parses, and abilities appearing in ≥50% of member parses.
+
 ### Remaining static values
 
 | Value | Location | Notes |

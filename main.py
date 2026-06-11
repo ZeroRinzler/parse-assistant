@@ -249,59 +249,7 @@ async def analyze(req: AnalyzeRequest):
     result["player_fight_duration_s"] = round(player_fight_dur_s, 1)
     result["cd_spell_ids"] = {cd["name"]: cd["spell_id"] for cd in (spec_cds or [])}
 
-    # Build parse comparison table from pre-computed per-CD benchmarks
     if encounter_id and spec_cds and enc_data:
-        player_bl_s: Optional[float] = None
-        for e in buff_events:
-            if (
-                e.get("type") == "applybuff"
-                and e.get("abilityGameID") in BLOODLUST_SPELL_IDS
-                and start <= e["timestamp"] <= end
-            ):
-                player_bl_s = (e["timestamp"] - start) / 1000
-                break
-
-        comparison = []
-        player_dur_min = player_fight_dur_s / 60 if player_fight_dur_s > 0 else 1
-        for cd in spec_cds:
-            bench = per_cd_benchmarks.get(cd["name"])
-            if not bench:
-                continue
-            cd_casts = [
-                c for c in cast_events
-                if c.get("type") == "cast" and c.get("abilityGameID") == cd["spell_id"]
-            ]
-            player_first = round((cd_casts[0]["timestamp"] - start) / 1000, 1) if cd_casts else None
-            player_upm = round(len(cd_casts) / player_dur_min, 2)
-
-            player_bl_offset: Optional[float] = None
-            if player_bl_s is not None and cd_casts:
-                window_offsets = [
-                    (c["timestamp"] - start) / 1000 - player_bl_s
-                    for c in cd_casts
-                    if player_bl_s - 30 <= (c["timestamp"] - start) / 1000 <= player_bl_s + 55
-                ]
-                if window_offsets:
-                    player_bl_offset = round(min(window_offsets, key=abs), 1)
-
-            upm = bench.get("uses_per_min") or {}
-            comparison.append({
-                "name": cd["name"],
-                "player_uses": len(cd_casts),
-                "player_uses_per_min": player_upm,
-                "player_first_cast_s": player_first,
-                "top_avg_uses": bench.get("avg_uses"),
-                "top_avg_uses_per_min": upm.get("avg"),
-                "top_stddev_uses_per_min": upm.get("stddev"),
-                "top_avg_first_cast_s": bench.get("avg_first_cast_s"),
-                "top_stddev_first_cast_s": bench.get("stddev_first_cast_s"),
-                "top_bl_pct": bench.get("bl_pct"),
-                "player_bl_offset_s": player_bl_offset,
-                "top_avg_bl_offset_s": bench.get("avg_bl_offset_s"),
-                "top_stddev_bl_offset_s": bench.get("stddev_bl_offset_s"),
-                "sample_count": bench.get("sample_count", enc_data.get("sample_count", 0)),
-            })
-        result["parse_comparison"] = comparison
         result["downtime_threshold_ms"] = round(downtime_threshold_ms)
         if top_avg_efficiency is not None:
             result["top_efficiency_pct"] = top_avg_efficiency
