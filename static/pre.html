@@ -4,7 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Pre-Fight Brief — WoW Analyzer</title>
+  <link rel="stylesheet" href="renderer.css" />
   <style>
+    /* auth-banner on this page is outside the container — give it breathing room */
+    .auth-banner { margin:20px auto; max-width:900px; }
     :root {
       --bg:#0a0c10;--surface:#13161e;--surface2:#1c202c;--border:#2a2f3d;
       --gold:#c8a64f;--gold-light:#e8c86a;--text:#dde1ec;--muted:#7b82a0;
@@ -108,34 +111,39 @@
   <a href="live.html">Live</a>
   <a href="index.html">Post-Raid</a>
   <div style="position:absolute;right:16px">
-    <button id="wcl-btn" style="display:none;padding:5px 12px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);font-size:12px;font-weight:600;cursor:pointer" onclick="toggleWclAuth()"></button>
+    <button id="wcl-btn" class="wcl-btn hidden" onclick="toggleWclAuth()"></button>
   </div>
 </nav>
 
-<div id="auth-banner" style="display:none;background:rgba(200,166,79,.08);border:1px solid rgba(200,166,79,.3);border-radius:8px;padding:20px 24px;text-align:center;margin:20px auto;max-width:900px">
+<div id="auth-banner" class="auth-banner hidden">
   <h3 style="color:var(--gold);margin-bottom:8px">Connect Warcraft Logs</h3>
-  <p style="color:var(--muted);font-size:13px;margin-bottom:16px">The pre-fight check fetches your gear directly from Warcraft Logs.<br>Connect once and your browser will remember your session.</p>
+  <p style="color:var(--muted);font-size:13px;margin-bottom:16px">Sign in to load your gear and compare against top parses.<br>Connect once and your browser will remember your session.</p>
   <button onclick="wclLogin()" style="background:var(--gold);color:#0a0c10;border:none;border-radius:6px;padding:10px 24px;font-size:14px;font-weight:700;cursor:pointer">Connect WCL</button>
 </div>
+
+<div id="main-ui" class="hidden">
 <div class="container">
 
-  <!-- Input card -->
+  <!-- Character + encounter card -->
   <div class="card">
-    <div class="input-row">
-      <div class="form-group">
-        <label for="char-url">Character URL</label>
-        <input id="char-url" type="text"
-          placeholder="https://www.warcraftlogs.com/character/us/stormrage/Name"
-          onkeydown="if(event.key==='Enter') loadChar()" />
+
+    <!-- Linked character selector (shown only when user has multiple linked chars) -->
+    <div id="char-select-row" class="hidden" style="margin-bottom:14px">
+      <div class="form-group" style="margin:0">
+        <label for="char-select">Your Characters</label>
+        <select id="char-select" onchange="onLinkedCharChange()"></select>
       </div>
-      <button class="btn btn-primary" onclick="loadChar()" id="load-btn">Load</button>
     </div>
+
+    <div id="char-loading" class="hidden"><div class="empty-state" style="padding:16px 0"><div class="spinner"></div>Looking up character…</div></div>
+
     <div id="char-badge" class="char-badge hidden">
       <div class="gear-status-dot ok"></div>
       <span id="char-badge-name" class="char-badge-name"></span>
       <span id="char-badge-spec" class="char-badge-spec"></span>
       <span id="char-badge-report" class="char-badge-report"></span>
     </div>
+
     <div id="enc-row" class="hidden" style="margin-top:12px">
       <div class="form-group">
         <label for="enc-sel">Encounter</label>
@@ -144,10 +152,22 @@
         </select>
       </div>
     </div>
+
+    <!-- Secondary: check another character by URL -->
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.6px">Check another character</div>
+      <div class="input-row">
+        <div class="form-group" style="margin:0;flex:1">
+          <input id="char-url" type="text"
+            placeholder="https://www.warcraftlogs.com/character/us/server/Name"
+            onkeydown="if(event.key==='Enter') loadCharFromUrl()" />
+        </div>
+        <button class="btn btn-primary" onclick="loadCharFromUrl()">Load</button>
+      </div>
+    </div>
   </div>
 
   <div id="error-box" class="error-msg hidden"></div>
-  <div id="char-loading" class="hidden"><div class="empty-state"><div class="spinner"></div>Looking up character…</div></div>
 
   <!-- Gear check section (shown after char load, before encounter select) -->
   <div id="gear-section" class="hidden">
@@ -163,6 +183,7 @@
   <div id="brief"></div>
 
 </div>
+</div><!-- /main-ui -->
 
 <script src="wcl.js"></script>
 <script>
@@ -207,38 +228,8 @@
     } catch { return null; }
   }
 
-  function _wclAvailable() { return typeof wclIsLoggedIn !== 'undefined' && wclIsLoggedIn(); }
-
-  // ── WCL auth UI ──────────────────────────────────────────────────────────────
-
-  function _updateWclUI() {
-    const btn    = document.getElementById('wcl-btn');
-    const banner = document.getElementById('auth-banner');
-    const loggedIn = typeof wclIsLoggedIn !== 'undefined' && wclIsLoggedIn();
-    if (loggedIn) {
-      btn.textContent = 'WCL ✓';
-      btn.style.color = 'var(--success)';
-      btn.style.borderColor = 'var(--success)';
-    } else {
-      btn.textContent = 'Connect WCL';
-      btn.style.color = '';
-      btn.style.borderColor = '';
-    }
-    btn.style.display = '';
-    banner.style.display = loggedIn ? 'none' : '';
-  }
-
-  function toggleWclAuth() {
-    if (typeof wclIsLoggedIn === 'undefined') return;
-    if (wclIsLoggedIn()) {
-      if (confirm('Disconnect from Warcraft Logs?')) { wclClearToken(); _updateWclUI(); }
-    } else { wclLogin(); }
-  }
-
   function syncURL() {
     const p = new URLSearchParams();
-    const url = document.getElementById('char-url').value.trim();
-    if (url) p.set('url', url);
     if (_encId) p.set('encounter', _encId);
     history.replaceState({}, '', p.toString() ? `?${p}` : location.pathname);
   }
@@ -250,69 +241,100 @@
   }
   function clearError() { document.getElementById('error-box').classList.add('hidden'); }
 
+  // ── Init ─────────────────────────────────────────────────────────────────────
+
   window.onload = async () => {
     _updateWclUI();
-    const p = new URLSearchParams(location.search);
-    const url = p.get('url');
-    if (url) {
-      document.getElementById('char-url').value = url;
-      await loadChar(parseInt(p.get('encounter') || '0', 10));
+    if (wclIsLoggedIn()) {
+      await initPrePage();
+      const autoEnc = parseInt(new URLSearchParams(location.search).get('encounter') || '0', 10);
+      if (autoEnc && _spec) {
+        document.getElementById('enc-sel').value = autoEnc;
+        await onEncChange();
+      }
     }
   };
 
+  async function initPrePage() {
+    const chars = await wclFetchUserCharacters().catch(() => []);
+    if (!chars.length) return;
+
+    if (chars.length > 1) {
+      const sel = document.getElementById('char-select');
+      sel.innerHTML = '';
+      chars.forEach(c => {
+        const o = document.createElement('option');
+        o.value = JSON.stringify({name: c.name, server: c.serverSlug, region: c.serverRegion});
+        o.textContent = `${c.name} — ${c.serverSlug}`;
+        sel.appendChild(o);
+      });
+      document.getElementById('char-select-row').classList.remove('hidden');
+    }
+
+    await _loadLinkedChar(chars[0]);
+  }
+
+  async function onLinkedCharChange() {
+    const val = JSON.parse(document.getElementById('char-select').value);
+    await _loadLinkedChar({name: val.name, serverSlug: val.server, serverRegion: val.region});
+  }
+
   // ── Character loading ─────────────────────────────────────────────────────
 
-  async function loadChar(autoEnc = null) {
-    const url = document.getElementById('char-url').value.trim();
-    if (!url) return;
+  function _resetCharState() {
     clearError();
     document.getElementById('char-loading').classList.remove('hidden');
     document.getElementById('char-badge').classList.add('hidden');
     document.getElementById('enc-row').classList.add('hidden');
     document.getElementById('gear-section').classList.add('hidden');
     document.getElementById('brief').innerHTML = '';
-    document.getElementById('load-btn').disabled = true;
     _charGear = null; _spec = ''; _encId = 0;
+  }
 
+  function _applyCharData(data) {
+    _spec = data.spec || '';
+    _charName = data.name || '';
+    _charServer = data.server || '';
+    _charRegion = data.region || '';
+
+    document.getElementById('char-badge-name').textContent = data.name;
+    document.getElementById('char-badge-spec').textContent = fmtSpec(data.spec) + (data.server ? ` — ${data.server}` : '');
+    document.getElementById('char-badge-report').textContent = data.source_report ? `from ${data.source_report}` : '';
+    document.getElementById('char-badge').classList.remove('hidden');
+    document.getElementById('gear-grid').innerHTML = '';
+    document.getElementById('gear-section').classList.remove('hidden');
+    document.getElementById('gear-no-data').classList.remove('hidden');
+  }
+
+  async function _loadLinkedChar(char) {
+    _resetCharState();
     try {
-      let data;
-      if (_wclAvailable()) {
-        data = await wclCharLookup(url);
-      } else {
-        data = await apiFetch(`/api/pre/char-lookup?url=${encodeURIComponent(url)}`);
-        if (!data) throw new Error('Backend server is not available. Run the server locally, or Connect WCL to use online.');
-      }
-
-      _spec = data.spec || '';
-      _charName = data.name || '';
-      _charServer = data.server || '';
-      _charRegion = data.region || '';
-
-      try {
-        localStorage.setItem('wcl_saved_char', JSON.stringify({
-          name: data.name, url, server: data.server, region: data.region, spec: data.spec
-        }));
-      } catch (_) {}
-
-      document.getElementById('char-badge-name').textContent = data.name;
-      document.getElementById('char-badge-spec').textContent = fmtSpec(data.spec) + (data.server ? ` — ${data.server}` : '');
-      document.getElementById('char-badge-report').textContent = data.source_report ? `from ${data.source_report}` : '';
-      document.getElementById('char-badge').classList.remove('hidden');
-      document.getElementById('gear-grid').innerHTML = '';
-      document.getElementById('gear-section').classList.remove('hidden');
-      document.getElementById('gear-no-data').classList.remove('hidden');
-
-      await populateEncounters(autoEnc);
-      syncURL();
+      const data = await wclCharLookupByCoords(char.name, char.serverSlug, char.serverRegion);
+      _applyCharData(data);
+      await populateEncounters();
     } catch (err) {
       showError(err.message);
     } finally {
       document.getElementById('char-loading').classList.add('hidden');
-      document.getElementById('load-btn').disabled = false;
     }
   }
 
-  async function populateEncounters(autoEnc = null) {
+  async function loadCharFromUrl() {
+    const url = document.getElementById('char-url').value.trim();
+    if (!url) return;
+    _resetCharState();
+    try {
+      const data = await wclCharLookup(url);
+      _applyCharData(data);
+      await populateEncounters();
+    } catch (err) {
+      showError(err.message);
+    } finally {
+      document.getElementById('char-loading').classList.add('hidden');
+    }
+  }
+
+  async function populateEncounters() {
     const encSel = document.getElementById('enc-sel');
     encSel.innerHTML = '<option>Loading…</option>';
     encSel.disabled = true;
@@ -333,9 +355,6 @@
           .filter(s => s.sample_count > 0)
           .map(s => ({id: s.encounter_id, name: `${s.encounter_name}  (${s.sample_count} parses)`}));
       }
-    } else {
-      const data = await apiFetch('/api/admin/encounters');
-      encounters = (data?.encounters || []).map(e => ({id: e.id, name: e.name}));
     }
 
     encSel.innerHTML = '<option value="">— select encounter —</option>';
@@ -349,10 +368,6 @@
       encSel.appendChild(o);
     });
     encSel.disabled = false;
-    if (autoEnc && encounters.some(e => e.id === autoEnc)) {
-      encSel.value = autoEnc;
-      await onEncChange();
-    }
   }
 
   // ── Encounter selection ───────────────────────────────────────────────────
@@ -371,46 +386,12 @@
 
     let charGearData, benchData;
 
-    if (!_spec) {
-      // Spec unknown — need to get it from char gear first
-      if (_wclAvailable()) {
-        charGearData = await wclGetCharGear(_charName, _charServer, _charRegion, _encId);
-      } else {
-        charGearData = await apiFetch(
-          `/api/pre/char-gear?name=${encodeURIComponent(_charName)}&server=${encodeURIComponent(_charServer)}&region=${encodeURIComponent(_charRegion)}&encounter_id=${_encId}`
-        );
-      }
-      if (charGearData?.found && charGearData.spec) {
-        _spec = charGearData.spec;
-        populateEncounters(_encId); // refresh list now we know spec
-      }
-    }
-
-    if (_spec) {
-      const charGearProm = charGearData
-        ? Promise.resolve(charGearData)
-        : (_wclAvailable()
-            ? wclGetCharGear(_charName, _charServer, _charRegion, _encId)
-            : apiFetch(`/api/pre/char-gear?name=${encodeURIComponent(_charName)}&server=${encodeURIComponent(_charServer)}&region=${encodeURIComponent(_charRegion)}&encounter_id=${_encId}`)
-          );
-      [charGearData, benchData] = await Promise.all([
-        charGearProm,
-        _staticFetch(`${_DATA_BASE_PRE}${_spec}/encounters/${_encId}.json`),
-      ]);
-      // Fallback: if static bench not available, try server
-      if (!benchData) {
-        benchData = await apiFetch(`/api/pre/gear-stats/${_spec}/${_encId}`);
-      }
-    } else {
-      if (!charGearData) {
-        if (_wclAvailable()) {
-          charGearData = await wclGetCharGear(_charName, _charServer, _charRegion, _encId);
-        } else {
-          charGearData = await apiFetch(
-            `/api/pre/char-gear?name=${encodeURIComponent(_charName)}&server=${encodeURIComponent(_charServer)}&region=${encodeURIComponent(_charRegion)}&encounter_id=${_encId}`
-          );
-        }
-      }
+    [charGearData, benchData] = await Promise.all([
+      wclGetCharGear(_charName, _charServer, _charRegion, _encId),
+      _spec ? _staticFetch(`${_DATA_BASE_PRE}${_spec}/encounters/${_encId}.json`) : Promise.resolve(null),
+    ]);
+    if (!benchData && _spec) {
+      benchData = await apiFetch(`/api/pre/gear-stats/${_spec}/${_encId}`);
     }
 
     document.getElementById('brief-loading').classList.add('hidden');

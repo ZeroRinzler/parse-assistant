@@ -134,33 +134,17 @@ function categoryIconHtml(category) {
   return _CATEGORY_ICONS[category] || '';
 }
 
-// ── Saved character (localStorage) ───────────────────────────────────────────
-// Stores {name, url} resolved from a WCL character URL via /api/pre/char-lookup.
+// ── Linked character auto-selection ──────────────────────────────────────────
+// Matches any WCL-linked character name against the player dropdown.
 
-const CHAR_STORAGE_KEY = 'wcl_saved_char';
-
-function getSavedChar() {
-  try { return JSON.parse(localStorage.getItem(CHAR_STORAGE_KEY)) || null; } catch { return null; }
-}
-
-function _saveCharData(data) {
-  localStorage.setItem(CHAR_STORAGE_KEY, JSON.stringify(data));
-}
-
-function clearSavedChar() {
-  localStorage.removeItem(CHAR_STORAGE_KEY);
-}
-
-// Try to auto-select the saved character in the player dropdown.
-// Returns true if found, false if character is not in the current log.
-function autoSelectSavedPlayer() {
-  const char = getSavedChar();
-  if (!char?.name) return null;
+function autoSelectLinkedPlayer() {
+  const chars = (typeof wclGetCachedUserChars !== 'undefined') ? wclGetCachedUserChars() : [];
+  if (!chars.length) return false;
+  const names = new Set(chars.map(c => c.name.toLowerCase()));
   const sel = document.getElementById('player-select');
-  if (!sel) return null;
-  const nameLower = char.name.toLowerCase();
+  if (!sel) return false;
   for (const opt of sel.options) {
-    if (opt.textContent.split(' — ')[0].toLowerCase() === nameLower) {
+    if (names.has(opt.textContent.split(' — ')[0].toLowerCase())) {
       sel.value = opt.value;
       return true;
     }
@@ -168,97 +152,13 @@ function autoSelectSavedPlayer() {
   return false;
 }
 
-// Render or update the character chip in the nav bar.
-function renderCharChip() {
-  const char = getSavedChar();
-  const chip = document.getElementById('char-chip');
-  if (!chip) return;
-  if (char?.name) {
-    chip.innerHTML = `<span class="char-chip-name">${char.name}</span><button class="char-chip-change" onclick="promptChangeChar()" title="Change character">✕</button>`;
-    chip.classList.add('saved');
-  } else {
-    chip.innerHTML = `<button class="char-chip-set" onclick="promptChangeChar()">Set my character</button>`;
-    chip.classList.remove('saved');
-  }
-}
-
-function promptChangeChar() {
-  const modal = document.getElementById('char-modal');
-  if (!modal) return;
-  const inp = document.getElementById('char-modal-input');
-  if (inp) inp.value = getSavedChar()?.url || '';
-  // Reset status
-  const status = document.getElementById('char-modal-status');
-  if (status) { status.textContent = ''; status.className = 'char-modal-status'; }
-  modal.classList.remove('hidden');
-  inp?.focus();
-}
-
-async function closeCharModal(save) {
-  const modal = document.getElementById('char-modal');
-  if (!modal) return;
-  if (save) {
-    const url = document.getElementById('char-modal-input')?.value?.trim();
-    if (!url) {
-      clearSavedChar();
-      renderCharChip();
-      modal.classList.add('hidden');
-      return;
-    }
-    // Resolve character from URL — use WCL-direct if logged in, fall back to backend
-    const status = document.getElementById('char-modal-status');
-    if (status) { status.textContent = 'Looking up…'; status.className = 'char-modal-status'; }
-    try {
-      let data;
-      if (typeof wclIsLoggedIn !== 'undefined' && wclIsLoggedIn()) {
-        data = await wclCharLookup(url);
-      } else {
-        data = await apiFetch(`/api/pre/char-lookup?url=${encodeURIComponent(url)}`);
-      }
-      _saveCharData({name: data.name, url, server: data.server, region: data.region, spec: data.spec});
-      renderCharChip();
-      const found = autoSelectSavedPlayer();
-      _updateCharWarning(found);
-      if (found !== false && typeof analyzePlayer === 'function') analyzePlayer();
-      modal.classList.add('hidden');
-    } catch (e) {
-      if (status) { status.textContent = `Not found: ${e.message}`; status.className = 'char-modal-status error'; }
-    }
-    return;
-  }
-  modal.classList.add('hidden');
-}
-
-function _updateCharWarning(found) {
-  const warn = document.getElementById('char-not-found');
-  if (!warn) return;
-  const char = getSavedChar();
-  if (found === false && char?.name) {
-    warn.textContent = `⚠ ${char.name} not found in this log — select a player below.`;
-    warn.classList.remove('hidden');
-    document.getElementById('player-select')?.parentElement?.classList?.remove('hidden');
-  } else {
-    warn.classList.add('hidden');
-    if (char?.name) document.getElementById('player-select')?.parentElement?.classList?.add('hidden');
-  }
-}
-
-// Called after the player list is populated to apply saved character.
+// Called after the player list is populated to apply character selection.
 function applyCharacterSelection(autoPlayer = null) {
-  const char = getSavedChar();
   if (autoPlayer) {
-    // Explicit override (from URL param)
     document.getElementById('player-select').value = autoPlayer;
-    _updateCharWarning(null);
     return;
   }
-  if (char?.name) {
-    const found = autoSelectSavedPlayer();
-    _updateCharWarning(found);
-    // Only hide dropdown when character was actually found
-    const sel = document.getElementById('player-select');
-    if (sel) sel.parentElement.classList.toggle('hidden', found === true);
-  }
+  autoSelectLinkedPlayer();
 }
 
 // ── Rendering ──────────────────────────────────────────────────────────────────

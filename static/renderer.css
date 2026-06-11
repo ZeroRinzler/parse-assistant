@@ -1,4 +1,16 @@
-/* Shared results styles — included by index.html and live.html */
+/* Shared styles — included by all pages */
+
+/* ── Nav auth button ──────────────────────────────────────────────── */
+.wcl-btn { padding:5px 12px; border-radius:6px; border:1px solid var(--border); background:var(--surface2); color:var(--muted); font-size:12px; font-weight:600; cursor:pointer; }
+.wcl-btn:hover { border-color:var(--gold); color:var(--gold); }
+.wcl-btn.connected { color:var(--success); border-color:var(--success); }
+
+/* ── Auth banner ──────────────────────────────────────────────────── */
+.auth-banner { background:rgba(200,166,79,.08); border:1px solid rgba(200,166,79,.3); border-radius:var(--radius); padding:20px 24px; text-align:center; }
+.auth-banner h3 { color:var(--gold); margin-bottom:8px; }
+.auth-banner p { color:var(--muted); font-size:13px; margin-bottom:16px; }
+.auth-banner button { background:var(--gold); color:#0a0c10; border:none; border-radius:6px; padding:10px 24px; font-size:14px; font-weight:700; cursor:pointer; }
+.auth-banner button:hover { background:var(--gold-light); }
 
 /* ── Spell icons ──────────────────────────────────────────────────── */
 .spell-icon { border-radius: 3px; vertical-align: middle; flex-shrink: 0; }
@@ -19,51 +31,6 @@
 .rule-item { display: flex; align-items: flex-start; gap: 8px; }
 .rule-item > .cat-icon { margin-top: 3px; flex-shrink: 0; }
 
-/* ── Character chip ──────────────────────────────────────────────── */
-.char-chip {
-  display: flex; align-items: center; gap: 6px;
-  background: var(--surface2); border: 1px solid var(--border);
-  border-radius: 20px; padding: 4px 10px; font-size: 12px; white-space: nowrap;
-}
-.char-chip.saved { border-color: rgba(200,166,79,0.4); }
-.char-chip-name { color: var(--gold); font-weight: 600; }
-.char-chip-change { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 11px; padding: 0 2px; }
-.char-chip-change:hover { color: var(--critical); }
-.char-chip-set { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 12px; padding: 0; text-decoration: underline; }
-.char-chip-set:hover { color: var(--gold); }
-
-/* ── Character modal ─────────────────────────────────────────────── */
-.char-modal-overlay {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.65); z-index: 100;
-  display: flex; align-items: center; justify-content: center;
-}
-.char-modal-box {
-  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
-  padding: 24px 28px; width: 340px; box-shadow: 0 8px 40px rgba(0,0,0,.6);
-}
-.char-modal-box h3 { font-size: 15px; color: var(--gold); margin-bottom: 8px; }
-.char-modal-box p { font-size: 12px; color: var(--muted); margin-bottom: 14px; }
-.char-modal-row { display: flex; gap: 8px; }
-.char-modal-row input { flex: 1; }
-.char-modal-btn {
-  background: linear-gradient(135deg,#9a6f1f,var(--gold)); color: #0a0c10;
-  border: none; border-radius: 6px; padding: 8px 16px; font-weight: 700;
-  font-size: 13px; cursor: pointer; white-space: nowrap;
-}
-.char-modal-btn:hover { opacity: .88; }
-.char-modal-skip { display: block; text-align: center; margin-top: 12px; font-size: 12px; color: var(--muted); cursor: pointer; }
-.char-modal-skip:hover { color: var(--text); }
-.char-modal-box input { font-size: 11px; }
-.char-modal-status { font-size: 12px; min-height: 16px; margin-top: 6px; color: var(--muted); }
-.char-modal-status.error { color: var(--critical); }
-/* Widen modal slightly so URL fits */
-.char-modal-box { width: 420px; }
-
-.char-not-found {
-  background: rgba(232,169,58,0.08); border: 1px solid rgba(232,169,58,0.25);
-  border-radius: 6px; padding: 8px 12px; color: var(--warning);
-  font-size: 12px; margin-bottom: 10px;
-}
 
 .result-header { margin-bottom: 18px; }
 .result-header h2 { font-size: 18px; font-weight: 700; color: var(--gold); }

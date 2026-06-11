@@ -42,6 +42,47 @@ function wclIsLoggedIn() { return !!wclGetToken(); }
 function wclClearToken() {
   localStorage.removeItem('wcl_token');
   localStorage.removeItem('wcl_token_expiry');
+  localStorage.removeItem('wcl_user_chars');
+}
+
+// ── User characters ───────────────────────────────────────────────────────────
+
+const _USER_CHARS_Q = `{userData{currentUser{characters{id name serverSlug serverRegion}}}}`;
+
+async function wclFetchUserCharacters() {
+  const d = await wclQuery(_USER_CHARS_Q);
+  const chars = d?.userData?.currentUser?.characters || [];
+  try { localStorage.setItem('wcl_user_chars', JSON.stringify(chars)); } catch {}
+  return chars;
+}
+
+function wclGetCachedUserChars() {
+  try { return JSON.parse(localStorage.getItem('wcl_user_chars')) || []; } catch { return []; }
+}
+
+// ── Shared auth UI ───────────────────────────────────────────────────────────
+
+function _updateWclUI() {
+  const btn    = document.getElementById('wcl-btn');
+  const banner = document.getElementById('auth-banner');
+  const mainUi = document.getElementById('main-ui');
+  const loggedIn = wclIsLoggedIn();
+  if (mainUi) mainUi.classList.toggle('hidden', !loggedIn);
+  if (banner) banner.classList.toggle('hidden', loggedIn);
+  if (loggedIn) {
+    btn.textContent = 'WCL ✓';
+    btn.classList.add('connected');
+  } else {
+    btn.textContent = 'Connect WCL';
+    btn.classList.remove('connected');
+  }
+  btn.classList.remove('hidden');
+}
+
+function toggleWclAuth() {
+  if (wclIsLoggedIn()) {
+    if (confirm('Disconnect from Warcraft Logs?')) { wclClearToken(); _updateWclUI(); }
+  } else { wclLogin(); }
 }
 
 // ── Auth flow ─────────────────────────────────────────────────────────────────
@@ -181,13 +222,11 @@ function _parseCharUrl(url) {
   throw new Error('Not a valid WCL character URL (expected /character/region/server/name)');
 }
 
-async function wclCharLookup(url) {
-  const {region, server, name} = _parseCharUrl(url);
+async function _resolveCharSpec(name, server, region) {
   const d = await wclQuery(_CHAR_Q, {name, serverSlug: server, serverRegion: region});
   const char = d?.characterData?.character;
   if (!char) throw new Error(`Character not found: ${name}-${server} (${region})`);
 
-  // Detect spec from recent reports
   let spec = null, sourceReport = null;
   const reports = char.recentReports?.data || [];
   if (!reports.length) throw new Error('No recent WCL reports found for this character.');
@@ -199,13 +238,21 @@ async function wclCharLookup(url) {
       const fights = rd.fights || [];
       if (!fights.length) continue;
       const specMap = await wclGetPlayerDetails(rep.code, fights[0].id);
-      // Find this character's actor by name
       const actor = (rd.masterData?.actors || []).find(a => a.name.toLowerCase() === char.name.toLowerCase());
       if (actor && specMap[actor.id]) { spec = specMap[actor.id]; sourceReport = rep.code; break; }
     } catch { /* try next report */ }
   }
 
   return {name: char.name, spec, server, region, source_report: sourceReport};
+}
+
+async function wclCharLookupByCoords(name, server, region) {
+  return _resolveCharSpec(name, server, region);
+}
+
+async function wclCharLookup(url) {
+  const {region, server, name} = _parseCharUrl(url);
+  return _resolveCharSpec(name, server, region);
 }
 
 // Extract combatant info (gear/talents/enchants) from a WCL encounterRankings entry

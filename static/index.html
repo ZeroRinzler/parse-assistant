@@ -21,10 +21,6 @@
     .page-nav a.active{ background:var(--surface2); color:var(--gold); }
     .nav-right{ position:absolute; right:16px; display:flex; align-items:center; gap:8px; }
 
-    .wcl-btn{ padding:5px 12px; border-radius:6px; border:1px solid var(--border); background:var(--surface2); color:var(--muted); font-size:12px; font-weight:600; cursor:pointer; }
-    .wcl-btn:hover{ border-color:var(--gold); color:var(--gold); }
-    .wcl-btn.connected{ color:var(--success); border-color:var(--success); }
-
     .container{ max-width:860px; margin:0 auto; padding:32px 20px 64px; }
 
     .card{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:24px; margin-bottom:20px; }
@@ -46,11 +42,6 @@
 
     .error-msg{ background:rgba(224,82,82,0.1); border:1px solid rgba(224,82,82,0.3); border-radius:var(--radius); padding:14px 16px; color:var(--critical); font-size:13px; margin-bottom:16px; }
 
-    .auth-banner{ background:rgba(200,166,79,.08); border:1px solid rgba(200,166,79,.3); border-radius:var(--radius); padding:20px 24px; text-align:center; }
-    .auth-banner h3{ color:var(--gold); margin-bottom:8px; }
-    .auth-banner p{ color:var(--muted); font-size:13px; margin-bottom:16px; }
-    .auth-banner button{ background:var(--gold); color:#0a0c10; border:none; border-radius:6px; padding:10px 24px; font-size:14px; font-weight:700; cursor:pointer; }
-    .auth-banner button:hover{ background:var(--gold-light); }
   </style>
 </head>
 <body>
@@ -60,25 +51,8 @@
   <a href="index.html" class="active">Post-Raid</a>
   <div class="nav-right">
     <button id="wcl-btn" class="wcl-btn hidden" onclick="toggleWclAuth()"></button>
-    <div id="char-chip" class="char-chip"></div>
   </div>
 </nav>
-
-<!-- Character selection modal -->
-<div id="char-modal" class="char-modal-overlay hidden">
-  <div class="char-modal-box">
-    <h3>Who are you?</h3>
-    <p>Paste your Warcraft Logs character URL and your name will be auto-selected in every log you open.</p>
-    <div class="char-modal-row">
-      <input id="char-modal-input" type="text"
-        placeholder="https://www.warcraftlogs.com/character/eu/server/name"
-        onkeydown="if(event.key==='Enter') closeCharModal(true)" />
-      <button class="char-modal-btn" onclick="closeCharModal(true)">Save</button>
-    </div>
-    <div id="char-modal-status" class="char-modal-status"></div>
-    <span class="char-modal-skip" onclick="closeCharModal(false)">Skip for now</span>
-  </div>
-</div>
 
 <div class="container">
   <div id="auth-banner" class="auth-banner hidden">
@@ -97,7 +71,6 @@
           onkeydown="if(event.key==='Enter'){ clearTimeout(_loadTimer); loadReport(); }" />
       </div>
       <div id="selectors" class="selectors hidden">
-        <div id="char-not-found" class="char-not-found hidden"></div>
         <div class="row">
           <div class="form-group">
             <label for="fight-select">Fight</label>
@@ -128,37 +101,6 @@
   let _allPlayers = [];
   let _allFights  = [];
   let _masterAbilities = [];
-
-  // ── WCL auth UI ──────────────────────────────────────────────────────────────
-
-  function _updateWclUI() {
-    const btn    = document.getElementById('wcl-btn');
-    const banner = document.getElementById('auth-banner');
-    const mainUi = document.getElementById('main-ui');
-    const loggedIn = typeof wclIsLoggedIn !== 'undefined' && wclIsLoggedIn();
-    mainUi.classList.toggle('hidden', !loggedIn);
-    banner.classList.toggle('hidden', loggedIn);
-    if (loggedIn) {
-      btn.textContent = 'WCL ✓';
-      btn.classList.add('connected');
-    } else {
-      btn.textContent = 'Connect WCL';
-      btn.classList.remove('connected');
-    }
-    btn.classList.remove('hidden');
-  }
-
-  function toggleWclAuth() {
-    if (typeof wclIsLoggedIn === 'undefined') return;
-    if (wclIsLoggedIn()) {
-      if (confirm('Disconnect from Warcraft Logs?')) {
-        wclClearToken();
-        _updateWclUI();
-      }
-    } else {
-      wclLogin();
-    }
-  }
 
   // ── Fight/player transforms ──────────────────────────────────────────────────
 
@@ -204,9 +146,7 @@
 
   window.onload = () => {
     _updateWclUI();
-    renderCharChip();
-    if (!getSavedChar()) promptChangeChar();
-
+    if (wclIsLoggedIn()) wclFetchUserCharacters().catch(() => {});
     const p = new URLSearchParams(location.search);
     const r = p.get('report');
     if (r) {
