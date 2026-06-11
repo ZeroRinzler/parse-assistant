@@ -204,11 +204,16 @@ async function closeCharModal(save) {
       modal.classList.add('hidden');
       return;
     }
-    // Resolve character from URL via API
+    // Resolve character from URL — use WCL-direct if logged in, fall back to backend
     const status = document.getElementById('char-modal-status');
     if (status) { status.textContent = 'Looking up…'; status.className = 'char-modal-status'; }
     try {
-      const data = await apiFetch(`/api/pre/char-lookup?url=${encodeURIComponent(url)}`);
+      let data;
+      if (typeof wclIsLoggedIn !== 'undefined' && wclIsLoggedIn()) {
+        data = await wclCharLookup(url);
+      } else {
+        data = await apiFetch(`/api/pre/char-lookup?url=${encodeURIComponent(url)}`);
+      }
       _saveCharData({name: data.name, url, server: data.server, region: data.region, spec: data.spec});
       renderCharChip();
       const found = autoSelectSavedPlayer();

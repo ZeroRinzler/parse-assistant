@@ -3,6 +3,7 @@
   "encounter_id": 3176,
   "encounter_name": "Imperator Averzian",
   "sample_count": 10,
+  "avg_duration_s": 229.3,
   "downtime_threshold_ms": 1217,
   "top_avg_efficiency": 74.5,
   "top_efficiency_stddev": 8.2,
@@ -20,7 +21,11 @@
         "stddev": 0.061,
         "min": 0.511,
         "max": 0.692
-      }
+      },
+      "avg_uses": 2.3,
+      "avg_uses_per_min": 0.6,
+      "bl_pct": 0,
+      "majority_hold": false
     },
     "Kingsbane": {
       "avg_first_cast_s": 8.7,
@@ -35,7 +40,11 @@
         "stddev": 0.065,
         "min": 0.926,
         "max": 1.11
-      }
+      },
+      "avg_uses": 4,
+      "avg_uses_per_min": 1.04,
+      "bl_pct": 0,
+      "majority_hold": false
     },
     "Vanish": {
       "avg_first_cast_s": 35.7,
@@ -50,7 +59,11 @@
         "stddev": 0.127,
         "min": 0.263,
         "max": 0.692
-      }
+      },
+      "avg_uses": 2.1,
+      "avg_uses_per_min": 0.55,
+      "bl_pct": 0,
+      "majority_hold": false
     }
   },
   "burst_windows": [

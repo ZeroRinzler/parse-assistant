@@ -38,6 +38,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 wcl = WCLClient()
 STATIC_DIR   = Path(__file__).parent / "static"
 PROMPTS_DIR  = Path(__file__).parent / "prompts"
+DATA_DIR     = Path(__file__).parent / "data"
 
 
 @app.on_event("startup")
@@ -1190,3 +1191,4 @@ from analysis_utils import cluster_burst_windows as _cluster_burst_windows
 
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+app.mount("/data",   StaticFiles(directory=str(DATA_DIR)),   name="data")

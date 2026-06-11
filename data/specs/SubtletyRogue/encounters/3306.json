@@ -3,6 +3,7 @@
   "encounter_id": 3306,
   "encounter_name": "Chimaerus, the Undreamt God",
   "sample_count": 10,
+  "avg_duration_s": 145.3,
   "downtime_threshold_ms": 1285,
   "top_avg_efficiency": 76.9,
   "top_efficiency_stddev": 6.5,
@@ -20,7 +21,11 @@
         "stddev": 0.034,
         "min": 0.804,
         "max": 0.913
-      }
+      },
+      "avg_uses": 2,
+      "avg_uses_per_min": 0.83,
+      "bl_pct": 0,
+      "majority_hold": false
     },
     "Shadow Dance": {
       "avg_first_cast_s": 2.9,
@@ -35,7 +40,11 @@
         "stddev": 0.154,
         "min": 3.215,
         "max": 3.696
-      }
+      },
+      "avg_uses": 8.7,
+      "avg_uses_per_min": 3.59,
+      "bl_pct": 0,
+      "majority_hold": false
     },
     "Secret Technique": {
       "avg_first_cast_s": 3.1,
@@ -50,7 +59,11 @@
         "stddev": 0.239,
         "min": 2.813,
         "max": 3.654
-      }
+      },
+      "avg_uses": 8,
+      "avg_uses_per_min": 3.3,
+      "bl_pct": 0,
+      "majority_hold": false
     },
     "Vanish": {
       "avg_first_cast_s": 29.8,
@@ -65,7 +78,11 @@
         "stddev": 0.198,
         "min": 0.405,
         "max": 0.82
-      }
+      },
+      "avg_uses": 1.2,
+      "avg_uses_per_min": 0.5,
+      "bl_pct": 0,
+      "majority_hold": false
     },
     "Algeth'ar Puzzle Box": {
       "avg_first_cast_s": null,
@@ -75,7 +92,11 @@
       "avg_bl_offset_s": null,
       "stddev_bl_offset_s": null,
       "hold_targets": {},
-      "uses_per_min": {}
+      "uses_per_min": {},
+      "avg_uses": 0,
+      "avg_uses_per_min": 0.0,
+      "bl_pct": 0,
+      "majority_hold": false
     }
   },
   "burst_windows": [

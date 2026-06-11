@@ -3,6 +3,7 @@
   "encounter_id": 3306,
   "encounter_name": "Chimaerus, the Undreamt God",
   "sample_count": 10,
+  "avg_duration_s": 147.3,
   "downtime_threshold_ms": 1070,
   "top_avg_efficiency": 73.9,
   "top_efficiency_stddev": 8.8,
@@ -20,7 +21,11 @@
         "stddev": 0.01,
         "min": 0.801,
         "max": 0.829
-      }
+      },
+      "avg_uses": 2,
+      "avg_uses_per_min": 0.81,
+      "bl_pct": 0,
+      "majority_hold": false
     },
     "Kingsbane": {
       "avg_first_cast_s": 9.4,
@@ -35,7 +40,11 @@
         "stddev": 0.015,
         "min": 1.202,
         "max": 1.244
-      }
+      },
+      "avg_uses": 3,
+      "avg_uses_per_min": 1.22,
+      "bl_pct": 0,
+      "majority_hold": false
     },
     "Vanish": {
       "avg_first_cast_s": 40.4,
@@ -50,7 +59,11 @@
         "stddev": 0.213,
         "min": 0.401,
         "max": 0.829
-      }
+      },
+      "avg_uses": 1.6,
+      "avg_uses_per_min": 0.65,
+      "bl_pct": 0,
+      "majority_hold": false
     }
   },
   "burst_windows": [

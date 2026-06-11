@@ -201,6 +201,12 @@ async def sync_encounter_file(spec: str, encounter_id: int) -> None:
                     "total_samples": len(entries),
                 }
 
+        upm_list = [
+            e["total_uses"] / (e["fight_duration_s"] / 60)
+            for e in entries if e.get("fight_duration_s")
+        ]
+        bl_count = sum(1 for e in entries if e.get("bl_aligned"))
+
         per_cd_benchmarks[cd_name] = {
             "avg_first_cast_s": round(statistics.mean(top_first_casts), 1) if top_first_casts else None,
             "stddev_first_cast_s": round(statistics.stdev(top_first_casts), 1) if len(top_first_casts) > 1 else None,
@@ -210,7 +216,20 @@ async def sync_encounter_file(spec: str, encounter_id: int) -> None:
             "stddev_bl_offset_s": round(statistics.stdev(bl_offsets), 1) if len(bl_offsets) > 1 else None,
             "hold_targets": hold_targets,
             "uses_per_min": _bench_uses_per_min(entries),
+            # Brief display fields
+            "avg_uses": round(statistics.mean([e.get("total_uses", 0) for e in entries]), 1) if entries else 0,
+            "avg_uses_per_min": round(statistics.mean(upm_list), 2) if upm_list else None,
+            "bl_pct": round(bl_count / len(entries) * 100) if entries else 0,
+            "majority_hold": sum(1 for e in entries if e.get("cast_pattern") == "hold") > len(entries) * 0.5,
         }
+
+    # ── Duration ──────────────────────────────────────────────────────────────
+    durations = [
+        (s.get("cooldown_data") or {}).get("fight_duration_s")
+        for s in samples
+    ]
+    durations = [d for d in durations if d]
+    avg_duration_s = round(statistics.mean(durations), 1) if durations else None
 
     # ── Burst windows ─────────────────────────────────────────────────────────
     from analysis_utils import cluster_burst_windows, aggregate_gear
@@ -228,6 +247,7 @@ async def sync_encounter_file(spec: str, encounter_id: int) -> None:
         "encounter_id": encounter_id,
         "encounter_name": enc_name,
         "sample_count": len(samples),
+        "avg_duration_s": avg_duration_s,
         "downtime_threshold_ms": round(downtime_threshold_ms),
         "top_avg_efficiency": top_avg_efficiency,
         "top_efficiency_stddev": top_efficiency_stddev,
@@ -240,6 +260,29 @@ async def sync_encounter_file(spec: str, encounter_id: int) -> None:
         enc_dir.mkdir(parents=True, exist_ok=True)
         (enc_dir / f"{encounter_id}.json").write_text(
             json.dumps(out, indent=2, ensure_ascii=False)
+        )
+        # Keep a per-spec index of which encounters have data for static clients
+        _sync_encounters_index(spec, enc_dir)
+    except Exception:
+        pass
+
+
+def _sync_encounters_index(spec: str, enc_dir) -> None:
+    """Write data/specs/{spec}/encounters.json — a list of {id, name, sample_count}."""
+    entries = []
+    for p in sorted(enc_dir.glob("*.json")):
+        try:
+            d = json.loads(p.read_text())
+            entries.append({
+                "id": d.get("encounter_id", int(p.stem)),
+                "name": d.get("encounter_name", p.stem),
+                "sample_count": d.get("sample_count", 0),
+            })
+        except Exception:
+            pass
+    try:
+        (enc_dir.parent / "encounters.json").write_text(
+            json.dumps(entries, indent=2, ensure_ascii=False)
         )
     except Exception:
         pass

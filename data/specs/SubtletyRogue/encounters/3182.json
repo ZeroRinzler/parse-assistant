@@ -3,6 +3,7 @@
   "encounter_id": 3182,
   "encounter_name": "Belo'ren, Child of Al'ar",
   "sample_count": 10,
+  "avg_duration_s": 290.5,
   "downtime_threshold_ms": 1500,
   "top_avg_efficiency": 72.7,
   "top_efficiency_stddev": 3.5,
@@ -27,7 +28,11 @@
         "stddev": 0.074,
         "min": 0.584,
         "max": 0.8
-      }
+      },
+      "avg_uses": 3.4,
+      "avg_uses_per_min": 0.7,
+      "bl_pct": 0,
+      "majority_hold": true
     },
     "Shadow Dance": {
       "avg_first_cast_s": 1.9,
@@ -42,7 +47,11 @@
         "stddev": 0.106,
         "min": 3.0,
         "max": 3.372
-      }
+      },
+      "avg_uses": 15.7,
+      "avg_uses_per_min": 3.25,
+      "bl_pct": 0,
+      "majority_hold": false
     },
     "Secret Technique": {
       "avg_first_cast_s": 1.9,
@@ -57,7 +66,11 @@
         "stddev": 0.111,
         "min": 2.919,
         "max": 3.302
-      }
+      },
+      "avg_uses": 15,
+      "avg_uses_per_min": 3.11,
+      "bl_pct": 0,
+      "majority_hold": false
     },
     "Vanish": {
       "avg_first_cast_s": 52.2,
@@ -85,7 +98,11 @@
         "stddev": 0.139,
         "min": 0.195,
         "max": 0.682
-      }
+      },
+      "avg_uses": 2.4,
+      "avg_uses_per_min": 0.5,
+      "bl_pct": 0,
+      "majority_hold": true
     },
     "Algeth'ar Puzzle Box": {
       "avg_first_cast_s": null,
@@ -95,7 +112,11 @@
       "avg_bl_offset_s": null,
       "stddev_bl_offset_s": null,
       "hold_targets": {},
-      "uses_per_min": {}
+      "uses_per_min": {},
+      "avg_uses": 0,
+      "avg_uses_per_min": 0.0,
+      "bl_pct": 0,
+      "majority_hold": false
     }
   },
   "burst_windows": [

@@ -3,6 +3,7 @@
   "encounter_id": 3176,
   "encounter_name": "Imperator Averzian",
   "sample_count": 10,
+  "avg_duration_s": 260.6,
   "downtime_threshold_ms": 1572,
   "top_avg_efficiency": 74.9,
   "top_efficiency_stddev": 4.6,
@@ -33,7 +34,11 @@
         "stddev": 0.107,
         "min": 0.643,
         "max": 0.926
-      }
+      },
+      "avg_uses": 3.2,
+      "avg_uses_per_min": 0.75,
+      "bl_pct": 0,
+      "majority_hold": true
     },
     "Shadow Dance": {
       "avg_first_cast_s": 1.9,
@@ -48,7 +53,11 @@
         "stddev": 0.105,
         "min": 3.104,
         "max": 3.399
-      }
+      },
+      "avg_uses": 14.1,
+      "avg_uses_per_min": 3.26,
+      "bl_pct": 0,
+      "majority_hold": false
     },
     "Secret Technique": {
       "avg_first_cast_s": 2.0,
@@ -63,7 +72,11 @@
         "stddev": 0.213,
         "min": 2.976,
         "max": 3.674
-      }
+      },
+      "avg_uses": 13.5,
+      "avg_uses_per_min": 3.14,
+      "bl_pct": 0,
+      "majority_hold": false
     },
     "Vanish": {
       "avg_first_cast_s": 35.1,
@@ -85,7 +98,11 @@
         "stddev": 0.108,
         "min": 0.425,
         "max": 0.735
-      }
+      },
+      "avg_uses": 2.2,
+      "avg_uses_per_min": 0.51,
+      "bl_pct": 0,
+      "majority_hold": true
     },
     "Algeth'ar Puzzle Box": {
       "avg_first_cast_s": null,
@@ -95,7 +112,11 @@
       "avg_bl_offset_s": null,
       "stddev_bl_offset_s": null,
       "hold_targets": {},
-      "uses_per_min": {}
+      "uses_per_min": {},
+      "avg_uses": 0,
+      "avg_uses_per_min": 0.0,
+      "bl_pct": 0,
+      "majority_hold": false
     }
   },
   "burst_windows": [

@@ -3,6 +3,7 @@
   "encounter_id": 3179,
   "encounter_name": "Fallen-King Salhadaar",
   "sample_count": 9,
+  "avg_duration_s": 277.4,
   "downtime_threshold_ms": 1255,
   "top_avg_efficiency": 73.0,
   "top_efficiency_stddev": 7.9,
@@ -20,7 +21,11 @@
         "stddev": 0.074,
         "min": 0.485,
         "max": 0.691
-      }
+      },
+      "avg_uses": 2.7,
+      "avg_uses_per_min": 0.59,
+      "bl_pct": 0,
+      "majority_hold": false
     },
     "Kingsbane": {
       "avg_first_cast_s": 8.5,
@@ -42,7 +47,11 @@
         "stddev": 0.173,
         "min": 0.647,
         "max": 1.199
-      }
+      },
+      "avg_uses": 4.6,
+      "avg_uses_per_min": 1.0,
+      "bl_pct": 0,
+      "majority_hold": false
     },
     "Vanish": {
       "avg_first_cast_s": 84.5,
@@ -57,7 +66,11 @@
         "stddev": 0.125,
         "min": 0.3,
         "max": 0.691
-      }
+      },
+      "avg_uses": 2,
+      "avg_uses_per_min": 0.43,
+      "bl_pct": 0,
+      "majority_hold": false
     }
   },
   "burst_windows": [

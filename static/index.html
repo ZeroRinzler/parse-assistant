@@ -19,7 +19,11 @@
     .page-nav a{ color:var(--muted); text-decoration:none; padding:6px 18px; border-radius:6px; font-size:13px; font-weight:600; }
     .page-nav a:hover{ background:var(--surface2); color:var(--text); }
     .page-nav a.active{ background:var(--surface2); color:var(--gold); }
-    .nav-char{ position:absolute; right:16px; }
+    .nav-right{ position:absolute; right:16px; display:flex; align-items:center; gap:8px; }
+
+    .wcl-btn{ padding:5px 12px; border-radius:6px; border:1px solid var(--border); background:var(--surface2); color:var(--muted); font-size:12px; font-weight:600; cursor:pointer; }
+    .wcl-btn:hover{ border-color:var(--gold); color:var(--gold); }
+    .wcl-btn.connected{ color:var(--success); border-color:var(--success); }
 
     .container{ max-width:860px; margin:0 auto; padding:32px 20px 64px; }
 
@@ -41,6 +45,12 @@
     @keyframes spin{ to{ transform:rotate(360deg); } }
 
     .error-msg{ background:rgba(224,82,82,0.1); border:1px solid rgba(224,82,82,0.3); border-radius:var(--radius); padding:14px 16px; color:var(--critical); font-size:13px; margin-bottom:16px; }
+
+    .auth-banner{ background:rgba(200,166,79,.08); border:1px solid rgba(200,166,79,.3); border-radius:var(--radius); padding:20px 24px; text-align:center; }
+    .auth-banner h3{ color:var(--gold); margin-bottom:8px; }
+    .auth-banner p{ color:var(--muted); font-size:13px; margin-bottom:16px; }
+    .auth-banner button{ background:var(--gold); color:#0a0c10; border:none; border-radius:6px; padding:10px 24px; font-size:14px; font-weight:700; cursor:pointer; }
+    .auth-banner button:hover{ background:var(--gold-light); }
   </style>
 </head>
 <body>
@@ -48,7 +58,10 @@
   <a href="pre.html">Pre-Fight</a>
   <a href="live.html">Live</a>
   <a href="index.html" class="active">Post-Raid</a>
-  <div class="nav-char"><div id="char-chip" class="char-chip"></div></div>
+  <div class="nav-right">
+    <button id="wcl-btn" class="wcl-btn hidden" onclick="toggleWclAuth()"></button>
+    <div id="char-chip" class="char-chip"></div>
+  </div>
 </nav>
 
 <!-- Character selection modal -->
@@ -68,47 +81,122 @@
 </div>
 
 <div class="container">
-  <div class="card">
-    <div class="form-group">
-      <label for="report-url">Warcraft Logs Report URL or Code</label>
-      <input id="report-url" type="text"
-        placeholder="https://www.warcraftlogs.com/reports/AbCdEfGh..."
-        oninput="onReportInput()"
-        onkeydown="if(event.key==='Enter'){ clearTimeout(_loadTimer); loadReport(); }" />
-    </div>
-    <div id="selectors" class="selectors hidden">
-      <div id="char-not-found" class="char-not-found hidden"></div>
-      <div class="row">
-        <div class="form-group">
-          <label for="fight-select">Fight</label>
-          <select id="fight-select" onchange="filterAndPopulatePlayers(); analyzePlayer()"></select>
-        </div>
-        <div class="form-group" id="player-select-group">
-          <label for="player-select">Player</label>
-          <select id="player-select" onchange="analyzePlayer()"></select>
+  <div id="auth-banner" class="auth-banner hidden">
+    <h3>Connect Warcraft Logs</h3>
+    <p>This analyzer fetches your combat data directly from Warcraft Logs.<br>Connect once and your browser will remember your session.</p>
+    <button onclick="wclLogin()">Connect WCL</button>
+  </div>
+
+  <div id="main-ui" class="hidden">
+    <div class="card">
+      <div class="form-group">
+        <label for="report-url">Warcraft Logs Report URL or Code</label>
+        <input id="report-url" type="text"
+          placeholder="https://www.warcraftlogs.com/reports/AbCdEfGh..."
+          oninput="onReportInput()"
+          onkeydown="if(event.key==='Enter'){ clearTimeout(_loadTimer); loadReport(); }" />
+      </div>
+      <div id="selectors" class="selectors hidden">
+        <div id="char-not-found" class="char-not-found hidden"></div>
+        <div class="row">
+          <div class="form-group">
+            <label for="fight-select">Fight</label>
+            <select id="fight-select" onchange="filterAndPopulatePlayers(); analyzePlayer()"></select>
+          </div>
+          <div class="form-group" id="player-select-group">
+            <label for="player-select">Player</label>
+            <select id="player-select" onchange="analyzePlayer()"></select>
+          </div>
         </div>
       </div>
     </div>
   </div>
 
   <div id="loading" class="hidden">
-    <div class="loading-wrap"><div class="spinner"></div><span>Fetching combat log…</span></div>
+    <div class="loading-wrap"><div class="spinner"></div><span id="loading-msg">Fetching combat log…</span></div>
   </div>
   <div id="error-box" class="error-msg hidden"></div>
   <div id="results" class="card hidden"></div>
 </div>
 
+<script src="wcl.js"></script>
+<script src="analyzer-engine.js"></script>
 <script src="renderer.js"></script>
 <script>
   let reportCode = '';
   let _loadTimer = null;
   let _allPlayers = [];
   let _allFights  = [];
+  let _masterAbilities = [];
 
-  function onReportInput() {
-    clearTimeout(_loadTimer);
-    _loadTimer = setTimeout(() => loadReport(), 400);
+  // ── WCL auth UI ──────────────────────────────────────────────────────────────
+
+  function _updateWclUI() {
+    const btn    = document.getElementById('wcl-btn');
+    const banner = document.getElementById('auth-banner');
+    const mainUi = document.getElementById('main-ui');
+    if (typeof wclIsLoggedIn === 'undefined') {
+      // wcl.js not loaded yet — always show main UI (local backend path)
+      banner.classList.add('hidden');
+      mainUi.classList.remove('hidden');
+      return;
+    }
+    if (wclIsLoggedIn()) {
+      btn.textContent = 'WCL ✓';
+      btn.classList.add('connected');
+      btn.classList.remove('hidden');
+      banner.classList.add('hidden');
+      mainUi.classList.remove('hidden');
+    } else {
+      btn.textContent = 'Connect WCL';
+      btn.classList.remove('connected');
+      btn.classList.remove('hidden');
+      banner.classList.remove('hidden');
+      mainUi.classList.add('hidden');
+    }
   }
+
+  function toggleWclAuth() {
+    if (typeof wclIsLoggedIn === 'undefined') return;
+    if (wclIsLoggedIn()) {
+      if (confirm('Disconnect from Warcraft Logs?')) {
+        wclClearToken();
+        _updateWclUI();
+      }
+    } else {
+      wclLogin();
+    }
+  }
+
+  // ── Fight/player transforms ──────────────────────────────────────────────────
+
+  function _transformFights(rawFights) {
+    const bossAttempt = {};
+    const enc = rawFights
+      .filter(f => (f.encounterID || 0) > 0)
+      .sort((a, b) => a.startTime - b.startTime);
+    return enc.map(f => {
+      const eid = f.encounterID || 0;
+      bossAttempt[eid] = (bossAttempt[eid] || 0) + 1;
+      return {
+        id: f.id, name: f.name,
+        startTime: f.startTime, endTime: f.endTime,
+        kill: f.kill,
+        duration_s: Math.round((f.endTime - f.startTime) / 100) / 10,
+        encounterID: eid,
+        attempt: bossAttempt[eid],
+        friendlyPlayers: f.friendlyPlayers || [],
+      };
+    });
+  }
+
+  function _transformActors(actors) {
+    return actors
+      .map(a => ({id: a.id, name: a.name, spec: a.subType || 'Unknown', server: a.server || ''}))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  // ── URL sync ──────────────────────────────────────────────────────────────────
 
   function syncURL() {
     const p = new URLSearchParams();
@@ -120,9 +208,11 @@
     history.replaceState({}, '', p.toString() ? `?${p}` : location.pathname);
   }
 
+  // ── Init ──────────────────────────────────────────────────────────────────────
+
   window.onload = () => {
+    _updateWclUI();
     renderCharChip();
-    // First-time visitor prompt
     if (!getSavedChar()) promptChangeChar();
 
     const p = new URLSearchParams(location.search);
@@ -133,41 +223,88 @@
     }
   };
 
+  function onReportInput() {
+    clearTimeout(_loadTimer);
+    _loadTimer = setTimeout(() => loadReport(), 400);
+  }
+
+  // ── Load report ──────────────────────────────────────────────────────────────
+
   async function loadReport(autoFight = null, autoPlayer = null) {
     clearError();
     const url = document.getElementById('report-url').value.trim();
     if (!url) return;
     reportCode = extractCode(url);
+
+    document.getElementById('loading').classList.remove('hidden');
+    document.getElementById('selectors').classList.add('hidden');
+    document.getElementById('results').classList.add('hidden');
+
     try {
-      const data = await apiFetch(`/api/report/${reportCode}`);
-      _allFights  = data.fights;
-      _allPlayers = data.players;
-      populateFights(data.fights, autoFight);
+      if (typeof wclIsLoggedIn !== 'undefined' && wclIsLoggedIn()) {
+        // WCL-direct path (GitHub Pages)
+        document.getElementById('loading-msg').textContent = 'Fetching report from WCL…';
+        const report = await wclGetReport(reportCode);
+        _allFights        = _transformFights(report.fights || []);
+        _allPlayers       = _transformActors(report.masterData?.actors || []);
+        _masterAbilities  = report.masterData?.abilities || [];
+      } else {
+        // Backend fallback (local dev)
+        document.getElementById('loading-msg').textContent = 'Fetching combat log…';
+        const data = await apiFetch(`/api/report/${reportCode}`);
+        _allFights   = data.fights;
+        _allPlayers  = data.players;
+        _masterAbilities = [];
+      }
+      populateFights(_allFights, autoFight);
       filterAndPopulatePlayers();
       applyCharacterSelection(autoPlayer);
       document.getElementById('selectors').classList.remove('hidden');
-      document.getElementById('results').classList.add('hidden');
       syncURL();
       analyzePlayer();
-    } catch (err) { showError(err.message); }
+    } catch (err) {
+      showError(err.message);
+    } finally {
+      document.getElementById('loading').classList.add('hidden');
+    }
   }
+
+  // ── Analyze ──────────────────────────────────────────────────────────────────
 
   async function analyzePlayer() {
     clearError();
-    const fightId  = parseInt(document.getElementById('fight-select').value, 10);
-    const playerId = parseInt(document.getElementById('player-select').value, 10);
+    const fightEl  = document.getElementById('fight-select');
+    const playerEl = document.getElementById('player-select');
+    if (!fightEl?.value || !playerEl?.value) return;
+    const fightId  = parseInt(fightEl.value, 10);
+    const playerId = parseInt(playerEl.value, 10);
+
     document.getElementById('loading').classList.remove('hidden');
     document.getElementById('results').classList.add('hidden');
     try {
-      const data = await apiFetch('/api/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ report_url: reportCode, fight_id: fightId, player_id: playerId }),
-      });
+      let data;
+      if (typeof wclIsLoggedIn !== 'undefined' && wclIsLoggedIn()) {
+        document.getElementById('loading-msg').textContent = 'Fetching events…';
+        data = await runAnalysis({
+          reportCode, fightId, playerId,
+          fights: _allFights,
+          masterAbilities: _masterAbilities,
+        });
+      } else {
+        document.getElementById('loading-msg').textContent = 'Analyzing…';
+        data = await apiFetch('/api/analyze', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({report_url: reportCode, fight_id: fightId, player_id: playerId}),
+        });
+      }
       renderResults(data);
       syncURL();
-    } catch (err) { showError(err.message); }
-    finally { document.getElementById('loading').classList.add('hidden'); }
+    } catch (err) {
+      showError(err.message);
+    } finally {
+      document.getElementById('loading').classList.add('hidden');
+    }
   }
 </script>
 </body>

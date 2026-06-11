@@ -3,6 +3,7 @@
   "encounter_id": 3181,
   "encounter_name": "Crown of the Cosmos",
   "sample_count": 9,
+  "avg_duration_s": 497.3,
   "downtime_threshold_ms": 1128,
   "top_avg_efficiency": 65.2,
   "top_efficiency_stddev": 3.1,
@@ -39,7 +40,11 @@
         "stddev": 0.019,
         "min": 0.462,
         "max": 0.521
-      }
+      },
+      "avg_uses": 4,
+      "avg_uses_per_min": 0.48,
+      "bl_pct": 0,
+      "majority_hold": true
     },
     "Kingsbane": {
       "avg_first_cast_s": 23.6,
@@ -97,7 +102,11 @@
         "stddev": 0.043,
         "min": 0.836,
         "max": 0.967
-      }
+      },
+      "avg_uses": 7.7,
+      "avg_uses_per_min": 0.92,
+      "bl_pct": 0,
+      "majority_hold": true
     },
     "Vanish": {
       "avg_first_cast_s": 16.1,
@@ -131,7 +140,11 @@
         "stddev": 0.019,
         "min": 0.462,
         "max": 0.521
-      }
+      },
+      "avg_uses": 4,
+      "avg_uses_per_min": 0.48,
+      "bl_pct": 0,
+      "majority_hold": true
     }
   },
   "burst_windows": [

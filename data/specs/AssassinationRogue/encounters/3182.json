@@ -3,6 +3,7 @@
   "encounter_id": 3182,
   "encounter_name": "Belo'ren, Child of Al'ar",
   "sample_count": 10,
+  "avg_duration_s": 312.2,
   "downtime_threshold_ms": 1232,
   "top_avg_efficiency": 69.0,
   "top_efficiency_stddev": 4.6,
@@ -27,7 +28,11 @@
         "stddev": 0.015,
         "min": 0.551,
         "max": 0.598
-      }
+      },
+      "avg_uses": 3,
+      "avg_uses_per_min": 0.58,
+      "bl_pct": 0,
+      "majority_hold": true
     },
     "Kingsbane": {
       "avg_first_cast_s": 8.3,
@@ -49,7 +54,11 @@
         "stddev": 0.025,
         "min": 0.919,
         "max": 0.997
-      }
+      },
+      "avg_uses": 5,
+      "avg_uses_per_min": 0.96,
+      "bl_pct": 0,
+      "majority_hold": true
     },
     "Vanish": {
       "avg_first_cast_s": 42.2,
@@ -77,7 +86,11 @@
         "stddev": 0.09,
         "min": 0.384,
         "max": 0.594
-      }
+      },
+      "avg_uses": 2.7,
+      "avg_uses_per_min": 0.52,
+      "bl_pct": 0,
+      "majority_hold": true
     }
   },
   "burst_windows": [

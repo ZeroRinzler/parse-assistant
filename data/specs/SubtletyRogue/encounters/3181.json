@@ -3,6 +3,7 @@
   "encounter_id": 3181,
   "encounter_name": "Crown of the Cosmos",
   "sample_count": 10,
+  "avg_duration_s": 490.0,
   "downtime_threshold_ms": 1802,
   "top_avg_efficiency": 66.8,
   "top_efficiency_stddev": 5.1,
@@ -39,7 +40,11 @@
         "stddev": 0.04,
         "min": 0.626,
         "max": 0.761
-      }
+      },
+      "avg_uses": 5.8,
+      "avg_uses_per_min": 0.71,
+      "bl_pct": 0,
+      "majority_hold": true
     },
     "Shadow Dance": {
       "avg_first_cast_s": 8.3,
@@ -54,7 +59,11 @@
         "stddev": 0.078,
         "min": 2.879,
         "max": 3.088
-      }
+      },
+      "avg_uses": 24.2,
+      "avg_uses_per_min": 2.96,
+      "bl_pct": 0,
+      "majority_hold": false
     },
     "Secret Technique": {
       "avg_first_cast_s": 8.4,
@@ -69,7 +78,11 @@
         "stddev": 0.208,
         "min": 2.144,
         "max": 2.929
-      }
+      },
+      "avg_uses": 22,
+      "avg_uses_per_min": 2.69,
+      "bl_pct": 0,
+      "majority_hold": false
     },
     "Vanish": {
       "avg_first_cast_s": 13.6,
@@ -103,7 +116,11 @@
         "stddev": 0.129,
         "min": 0.117,
         "max": 0.536
-      }
+      },
+      "avg_uses": 3.1,
+      "avg_uses_per_min": 0.38,
+      "bl_pct": 0,
+      "majority_hold": true
     },
     "Algeth'ar Puzzle Box": {
       "avg_first_cast_s": null,
@@ -113,7 +130,11 @@
       "avg_bl_offset_s": null,
       "stddev_bl_offset_s": null,
       "hold_targets": {},
-      "uses_per_min": {}
+      "uses_per_min": {},
+      "avg_uses": 0,
+      "avg_uses_per_min": 0.0,
+      "bl_pct": 0,
+      "majority_hold": false
     }
   },
   "burst_windows": [

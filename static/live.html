@@ -19,7 +19,11 @@
     .page-nav a{ color:var(--muted); text-decoration:none; padding:6px 18px; border-radius:6px; font-size:13px; font-weight:600; }
     .page-nav a:hover{ background:var(--surface2); color:var(--text); }
     .page-nav a.active{ background:var(--surface2); color:var(--gold); }
-    .nav-char{ position:absolute; right:16px; }
+    .nav-right{ position:absolute; right:16px; display:flex; align-items:center; gap:8px; }
+
+    .wcl-btn{ padding:5px 12px; border-radius:6px; border:1px solid var(--border); background:var(--surface2); color:var(--muted); font-size:12px; font-weight:600; cursor:pointer; }
+    .wcl-btn:hover{ border-color:var(--gold); color:var(--gold); }
+    .wcl-btn.connected{ color:var(--success); border-color:var(--success); }
 
     .container{ max-width:860px; margin:0 auto; padding:28px 20px 64px; }
 
@@ -34,7 +38,6 @@
     .selectors{ margin-top:14px; border-top:1px solid var(--border); padding-top:14px; }
     .hidden{ display:none!important; }
 
-    /* Poll status bar */
     .poll-bar{ display:flex; align-items:center; gap:9px; padding:8px 14px; border-radius:6px; font-size:12px; margin-bottom:14px; border:1px solid transparent; }
     .poll-bar.watching{ background:rgba(76,175,122,0.08); border-color:rgba(76,175,122,0.2); color:var(--success); }
     .poll-bar.checking{ background:rgba(91,141,232,0.08); border-color:rgba(91,141,232,0.2); color:var(--info); }
@@ -49,6 +52,12 @@
     @keyframes spin{ to{ transform:rotate(360deg); } }
 
     .error-msg{ background:rgba(224,82,82,0.1); border:1px solid rgba(224,82,82,0.3); border-radius:var(--radius); padding:14px 16px; color:var(--critical); font-size:13px; margin-bottom:14px; }
+
+    .auth-banner{ background:rgba(200,166,79,.08); border:1px solid rgba(200,166,79,.3); border-radius:var(--radius); padding:20px 24px; text-align:center; margin-bottom:16px; }
+    .auth-banner h3{ color:var(--gold); margin-bottom:8px; }
+    .auth-banner p{ color:var(--muted); font-size:13px; margin-bottom:16px; }
+    .auth-banner button{ background:var(--gold); color:#0a0c10; border:none; border-radius:6px; padding:10px 24px; font-size:14px; font-weight:700; cursor:pointer; }
+    .auth-banner button:hover{ background:var(--gold-light); }
   </style>
 </head>
 <body>
@@ -56,7 +65,10 @@
   <a href="pre.html">Pre-Fight</a>
   <a href="live.html" class="active">Live</a>
   <a href="index.html">Post-Raid</a>
-  <div class="nav-char"><div id="char-chip" class="char-chip"></div></div>
+  <div class="nav-right">
+    <button id="wcl-btn" class="wcl-btn hidden" onclick="toggleWclAuth()"></button>
+    <div id="char-chip" class="char-chip"></div>
+  </div>
 </nav>
 
 <!-- Character selection modal -->
@@ -74,56 +86,127 @@
     <span class="char-modal-skip" onclick="closeCharModal(false)">Skip for now</span>
   </div>
 </div>
+
 <div class="container">
+  <div id="auth-banner" class="auth-banner hidden">
+    <h3>Connect Warcraft Logs</h3>
+    <p>The live analyzer fetches your combat data directly from Warcraft Logs.<br>Connect once and your browser will remember your session.</p>
+    <button onclick="wclLogin()">Connect WCL</button>
+  </div>
 
   <div id="poll-bar" class="poll-bar idle hidden">
     <div class="pulse-dot"></div>
     <span id="poll-text">Idle</span>
   </div>
 
-  <div class="card">
-    <div class="form-group">
-      <label>Warcraft Logs Report URL or Code</label>
-      <input id="report-url" type="text" placeholder="https://www.warcraftlogs.com/reports/AbCdEfGh…"
-        oninput="onReportInput()"
-        onkeydown="if(event.key==='Enter'){ clearTimeout(_loadTimer); loadReport(); }" />
-    </div>
-    <div id="selectors" class="selectors hidden">
-      <div id="char-not-found" class="char-not-found hidden"></div>
-      <div class="row">
-        <div class="form-group">
-          <label>Fight</label>
-          <select id="fight-select" onchange="filterAndPopulatePlayers(); analyzePlayer()"></select>
-        </div>
-        <div class="form-group" id="player-select-group">
-          <label>Player</label>
-          <select id="player-select" onchange="analyzePlayer()"></select>
+  <div id="main-ui" class="hidden">
+    <div class="card">
+      <div class="form-group">
+        <label>Warcraft Logs Report URL or Code</label>
+        <input id="report-url" type="text" placeholder="https://www.warcraftlogs.com/reports/AbCdEfGh…"
+          oninput="onReportInput()"
+          onkeydown="if(event.key==='Enter'){ clearTimeout(_loadTimer); loadReport(); }" />
+      </div>
+      <div id="selectors" class="selectors hidden">
+        <div id="char-not-found" class="char-not-found hidden"></div>
+        <div class="row">
+          <div class="form-group">
+            <label>Fight</label>
+            <select id="fight-select" onchange="filterAndPopulatePlayers(); analyzePlayer()"></select>
+          </div>
+          <div class="form-group" id="player-select-group">
+            <label>Player</label>
+            <select id="player-select" onchange="analyzePlayer()"></select>
+          </div>
         </div>
       </div>
     </div>
   </div>
 
   <div id="loading" class="hidden">
-    <div class="loading-wrap"><div class="spinner"></div><span>Analysing…</span></div>
+    <div class="loading-wrap"><div class="spinner"></div><span id="loading-msg">Analysing…</span></div>
   </div>
   <div id="error-box" class="error-msg hidden"></div>
   <div id="results" class="card hidden"></div>
 </div>
 
+<script src="wcl.js"></script>
+<script src="analyzer-engine.js"></script>
 <script src="renderer.js"></script>
 <script>
   let reportCode = '';
   let _loadTimer = null;
   let _allFights = [], _allPlayers = [];
+  let _masterAbilities = [];
   let _pollInterval = null;
   let _maxFightId = -1;
   let _isAnalyzing = false;
   const POLL_MS = 12000;
 
-  function onReportInput() {
-    clearTimeout(_loadTimer);
-    _loadTimer = setTimeout(() => loadReport(), 400);
+  // ── WCL auth UI ──────────────────────────────────────────────────────────────
+
+  function _updateWclUI() {
+    const btn    = document.getElementById('wcl-btn');
+    const banner = document.getElementById('auth-banner');
+    const mainUi = document.getElementById('main-ui');
+    if (typeof wclIsLoggedIn === 'undefined') {
+      banner.classList.add('hidden');
+      mainUi.classList.remove('hidden');
+      return;
+    }
+    if (wclIsLoggedIn()) {
+      btn.textContent = 'WCL ✓';
+      btn.classList.add('connected');
+      btn.classList.remove('hidden');
+      banner.classList.add('hidden');
+      mainUi.classList.remove('hidden');
+    } else {
+      btn.textContent = 'Connect WCL';
+      btn.classList.remove('connected');
+      btn.classList.remove('hidden');
+      banner.classList.remove('hidden');
+      mainUi.classList.add('hidden');
+    }
   }
+
+  function toggleWclAuth() {
+    if (typeof wclIsLoggedIn === 'undefined') return;
+    if (wclIsLoggedIn()) {
+      if (confirm('Disconnect from Warcraft Logs?')) {
+        wclClearToken();
+        _updateWclUI();
+      }
+    } else {
+      wclLogin();
+    }
+  }
+
+  // ── Fight/player transforms ──────────────────────────────────────────────────
+
+  function _transformFights(rawFights) {
+    const bossAttempt = {};
+    const enc = rawFights.filter(f => (f.encounterID || 0) > 0)
+                         .sort((a, b) => a.startTime - b.startTime);
+    return enc.map(f => {
+      const eid = f.encounterID || 0;
+      bossAttempt[eid] = (bossAttempt[eid] || 0) + 1;
+      return {
+        id: f.id, name: f.name,
+        startTime: f.startTime, endTime: f.endTime,
+        kill: f.kill,
+        duration_s: Math.round((f.endTime - f.startTime) / 100) / 10,
+        encounterID: eid, attempt: bossAttempt[eid],
+        friendlyPlayers: f.friendlyPlayers || [],
+      };
+    });
+  }
+
+  function _transformActors(actors) {
+    return actors.map(a => ({id: a.id, name: a.name, spec: a.subType || 'Unknown', server: a.server || ''}))
+                 .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  // ── URL sync ──────────────────────────────────────────────────────────────────
 
   function syncURL() {
     const p = new URLSearchParams();
@@ -133,7 +216,13 @@
     history.replaceState({}, '', p.toString() ? `?${p}` : location.pathname);
   }
 
+  function onReportInput() {
+    clearTimeout(_loadTimer);
+    _loadTimer = setTimeout(() => loadReport(), 400);
+  }
+
   window.onload = () => {
+    _updateWclUI();
     renderCharChip();
     if (!getSavedChar()) promptChangeChar();
     const p = new URLSearchParams(location.search);
@@ -144,19 +233,34 @@
     }
   };
 
-  // ── Report loading ────────────────────────────────────────────────────────────
+  // ── Report load ──────────────────────────────────────────────────────────────
+
+  async function _fetchReport(code) {
+    if (typeof wclIsLoggedIn !== 'undefined' && wclIsLoggedIn()) {
+      const report = await wclGetReport(code);
+      return {
+        fights:   _transformFights(report.fights || []),
+        players:  _transformActors(report.masterData?.actors || []),
+        abilities: report.masterData?.abilities || [],
+      };
+    } else {
+      const data = await apiFetch(`/api/report/${code}`);
+      return {fights: data.fights, players: data.players, abilities: []};
+    }
+  }
+
   async function loadReport(autoFight = null, autoPlayer = null) {
     clearError();
     const url = document.getElementById('report-url').value.trim();
     if (!url) return;
     reportCode = extractCode(url);
     try {
-      const data = await apiFetch(`/api/report/${reportCode}`);
-      _allFights  = data.fights;
-      _allPlayers = data.players;
-      _maxFightId = Math.max(...data.fights.map(f => f.id), -1);
-      // Live: always start on newest fight
-      populateFights(data.fights, autoFight ?? String(data.fights[data.fights.length - 1]?.id ?? ''));
+      const {fights, players, abilities} = await _fetchReport(reportCode);
+      _allFights       = fights;
+      _allPlayers      = players;
+      _masterAbilities = abilities;
+      _maxFightId      = Math.max(...fights.map(f => f.id), -1);
+      populateFights(fights, autoFight ?? String(fights[fights.length - 1]?.id ?? ''));
       filterAndPopulatePlayers();
       applyCharacterSelection(autoPlayer);
       document.getElementById('selectors').classList.remove('hidden');
@@ -168,22 +272,37 @@
   }
 
   // ── Analysis ──────────────────────────────────────────────────────────────────
+
   async function analyzePlayer() {
     if (_isAnalyzing) return;
     clearError();
-    const fightId  = parseInt(document.getElementById('fight-select').value, 10);
-    const playerId = parseInt(document.getElementById('player-select').value, 10);
+    const fightEl  = document.getElementById('fight-select');
+    const playerEl = document.getElementById('player-select');
+    if (!fightEl?.value || !playerEl?.value) return;
+    const fightId  = parseInt(fightEl.value, 10);
+    const playerId = parseInt(playerEl.value, 10);
     if (!fightId || !playerId) return;
     _isAnalyzing = true;
     document.getElementById('loading').classList.remove('hidden');
     document.getElementById('results').classList.add('hidden');
     syncURL();
     try {
-      const data = await apiFetch('/api/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ report_url: reportCode, fight_id: fightId, player_id: playerId }),
-      });
+      let data;
+      if (typeof wclIsLoggedIn !== 'undefined' && wclIsLoggedIn()) {
+        document.getElementById('loading-msg').textContent = 'Fetching events…';
+        data = await runAnalysis({
+          reportCode, fightId, playerId,
+          fights: _allFights,
+          masterAbilities: _masterAbilities,
+        });
+      } else {
+        document.getElementById('loading-msg').textContent = 'Analysing…';
+        data = await apiFetch('/api/analyze', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({report_url: reportCode, fight_id: fightId, player_id: playerId}),
+        });
+      }
       renderResults(data);
     } catch (err) { showError(err.message); }
     finally {
@@ -193,6 +312,7 @@
   }
 
   // ── Polling ───────────────────────────────────────────────────────────────────
+
   function setPollStatus(state, msg) {
     const bar = document.getElementById('poll-bar');
     bar.className = `poll-bar ${state}`;
@@ -210,13 +330,14 @@
     if (!reportCode || _isAnalyzing) return;
     setPollStatus('checking', 'Checking for new pulls…');
     try {
-      const data = await apiFetch(`/api/report/${reportCode}`);
-      const newMax = Math.max(...data.fights.map(f => f.id), -1);
+      const {fights, players, abilities} = await _fetchReport(reportCode);
+      const newMax = Math.max(...fights.map(f => f.id), -1);
       if (newMax > _maxFightId) {
-        _maxFightId = newMax;
-        _allFights  = data.fights;
-        _allPlayers = data.players;
-        populateFights(data.fights, String(data.fights[data.fights.length - 1].id));
+        _maxFightId      = newMax;
+        _allFights       = fights;
+        _allPlayers      = players;
+        _masterAbilities = abilities;
+        populateFights(fights, String(fights[fights.length - 1].id));
         filterAndPopulatePlayers();
         setPollStatus('watching', 'New pull detected — analysing…');
         await analyzePlayer();

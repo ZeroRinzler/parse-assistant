@@ -3,6 +3,7 @@
   "encounter_id": 3179,
   "encounter_name": "Fallen-King Salhadaar",
   "sample_count": 10,
+  "avg_duration_s": 285.9,
   "downtime_threshold_ms": 1538,
   "top_avg_efficiency": 74.2,
   "top_efficiency_stddev": 4.0,
@@ -39,7 +40,11 @@
         "stddev": 0.051,
         "min": 0.688,
         "max": 0.834
-      }
+      },
+      "avg_uses": 3.5,
+      "avg_uses_per_min": 0.74,
+      "bl_pct": 0,
+      "majority_hold": true
     },
     "Shadow Dance": {
       "avg_first_cast_s": 3.4,
@@ -54,7 +59,11 @@
         "stddev": 0.095,
         "min": 3.101,
         "max": 3.442
-      }
+      },
+      "avg_uses": 15.5,
+      "avg_uses_per_min": 3.27,
+      "bl_pct": 0,
+      "majority_hold": false
     },
     "Secret Technique": {
       "avg_first_cast_s": 3.6,
@@ -69,7 +78,11 @@
         "stddev": 0.186,
         "min": 2.51,
         "max": 3.116
-      }
+      },
+      "avg_uses": 13.9,
+      "avg_uses_per_min": 2.93,
+      "bl_pct": 0,
+      "majority_hold": false
     },
     "Vanish": {
       "avg_first_cast_s": 26.7,
@@ -91,7 +104,11 @@
         "stddev": 0.127,
         "min": 0.181,
         "max": 0.556
-      }
+      },
+      "avg_uses": 2,
+      "avg_uses_per_min": 0.43,
+      "bl_pct": 0,
+      "majority_hold": true
     },
     "Algeth'ar Puzzle Box": {
       "avg_first_cast_s": null,
@@ -101,7 +118,11 @@
       "avg_bl_offset_s": null,
       "stddev_bl_offset_s": null,
       "hold_targets": {},
-      "uses_per_min": {}
+      "uses_per_min": {},
+      "avg_uses": 0,
+      "avg_uses_per_min": 0.0,
+      "bl_pct": 0,
+      "majority_hold": false
     }
   },
   "burst_windows": [

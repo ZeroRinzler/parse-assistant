@@ -3,6 +3,7 @@
   "encounter_id": 3183,
   "encounter_name": "Midnight Falls",
   "sample_count": 10,
+  "avg_duration_s": 539.4,
   "downtime_threshold_ms": 1501,
   "top_avg_efficiency": 72.4,
   "top_efficiency_stddev": 4.7,
@@ -45,7 +46,11 @@
         "stddev": 0.023,
         "min": 0.649,
         "max": 0.726
-      }
+      },
+      "avg_uses": 6.1,
+      "avg_uses_per_min": 0.68,
+      "bl_pct": 0,
+      "majority_hold": true
     },
     "Shadow Dance": {
       "avg_first_cast_s": 2.3,
@@ -60,7 +65,11 @@
         "stddev": 0.052,
         "min": 2.982,
         "max": 3.139
-      }
+      },
+      "avg_uses": 27.5,
+      "avg_uses_per_min": 3.06,
+      "bl_pct": 0,
+      "majority_hold": false
     },
     "Secret Technique": {
       "avg_first_cast_s": 2.8,
@@ -75,7 +84,11 @@
         "stddev": 0.246,
         "min": 2.523,
         "max": 3.239
-      }
+      },
+      "avg_uses": 26.1,
+      "avg_uses_per_min": 2.9,
+      "bl_pct": 0,
+      "majority_hold": false
     },
     "Vanish": {
       "avg_first_cast_s": 56.8,
@@ -109,7 +122,11 @@
         "stddev": 0.083,
         "min": 0.235,
         "max": 0.556
-      }
+      },
+      "avg_uses": 4,
+      "avg_uses_per_min": 0.44,
+      "bl_pct": 0,
+      "majority_hold": true
     },
     "Algeth'ar Puzzle Box": {
       "avg_first_cast_s": null,
@@ -119,7 +136,11 @@
       "avg_bl_offset_s": null,
       "stddev_bl_offset_s": null,
       "hold_targets": {},
-      "uses_per_min": {}
+      "uses_per_min": {},
+      "avg_uses": 0,
+      "avg_uses_per_min": 0.0,
+      "bl_pct": 0,
+      "majority_hold": false
     }
   },
   "burst_windows": [

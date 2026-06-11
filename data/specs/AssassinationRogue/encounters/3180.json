@@ -3,6 +3,7 @@
   "encounter_id": 3180,
   "encounter_name": "Lightblinded Vanguard",
   "sample_count": 9,
+  "avg_duration_s": 396.3,
   "downtime_threshold_ms": 1403,
   "top_avg_efficiency": 78.0,
   "top_efficiency_stddev": 5.3,
@@ -33,7 +34,11 @@
         "stddev": 0.028,
         "min": 0.525,
         "max": 0.605
-      }
+      },
+      "avg_uses": 3.8,
+      "avg_uses_per_min": 0.57,
+      "bl_pct": 0,
+      "majority_hold": true
     },
     "Kingsbane": {
       "avg_first_cast_s": 10.5,
@@ -73,7 +78,11 @@
         "stddev": 0.026,
         "min": 0.978,
         "max": 1.059
-      }
+      },
+      "avg_uses": 6.8,
+      "avg_uses_per_min": 1.03,
+      "bl_pct": 0,
+      "majority_hold": true
     },
     "Vanish": {
       "avg_first_cast_s": 38.8,
@@ -107,7 +116,11 @@
         "stddev": 0.088,
         "min": 0.35,
         "max": 0.605
-      }
+      },
+      "avg_uses": 3.6,
+      "avg_uses_per_min": 0.54,
+      "bl_pct": 0,
+      "majority_hold": true
     }
   },
   "burst_windows": [
