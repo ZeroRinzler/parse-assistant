@@ -139,9 +139,7 @@
     if (!url) return;
     reportCode = extractCode(url);
     try {
-      const resp = await fetch(`/api/report/${reportCode}`);
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.detail || 'Failed to load report');
+      const data = await apiFetch(`/api/report/${reportCode}`);
       _allFights  = data.fights;
       _allPlayers = data.players;
       populateFights(data.fights, autoFight);
@@ -161,13 +159,11 @@
     document.getElementById('loading').classList.remove('hidden');
     document.getElementById('results').classList.add('hidden');
     try {
-      const resp = await fetch('/api/analyze', {
+      const data = await apiFetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ report_url: reportCode, fight_id: fightId, player_id: playerId }),
       });
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.detail || 'Analysis failed');
       renderResults(data);
       syncURL();
     } catch (err) { showError(err.message); }

@@ -151,9 +151,7 @@
     if (!url) return;
     reportCode = extractCode(url);
     try {
-      const resp = await fetch(`/api/report/${reportCode}`);
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.detail || 'Failed to load report');
+      const data = await apiFetch(`/api/report/${reportCode}`);
       _allFights  = data.fights;
       _allPlayers = data.players;
       _maxFightId = Math.max(...data.fights.map(f => f.id), -1);
@@ -181,13 +179,11 @@
     document.getElementById('results').classList.add('hidden');
     syncURL();
     try {
-      const resp = await fetch('/api/analyze', {
+      const data = await apiFetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ report_url: reportCode, fight_id: fightId, player_id: playerId }),
       });
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.detail || 'Analysis failed');
       renderResults(data);
     } catch (err) { showError(err.message); }
     finally {
@@ -214,9 +210,7 @@
     if (!reportCode || _isAnalyzing) return;
     setPollStatus('checking', 'Checking for new pulls…');
     try {
-      const resp = await fetch(`/api/report/${reportCode}`);
-      if (!resp.ok) { setPollStatus('error', 'Poll failed — will retry'); return; }
-      const data = await resp.json();
+      const data = await apiFetch(`/api/report/${reportCode}`);
       const newMax = Math.max(...data.fights.map(f => f.id), -1);
       if (newMax > _maxFightId) {
         _maxFightId = newMax;

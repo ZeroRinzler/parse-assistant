@@ -179,6 +179,8 @@
 
   async function apiFetch(url) {
     const r = await fetch(url);
+    const ct = r.headers.get('content-type') || '';
+    if (!ct.includes('json')) return null;
     return r.ok ? r.json() : null;
   }
 
@@ -221,9 +223,8 @@
     _charGear = null; _spec = ''; _encId = 0;
 
     try {
-      const resp = await fetch(`/api/pre/char-lookup?url=${encodeURIComponent(url)}`);
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.detail || 'Character lookup failed');
+      const data = await apiFetch(`/api/pre/char-lookup?url=${encodeURIComponent(url)}`);
+      if (!data) throw new Error('Backend server is not available. Run the server locally to use the analyzer.');
 
       _spec = data.spec || '';
       _charName = data.name || '';

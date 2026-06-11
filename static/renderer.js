@@ -1,5 +1,21 @@
 // Shared rendering — used by index.html (post-raid) and live.html (live)
 
+// ── API fetch helper ──────────────────────────────────────────────────────────
+// Wraps fetch+json with a clear error when the backend is unavailable (e.g. on
+// GitHub Pages the API routes don't exist and return HTML 404 pages).
+async function apiFetch(url, opts) {
+  const resp = await fetch(url, opts);
+  const ct = resp.headers.get('content-type') || '';
+  if (!ct.includes('json')) {
+    throw new Error(
+      'Backend server is not available. Run the server locally to use the analyzer.'
+    );
+  }
+  const data = await resp.json();
+  if (!resp.ok) throw new Error(data.detail || `Request failed (${resp.status})`);
+  return data;
+}
+
 // ── Formatters ─────────────────────────────────────────────────────────────────
 
 function formatDuration(seconds) {
@@ -192,9 +208,7 @@ async function closeCharModal(save) {
     const status = document.getElementById('char-modal-status');
     if (status) { status.textContent = 'Looking up…'; status.className = 'char-modal-status'; }
     try {
-      const res = await fetch(`/api/pre/char-lookup?url=${encodeURIComponent(url)}`);
-      if (!res.ok) throw new Error(await res.text());
-      const data = await res.json();
+      const data = await apiFetch(`/api/pre/char-lookup?url=${encodeURIComponent(url)}`);
       _saveCharData({name: data.name, url, server: data.server, region: data.region, spec: data.spec});
       renderCharChip();
       const found = autoSelectSavedPlayer();
