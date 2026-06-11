@@ -46,7 +46,6 @@ warcraft-learner/
 ├── wcl_client.py        # Warcraft Logs OAuth2 + GraphQL client (handles pagination)
 ├── rulebook.py          # Static fallback cooldowns for 22+ DPS specs
 ├── scraper.py           # Web (BeautifulSoup/lxml) + YouTube transcript scraping
-├── llm_parser.py        # Claude API — converts guide text → structured JSON rulebook
 ├── parses_analyzer.py   # WCL characterRankings + per-parse cooldown timing analysis + gear extraction
 ├── analysis_utils.py    # Shared aggregation — cluster_burst_windows, aggregate_gear
 ├── static/
@@ -215,7 +214,6 @@ These are non-obvious and have caused bugs before — read before touching gear 
 | API | Auth | Used for |
 |---|---|---|
 | Warcraft Logs v2 (GraphQL) | OAuth2 client credentials | Report data, fight events, character rankings, playerDetails |
-| Anthropic (Claude) | API key | Guide text → structured rulebook JSON |
 | YouTube (no key) | None | Transcript extraction via `youtube-transcript-api` |
 
 ## Spec naming convention
