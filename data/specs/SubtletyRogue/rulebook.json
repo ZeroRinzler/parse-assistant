@@ -7,40 +7,32 @@
       "cooldown": 90,
       "duration": 20,
       "align_with_bloodlust": true,
-      "opener_priority": 3,
-      "usage_rule": "Use in combination with Shadow Dance when both are available, delaying the final use to align with Algeth'ar Puzzle Box if equipped."
+      "opener_priority": 1,
+      "usage_rule": "Use only when at least one charge of Shadow Dance and Secret Technique are ready; sync with potions and on-use trinkets for maximum burst."
     },
     {
       "name": "Shadow Dance",
       "spell_id": 185313,
-      "cooldown": 60,
-      "duration": 9,
-      "align_with_bloodlust": true,
+      "cooldown": 20,
+      "duration": 8,
+      "align_with_bloodlust": false,
       "opener_priority": 2,
-      "usage_rule": "Cast with very low or max combo points only when Secret Technique is ready, or when extending a Shadow Blades window."
+      "usage_rule": "Only press when Secret Technique is ready, except for the second charge inside the Shadow Blades window; hold charges when Shadow Blades is within 30 seconds."
     },
     {
       "name": "Secret Technique",
       "spell_id": 280719,
-      "cooldown": 60,
-      "align_with_bloodlust": true,
-      "opener_priority": 4,
-      "usage_rule": "Cast as your highest priority finisher immediately upon entering Shadow Dance to benefit from damage modifiers and Supercharger."
+      "cooldown": 45,
+      "align_with_bloodlust": false,
+      "opener_priority": 3,
+      "usage_rule": "Cast as the top-priority finisher inside every Shadow Dance window; may be used outside Shadow Dance only when Shadow Dance has 10 or more seconds remaining on cooldown."
     },
     {
       "name": "Vanish",
       "spell_id": 1856,
       "cooldown": 120,
       "align_with_bloodlust": false,
-      "usage_rule": "Use on cooldown at 0 combo points to generate a full combo point bar via Premeditation and access Shadowstrike."
-    },
-    {
-      "name": "Algeth'ar Puzzle Box",
-      "spell_id": 388688,
-      "cooldown": 180,
-      "align_with_bloodlust": true,
-      "opener_priority": 1,
-      "usage_rule": "Channel this trinket for 2 seconds before going into your major cooldowns."
+      "usage_rule": "Use on cooldown at 0-2 combo points to enable Shadow Strike via Premeditation; prioritise utility uses such as interrupts or mechanic solves over pure damage."
     }
   ],
   "rules": [
@@ -48,51 +40,73 @@
       "type": "cooldown_pairing",
       "priority": "critical",
       "description": "Pair Secret Technique with Shadow Dance",
-      "condition": {
-        "kind": "cast_without_prior",
-        "spell_id": 280719,
-        "spell_name": "Secret Technique",
-        "required_spell_id": 185313,
-        "required_spell_name": "Shadow Dance",
-        "window_s": 9
-      },
-      "action": "Always cast Secret Technique within your Shadow Dance window to maximize burst damage and utilize supercharged combo points."
+      "condition": null,
+      "action": "Cast Secret Technique as your first or second finisher inside every Shadow Dance window — using it outside Shadow Dance when Shadow Dance has fewer than 10 seconds of cooldown remaining is a major DPS loss."
     },
     {
       "type": "cd_hold",
       "priority": "high",
-      "description": "Delay 2nd Dance in Shadow Blades",
-      "condition": null,
-      "action": "Delay your second Shadow Dance cast until Shadow Blades has less than 10 seconds remaining, ensuring you can fit another Secret Technique inside the window."
+      "description": "Hold Shadow Dance and SecTech before Shadow Blades",
+      "condition": {
+        "kind": "hold_cooldown_for_anchor",
+        "spell_ids": [
+          185313,
+          280719
+        ],
+        "spell_names": [
+          "Shadow Dance",
+          "Secret Technique"
+        ],
+        "anchor_spell_id": 121471,
+        "anchor_spell_name": "Shadow Blades",
+        "hold_window_s": 30
+      },
+      "action": "When Shadow Blades is less than 30 seconds from coming off cooldown, stop spending Shadow Dance charges and hold Secret Technique so you enter Shadow Blades with both available."
     },
     {
-      "type": "rotation",
+      "type": "cooldown_pairing",
       "priority": "critical",
-      "description": "Finisher Combo Point Threshold",
+      "description": "Only use Shadow Blades with Shadow Dance ready",
       "condition": null,
-      "action": "Always cast your finishing moves at 6 or more combo points to avoid wasting energy and globals."
+      "action": "Press Shadow Blades only when you have at least one charge of Shadow Dance available — using it without Shadow Dance wastes the doubled combo point generation and the shared damage amplification window."
     },
     {
       "type": "rotation",
       "priority": "high",
-      "description": "Shadow Dance Entry Combo Points",
+      "description": "Enter Shadow Dance at correct combo point count",
       "condition": null,
-      "action": "Enter Shadow Dance at either exactly 0 combo points or maximum combo points to ensure you get full value out of the Premeditation talent."
+      "action": "As Trickster, enter Shadow Dance at 6-7 combo points so you can immediately open with Secret Technique. As Deathstalker, enter at 0-1 combo points so Premeditation fills your bar on the first Shadowstrike."
+    },
+    {
+      "type": "rotation",
+      "priority": "high",
+      "description": "Second Shadow Dance timing during Shadow Blades",
+      "condition": null,
+      "action": "Use your second Shadow Dance charge immediately when the first expires during Shadow Blades, but do not spend it if Shadow Blades has fewer than 10 seconds remaining — preserve charges for the next Shadow Blades cycle."
+    },
+    {
+      "type": "opener",
+      "priority": "medium",
+      "description": "Pre-load Supercharger charges before pull",
+      "condition": null,
+      "action": "Press Shadow Dance before the pull to carry two Supercharger charges into combat, giving your first two finishers the power equivalent of 10 combo points."
     },
     {
       "type": "aoe_switch",
-      "priority": "high",
-      "description": "AoE Builder and Finisher Priority",
+      "priority": "medium",
+      "description": "Swap to Shuriken Storm and Black Powder at 2+ targets",
       "condition": null,
-      "action": "Swap your builder to Shuriken Storm at 2+ targets (3+ during Dance) and your finisher to Black Powder at 3+ targets."
+      "action": "At 2 or more targets replace Backstab with Shuriken Storm and Eviscerate with Black Powder; inside Shadow Dance at 4 or more targets use Shuriken Storm over Shadowstrike entirely."
     },
     {
       "type": "positioning",
       "priority": "medium",
-      "description": "Backstab Positioning",
+      "description": "Stay behind target for Backstab",
       "condition": null,
-      "action": "Always position yourself behind the target to benefit from increased Backstab damage and to prevent the boss from parrying your attacks."
+      "action": "Always position behind the boss when using Backstab — it deals increased damage from behind and bosses can only parry attacks coming from the front."
     }
   ],
-  "source_summary": "Subtlety Rogue revolves around intensely stacking major cooldowns, specifically aligning Secret Technique and Shadow Dance inside of Shadow Blades windows. Outside of cooldowns, the rotation focuses on managing energy and combo points to pool resources for the next burst. Extreme precision is required to avoid casting cooldowns on the global cooldown and entering burst windows with the correct combo point thresholds."
+  "source_summary": "Subtlety Rogue in Midnight concentrates nearly all damage inside cooldown windows: Shadow Blades should only be used when Shadow Dance and Secret Technique are both ready, Secret Technique must always be cast inside Shadow Dance, and both cooldowns must be held for the 30 seconds before Shadow Blades resets. Outside of cooldowns the spec is intentionally energy-starved with low output, so pool energy before pressing Shadow Dance, use macros to chain it with a finisher or builder immediately, and exploit Premeditation by entering Shadow Dance and Vanish at the correct combo point count for your chosen hero talent.",
+  "guide_count": 0,
+  "saved_at": "2026-06-11 20:08:01"
 }

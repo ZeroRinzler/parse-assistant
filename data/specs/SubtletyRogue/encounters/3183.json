@@ -3,36 +3,36 @@
   "encounter_id": 3183,
   "encounter_name": "Midnight Falls",
   "sample_count": 10,
-  "avg_duration_s": 539.4,
-  "last_ingested": "2026-06-11 17:08:35",
-  "downtime_threshold_ms": 1501,
-  "top_avg_efficiency": 72.4,
-  "top_efficiency_stddev": 4.7,
+  "avg_duration_s": 546.6,
+  "last_ingested": "2026-06-11 20:21:02",
+  "downtime_threshold_ms": 1585,
+  "top_avg_efficiency": 72.6,
+  "top_efficiency_stddev": 3.4,
   "per_cd_benchmarks": {
     "Shadow Blades": {
       "sample_count": 10,
-      "avg_first_cast_s": 2.3,
-      "stddev_first_cast_s": 0.7,
-      "avg_gap_s": 94.0,
-      "stddev_gap_s": 4.8,
+      "avg_first_cast_s": 2.0,
+      "stddev_first_cast_s": 0.5,
+      "avg_gap_s": 94.5,
+      "stddev_gap_s": 6.2,
       "avg_bl_offset_s": null,
       "stddev_bl_offset_s": null,
       "hold_targets": {
         "4": {
-          "target_s": 283.3,
-          "stddev_s": 4.0,
-          "count": 7,
+          "target_s": 284.9,
+          "stddev_s": 4.8,
+          "count": 6,
           "total_samples": 10
         },
         "5": {
           "target_s": 377.1,
-          "stddev_s": 4.6,
+          "stddev_s": 5.2,
           "count": 9,
           "total_samples": 10
         },
         "6": {
           "target_s": 472.6,
-          "stddev_s": 8.7,
+          "stddev_s": 10.6,
           "count": 9,
           "total_samples": 10
         },
@@ -44,118 +44,122 @@
         }
       },
       "uses_per_min": {
-        "avg": 0.678,
-        "stddev": 0.023,
+        "avg": 0.68,
+        "stddev": 0.028,
         "min": 0.649,
         "max": 0.726
       },
-      "avg_uses": 6.1,
+      "avg_uses": 6.2,
       "avg_uses_per_min": 0.68,
       "bl_pct": 0,
       "majority_hold": true
     },
     "Shadow Dance": {
       "sample_count": 10,
-      "avg_first_cast_s": 2.3,
-      "stddev_first_cast_s": 0.7,
+      "avg_first_cast_s": 2.1,
+      "stddev_first_cast_s": 0.5,
       "avg_gap_s": 19.9,
-      "stddev_gap_s": 7.6,
+      "stddev_gap_s": 7.5,
       "avg_bl_offset_s": null,
       "stddev_bl_offset_s": null,
-      "hold_targets": {},
+      "hold_targets": {
+        "19": {
+          "target_s": 373.3,
+          "stddev_s": 2.7,
+          "count": 5,
+          "total_samples": 10
+        },
+        "25": {
+          "target_s": 494.0,
+          "stddev_s": 2.1,
+          "count": 5,
+          "total_samples": 10
+        },
+        "24": {
+          "target_s": 477.4,
+          "stddev_s": 4.9,
+          "count": 5,
+          "total_samples": 10
+        }
+      },
       "uses_per_min": {
-        "avg": 3.058,
-        "stddev": 0.052,
-        "min": 2.982,
+        "avg": 3.073,
+        "stddev": 0.041,
+        "min": 3.023,
         "max": 3.139
       },
-      "avg_uses": 27.5,
-      "avg_uses_per_min": 3.06,
+      "avg_uses": 28,
+      "avg_uses_per_min": 3.07,
       "bl_pct": 0,
-      "majority_hold": false
+      "majority_hold": true
     },
     "Secret Technique": {
       "sample_count": 10,
-      "avg_first_cast_s": 2.8,
-      "stddev_first_cast_s": 1.2,
-      "avg_gap_s": 21.1,
-      "stddev_gap_s": 6.1,
+      "avg_first_cast_s": 2.4,
+      "stddev_first_cast_s": 0.9,
+      "avg_gap_s": 20.6,
+      "stddev_gap_s": 5.8,
       "avg_bl_offset_s": null,
       "stddev_bl_offset_s": null,
       "hold_targets": {},
       "uses_per_min": {
-        "avg": 2.899,
-        "stddev": 0.246,
-        "min": 2.523,
+        "avg": 2.982,
+        "stddev": 0.204,
+        "min": 2.595,
         "max": 3.239
       },
-      "avg_uses": 26.1,
-      "avg_uses_per_min": 2.9,
+      "avg_uses": 27.2,
+      "avg_uses_per_min": 2.98,
       "bl_pct": 0,
       "majority_hold": false
     },
     "Vanish": {
       "sample_count": 10,
-      "avg_first_cast_s": 56.8,
-      "stddev_first_cast_s": 92.7,
-      "avg_gap_s": 143.7,
-      "stddev_gap_s": 27.3,
+      "avg_first_cast_s": 53.5,
+      "stddev_first_cast_s": 93.8,
+      "avg_gap_s": 153.3,
+      "stddev_gap_s": 40.7,
       "avg_bl_offset_s": null,
       "stddev_bl_offset_s": null,
       "hold_targets": {
         "2": {
-          "target_s": 204.4,
-          "stddev_s": 127.1,
-          "count": 6,
+          "target_s": 204.2,
+          "stddev_s": 118.6,
+          "count": 7,
           "total_samples": 10
         },
         "3": {
-          "target_s": 349.1,
-          "stddev_s": 50.4,
+          "target_s": 391.2,
+          "stddev_s": 67.2,
           "count": 6,
           "total_samples": 10
         },
         "4": {
-          "target_s": 450.5,
-          "stddev_s": 54.4,
-          "count": 8,
+          "target_s": 461.3,
+          "stddev_s": 54.8,
+          "count": 7,
           "total_samples": 10
         }
       },
       "uses_per_min": {
-        "avg": 0.443,
-        "stddev": 0.083,
+        "avg": 0.415,
+        "stddev": 0.079,
         "min": 0.235,
-        "max": 0.556
+        "max": 0.518
       },
-      "avg_uses": 4,
-      "avg_uses_per_min": 0.44,
+      "avg_uses": 3.8,
+      "avg_uses_per_min": 0.42,
       "bl_pct": 0,
       "majority_hold": true
-    },
-    "Algeth'ar Puzzle Box": {
-      "sample_count": 10,
-      "avg_first_cast_s": null,
-      "stddev_first_cast_s": null,
-      "avg_gap_s": null,
-      "stddev_gap_s": null,
-      "avg_bl_offset_s": null,
-      "stddev_bl_offset_s": null,
-      "hold_targets": {},
-      "uses_per_min": {},
-      "avg_uses": 0,
-      "avg_uses_per_min": 0.0,
-      "bl_pct": 0,
-      "majority_hold": false
     }
   },
   "burst_windows": [
     {
-      "time_s": 478.2,
-      "stddev_s": 8.5,
-      "count": 17,
+      "time_s": 478.8,
+      "stddev_s": 7.6,
+      "count": 12,
       "total_samples": 10,
-      "pct_avg": 0.081,
+      "pct_avg": 0.082,
       "pct_stddev": 0.012,
       "pct_min": 0.064,
       "pct_max": 0.105,
@@ -167,43 +171,43 @@
       "ability_breakdown": [
         {
           "spell_id": 1292446,
-          "avg_pct": 0.314,
-          "count": 17
+          "avg_pct": 0.303,
+          "count": 12
         },
         {
           "spell_id": 279043,
-          "avg_pct": 0.166,
-          "count": 16
+          "avg_pct": 0.168,
+          "count": 12
         },
         {
           "spell_id": 196819,
-          "avg_pct": 0.105,
-          "count": 16
+          "avg_pct": 0.103,
+          "count": 11
         },
         {
           "spell_id": 282449,
-          "avg_pct": 0.09,
-          "count": 16
+          "avg_pct": 0.098,
+          "count": 11
         },
         {
           "spell_id": 1269205,
-          "avg_pct": 0.078,
-          "count": 15
+          "avg_pct": 0.086,
+          "count": 10
         },
         {
-          "spell_id": 328082,
-          "avg_pct": 0.055,
-          "count": 9
+          "spell_id": 185438,
+          "avg_pct": 0.049,
+          "count": 6
         }
       ]
     },
     {
-      "time_s": 504.6,
-      "stddev_s": 6.6,
+      "time_s": 502.8,
+      "stddev_s": 6.7,
       "count": 12,
       "total_samples": 10,
-      "pct_avg": 0.066,
-      "pct_stddev": 0.012,
+      "pct_avg": 0.07,
+      "pct_stddev": 0.014,
       "pct_min": 0.054,
       "pct_max": 0.095,
       "common_cds": [
@@ -213,77 +217,125 @@
       "ability_breakdown": [
         {
           "spell_id": 1292446,
-          "avg_pct": 0.396,
+          "avg_pct": 0.369,
           "count": 12
         },
         {
           "spell_id": 282449,
-          "avg_pct": 0.096,
+          "avg_pct": 0.1,
           "count": 11
         },
         {
           "spell_id": 196819,
-          "avg_pct": 0.09,
+          "avg_pct": 0.091,
           "count": 12
         },
         {
           "spell_id": 1269205,
-          "avg_pct": 0.087,
-          "count": 11
+          "avg_pct": 0.085,
+          "count": 10
         },
         {
           "spell_id": 185438,
-          "avg_pct": 0.056,
-          "count": 8
+          "avg_pct": 0.062,
+          "count": 7
         },
         {
           "spell_id": 1264397,
           "avg_pct": 0.053,
-          "count": 6
+          "count": 7
         }
       ]
     },
     {
       "time_s": 521.8,
-      "stddev_s": 3.8,
-      "count": 7,
+      "stddev_s": 5.5,
+      "count": 9,
       "total_samples": 10,
-      "pct_avg": 0.058,
+      "pct_avg": 0.06,
       "pct_stddev": 0.003,
-      "pct_min": 0.052,
-      "pct_max": 0.062,
-      "common_cds": [],
+      "pct_min": 0.057,
+      "pct_max": 0.066,
+      "common_cds": [
+        "Shadow Dance"
+      ],
       "avg_targets": 1,
       "ability_breakdown": [
         {
           "spell_id": 1292446,
-          "avg_pct": 0.411,
-          "count": 7
+          "avg_pct": 0.39,
+          "count": 9
         },
         {
           "spell_id": 282449,
-          "avg_pct": 0.107,
-          "count": 7
+          "avg_pct": 0.114,
+          "count": 9
         },
         {
           "spell_id": 196819,
-          "avg_pct": 0.1,
-          "count": 7
+          "avg_pct": 0.105,
+          "count": 9
         },
         {
           "spell_id": 1269205,
-          "avg_pct": 0.079,
-          "count": 6
+          "avg_pct": 0.085,
+          "count": 9
+        },
+        {
+          "spell_id": 328082,
+          "avg_pct": 0.061,
+          "count": 5
         },
         {
           "spell_id": 185438,
-          "avg_pct": 0.059,
-          "count": 6
+          "avg_pct": 0.058,
+          "count": 8
+        }
+      ]
+    },
+    {
+      "time_s": 549.7,
+      "stddev_s": 9.0,
+      "count": 5,
+      "total_samples": 10,
+      "pct_avg": 0.065,
+      "pct_stddev": 0.008,
+      "pct_min": 0.054,
+      "pct_max": 0.073,
+      "common_cds": [
+        "Shadow Dance"
+      ],
+      "avg_targets": 1,
+      "ability_breakdown": [
+        {
+          "spell_id": 1292446,
+          "avg_pct": 0.355,
+          "count": 5
         },
         {
-          "spell_id": 1264397,
-          "avg_pct": 0.058,
-          "count": 4
+          "spell_id": 279043,
+          "avg_pct": 0.163,
+          "count": 3
+        },
+        {
+          "spell_id": 282449,
+          "avg_pct": 0.151,
+          "count": 5
+        },
+        {
+          "spell_id": 196819,
+          "avg_pct": 0.066,
+          "count": 5
+        },
+        {
+          "spell_id": 1269205,
+          "avg_pct": 0.06,
+          "count": 5
+        },
+        {
+          "spell_id": 1,
+          "avg_pct": 0.039,
+          "count": 3
         }
       ]
     }
@@ -295,9 +347,9 @@
         "key": "v2:110432,110432,110432,90638,90639,90640,90692,90704,90706,90713,90716,90720,90721,90724,90730,90732,90738,90748,90749,90750,90751,90752,90758,90760,94580",
         "count": 9,
         "pct": 90,
-        "report_code": "YLyG4dmr2cX1gqFb",
-        "fight_id": 40,
-        "player_name": "Slasharama"
+        "report_code": "KYXgTZDqyj4GhcWF",
+        "fight_id": 1,
+        "player_name": "丶水灯心"
       },
       {
         "key": "v2:110432,110432,110432,90638,90639,90640,90691,90692,90704,90706,90713,90716,90720,90721,90724,90730,90732,90738,90748,90749,90750,90751,90752,90760,94580",
@@ -313,58 +365,50 @@
         {
           "id": 249344,
           "name": "Light Company Guidon",
-          "count": 8,
-          "pct": 80
+          "count": 9,
+          "pct": 90
         },
         {
           "id": 249343,
           "name": "Gaze of the Alnseer",
-          "count": 2,
-          "pct": 20
+          "count": 1,
+          "pct": 10
         }
       ],
       "13": [
         {
           "id": 249343,
           "name": "Gaze of the Alnseer",
-          "count": 8,
-          "pct": 80
+          "count": 9,
+          "pct": 90
         },
         {
           "id": 249344,
           "name": "Light Company Guidon",
-          "count": 2,
-          "pct": 20
+          "count": 1,
+          "pct": 10
         }
       ]
     },
     "enchants": {
-      "0": [
-        {
-          "id": 8017,
-          "name": "",
-          "count": 8,
-          "pct": 80
-        },
-        {
-          "id": 7961,
-          "name": "",
-          "count": 2,
-          "pct": 20
-        }
-      ],
       "2": [
         {
           "id": 8001,
           "name": "",
-          "count": 8,
-          "pct": 80
+          "count": 7,
+          "pct": 70
         },
         {
           "id": 8031,
           "name": "",
           "count": 2,
           "pct": 20
+        },
+        {
+          "id": 7973,
+          "name": "",
+          "count": 1,
+          "pct": 10
         }
       ],
       "4": [
@@ -387,20 +431,20 @@
         {
           "id": 7963,
           "name": "",
-          "count": 7,
-          "pct": 70
+          "count": 6,
+          "pct": 60
+        },
+        {
+          "id": 8019,
+          "name": "",
+          "count": 2,
+          "pct": 20
         },
         {
           "id": 7993,
           "name": "",
           "count": 2,
           "pct": 20
-        },
-        {
-          "id": 8019,
-          "name": "",
-          "count": 1,
-          "pct": 10
         }
       ],
       "10": [
@@ -429,11 +473,17 @@
         {
           "id": 8039,
           "name": "",
-          "count": 9,
-          "pct": 90
+          "count": 7,
+          "pct": 70
         },
         {
           "id": 8041,
+          "name": "",
+          "count": 2,
+          "pct": 20
+        },
+        {
+          "id": 7981,
           "name": "",
           "count": 1,
           "pct": 10
@@ -443,22 +493,30 @@
         {
           "id": 8039,
           "name": "",
-          "count": 9,
-          "pct": 90
+          "count": 10,
+          "pct": 100
+        }
+      ],
+      "0": [
+        {
+          "id": 8017,
+          "name": "",
+          "count": 7,
+          "pct": 70
         },
         {
-          "id": 8041,
+          "id": 7961,
           "name": "",
-          "count": 1,
-          "pct": 10
+          "count": 2,
+          "pct": 20
         }
       ],
       "9": [
         {
           "id": 2841,
           "name": "",
-          "count": 2,
-          "pct": 20
+          "count": 1,
+          "pct": 10
         }
       ]
     }
@@ -467,9 +525,9 @@
     {
       "name": "Cloak of Shadows",
       "spell_id": 31224,
-      "avg_uses": 1.7,
+      "avg_uses": 1.3,
       "min_uses": 1,
-      "max_uses": 3,
+      "max_uses": 2,
       "sample_count": 9
     },
     {
@@ -484,23 +542,23 @@
   "top_dtk_comparison": [
     {
       "spell_id": 1249797,
-      "avg_pct": 0.6893,
-      "min_pct": 0.666,
-      "max_pct": 0.709,
-      "stddev_pct": 0.0151,
+      "avg_pct": 0.68,
+      "min_pct": 0.634,
+      "max_pct": 0.701,
+      "stddev_pct": 0.0204,
       "sample_count": 10
     },
     {
       "spell_id": 1249594,
-      "avg_pct": 0.0323,
+      "avg_pct": 0.0311,
       "min_pct": 0.026,
-      "max_pct": 0.039,
-      "stddev_pct": 0.0037,
+      "max_pct": 0.035,
+      "stddev_pct": 0.0032,
       "sample_count": 9
     },
     {
       "spell_id": 1251649,
-      "avg_pct": 0.0308,
+      "avg_pct": 0.031,
       "min_pct": 0.019,
       "max_pct": 0.038,
       "stddev_pct": 0.0056,
@@ -508,165 +566,165 @@
     },
     {
       "spell_id": 1249582,
-      "avg_pct": 0.0275,
+      "avg_pct": 0.0289,
       "min_pct": 0.023,
       "max_pct": 0.039,
-      "stddev_pct": 0.0051,
+      "stddev_pct": 0.006,
       "sample_count": 8
     },
     {
+      "spell_id": 1281473,
+      "avg_pct": 0.0273,
+      "min_pct": 0.021,
+      "max_pct": 0.033,
+      "stddev_pct": 0.005,
+      "sample_count": 6
+    },
+    {
       "spell_id": 1254644,
-      "avg_pct": 0.0263,
+      "avg_pct": 0.0269,
       "min_pct": 0.021,
       "max_pct": 0.032,
-      "stddev_pct": 0.0034,
+      "stddev_pct": 0.0036,
       "sample_count": 10
     },
     {
-      "spell_id": 1281473,
-      "avg_pct": 0.0262,
-      "min_pct": 0.021,
-      "max_pct": 0.032,
-      "stddev_pct": 0.0047,
-      "sample_count": 5
-    },
-    {
       "spell_id": 1282425,
-      "avg_pct": 0.0244,
+      "avg_pct": 0.024,
       "min_pct": 0.02,
       "max_pct": 0.028,
-      "stddev_pct": 0.0023,
+      "stddev_pct": 0.0022,
       "sample_count": 8
     },
     {
       "spell_id": 1285827,
-      "avg_pct": 0.0222,
+      "avg_pct": 0.0221,
       "min_pct": 0.017,
       "max_pct": 0.025,
       "stddev_pct": 0.0024,
-      "sample_count": 10
+      "sample_count": 9
     }
   ],
   "top_dtk_segments": [
     {
       "seg_index": 0,
-      "avg_pct": 0.0474,
-      "stddev_pct": 0.0044,
+      "avg_pct": 0.046,
+      "stddev_pct": 0.0053,
       "sample_count": 10
     },
     {
       "seg_index": 1,
-      "avg_pct": 0.0438,
+      "avg_pct": 0.0427,
       "stddev_pct": 0.0053,
       "sample_count": 10
     },
     {
       "seg_index": 2,
-      "avg_pct": 0.0478,
-      "stddev_pct": 0.0051,
-      "sample_count": 10
-    },
-    {
-      "seg_index": 3,
-      "avg_pct": 0.0444,
-      "stddev_pct": 0.0042,
-      "sample_count": 10
-    },
-    {
-      "seg_index": 4,
-      "avg_pct": 0.0505,
-      "stddev_pct": 0.0061,
-      "sample_count": 10
-    },
-    {
-      "seg_index": 5,
-      "avg_pct": 0.0445,
+      "avg_pct": 0.0469,
       "stddev_pct": 0.0044,
       "sample_count": 10
     },
     {
+      "seg_index": 3,
+      "avg_pct": 0.0428,
+      "stddev_pct": 0.0047,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 4,
+      "avg_pct": 0.048,
+      "stddev_pct": 0.0074,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 5,
+      "avg_pct": 0.0431,
+      "stddev_pct": 0.0049,
+      "sample_count": 10
+    },
+    {
       "seg_index": 6,
-      "avg_pct": 0.0379,
-      "stddev_pct": 0.0051,
+      "avg_pct": 0.0387,
+      "stddev_pct": 0.0036,
       "sample_count": 10
     },
     {
       "seg_index": 7,
-      "avg_pct": 0.0272,
-      "stddev_pct": 0.0083,
+      "avg_pct": 0.0278,
+      "stddev_pct": 0.007,
       "sample_count": 10
     },
     {
       "seg_index": 8,
-      "avg_pct": 0.0614,
+      "avg_pct": 0.059,
       "stddev_pct": 0.0065,
       "sample_count": 10
     },
     {
       "seg_index": 9,
-      "avg_pct": 0.0601,
-      "stddev_pct": 0.006,
+      "avg_pct": 0.0579,
+      "stddev_pct": 0.0056,
       "sample_count": 10
     },
     {
       "seg_index": 10,
-      "avg_pct": 0.0599,
-      "stddev_pct": 0.0035,
+      "avg_pct": 0.0601,
+      "stddev_pct": 0.0042,
       "sample_count": 10
     },
     {
       "seg_index": 11,
-      "avg_pct": 0.0568,
-      "stddev_pct": 0.0095,
+      "avg_pct": 0.0579,
+      "stddev_pct": 0.007,
       "sample_count": 10
     },
     {
       "seg_index": 12,
-      "avg_pct": 0.0502,
-      "stddev_pct": 0.0098,
+      "avg_pct": 0.0494,
+      "stddev_pct": 0.0088,
       "sample_count": 10
     },
     {
       "seg_index": 13,
-      "avg_pct": 0.0534,
+      "avg_pct": 0.053,
       "stddev_pct": 0.0076,
       "sample_count": 10
     },
     {
       "seg_index": 14,
-      "avg_pct": 0.0434,
+      "avg_pct": 0.0426,
       "stddev_pct": 0.0085,
       "sample_count": 10
     },
     {
       "seg_index": 15,
-      "avg_pct": 0.0618,
-      "stddev_pct": 0.0295,
+      "avg_pct": 0.0613,
+      "stddev_pct": 0.0293,
       "sample_count": 10
     },
     {
       "seg_index": 16,
-      "avg_pct": 0.0982,
-      "stddev_pct": 0.0365,
+      "avg_pct": 0.0877,
+      "stddev_pct": 0.035,
       "sample_count": 10
     },
     {
       "seg_index": 17,
-      "avg_pct": 0.088,
-      "stddev_pct": 0.0412,
+      "avg_pct": 0.0921,
+      "stddev_pct": 0.0395,
       "sample_count": 10
     },
     {
       "seg_index": 18,
-      "avg_pct": 0.0586,
-      "stddev_pct": 0.0434,
-      "sample_count": 3
+      "avg_pct": 0.0663,
+      "stddev_pct": 0.037,
+      "sample_count": 5
     },
     {
       "seg_index": 19,
-      "avg_pct": 0.0563,
-      "stddev_pct": 0.0,
-      "sample_count": 1
+      "avg_pct": 0.0488,
+      "stddev_pct": 0.0107,
+      "sample_count": 2
     }
   ]
 }

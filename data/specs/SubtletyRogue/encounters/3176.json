@@ -4,7 +4,7 @@
   "encounter_name": "Imperator Averzian",
   "sample_count": 10,
   "avg_duration_s": 260.6,
-  "last_ingested": "2026-06-11 17:08:35",
+  "last_ingested": "2026-06-11 20:19:51",
   "downtime_threshold_ms": 1572,
   "top_avg_efficiency": 74.9,
   "top_efficiency_stddev": 4.6,
@@ -108,21 +108,6 @@
       "avg_uses_per_min": 0.51,
       "bl_pct": 0,
       "majority_hold": true
-    },
-    "Algeth'ar Puzzle Box": {
-      "sample_count": 10,
-      "avg_first_cast_s": null,
-      "stddev_first_cast_s": null,
-      "avg_gap_s": null,
-      "stddev_gap_s": null,
-      "avg_bl_offset_s": null,
-      "stddev_bl_offset_s": null,
-      "hold_targets": {},
-      "uses_per_min": {},
-      "avg_uses": 0,
-      "avg_uses_per_min": 0.0,
-      "bl_pct": 0,
-      "majority_hold": false
     }
   },
   "burst_windows": [

@@ -3,142 +3,127 @@
   "encounter_id": 3179,
   "encounter_name": "Fallen-King Salhadaar",
   "sample_count": 10,
-  "avg_duration_s": 285.9,
-  "last_ingested": "2026-06-11 17:08:35",
-  "downtime_threshold_ms": 1538,
-  "top_avg_efficiency": 74.2,
-  "top_efficiency_stddev": 4.0,
+  "avg_duration_s": 300.2,
+  "last_ingested": "2026-06-11 20:20:14",
+  "downtime_threshold_ms": 1532,
+  "top_avg_efficiency": 74.7,
+  "top_efficiency_stddev": 3.8,
   "per_cd_benchmarks": {
     "Shadow Blades": {
       "sample_count": 10,
-      "avg_first_cast_s": 3.4,
-      "stddev_first_cast_s": 1.8,
-      "avg_gap_s": 102.1,
+      "avg_first_cast_s": 3.5,
+      "stddev_first_cast_s": 1.7,
+      "avg_gap_s": 103.4,
       "stddev_gap_s": 13.0,
       "avg_bl_offset_s": null,
       "stddev_bl_offset_s": null,
       "hold_targets": {
         "4": {
-          "target_s": 317.4,
-          "stddev_s": 4.9,
-          "count": 6,
-          "total_samples": 10
-        },
-        "3": {
-          "target_s": 225.3,
-          "stddev_s": 13.0,
+          "target_s": 318.2,
+          "stddev_s": 5.0,
           "count": 7,
           "total_samples": 10
         },
+        "3": {
+          "target_s": 225.4,
+          "stddev_s": 12.3,
+          "count": 8,
+          "total_samples": 10
+        },
         "2": {
-          "target_s": 103.7,
-          "stddev_s": 1.5,
-          "count": 5,
+          "target_s": 103.5,
+          "stddev_s": 1.3,
+          "count": 6,
           "total_samples": 10
         }
       },
       "uses_per_min": {
-        "avg": 0.74,
-        "stddev": 0.051,
-        "min": 0.688,
+        "avg": 0.725,
+        "stddev": 0.049,
+        "min": 0.66,
         "max": 0.834
       },
-      "avg_uses": 3.5,
-      "avg_uses_per_min": 0.74,
+      "avg_uses": 3.6,
+      "avg_uses_per_min": 0.72,
       "bl_pct": 0,
       "majority_hold": true
     },
     "Shadow Dance": {
       "sample_count": 10,
-      "avg_first_cast_s": 3.4,
-      "stddev_first_cast_s": 1.8,
+      "avg_first_cast_s": 3.5,
+      "stddev_first_cast_s": 1.7,
       "avg_gap_s": 19.0,
       "stddev_gap_s": 7.5,
       "avg_bl_offset_s": null,
       "stddev_bl_offset_s": null,
       "hold_targets": {},
       "uses_per_min": {
-        "avg": 3.269,
-        "stddev": 0.095,
+        "avg": 3.257,
+        "stddev": 0.104,
         "min": 3.101,
         "max": 3.442
       },
-      "avg_uses": 15.5,
-      "avg_uses_per_min": 3.27,
+      "avg_uses": 16.2,
+      "avg_uses_per_min": 3.26,
       "bl_pct": 0,
       "majority_hold": false
     },
     "Secret Technique": {
       "sample_count": 10,
-      "avg_first_cast_s": 3.6,
+      "avg_first_cast_s": 3.8,
       "stddev_first_cast_s": 1.7,
       "avg_gap_s": 21.2,
-      "stddev_gap_s": 6.9,
+      "stddev_gap_s": 6.8,
       "avg_bl_offset_s": null,
       "stddev_bl_offset_s": null,
       "hold_targets": {},
       "uses_per_min": {
-        "avg": 2.929,
-        "stddev": 0.186,
+        "avg": 2.927,
+        "stddev": 0.185,
         "min": 2.51,
         "max": 3.116
       },
-      "avg_uses": 13.9,
+      "avg_uses": 14.6,
       "avg_uses_per_min": 2.93,
       "bl_pct": 0,
       "majority_hold": false
     },
     "Vanish": {
       "sample_count": 10,
-      "avg_first_cast_s": 26.7,
-      "stddev_first_cast_s": 40.3,
-      "avg_gap_s": 165.1,
-      "stddev_gap_s": 66.6,
+      "avg_first_cast_s": 25.8,
+      "stddev_first_cast_s": 40.7,
+      "avg_gap_s": 160.1,
+      "stddev_gap_s": 65.1,
       "avg_bl_offset_s": null,
       "stddev_bl_offset_s": null,
       "hold_targets": {
         "2": {
-          "target_s": 234.6,
-          "stddev_s": 85.9,
-          "count": 5,
+          "target_s": 280.4,
+          "stddev_s": 75.9,
+          "count": 4,
           "total_samples": 10
         }
       },
       "uses_per_min": {
-        "avg": 0.428,
-        "stddev": 0.127,
+        "avg": 0.423,
+        "stddev": 0.123,
         "min": 0.181,
         "max": 0.556
       },
-      "avg_uses": 2,
-      "avg_uses_per_min": 0.43,
+      "avg_uses": 2.1,
+      "avg_uses_per_min": 0.42,
       "bl_pct": 0,
       "majority_hold": true
-    },
-    "Algeth'ar Puzzle Box": {
-      "sample_count": 10,
-      "avg_first_cast_s": null,
-      "stddev_first_cast_s": null,
-      "avg_gap_s": null,
-      "stddev_gap_s": null,
-      "avg_bl_offset_s": null,
-      "stddev_bl_offset_s": null,
-      "hold_targets": {},
-      "uses_per_min": {},
-      "avg_uses": 0,
-      "avg_uses_per_min": 0.0,
-      "bl_pct": 0,
-      "majority_hold": false
     }
   },
   "burst_windows": [
     {
-      "time_s": 12.3,
-      "stddev_s": 6.1,
-      "count": 9,
+      "time_s": 13.1,
+      "stddev_s": 6.5,
+      "count": 8,
       "total_samples": 10,
-      "pct_avg": 0.092,
-      "pct_stddev": 0.019,
+      "pct_avg": 0.086,
+      "pct_stddev": 0.023,
       "pct_min": 0.054,
       "pct_max": 0.114,
       "common_cds": [
@@ -149,42 +134,42 @@
       "ability_breakdown": [
         {
           "spell_id": 279043,
-          "avg_pct": 0.228,
-          "count": 9
+          "avg_pct": 0.222,
+          "count": 8
         },
         {
           "spell_id": 196819,
-          "avg_pct": 0.147,
-          "count": 9
+          "avg_pct": 0.149,
+          "count": 7
         },
         {
           "spell_id": 282449,
-          "avg_pct": 0.133,
-          "count": 9
+          "avg_pct": 0.143,
+          "count": 8
         },
         {
           "spell_id": 1269205,
-          "avg_pct": 0.108,
-          "count": 9
+          "avg_pct": 0.1,
+          "count": 8
         },
         {
           "spell_id": 185438,
           "avg_pct": 0.088,
-          "count": 5
+          "count": 4
         },
         {
           "spell_id": 328082,
-          "avg_pct": 0.074,
-          "count": 7
+          "avg_pct": 0.08,
+          "count": 5
         }
       ]
     },
     {
-      "time_s": 105.3,
-      "stddev_s": 4.6,
-      "count": 5,
+      "time_s": 106.2,
+      "stddev_s": 5.2,
+      "count": 4,
       "total_samples": 10,
-      "pct_avg": 0.095,
+      "pct_avg": 0.099,
       "pct_stddev": 0.018,
       "pct_min": 0.072,
       "pct_max": 0.11,
@@ -196,45 +181,45 @@
       "ability_breakdown": [
         {
           "spell_id": 279043,
-          "avg_pct": 0.244,
-          "count": 5
+          "avg_pct": 0.245,
+          "count": 4
         },
         {
           "spell_id": 196819,
-          "avg_pct": 0.193,
-          "count": 5
+          "avg_pct": 0.199,
+          "count": 4
         },
         {
           "spell_id": 282449,
-          "avg_pct": 0.142,
-          "count": 4
+          "avg_pct": 0.135,
+          "count": 3
         },
         {
           "spell_id": 1269205,
-          "avg_pct": 0.129,
-          "count": 5
+          "avg_pct": 0.131,
+          "count": 4
         },
         {
           "spell_id": 328082,
-          "avg_pct": 0.086,
-          "count": 5
+          "avg_pct": 0.083,
+          "count": 4
         },
         {
           "spell_id": 185438,
-          "avg_pct": 0.071,
-          "count": 4
+          "avg_pct": 0.073,
+          "count": 3
         }
       ]
     },
     {
-      "time_s": 185.0,
+      "time_s": 185.9,
       "stddev_s": 2.1,
       "count": 8,
       "total_samples": 10,
-      "pct_avg": 0.081,
-      "pct_stddev": 0.029,
-      "pct_min": 0.063,
-      "pct_max": 0.146,
+      "pct_avg": 0.07,
+      "pct_stddev": 0.013,
+      "pct_min": 0.057,
+      "pct_max": 0.099,
       "common_cds": [
         "Shadow Dance"
       ],
@@ -242,45 +227,45 @@
       "ability_breakdown": [
         {
           "spell_id": 282449,
-          "avg_pct": 0.238,
+          "avg_pct": 0.223,
           "count": 8
         },
         {
           "spell_id": 459497,
-          "avg_pct": 0.202,
+          "avg_pct": 0.205,
           "count": 8
         },
         {
           "spell_id": 319175,
-          "avg_pct": 0.14,
+          "avg_pct": 0.151,
           "count": 8
         },
         {
+          "spell_id": 280720,
+          "avg_pct": 0.073,
+          "count": 4
+        },
+        {
           "spell_id": 319190,
-          "avg_pct": 0.068,
-          "count": 7
+          "avg_pct": 0.069,
+          "count": 8
         },
         {
           "spell_id": 197835,
           "avg_pct": 0.061,
-          "count": 4
-        },
-        {
-          "spell_id": 1269205,
-          "avg_pct": 0.048,
-          "count": 4
+          "count": 5
         }
       ]
     },
     {
-      "time_s": 262.0,
-      "stddev_s": 1.6,
-      "count": 6,
+      "time_s": 262.2,
+      "stddev_s": 1.5,
+      "count": 7,
       "total_samples": 10,
-      "pct_avg": 0.079,
-      "pct_stddev": 0.008,
+      "pct_avg": 0.081,
+      "pct_stddev": 0.009,
       "pct_min": 0.067,
-      "pct_max": 0.09,
+      "pct_max": 0.093,
       "common_cds": [
         "Shadow Dance"
       ],
@@ -288,64 +273,64 @@
       "ability_breakdown": [
         {
           "spell_id": 459497,
-          "avg_pct": 0.29,
-          "count": 5
+          "avg_pct": 0.293,
+          "count": 6
         },
         {
           "spell_id": 282449,
-          "avg_pct": 0.198,
-          "count": 6
+          "avg_pct": 0.201,
+          "count": 7
         },
         {
           "spell_id": 319175,
-          "avg_pct": 0.185,
-          "count": 6
+          "avg_pct": 0.176,
+          "count": 7
         },
         {
           "spell_id": 319190,
           "avg_pct": 0.074,
-          "count": 6
-        },
-        {
-          "spell_id": 197835,
-          "avg_pct": 0.068,
-          "count": 6
+          "count": 7
         },
         {
           "spell_id": 1269565,
           "avg_pct": 0.068,
           "count": 4
+        },
+        {
+          "spell_id": 197835,
+          "avg_pct": 0.066,
+          "count": 7
         }
       ]
     },
     {
-      "time_s": 308.7,
-      "stddev_s": 6.2,
-      "count": 10,
+      "time_s": 308.3,
+      "stddev_s": 6.0,
+      "count": 11,
       "total_samples": 10,
-      "pct_avg": 0.096,
+      "pct_avg": 0.098,
       "pct_stddev": 0.025,
       "pct_min": 0.058,
       "pct_max": 0.147,
       "common_cds": [
         "Shadow Dance"
       ],
-      "avg_targets": 2.1,
+      "avg_targets": 2.2,
       "ability_breakdown": [
         {
           "spell_id": 459497,
-          "avg_pct": 0.195,
-          "count": 9
-        },
-        {
-          "spell_id": 319175,
-          "avg_pct": 0.195,
+          "avg_pct": 0.207,
           "count": 10
         },
         {
+          "spell_id": 319175,
+          "avg_pct": 0.189,
+          "count": 11
+        },
+        {
           "spell_id": 282449,
-          "avg_pct": 0.183,
-          "count": 8
+          "avg_pct": 0.188,
+          "count": 9
         },
         {
           "spell_id": 279043,
@@ -354,8 +339,8 @@
         },
         {
           "spell_id": 319190,
-          "avg_pct": 0.102,
-          "count": 9
+          "avg_pct": 0.097,
+          "count": 10
         },
         {
           "spell_id": 1269565,
@@ -388,14 +373,14 @@
     "trinkets": {
       "12": [
         {
-          "id": 249343,
-          "name": "Gaze of the Alnseer",
+          "id": 249344,
+          "name": "Light Company Guidon",
           "count": 5,
           "pct": 50
         },
         {
-          "id": 249344,
-          "name": "Light Company Guidon",
+          "id": 249343,
+          "name": "Gaze of the Alnseer",
           "count": 4,
           "pct": 40
         },
@@ -408,14 +393,14 @@
       ],
       "13": [
         {
-          "id": 249344,
-          "name": "Light Company Guidon",
+          "id": 249343,
+          "name": "Gaze of the Alnseer",
           "count": 5,
           "pct": 50
         },
         {
-          "id": 249343,
-          "name": "Gaze of the Alnseer",
+          "id": 249344,
+          "name": "Light Company Guidon",
           "count": 4,
           "pct": 40
         },
@@ -452,8 +437,8 @@
         {
           "id": 8001,
           "name": "",
-          "count": 6,
-          "pct": 60
+          "count": 5,
+          "pct": 50
         },
         {
           "id": 8031,
@@ -536,14 +521,14 @@
         {
           "id": 8041,
           "name": "",
-          "count": 3,
-          "pct": 30
+          "count": 4,
+          "pct": 40
         },
         {
           "id": 7981,
           "name": "",
-          "count": 2,
-          "pct": 20
+          "count": 1,
+          "pct": 10
         }
       ],
       "16": [
@@ -560,134 +545,140 @@
     {
       "name": "Cloak of Shadows",
       "spell_id": 31224,
-      "avg_uses": 1.4,
+      "avg_uses": 1.3,
       "min_uses": 1,
       "max_uses": 2,
-      "sample_count": 5
+      "sample_count": 6
     }
   ],
   "top_dtk_comparison": [
     {
       "spell_id": 1250686,
-      "avg_pct": 0.4211,
+      "avg_pct": 0.4149,
       "min_pct": 0.36,
       "max_pct": 0.461,
-      "stddev_pct": 0.0392,
+      "stddev_pct": 0.0428,
       "sample_count": 10
     },
     {
       "spell_id": 1285504,
-      "avg_pct": 0.2993,
+      "avg_pct": 0.3021,
       "min_pct": 0.258,
       "max_pct": 0.374,
-      "stddev_pct": 0.0323,
+      "stddev_pct": 0.0332,
       "sample_count": 10
     },
     {
       "spell_id": 1254018,
-      "avg_pct": 0.175,
+      "avg_pct": 0.1856,
       "min_pct": 0.138,
-      "max_pct": 0.217,
-      "stddev_pct": 0.027,
+      "max_pct": 0.246,
+      "stddev_pct": 0.0321,
+      "sample_count": 10
+    },
+    {
+      "spell_id": 1260835,
+      "avg_pct": 0.043,
+      "min_pct": 0.015,
+      "max_pct": 0.099,
+      "stddev_pct": 0.0251,
       "sample_count": 10
     },
     {
       "spell_id": 1245592,
-      "avg_pct": 0.0478,
-      "min_pct": 0.011,
+      "avg_pct": 0.0422,
+      "min_pct": 0.009,
       "max_pct": 0.107,
-      "stddev_pct": 0.0305,
+      "stddev_pct": 0.0333,
       "sample_count": 8
     },
     {
-      "spell_id": 1260835,
-      "avg_pct": 0.0447,
-      "min_pct": 0.015,
-      "max_pct": 0.099,
-      "stddev_pct": 0.0259,
-      "sample_count": 10
-    },
-    {
       "spell_id": 1250828,
-      "avg_pct": 0.0279,
-      "min_pct": 0.013,
+      "avg_pct": 0.0266,
+      "min_pct": 0.01,
       "max_pct": 0.05,
-      "stddev_pct": 0.0145,
+      "stddev_pct": 0.0157,
       "sample_count": 7
     }
   ],
   "top_dtk_segments": [
     {
       "seg_index": 0,
-      "avg_pct": 0.0496,
-      "stddev_pct": 0.019,
+      "avg_pct": 0.0464,
+      "stddev_pct": 0.0182,
       "sample_count": 10
     },
     {
       "seg_index": 1,
-      "avg_pct": 0.115,
-      "stddev_pct": 0.0356,
+      "avg_pct": 0.1114,
+      "stddev_pct": 0.0355,
       "sample_count": 10
     },
     {
       "seg_index": 2,
-      "avg_pct": 0.1163,
-      "stddev_pct": 0.039,
+      "avg_pct": 0.1081,
+      "stddev_pct": 0.0372,
       "sample_count": 10
     },
     {
       "seg_index": 3,
-      "avg_pct": 0.157,
-      "stddev_pct": 0.0493,
+      "avg_pct": 0.1496,
+      "stddev_pct": 0.0498,
       "sample_count": 10
     },
     {
       "seg_index": 4,
-      "avg_pct": 0.0588,
-      "stddev_pct": 0.0237,
+      "avg_pct": 0.0558,
+      "stddev_pct": 0.0249,
       "sample_count": 10
     },
     {
       "seg_index": 5,
-      "avg_pct": 0.1372,
-      "stddev_pct": 0.0379,
+      "avg_pct": 0.1319,
+      "stddev_pct": 0.0399,
       "sample_count": 10
     },
     {
       "seg_index": 6,
-      "avg_pct": 0.1075,
-      "stddev_pct": 0.0321,
+      "avg_pct": 0.0988,
+      "stddev_pct": 0.0246,
       "sample_count": 9
     },
     {
       "seg_index": 7,
-      "avg_pct": 0.1125,
-      "stddev_pct": 0.0381,
+      "avg_pct": 0.1169,
+      "stddev_pct": 0.0356,
       "sample_count": 9
     },
     {
       "seg_index": 8,
-      "avg_pct": 0.0469,
-      "stddev_pct": 0.0093,
-      "sample_count": 6
+      "avg_pct": 0.0453,
+      "stddev_pct": 0.0095,
+      "sample_count": 7
     },
     {
       "seg_index": 9,
-      "avg_pct": 0.1195,
-      "stddev_pct": 0.0156,
-      "sample_count": 6
+      "avg_pct": 0.1174,
+      "stddev_pct": 0.0152,
+      "sample_count": 7
     },
     {
       "seg_index": 10,
-      "avg_pct": 0.0946,
-      "stddev_pct": 0.0349,
-      "sample_count": 6
+      "avg_pct": 0.0906,
+      "stddev_pct": 0.0336,
+      "sample_count": 7
     },
     {
       "seg_index": 11,
-      "avg_pct": 0.0191,
-      "stddev_pct": 0.0168,
-      "sample_count": 6
+      "avg_pct": 0.0333,
+      "stddev_pct": 0.0405,
+      "sample_count": 7
+    },
+    {
+      "seg_index": 12,
+      "avg_pct": 0.0198,
+      "stddev_pct": 0.0,
+      "sample_count": 1
     }
   ]
 }

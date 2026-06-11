@@ -6,6 +6,7 @@
     "report_code": "nwNtzkPDV3QBXhAm",
     "fight_id": 31,
     "player_name": "Arar",
+    "sampled_at": "2026-06-11 20:19:53",
     "cooldown_data": {
       "player": "Arar",
       "spec": "SubtletyRogue",
@@ -310,17 +311,6 @@
           ],
           "hold_windows": [],
           "cast_pattern": "on_cooldown"
-        },
-        {
-          "name": "Algeth'ar Puzzle Box",
-          "spell_id": 388688,
-          "total_uses": 0,
-          "first_cast_s": null,
-          "bl_aligned": false,
-          "bl_offset_s": null,
-          "cast_times_s": [],
-          "hold_windows": [],
-          "cast_pattern": "on_cooldown"
         }
       ],
       "burst_windows": [
@@ -605,8 +595,7 @@
           "name": ""
         }
       ]
-    },
-    "sampled_at": "2026-06-11 09:33:39"
+    }
   },
   {
     "spec": "SubtletyRogue",
@@ -615,6 +604,7 @@
     "report_code": "xJRnDhGNk9tWzqTX",
     "fight_id": 10,
     "player_name": "Marketable",
+    "sampled_at": "2026-06-11 20:19:54",
     "cooldown_data": {
       "player": "Marketable",
       "spec": "SubtletyRogue",
@@ -922,17 +912,6 @@
             }
           ],
           "cast_pattern": "hold"
-        },
-        {
-          "name": "Algeth'ar Puzzle Box",
-          "spell_id": 388688,
-          "total_uses": 0,
-          "first_cast_s": null,
-          "bl_aligned": false,
-          "bl_offset_s": null,
-          "cast_times_s": [],
-          "hold_windows": [],
-          "cast_pattern": "on_cooldown"
         }
       ],
       "burst_windows": [
@@ -1247,8 +1226,7 @@
           "name": ""
         }
       ]
-    },
-    "sampled_at": "2026-06-11 09:33:40"
+    }
   },
   {
     "spec": "SubtletyRogue",
@@ -1257,6 +1235,7 @@
     "report_code": "xW9yJAFcrnbNgTCf",
     "fight_id": 34,
     "player_name": "Sebrogue",
+    "sampled_at": "2026-06-11 20:19:55",
     "cooldown_data": {
       "player": "Sebrogue",
       "spec": "SubtletyRogue",
@@ -1545,17 +1524,6 @@
             35.36,
             157.04
           ],
-          "hold_windows": [],
-          "cast_pattern": "on_cooldown"
-        },
-        {
-          "name": "Algeth'ar Puzzle Box",
-          "spell_id": 388688,
-          "total_uses": 0,
-          "first_cast_s": null,
-          "bl_aligned": false,
-          "bl_offset_s": null,
-          "cast_times_s": [],
           "hold_windows": [],
           "cast_pattern": "on_cooldown"
         }
@@ -1872,8 +1840,7 @@
           "name": ""
         }
       ]
-    },
-    "sampled_at": "2026-06-11 09:33:41"
+    }
   },
   {
     "spec": "SubtletyRogue",
@@ -1882,6 +1849,7 @@
     "report_code": "hmTWFR3x91wV2HnX",
     "fight_id": 6,
     "player_name": "Antok",
+    "sampled_at": "2026-06-11 20:19:55",
     "cooldown_data": {
       "player": "Antok",
       "spec": "SubtletyRogue",
@@ -2147,17 +2115,6 @@
           "cast_times_s": [
             35.83
           ],
-          "hold_windows": [],
-          "cast_pattern": "on_cooldown"
-        },
-        {
-          "name": "Algeth'ar Puzzle Box",
-          "spell_id": 388688,
-          "total_uses": 0,
-          "first_cast_s": null,
-          "bl_aligned": false,
-          "bl_offset_s": null,
-          "cast_times_s": [],
           "hold_windows": [],
           "cast_pattern": "on_cooldown"
         }
@@ -2448,8 +2405,7 @@
           "name": ""
         }
       ]
-    },
-    "sampled_at": "2026-06-11 09:33:43"
+    }
   },
   {
     "spec": "SubtletyRogue",
@@ -2458,6 +2414,7 @@
     "report_code": "3jz7yRgTnmhG8rCf",
     "fight_id": 6,
     "player_name": "Annsie",
+    "sampled_at": "2026-06-11 20:19:56",
     "cooldown_data": {
       "player": "Annsie",
       "spec": "SubtletyRogue",
@@ -2796,17 +2753,6 @@
             }
           ],
           "cast_pattern": "hold"
-        },
-        {
-          "name": "Algeth'ar Puzzle Box",
-          "spell_id": 388688,
-          "total_uses": 0,
-          "first_cast_s": null,
-          "bl_aligned": false,
-          "bl_offset_s": null,
-          "cast_times_s": [],
-          "hold_windows": [],
-          "cast_pattern": "on_cooldown"
         }
       ],
       "burst_windows": [
@@ -3105,8 +3051,7 @@
           "name": ""
         }
       ]
-    },
-    "sampled_at": "2026-06-11 09:33:44"
+    }
   },
   {
     "spec": "SubtletyRogue",
@@ -3115,6 +3060,7 @@
     "report_code": "zbfJ3KPcG8HaRd2Y",
     "fight_id": 18,
     "player_name": "권야옹",
+    "sampled_at": "2026-06-11 20:19:56",
     "cooldown_data": {
       "player": "권야옹",
       "spec": "SubtletyRogue",
@@ -3415,17 +3361,6 @@
           ],
           "hold_windows": [],
           "cast_pattern": "on_cooldown"
-        },
-        {
-          "name": "Algeth'ar Puzzle Box",
-          "spell_id": 388688,
-          "total_uses": 0,
-          "first_cast_s": null,
-          "bl_aligned": false,
-          "bl_offset_s": null,
-          "cast_times_s": [],
-          "hold_windows": [],
-          "cast_pattern": "on_cooldown"
         }
       ],
       "burst_windows": [
@@ -3716,8 +3651,7 @@
           "name": ""
         }
       ]
-    },
-    "sampled_at": "2026-06-11 09:33:46"
+    }
   },
   {
     "spec": "SubtletyRogue",
@@ -3726,6 +3660,7 @@
     "report_code": "GhVjwHPfKdZvTnAq",
     "fight_id": 37,
     "player_name": "小心老六",
+    "sampled_at": "2026-06-11 20:19:58",
     "cooldown_data": {
       "player": "小心老六",
       "spec": "SubtletyRogue",
@@ -4050,17 +3985,6 @@
             }
           ],
           "cast_pattern": "hold"
-        },
-        {
-          "name": "Algeth'ar Puzzle Box",
-          "spell_id": 388688,
-          "total_uses": 0,
-          "first_cast_s": null,
-          "bl_aligned": false,
-          "bl_offset_s": null,
-          "cast_times_s": [],
-          "hold_windows": [],
-          "cast_pattern": "on_cooldown"
         }
       ],
       "burst_windows": [
@@ -4375,8 +4299,7 @@
           "name": ""
         }
       ]
-    },
-    "sampled_at": "2026-06-11 09:33:47"
+    }
   },
   {
     "spec": "SubtletyRogue",
@@ -4385,6 +4308,7 @@
     "report_code": "zQAaHTX971CPV48p",
     "fight_id": 19,
     "player_name": "Евлога",
+    "sampled_at": "2026-06-11 20:19:58",
     "cooldown_data": {
       "player": "Евлога",
       "spec": "SubtletyRogue",
@@ -4691,17 +4615,6 @@
             }
           ],
           "cast_pattern": "hold"
-        },
-        {
-          "name": "Algeth'ar Puzzle Box",
-          "spell_id": 388688,
-          "total_uses": 0,
-          "first_cast_s": null,
-          "bl_aligned": false,
-          "bl_offset_s": null,
-          "cast_times_s": [],
-          "hold_windows": [],
-          "cast_pattern": "on_cooldown"
         }
       ],
       "burst_windows": [
@@ -4997,8 +4910,7 @@
           "name": ""
         }
       ]
-    },
-    "sampled_at": "2026-06-11 09:33:49"
+    }
   },
   {
     "spec": "SubtletyRogue",
@@ -5007,6 +4919,7 @@
     "report_code": "BX6kNWzF1jbaqL3m",
     "fight_id": 38,
     "player_name": "Omr",
+    "sampled_at": "2026-06-11 20:19:59",
     "cooldown_data": {
       "player": "Omr",
       "spec": "SubtletyRogue",
@@ -5318,17 +5231,6 @@
             }
           ],
           "cast_pattern": "hold"
-        },
-        {
-          "name": "Algeth'ar Puzzle Box",
-          "spell_id": 388688,
-          "total_uses": 0,
-          "first_cast_s": null,
-          "bl_aligned": false,
-          "bl_offset_s": null,
-          "cast_times_s": [],
-          "hold_windows": [],
-          "cast_pattern": "on_cooldown"
         }
       ],
       "burst_windows": [
@@ -5644,8 +5546,7 @@
           "name": ""
         }
       ]
-    },
-    "sampled_at": "2026-06-11 09:33:50"
+    }
   },
   {
     "spec": "SubtletyRogue",
@@ -5654,6 +5555,7 @@
     "report_code": "YpdKVTDk4rcQnZNh",
     "fight_id": 18,
     "player_name": "Pokz",
+    "sampled_at": "2026-06-11 20:20:00",
     "cooldown_data": {
       "player": "Pokz",
       "spec": "SubtletyRogue",
@@ -5948,17 +5850,6 @@
             14.14,
             137.52
           ],
-          "hold_windows": [],
-          "cast_pattern": "on_cooldown"
-        },
-        {
-          "name": "Algeth'ar Puzzle Box",
-          "spell_id": 388688,
-          "total_uses": 0,
-          "first_cast_s": null,
-          "bl_aligned": false,
-          "bl_offset_s": null,
-          "cast_times_s": [],
           "hold_windows": [],
           "cast_pattern": "on_cooldown"
         }
@@ -6274,7 +6165,6 @@
           "name": ""
         }
       ]
-    },
-    "sampled_at": "2026-06-11 09:33:51"
+    }
   }
 ]

@@ -3,142 +3,184 @@
   "encounter_id": 3178,
   "encounter_name": "Vaelgor & Ezzorak",
   "sample_count": 10,
-  "avg_duration_s": 384.2,
-  "last_ingested": "2026-06-11 17:08:35",
-  "downtime_threshold_ms": 1510,
-  "top_avg_efficiency": 72.9,
-  "top_efficiency_stddev": 3.4,
+  "avg_duration_s": 396.8,
+  "last_ingested": "2026-06-11 20:20:22",
+  "downtime_threshold_ms": 1556,
+  "top_avg_efficiency": 72.6,
+  "top_efficiency_stddev": 2.5,
   "per_cd_benchmarks": {
     "Shadow Blades": {
       "sample_count": 10,
       "avg_first_cast_s": 3.9,
       "stddev_first_cast_s": 1.8,
       "avg_gap_s": 101.0,
-      "stddev_gap_s": 7.2,
+      "stddev_gap_s": 7.7,
       "avg_bl_offset_s": null,
       "stddev_bl_offset_s": null,
       "hold_targets": {
         "3": {
-          "target_s": 206.0,
-          "stddev_s": 4.8,
+          "target_s": 206.1,
+          "stddev_s": 6.0,
           "count": 9,
           "total_samples": 10
         },
         "4": {
-          "target_s": 308.1,
-          "stddev_s": 7.2,
+          "target_s": 308.4,
+          "stddev_s": 7.3,
           "count": 10,
           "total_samples": 10
-        }
-      },
-      "uses_per_min": {
-        "avg": 0.671,
-        "stddev": 0.037,
-        "min": 0.614,
-        "max": 0.748
-      },
-      "avg_uses": 4.3,
-      "avg_uses_per_min": 0.67,
-      "bl_pct": 0,
-      "majority_hold": true
-    },
-    "Shadow Dance": {
-      "sample_count": 10,
-      "avg_first_cast_s": 4.0,
-      "stddev_first_cast_s": 1.8,
-      "avg_gap_s": 19.9,
-      "stddev_gap_s": 6.4,
-      "avg_bl_offset_s": null,
-      "stddev_bl_offset_s": null,
-      "hold_targets": {},
-      "uses_per_min": {
-        "avg": 3.083,
-        "stddev": 0.113,
-        "min": 2.844,
-        "max": 3.2
-      },
-      "avg_uses": 19.7,
-      "avg_uses_per_min": 3.08,
-      "bl_pct": 0,
-      "majority_hold": false
-    },
-    "Secret Technique": {
-      "sample_count": 10,
-      "avg_first_cast_s": 4.1,
-      "stddev_first_cast_s": 1.8,
-      "avg_gap_s": 20.6,
-      "stddev_gap_s": 4.4,
-      "avg_bl_offset_s": null,
-      "stddev_bl_offset_s": null,
-      "hold_targets": {},
-      "uses_per_min": {
-        "avg": 2.97,
-        "stddev": 0.077,
-        "min": 2.842,
-        "max": 3.064
-      },
-      "avg_uses": 19,
-      "avg_uses_per_min": 2.97,
-      "bl_pct": 0,
-      "majority_hold": false
-    },
-    "Vanish": {
-      "sample_count": 10,
-      "avg_first_cast_s": 21.9,
-      "stddev_first_cast_s": 19.6,
-      "avg_gap_s": 180.4,
-      "stddev_gap_s": 84.8,
-      "avg_bl_offset_s": null,
-      "stddev_bl_offset_s": null,
-      "hold_targets": {
-        "2": {
-          "target_s": 203.4,
-          "stddev_s": 106.4,
-          "count": 7,
-          "total_samples": 10
         },
-        "3": {
-          "target_s": 304.0,
-          "stddev_s": 36.2,
+        "5": {
+          "target_s": 418.8,
+          "stddev_s": 10.5,
           "count": 5,
           "total_samples": 10
         }
       },
       "uses_per_min": {
-        "avg": 0.396,
-        "stddev": 0.146,
+        "avg": 0.68,
+        "stddev": 0.043,
+        "min": 0.614,
+        "max": 0.748
+      },
+      "avg_uses": 4.5,
+      "avg_uses_per_min": 0.68,
+      "bl_pct": 0,
+      "majority_hold": true
+    },
+    "Shadow Dance": {
+      "sample_count": 10,
+      "avg_first_cast_s": 3.9,
+      "stddev_first_cast_s": 1.8,
+      "avg_gap_s": 20.1,
+      "stddev_gap_s": 6.7,
+      "avg_bl_offset_s": null,
+      "stddev_bl_offset_s": null,
+      "hold_targets": {
+        "19": {
+          "target_s": 374.0,
+          "stddev_s": 8.5,
+          "count": 6,
+          "total_samples": 10
+        }
+      },
+      "uses_per_min": {
+        "avg": 3.059,
+        "stddev": 0.099,
+        "min": 2.844,
+        "max": 3.168
+      },
+      "avg_uses": 20.2,
+      "avg_uses_per_min": 3.06,
+      "bl_pct": 0,
+      "majority_hold": true
+    },
+    "Secret Technique": {
+      "sample_count": 10,
+      "avg_first_cast_s": 4.1,
+      "stddev_first_cast_s": 1.8,
+      "avg_gap_s": 20.8,
+      "stddev_gap_s": 4.7,
+      "avg_bl_offset_s": null,
+      "stddev_bl_offset_s": null,
+      "hold_targets": {},
+      "uses_per_min": {
+        "avg": 2.938,
+        "stddev": 0.095,
+        "min": 2.762,
+        "max": 3.064
+      },
+      "avg_uses": 19.4,
+      "avg_uses_per_min": 2.94,
+      "bl_pct": 0,
+      "majority_hold": false
+    },
+    "Vanish": {
+      "sample_count": 10,
+      "avg_first_cast_s": 19.5,
+      "stddev_first_cast_s": 18.6,
+      "avg_gap_s": 189.4,
+      "stddev_gap_s": 84.4,
+      "avg_bl_offset_s": null,
+      "stddev_bl_offset_s": null,
+      "hold_targets": {
+        "2": {
+          "target_s": 187.7,
+          "stddev_s": 107.3,
+          "count": 8,
+          "total_samples": 10
+        },
+        "3": {
+          "target_s": 304.0,
+          "stddev_s": 65.4,
+          "count": 5,
+          "total_samples": 10
+        }
+      },
+      "uses_per_min": {
+        "avg": 0.381,
+        "stddev": 0.137,
         "min": 0.161,
         "max": 0.599
       },
       "avg_uses": 2.5,
-      "avg_uses_per_min": 0.4,
+      "avg_uses_per_min": 0.38,
       "bl_pct": 0,
       "majority_hold": true
-    },
-    "Algeth'ar Puzzle Box": {
-      "sample_count": 10,
-      "avg_first_cast_s": null,
-      "stddev_first_cast_s": null,
-      "avg_gap_s": null,
-      "stddev_gap_s": null,
-      "avg_bl_offset_s": null,
-      "stddev_bl_offset_s": null,
-      "hold_targets": {},
-      "uses_per_min": {},
-      "avg_uses": 0,
-      "avg_uses_per_min": 0.0,
-      "bl_pct": 0,
-      "majority_hold": false
     }
   },
   "burst_windows": [
     {
-      "time_s": 78.6,
-      "stddev_s": 0.4,
-      "count": 6,
+      "time_s": 38.1,
+      "stddev_s": 0.3,
+      "count": 4,
       "total_samples": 10,
-      "pct_avg": 0.067,
+      "pct_avg": 0.064,
       "pct_stddev": 0.003,
+      "pct_min": 0.061,
+      "pct_max": 0.067,
+      "common_cds": [],
+      "avg_targets": 3,
+      "ability_breakdown": [
+        {
+          "spell_id": 459497,
+          "avg_pct": 0.261,
+          "count": 4
+        },
+        {
+          "spell_id": 282449,
+          "avg_pct": 0.237,
+          "count": 4
+        },
+        {
+          "spell_id": 319175,
+          "avg_pct": 0.144,
+          "count": 4
+        },
+        {
+          "spell_id": 1269565,
+          "avg_pct": 0.074,
+          "count": 2
+        },
+        {
+          "spell_id": 319190,
+          "avg_pct": 0.073,
+          "count": 3
+        },
+        {
+          "spell_id": 197835,
+          "avg_pct": 0.061,
+          "count": 3
+        }
+      ]
+    },
+    {
+      "time_s": 78.6,
+      "stddev_s": 0.2,
+      "count": 4,
+      "total_samples": 10,
+      "pct_avg": 0.068,
+      "pct_stddev": 0.004,
       "pct_min": 0.062,
       "pct_max": 0.072,
       "common_cds": [
@@ -148,48 +190,47 @@
       "ability_breakdown": [
         {
           "spell_id": 459497,
-          "avg_pct": 0.249,
-          "count": 6
+          "avg_pct": 0.272,
+          "count": 4
         },
         {
           "spell_id": 319175,
-          "avg_pct": 0.211,
-          "count": 6
+          "avg_pct": 0.205,
+          "count": 4
         },
         {
           "spell_id": 282449,
-          "avg_pct": 0.156,
-          "count": 6
+          "avg_pct": 0.161,
+          "count": 4
         },
         {
           "spell_id": 319190,
           "avg_pct": 0.096,
-          "count": 6
-        },
-        {
-          "spell_id": 280720,
-          "avg_pct": 0.069,
           "count": 4
         },
         {
           "spell_id": 197835,
           "avg_pct": 0.069,
-          "count": 5
+          "count": 4
+        },
+        {
+          "spell_id": 280720,
+          "avg_pct": 0.065,
+          "count": 2
         }
       ]
     },
     {
-      "time_s": 206.4,
-      "stddev_s": 1.4,
+      "time_s": 206.5,
+      "stddev_s": 0.5,
       "count": 9,
       "total_samples": 10,
-      "pct_avg": 0.089,
-      "pct_stddev": 0.018,
-      "pct_min": 0.062,
+      "pct_avg": 0.086,
+      "pct_stddev": 0.02,
+      "pct_min": 0.06,
       "pct_max": 0.119,
       "common_cds": [
-        "Shadow Blades",
-        "Shadow Dance"
+        "Shadow Blades"
       ],
       "avg_targets": 3,
       "ability_breakdown": [
@@ -199,34 +240,80 @@
           "count": 8
         },
         {
-          "spell_id": 279043,
-          "avg_pct": 0.187,
+          "spell_id": 319175,
+          "avg_pct": 0.186,
           "count": 9
         },
         {
-          "spell_id": 319175,
-          "avg_pct": 0.181,
+          "spell_id": 279043,
+          "avg_pct": 0.185,
           "count": 9
         },
         {
           "spell_id": 282449,
-          "avg_pct": 0.138,
+          "avg_pct": 0.137,
           "count": 8
         },
         {
           "spell_id": 319190,
-          "avg_pct": 0.076,
-          "count": 9
+          "avg_pct": 0.085,
+          "count": 8
+        }
+      ]
+    },
+    {
+      "time_s": 246.6,
+      "stddev_s": 0.3,
+      "count": 4,
+      "total_samples": 10,
+      "pct_avg": 0.065,
+      "pct_stddev": 0.007,
+      "pct_min": 0.057,
+      "pct_max": 0.075,
+      "common_cds": [
+        "Shadow Dance"
+      ],
+      "avg_targets": 3,
+      "ability_breakdown": [
+        {
+          "spell_id": 459497,
+          "avg_pct": 0.278,
+          "count": 4
+        },
+        {
+          "spell_id": 319175,
+          "avg_pct": 0.211,
+          "count": 4
+        },
+        {
+          "spell_id": 282449,
+          "avg_pct": 0.165,
+          "count": 4
+        },
+        {
+          "spell_id": 319190,
+          "avg_pct": 0.097,
+          "count": 4
+        },
+        {
+          "spell_id": 197835,
+          "avg_pct": 0.065,
+          "count": 4
+        },
+        {
+          "spell_id": 1269565,
+          "avg_pct": 0.048,
+          "count": 2
         }
       ]
     },
     {
       "time_s": 286.4,
-      "stddev_s": 0.4,
-      "count": 6,
+      "stddev_s": 0.5,
+      "count": 5,
       "total_samples": 10,
       "pct_avg": 0.072,
-      "pct_stddev": 0.021,
+      "pct_stddev": 0.024,
       "pct_min": 0.05,
       "pct_max": 0.107,
       "common_cds": [
@@ -236,43 +323,43 @@
       "ability_breakdown": [
         {
           "spell_id": 459497,
-          "avg_pct": 0.224,
-          "count": 5
+          "avg_pct": 0.259,
+          "count": 4
         },
         {
           "spell_id": 319175,
-          "avg_pct": 0.206,
-          "count": 6
+          "avg_pct": 0.205,
+          "count": 5
         },
         {
           "spell_id": 282449,
-          "avg_pct": 0.2,
-          "count": 6
+          "avg_pct": 0.174,
+          "count": 5
         },
         {
           "spell_id": 319190,
-          "avg_pct": 0.09,
-          "count": 6
-        },
-        {
-          "spell_id": 280720,
-          "avg_pct": 0.07,
-          "count": 3
+          "avg_pct": 0.089,
+          "count": 5
         },
         {
           "spell_id": 197835,
           "avg_pct": 0.067,
           "count": 5
+        },
+        {
+          "spell_id": 1269565,
+          "avg_pct": 0.062,
+          "count": 3
         }
       ]
     },
     {
-      "time_s": 308.3,
+      "time_s": 308.4,
       "stddev_s": 0.6,
       "count": 9,
       "total_samples": 10,
-      "pct_avg": 0.098,
-      "pct_stddev": 0.018,
+      "pct_avg": 0.091,
+      "pct_stddev": 0.02,
       "pct_min": 0.067,
       "pct_max": 0.123,
       "common_cds": [
@@ -283,33 +370,33 @@
       "ability_breakdown": [
         {
           "spell_id": 282449,
-          "avg_pct": 0.225,
-          "count": 9
-        },
-        {
-          "spell_id": 459497,
-          "avg_pct": 0.212,
+          "avg_pct": 0.24,
           "count": 9
         },
         {
           "spell_id": 279043,
-          "avg_pct": 0.191,
+          "avg_pct": 0.196,
+          "count": 9
+        },
+        {
+          "spell_id": 459497,
+          "avg_pct": 0.188,
           "count": 9
         },
         {
           "spell_id": 319175,
-          "avg_pct": 0.107,
-          "count": 9
+          "avg_pct": 0.113,
+          "count": 8
         },
         {
           "spell_id": 319190,
-          "avg_pct": 0.056,
+          "avg_pct": 0.06,
           "count": 5
         },
         {
           "spell_id": 280720,
-          "avg_pct": 0.049,
-          "count": 6
+          "avg_pct": 0.052,
+          "count": 7
         }
       ]
     }
@@ -321,9 +408,9 @@
         "key": "v2:110432,110432,110432,90638,90639,90640,90692,90704,90706,90713,90716,90718,90720,90721,90724,90730,90732,90738,90748,90749,90750,90751,90752,90758,90760,94580",
         "count": 9,
         "pct": 90,
-        "report_code": "DMjA3tVv6hQcGyKa",
-        "fight_id": 30,
-        "player_name": "Monsterabuse"
+        "report_code": "3bxyKWPXDMrCqdt8",
+        "fight_id": 1,
+        "player_name": "网恋高手"
       },
       {
         "key": "v2:110432,110432,110432,90638,90639,90640,90692,90704,90706,90713,90716,90720,90721,90724,90730,90732,90738,90748,90749,90750,90751,90752,90758,90760,94580",
@@ -339,28 +426,28 @@
         {
           "id": 249344,
           "name": "Light Company Guidon",
-          "count": 8,
-          "pct": 80
+          "count": 7,
+          "pct": 70
         },
         {
           "id": 249343,
           "name": "Gaze of the Alnseer",
-          "count": 2,
-          "pct": 20
+          "count": 3,
+          "pct": 30
         }
       ],
       "13": [
         {
           "id": 249343,
           "name": "Gaze of the Alnseer",
-          "count": 8,
-          "pct": 80
+          "count": 7,
+          "pct": 70
         },
         {
           "id": 249344,
           "name": "Light Company Guidon",
-          "count": 2,
-          "pct": 20
+          "count": 3,
+          "pct": 30
         }
       ]
     },
@@ -369,8 +456,14 @@
         {
           "id": 8017,
           "name": "",
-          "count": 9,
-          "pct": 90
+          "count": 7,
+          "pct": 70
+        },
+        {
+          "id": 7961,
+          "name": "",
+          "count": 2,
+          "pct": 20
         },
         {
           "id": 7959,
@@ -383,14 +476,14 @@
         {
           "id": 8001,
           "name": "",
-          "count": 7,
-          "pct": 70
+          "count": 5,
+          "pct": 50
         },
         {
           "id": 8031,
           "name": "",
-          "count": 2,
-          "pct": 20
+          "count": 4,
+          "pct": 40
         },
         {
           "id": 8028,
@@ -419,22 +512,14 @@
         {
           "id": 7963,
           "name": "",
-          "count": 8,
-          "pct": 80
+          "count": 6,
+          "pct": 60
         },
         {
           "id": 7993,
           "name": "",
-          "count": 2,
-          "pct": 20
-        }
-      ],
-      "9": [
-        {
-          "id": 2841,
-          "name": "",
-          "count": 1,
-          "pct": 10
+          "count": 4,
+          "pct": 40
         }
       ],
       "10": [
@@ -471,14 +556,28 @@
         {
           "id": 8039,
           "name": "",
-          "count": 8,
-          "pct": 80
+          "count": 7,
+          "pct": 70
         },
         {
           "id": 8041,
           "name": "",
           "count": 2,
           "pct": 20
+        },
+        {
+          "id": 7981,
+          "name": "",
+          "count": 1,
+          "pct": 10
+        }
+      ],
+      "9": [
+        {
+          "id": 2841,
+          "name": "",
+          "count": 1,
+          "pct": 10
         }
       ]
     }
@@ -487,10 +586,10 @@
     {
       "name": "Cloak of Shadows",
       "spell_id": 31224,
-      "avg_uses": 1.9,
+      "avg_uses": 1.7,
       "min_uses": 1,
       "max_uses": 2,
-      "sample_count": 8
+      "sample_count": 7
     },
     {
       "name": "Evasion",
@@ -504,167 +603,167 @@
   "top_dtk_comparison": [
     {
       "spell_id": 1259275,
-      "avg_pct": 0.2249,
+      "avg_pct": 0.2352,
       "min_pct": 0.165,
       "max_pct": 0.319,
-      "stddev_pct": 0.0475,
+      "stddev_pct": 0.0499,
       "sample_count": 10
     },
     {
       "spell_id": 1250071,
-      "avg_pct": 0.1695,
-      "min_pct": 0.155,
+      "avg_pct": 0.1635,
+      "min_pct": 0.14,
       "max_pct": 0.198,
-      "stddev_pct": 0.0151,
+      "stddev_pct": 0.0166,
       "sample_count": 10
     },
     {
       "spell_id": 1285954,
-      "avg_pct": 0.1397,
+      "avg_pct": 0.1374,
       "min_pct": 0.116,
       "max_pct": 0.156,
-      "stddev_pct": 0.0139,
+      "stddev_pct": 0.0137,
       "sample_count": 10
     },
     {
       "spell_id": 1245175,
-      "avg_pct": 0.0865,
+      "avg_pct": 0.0954,
       "min_pct": 0.041,
-      "max_pct": 0.13,
-      "stddev_pct": 0.033,
+      "max_pct": 0.15,
+      "stddev_pct": 0.0369,
       "sample_count": 10
     },
     {
       "spell_id": 1245302,
-      "avg_pct": 0.0791,
+      "avg_pct": 0.0757,
       "min_pct": 0.05,
       "max_pct": 0.112,
-      "stddev_pct": 0.0182,
+      "stddev_pct": 0.0192,
       "sample_count": 10
     },
     {
       "spell_id": 1245500,
-      "avg_pct": 0.0757,
+      "avg_pct": 0.0743,
       "min_pct": 0.06,
       "max_pct": 0.086,
-      "stddev_pct": 0.0093,
+      "stddev_pct": 0.0084,
       "sample_count": 10
     },
     {
-      "spell_id": 1244413,
-      "avg_pct": 0.0582,
-      "min_pct": 0.045,
-      "max_pct": 0.066,
-      "stddev_pct": 0.0064,
-      "sample_count": 9
-    },
-    {
       "spell_id": 1283712,
-      "avg_pct": 0.056,
+      "avg_pct": 0.0568,
       "min_pct": 0.039,
       "max_pct": 0.095,
-      "stddev_pct": 0.0224,
+      "stddev_pct": 0.0221,
       "sample_count": 5
     },
     {
+      "spell_id": 1244413,
+      "avg_pct": 0.0558,
+      "min_pct": 0.045,
+      "max_pct": 0.066,
+      "stddev_pct": 0.0066,
+      "sample_count": 9
+    },
+    {
       "spell_id": 1249748,
-      "avg_pct": 0.0432,
+      "avg_pct": 0.0416,
       "min_pct": 0.039,
       "max_pct": 0.047,
-      "stddev_pct": 0.0036,
+      "stddev_pct": 0.0033,
       "sample_count": 5
     }
   ],
   "top_dtk_segments": [
     {
       "seg_index": 0,
-      "avg_pct": 0.0313,
-      "stddev_pct": 0.0237,
+      "avg_pct": 0.0263,
+      "stddev_pct": 0.0206,
       "sample_count": 10
     },
     {
       "seg_index": 1,
-      "avg_pct": 0.0853,
-      "stddev_pct": 0.0191,
+      "avg_pct": 0.0844,
+      "stddev_pct": 0.0198,
       "sample_count": 10
     },
     {
       "seg_index": 2,
-      "avg_pct": 0.068,
-      "stddev_pct": 0.0167,
+      "avg_pct": 0.0694,
+      "stddev_pct": 0.0158,
       "sample_count": 10
     },
     {
       "seg_index": 3,
-      "avg_pct": 0.0795,
-      "stddev_pct": 0.0128,
-      "sample_count": 10
-    },
-    {
-      "seg_index": 4,
-      "avg_pct": 0.1112,
-      "stddev_pct": 0.0154,
-      "sample_count": 10
-    },
-    {
-      "seg_index": 5,
-      "avg_pct": 0.0897,
-      "stddev_pct": 0.0201,
-      "sample_count": 10
-    },
-    {
-      "seg_index": 6,
-      "avg_pct": 0.0692,
+      "avg_pct": 0.0763,
       "stddev_pct": 0.0129,
       "sample_count": 10
     },
     {
+      "seg_index": 4,
+      "avg_pct": 0.1089,
+      "stddev_pct": 0.0151,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 5,
+      "avg_pct": 0.0788,
+      "stddev_pct": 0.0169,
+      "sample_count": 10
+    },
+    {
+      "seg_index": 6,
+      "avg_pct": 0.0669,
+      "stddev_pct": 0.0135,
+      "sample_count": 10
+    },
+    {
       "seg_index": 7,
-      "avg_pct": 0.0656,
-      "stddev_pct": 0.0148,
+      "avg_pct": 0.0616,
+      "stddev_pct": 0.0132,
       "sample_count": 10
     },
     {
       "seg_index": 8,
-      "avg_pct": 0.1042,
-      "stddev_pct": 0.0255,
+      "avg_pct": 0.1028,
+      "stddev_pct": 0.0178,
       "sample_count": 10
     },
     {
       "seg_index": 9,
-      "avg_pct": 0.0839,
-      "stddev_pct": 0.0139,
+      "avg_pct": 0.0864,
+      "stddev_pct": 0.0108,
       "sample_count": 10
     },
     {
       "seg_index": 10,
-      "avg_pct": 0.142,
-      "stddev_pct": 0.0188,
+      "avg_pct": 0.1421,
+      "stddev_pct": 0.0193,
       "sample_count": 10
     },
     {
       "seg_index": 11,
-      "avg_pct": 0.0162,
-      "stddev_pct": 0.0092,
+      "avg_pct": 0.0159,
+      "stddev_pct": 0.0088,
       "sample_count": 10
     },
     {
       "seg_index": 12,
-      "avg_pct": 0.0474,
-      "stddev_pct": 0.0288,
-      "sample_count": 7
+      "avg_pct": 0.0522,
+      "stddev_pct": 0.0267,
+      "sample_count": 9
     },
     {
       "seg_index": 13,
-      "avg_pct": 0.0364,
-      "stddev_pct": 0.0263,
-      "sample_count": 4
+      "avg_pct": 0.0427,
+      "stddev_pct": 0.0247,
+      "sample_count": 6
     },
     {
       "seg_index": 14,
-      "avg_pct": 0.0311,
-      "stddev_pct": 0.0078,
-      "sample_count": 2
+      "avg_pct": 0.0253,
+      "stddev_pct": 0.0115,
+      "sample_count": 3
     }
   ]
 }
