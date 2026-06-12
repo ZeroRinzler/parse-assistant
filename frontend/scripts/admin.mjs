@@ -1,20 +1,32 @@
 #!/usr/bin/env node
 /**
- * Warcraft Learner Admin CLI
- * Replaces the admin.html web UI with an interactive terminal script.
+ * Warcraft Learner — Rulebook Admin CLI
+ *
+ * Manages AI-generated rulebooks for specs.
+ * Reads scraped guides from frontend/public/data/specs/{spec}/guides.json,
+ * builds the LLM prompt, and writes the pasted AI output directly to
+ * frontend/public/data/specs/{spec}/rulebook.json — no server needed.
  *
  * Usage:
- *   npm run admin              → main menu
- *   npm run admin -- guides    → jump to guides
- *   npm run admin -- parses    → jump to parses
- *   npm run admin -- rulebook  → jump to rulebook
+ *   npm run admin
+ *   npm run admin -- rulebook   (jump to rulebook menu)
  *
- * Requires: backend running at http://localhost:8000
+ * Related scripts:
+ *   npm run scrape   — add and scrape guide URLs
+ *   npm run ingest   — ingest top WCL parses
  */
 
+import fs from 'fs';
+import path from 'path';
 import readline from 'readline';
+import { fileURLToPath } from 'url';
 
-const BASE = process.env.API_BASE ?? 'http://localhost:8000';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const FRONTEND_ROOT = path.resolve(__dirname, '..');
+const DATA_DIR = path.join(FRONTEND_ROOT, 'public', 'data', 'specs');
+const PROMPTS_DIR = path.resolve(__dirname, '..', '..', 'prompts');
+const MAX_GUIDE_CHARS = 60_000;
 
 // ── Readline helpers ──────────────────────────────────────────────────────────
 
@@ -24,106 +36,88 @@ function ask(prompt) {
   return new Promise(resolve => rl.question(prompt, resolve));
 }
 
-function askList(prompt, choices) {
+async function askList(prompt, choices) {
   const lines = choices.map((c, i) => `  [${i + 1}] ${c}`).join('\n');
-  return new Promise(async resolve => {
-    while (true) {
-      const ans = await ask(`${prompt}\n${lines}\n> `);
-      const n = parseInt(ans);
-      if (n >= 1 && n <= choices.length) return resolve(n - 1);
-      console.log('Invalid choice, try again.');
-    }
-  });
-}
-
-// ── API helpers ───────────────────────────────────────────────────────────────
-
-async function api(method, path, body) {
-  const res = await fetch(`${BASE}${path}`, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`);
-  }
-  const ct = res.headers.get('content-type') ?? '';
-  return ct.includes('json') ? res.json() : res.text();
-}
-
-// ── Spec selection ────────────────────────────────────────────────────────────
-
-async function pickSpec() {
-  const data = await api('GET', '/api/admin/specs').catch(() => null);
-  const specs = data?.specs ?? [];
-  if (specs.length === 0) {
-    return await ask('Enter spec name (e.g. SubtletyRogue): ');
-  }
-  console.log('\nKnown specs:');
-  specs.forEach((s, i) => console.log(`  [${i + 1}] ${s}`));
-  const raw = await ask('Choose or type a new spec name: ');
-  const n = parseInt(raw);
-  return (n >= 1 && n <= specs.length) ? specs[n - 1] : raw.trim();
-}
-
-// ── Guides section ────────────────────────────────────────────────────────────
-
-async function guidesMenu(spec) {
   while (true) {
-    const guides = await api('GET', `/api/admin/guides/${spec}`).catch(() => []);
-    console.log(`\n── Guides for ${spec} (${guides.length}) ─────────────────────`);
-    guides.forEach((g, i) =>
-      console.log(`  ${i + 1}. [${g.status}] ${g.guide_type.toUpperCase()} ${g.url.slice(0, 80)}`));
-
-    const idx = await askList('\nAction:', [
-      'Add guide',
-      'Scrape a guide',
-      'Copy AI prompt (prints to stdout)',
-      '← Back',
-    ]);
-
-    if (idx === 3) break;
-
-    if (idx === 0) {
-      const url = await ask('Guide URL: ');
-      const gt = await askList('Guide type:', ['web', 'youtube', 'simc']);
-      const types = ['web', 'youtube', 'simc'];
-      const result = await api('POST', '/api/admin/guides', { spec, url: url.trim(), guide_type: types[gt] });
-      console.log('Added:', result.id);
-    }
-
-    if (idx === 1) {
-      if (guides.length === 0) { console.log('No guides to scrape.'); continue; }
-      const i = await askList('Scrape which?', guides.map(g => g.url.slice(0, 60)));
-      await api('POST', `/api/admin/guides/${guides[i].id}/scrape`);
-      console.log('Scraped successfully.');
-    }
-
-    if (idx === 2) {
-      const prompt = await api('GET', `/api/admin/guides/${spec}/prompt`);
-      console.log('\n── PROMPT START ──────────────────────────────────────────────');
-      console.log(typeof prompt === 'string' ? prompt : JSON.stringify(prompt));
-      console.log('── PROMPT END ────────────────────────────────────────────────\n');
-    }
+    const ans = await ask(`${prompt}\n${lines}\n> `);
+    const n = parseInt(ans);
+    if (n >= 1 && n <= choices.length) return n - 1;
+    console.log('Invalid choice, try again.');
   }
 }
 
-// ── Rulebook section ──────────────────────────────────────────────────────────
+// ── File I/O ──────────────────────────────────────────────────────────────────
+
+function readJson(filePath) {
+  if (!fs.existsSync(filePath)) return null;
+  try { return JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch { return null; }
+}
+
+function writeJson(filePath, data) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+}
+
+function getKnownSpecs() {
+  if (!fs.existsSync(DATA_DIR)) return [];
+  return fs.readdirSync(DATA_DIR).filter(d => {
+    try { return fs.statSync(path.join(DATA_DIR, d)).isDirectory(); } catch { return false; }
+  }).sort();
+}
+
+// ── Prompt building ───────────────────────────────────────────────────────────
+
+function buildPrompt(spec) {
+  const skillPath = path.join(PROMPTS_DIR, 'rulebook_skill.md');
+  if (!fs.existsSync(skillPath)) throw new Error(`Skill file not found: ${skillPath}`);
+
+  let skill = fs.readFileSync(skillPath, 'utf8');
+  skill = skill.replace(/\{\{spec\}\}/g, spec);
+
+  const guidesPath = path.join(DATA_DIR, spec, 'guides.json');
+  const guides = readJson(guidesPath) || [];
+  const scraped = guides.filter(g => g.status === 'scraped' && g.content);
+
+  if (!scraped.length) {
+    throw new Error(`No scraped guides found for ${spec}. Run "npm run scrape" first.`);
+  }
+
+  const sections = scraped.map((g, i) =>
+    `--- Guide ${i + 1} (${g.guide_type}: ${g.url}) ---\n${(g.content || '').slice(0, MAX_GUIDE_CHARS)}`
+  );
+
+  return `${skill}\n\n## Guide Content\n\n${sections.join('\n\n')}`;
+}
+
+// ── Rulebook management ───────────────────────────────────────────────────────
+
+async function readMultilineInput(prompt) {
+  console.log(prompt);
+  console.log('(Paste the JSON, then press Enter + Ctrl+D when done)\n');
+  return new Promise(resolve => {
+    let data = '';
+    const tmp = readline.createInterface({ input: process.stdin });
+    tmp.on('line', line => { data += line + '\n'; });
+    tmp.on('close', () => resolve(data.trim()));
+    rl.close(); // close the outer rl so stdin can be read
+  });
+}
 
 async function rulebookMenu(spec) {
   while (true) {
-    const rb = await api('GET', `/api/admin/rulebook/${spec}`).catch(() => null);
+    const rbPath = path.join(DATA_DIR, spec, 'rulebook.json');
+    const rb = readJson(rbPath);
+
     console.log(`\n── Rulebook for ${spec} ──────────────────────────────────────`);
     if (rb) {
-      console.log(`  Saved: ${rb.saved_at ?? 'unknown'} | Guides: ${rb.guide_count ?? 'n/a'}`);
-      console.log(`  Major CDs: ${rb.major_cooldowns?.length ?? 0} | Rules: ${rb.rules?.length ?? 0}`);
+      console.log(`  Saved: ${rb.saved_at ?? 'unknown'} | Guides used: ${rb.guide_count ?? 'n/a'}`);
+      console.log(`  Major CDs: ${rb.major_cooldowns?.length ?? 0} | Defensives: ${rb.defensives?.length ?? 0} | Rules: ${rb.rules?.length ?? 0}`);
     } else {
       console.log('  No rulebook saved yet.');
     }
 
     const idx = await askList('\nAction:', [
-      'Copy AI prompt (prints to stdout)',
+      'Print AI prompt (copy-paste into your LLM)',
       'Paste AI JSON output → save rulebook',
       '← Back',
     ]);
@@ -131,103 +125,81 @@ async function rulebookMenu(spec) {
     if (idx === 2) break;
 
     if (idx === 0) {
-      const prompt = await api('GET', `/api/admin/guides/${spec}/prompt`);
-      console.log('\n── PROMPT START ──────────────────────────────────────────────');
-      console.log(typeof prompt === 'string' ? prompt : JSON.stringify(prompt));
-      console.log('── PROMPT END ────────────────────────────────────────────────\n');
-    }
-
-    if (idx === 1) {
-      console.log('Paste the AI JSON output (then press Enter twice + Ctrl+D):');
-      let json = '';
-      rl.on('line', line => json += line + '\n');
-      await new Promise(resolve => rl.once('close', resolve));
+      let prompt;
       try {
-        const parsed = JSON.parse(json.trim());
-        await api('PUT', `/api/admin/rulebook/${spec}`, parsed);
-        console.log('Rulebook saved.');
-      } catch (e) {
-        console.error('Failed to parse JSON:', e.message);
+        prompt = buildPrompt(spec);
+      } catch (err) {
+        console.error(`\nError: ${err.message}`);
+        continue;
       }
-      return; // rl closed
+      console.log('\n══ PROMPT START (copy everything below this line) ═══════════\n');
+      console.log(prompt);
+      console.log('\n══ PROMPT END ═══════════════════════════════════════════════\n');
     }
-  }
-}
-
-// ── Parses section ────────────────────────────────────────────────────────────
-
-async function parsesMenu(spec) {
-  while (true) {
-    const idx = await askList(`\n── Parses for ${spec} ────────────────────────────────────────\nAction:`, [
-      'Ingest all bosses (streams progress)',
-      'View encounter list',
-      '← Back',
-    ]);
-
-    if (idx === 2) break;
 
     if (idx === 1) {
-      const encs = await api('GET', `/api/admin/encounters`).catch(() => []);
-      encs.forEach(e => console.log(`  ${e.id}: ${e.name} — ${e.sample_count ?? 0} samples`));
-    }
+      const json = await readMultilineInput('Paste the AI JSON output:');
+      try {
+        const parsed = JSON.parse(json);
+        if (!parsed.spec) parsed.spec = spec;
 
-    if (idx === 0) {
-      console.log(`\nIngesting all bosses for ${spec}... (this may take a few minutes)\n`);
-      const res = await fetch(`${BASE}/api/admin/parses/ingest-all-stream/${spec}`);
-      if (!res.ok) { console.error('Failed:', res.status); continue; }
-      for await (const chunk of res.body) {
-        const text = new TextDecoder().decode(chunk);
-        for (const line of text.split('\n')) {
-          const trimmed = line.trim();
-          if (trimmed.startsWith('data:')) {
-            try {
-              const d = JSON.parse(trimmed.slice(5));
-              if (d.status) process.stdout.write(`\r${d.name ?? ''}: ${d.status} (${d.done ?? 0}/${d.total ?? '?'})`);
-              if (d.done === d.total) console.log(' ✓');
-            } catch { /* non-JSON SSE */ }
-          }
-        }
+        const guidesPath = path.join(DATA_DIR, spec, 'guides.json');
+        const guides = readJson(guidesPath) || [];
+        const guideCount = guides.filter(g => g.status === 'scraped').length;
+
+        const toSave = {
+          ...parsed,
+          guide_count: guideCount,
+          saved_at: new Date().toISOString().replace('T', ' ').slice(0, 19),
+        };
+
+        writeJson(rbPath, toSave);
+        console.log(`\nRulebook saved to ${rbPath}`);
+        console.log(`  ${toSave.major_cooldowns?.length ?? 0} cooldowns, ${toSave.defensives?.length ?? 0} defensives, ${toSave.rules?.length ?? 0} rules`);
+      } catch (err) {
+        console.error(`\nFailed to parse JSON: ${err.message}`);
+        console.error('Make sure you pasted the raw JSON object (starting with {, ending with }).');
       }
-      console.log('\nDone!');
+      return; // stdin was closed during paste
     }
   }
 }
 
-// ── Main ───────────────────────────────────────────────────────────────────────
+// ── Spec selection ────────────────────────────────────────────────────────────
+
+async function pickSpec() {
+  const specs = getKnownSpecs();
+  console.log('\nKnown specs in data/specs/:');
+  if (specs.length) specs.forEach((s, i) => console.log(`  [${i + 1}] ${s}`));
+  else console.log('  (none yet — run "npm run scrape" to add guides for a spec)');
+  const raw = await ask('\nEnter spec name or number (e.g. SubtletyRogue): ');
+  const n = parseInt(raw);
+  if (n >= 1 && n <= specs.length) return specs[n - 1];
+  return raw.trim();
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
   const arg = process.argv[2];
-  console.log('Warcraft Learner Admin CLI');
-  console.log(`Backend: ${BASE}\n`);
+  console.log('Warcraft Learner — Rulebook Admin');
+  console.log('For guides: npm run scrape');
+  console.log('For parses: npm run ingest\n');
 
-  // Test connection
-  const ok = await fetch(`${BASE}/`).then(r => r.ok).catch(() => false);
-  if (!ok) {
-    console.error(`Cannot reach backend at ${BASE}`);
-    console.error('Start the server: python3 -m uvicorn main:app --port 8000');
-    process.exit(1);
-  }
-
-  if (arg === 'guides' || arg === 'parses' || arg === 'rulebook') {
-    const spec = await pickSpec();
-    if (arg === 'guides') await guidesMenu(spec);
-    else if (arg === 'parses') await parsesMenu(spec);
-    else if (arg === 'rulebook') await rulebookMenu(spec);
-    rl.close();
-    return;
-  }
-
-  // Interactive main menu
   while (true) {
     const spec = await pickSpec();
-    const section = await askList(`\nSection for ${spec}:`, ['Guides', 'Rulebook', 'Parses', 'Exit']);
-    if (section === 3) break;
-    if (section === 0) await guidesMenu(spec);
-    if (section === 1) await rulebookMenu(spec);
-    if (section === 2) await parsesMenu(spec);
+    if (!spec) break;
+
+    await rulebookMenu(spec);
+
+    const again = await ask('\nManage another spec? [y/N] ');
+    if (again.trim().toLowerCase() !== 'y') break;
   }
 
   rl.close();
 }
 
-main().catch(err => { console.error(err.message); process.exit(1); });
+main().catch(err => {
+  console.error('\nFatal error:', err.message);
+  process.exit(1);
+});

@@ -92,33 +92,26 @@ export class PostRaidComponent implements OnInit {
     this.result.set(null);
 
     try {
-      if (this.auth.isLoggedIn()) {
-        this.loadingMsg.set('Fetching report from WCL…');
-        const report = await this.wclApi.getReport(this._reportCode);
-        const bossAttempt: Record<number, number> = {};
-        this.fights.set(
-          (report.fights || []).filter(f => (f.encounterID || 0) > 0).sort((a, b) => a.startTime - b.startTime).map(f => {
-            const eid = f.encounterID || 0;
-            bossAttempt[eid] = (bossAttempt[eid] || 0) + 1;
-            return { ...f, duration_s: Math.round((f.endTime - f.startTime) / 100) / 10, attempt: bossAttempt[eid] };
-          })
-        );
-        this.players.set(
-          (report.masterData?.actors || [])
-            .map(a => ({ id: a.id, name: a.name, spec: a.subType || 'Unknown', server: a.server || '' }))
-            .sort((a, b) => a.name.localeCompare(b.name))
-        );
-        this._masterAbilities = report.masterData?.abilities || [];
-        if (report.masterData?.abilities) this.icons.seed(report.masterData.abilities);
-      } else {
-        this.loadingMsg.set('Fetching combat log…');
-        const resp = await fetch(`/api/report/${this._reportCode}`);
-        if (!resp.ok) throw new Error(`Failed to load report (${resp.status})`);
-        const data = await resp.json();
-        this.fights.set(data.fights || []);
-        this.players.set(data.players || []);
-        this._masterAbilities = [];
+      if (!this.auth.isLoggedIn()) {
+        throw new Error('Sign in with WCL to load reports.');
       }
+      this.loadingMsg.set('Fetching report from WCL…');
+      const report = await this.wclApi.getReport(this._reportCode);
+      const bossAttempt: Record<number, number> = {};
+      this.fights.set(
+        (report.fights || []).filter(f => (f.encounterID || 0) > 0).sort((a, b) => a.startTime - b.startTime).map(f => {
+          const eid = f.encounterID || 0;
+          bossAttempt[eid] = (bossAttempt[eid] || 0) + 1;
+          return { ...f, duration_s: Math.round((f.endTime - f.startTime) / 100) / 10, attempt: bossAttempt[eid] };
+        })
+      );
+      this.players.set(
+        (report.masterData?.actors || [])
+          .map(a => ({ id: a.id, name: a.name, spec: a.subType || 'Unknown', server: a.server || '' }))
+          .sort((a, b) => a.name.localeCompare(b.name))
+      );
+      this._masterAbilities = report.masterData?.abilities || [];
+      if (report.masterData?.abilities) this.icons.seed(report.masterData.abilities);
 
       const lastFight = this.fights()[this.fights().length - 1];
       this.selectedFightId.set(autoFight ?? lastFight?.id ?? null);
@@ -151,7 +144,7 @@ export class PostRaidComponent implements OnInit {
 
     this.loadingAnalysis.set(true);
     this.result.set(null);
-    this.loadingMsg.set(this.auth.isLoggedIn() ? 'Fetching events…' : 'Analyzing…');
+    this.loadingMsg.set('Fetching events…');
     try {
       const data = await this.analysisSvc.analyze(this._reportCode, fightId, playerId, this.fights(), this._masterAbilities);
       this.result.set(data);
@@ -163,12 +156,15 @@ export class PostRaidComponent implements OnInit {
   }
 
   private _applyAutoPlayer(autoPlayer: number | null): void {
-    if (autoPlayer) { this.selectedPlayerId.set(autoPlayer); return; }
+    // Always prefer the logged-in user's character over URL params
     const chars = this.wclApi.getCachedUserChars();
-    if (!chars.length) { this.selectedPlayerId.set(this.visiblePlayers()[0]?.id ?? null); return; }
-    const names = new Set(chars.map(c => c.name.toLowerCase()));
-    const match = this.visiblePlayers().find(p => names.has(p.name.toLowerCase()));
-    this.selectedPlayerId.set(match?.id ?? this.visiblePlayers()[0]?.id ?? null);
+    if (chars.length) {
+      const names = new Set(chars.map(c => c.name.toLowerCase()));
+      const match = this.visiblePlayers().find(p => names.has(p.name.toLowerCase()));
+      if (match) { this.selectedPlayerId.set(match.id); return; }
+    }
+    if (autoPlayer) { this.selectedPlayerId.set(autoPlayer); return; }
+    this.selectedPlayerId.set(this.visiblePlayers()[0]?.id ?? null);
   }
 
   private _syncUrl(): void {

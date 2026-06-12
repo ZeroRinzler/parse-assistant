@@ -45,49 +45,10 @@
         </div>
       </div>
 
-      <!-- Ability breakdown -->
+      <!-- Ability breakdown chart -->
       @if (expandedIdx() === card.idx && card.bw.ability_breakdown?.length) {
         <div class="bw-breakdown">
-          @for (ab of abRows(card.idx); track ab.spell_id) {
-            <div class="ab-row">
-              <div class="ab-name">
-                <wl-spell-icon [spellId]="ab.spell_id"></wl-spell-icon>
-                <a [href]="'https://www.wowhead.com/spell=' + ab.spell_id" target="_blank" class="ab-link">
-                  Spell {{ ab.spell_id }}
-                </a>
-              </div>
-              @if (!card.notReached && ab.playerPct != null) {
-                <div class="ab-candle-row">
-                  <span class="cmp-leg player"></span>
-                  <div class="cmp-track">
-                    <div class="cmp-fill player" [style.width.%]="ab.playerBar"></div>
-                  </div>
-                  <span class="cmp-val">{{ (ab.playerPct * 100 | number:'1.1-1') }}%
-                    <span [class]="ab.playerPct >= ab.avg_pct ? 'delta-good' : 'delta-bad'">
-                      {{ ab.playerPct >= ab.avg_pct ? '+' : '' }}{{ ((ab.playerPct - ab.avg_pct) * 100 | number:'1.1-1') }}%
-                    </span>
-                  </span>
-                </div>
-              }
-              <div class="ab-candle-row">
-                <span class="cmp-leg top"></span>
-                <div class="cmp-track">
-                  @if (ab.rW > 0.5) {
-                    <div class="cmp-candle" [style.left.%]="ab.tMinP" [style.width.%]="ab.rW">
-                      <div class="cmp-candle-tick" [style.left.%]="ab.avgOff"></div>
-                    </div>
-                  }
-                  <div class="cmp-fill top" [style.width.%]="ab.tBar"></div>
-                </div>
-                <span class="cmp-val top">
-                  {{ (ab.avg_pct * 100 | number:'1.1-1') }}%
-                  @if (ab.min_pct != null && ab.max_pct != null) {
-                    <span class="cmp-range">{{ (ab.min_pct * 100 | number:'1.1-1') }}%–{{ (ab.max_pct * 100 | number:'1.1-1') }}%</span>
-                  }
-                </span>
-              </div>
-            </div>
-          }
+          <wl-range-chart [rows]="abChartRows(card.idx)" unit="pct"></wl-range-chart>
         </div>
       }
     </div>

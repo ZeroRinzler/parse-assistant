@@ -1,8 +1,10 @@
-import { Component, computed, input } from '@angular/core';
+import { Component, computed, inject, input } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { DmgTakenAbility, TopDtkComparison, DmgTakenSegment } from '../../../core/models/analysis.models';
 import { ComparisonChartComponent, ChartRow } from '../../../shared/components/comparison-chart/comparison-chart';
+
 import { FormatDurationPipe } from '../../../shared/pipes/format-duration-pipe';
+import { IconCacheService } from '../../../core/services/icon-cache';
 
 @Component({
   selector: 'wl-damage-taken',
@@ -11,6 +13,7 @@ import { FormatDurationPipe } from '../../../shared/pipes/format-duration-pipe';
   styleUrl: './damage-taken.scss',
 })
 export class DamageTakenComponent {
+  private readonly icons = inject(IconCacheService);
   readonly byAbility = input<DmgTakenAbility[]>([]);
   readonly total = input<number>(0);
   readonly topComparison = input<TopDtkComparison[]>([]);
@@ -54,9 +57,13 @@ export class DamageTakenComponent {
     return [...mergedIds].map(sid => {
       const ab = playerMap[sid] ?? { spell_id: sid, name: '', damage: 0, pct: 0 };
       const top = topM[sid];
+      const icon = this.icons.get(sid);
+      const name = icon?.name || ab.name || `Spell ${sid}`;
+      const iconUrl = this.icons.iconUrl(sid, 'small');
+      const iconHtml = iconUrl ? `<img src="${iconUrl}" width="18" height="18" style="border-radius:3px;vertical-align:middle" alt="">` : '';
       return {
-        labelHtml: `<span style="display:flex;align-items:center;gap:6px">
-          <a href="https://www.wowhead.com/spell=${sid}" target="_blank">${ab.name || 'Spell ' + sid}</a>
+        labelHtml: `<span style="display:flex;align-items:center;gap:6px">${iconHtml}
+          <a href="https://www.wowhead.com/spell=${sid}" target="_blank">${name}</a>
         </span>`,
         playerVal: ab.pct,
         topAvg: top?.avg_pct ?? null,

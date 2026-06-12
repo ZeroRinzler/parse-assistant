@@ -8,7 +8,7 @@
 
     <mat-card class="char-card">
       <!-- Linked character selector -->
-      @if (linkedChars().length > 1) {
+      @if (linkedChars().length > 0) {
         <mat-form-field appearance="outline" class="full-width">
           <mat-label>Your Characters</mat-label>
           <mat-select [ngModel]="selectedLinkedChar()" (ngModelChange)="onLinkedCharChange($event)">

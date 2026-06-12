@@ -1,12 +1,12 @@
 import { Component, computed, input, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { BurstWindow, PlayerBurstWindow } from '../../../core/models/analysis.models';
-import { SpellIconComponent } from '../../../shared/components/spell-icon/spell-icon';
 import { FormatDurationPipe } from '../../../shared/pipes/format-duration-pipe';
+import { RangeChartComponent, RangeRow } from '../../../shared/components/range-chart/range-chart';
 
 @Component({
   selector: 'wl-burst-windows',
-  imports: [SpellIconComponent, FormatDurationPipe, DecimalPipe],
+  imports: [RangeChartComponent, FormatDurationPipe, DecimalPipe],
   templateUrl: './burst-windows.html',
   styleUrl: './burst-windows.scss',
 })
@@ -59,6 +59,19 @@ export class BurstWindowsComponent {
       };
     });
   });
+
+  protected abChartRows(cardIdx: number): RangeRow[] {
+    const card = this.cards()[cardIdx];
+    if (!card) return [];
+    return (card.bw.ability_breakdown || []).map(ab => ({
+      spellId: ab.spell_id,
+      label: `Spell ${ab.spell_id}`,
+      playerPct: card.playerAbMap[ab.spell_id]?.pct ?? null,
+      topAvg: ab.avg_pct,
+      topMin: ab.min_pct ?? ab.avg_pct * 0.7,
+      topMax: ab.max_pct ?? ab.avg_pct * 1.3,
+    }));
+  }
 
   protected abRows(cardIdx: number): AbilityRow[] {
     const card = this.cards()[cardIdx];

@@ -68,9 +68,4 @@ export class AnalysisResultComponent implements OnChanges {
     if (missing.length) this.icons.fetchMissing(missing);
   }
 
-  protected ruleSourceLabel(source: string): string {
-    if (source === 'generated') return 'AI-generated rulebook';
-    if (source === 'static') return 'Static fallback rulebook';
-    return 'No rulebook';
-  }
 }

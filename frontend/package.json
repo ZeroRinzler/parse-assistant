@@ -8,9 +8,8 @@
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "admin": "node scripts/admin.mjs",
-    "admin:guides": "node scripts/admin.mjs guides",
-    "admin:rulebook": "node scripts/admin.mjs rulebook",
-    "admin:parses": "node scripts/admin.mjs parses"
+    "ingest": "node scripts/ingest.mjs",
+    "scrape": "node scripts/scrape.mjs"
   },
   "private": true,
   "packageManager": "npm@11.13.0",
@@ -24,6 +23,8 @@
     "@angular/material": "^22.0.1",
     "@angular/platform-browser": "^22.0.0",
     "@angular/router": "^22.0.0",
+    "apexcharts": "^5.15.0",
+    "ng-apexcharts": "^2.4.0",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0"
   },

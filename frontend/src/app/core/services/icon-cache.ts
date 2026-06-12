@@ -36,16 +36,8 @@ export class IconCacheService {
     return `https://wow.zamimg.com/images/wow/icons/${size}/${info.icon}.jpg`;
   }
 
-  async fetchMissing(spellIds: number[]): Promise<void> {
-    const cache = this._cache();
-    const missing = spellIds.filter(id => id && !cache[String(id)]);
-    if (!missing.length) return;
-    try {
-      const resp = await fetch(`/api/spell-icons?ids=${missing.join(',')}`);
-      if (resp.ok) {
-        const data: Record<string, { icon: string; name: string }> = await resp.json();
-        this.seedFromMap(data);
-      }
-    } catch { /* icons non-critical */ }
+  fetchMissing(_spellIds: number[]): void {
+    // Icons are sourced from masterData.abilities seeded during report load.
+    // Unknown spell IDs will render without icons; Wowhead tooltips still work via the link.
   }
 }

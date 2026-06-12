@@ -71,7 +71,10 @@ export class PreFightComponent implements OnInit {
   private async _init(): Promise<void> {
     const chars = await this.wclApi.fetchUserCharacters().catch(() => []);
     this.linkedChars.set(chars);
-    if (chars.length) await this._loadLinkedChar(chars[0]);
+    if (chars.length) {
+      this.selectedLinkedChar.set(chars[0]);
+      await this._loadLinkedChar(chars[0]);
+    }
   }
 
   protected async onLinkedCharChange(char: WclUserCharacter): Promise<void> {
@@ -90,6 +93,11 @@ export class PreFightComponent implements OnInit {
       if (info.spec) {
         const enc = await this.encounterSvc.getEncounters(info.spec);
         this.encounters.set(enc);
+        if (!enc.length) {
+          this.error.set(`No parse data ingested yet for ${info.spec}. Run "npm run ingest" to populate encounter data.`);
+        }
+      } else {
+        this.error.set('Could not detect spec — no recent WCL reports found for this character.');
       }
     } catch (err) {
       this.error.set(err instanceof Error ? err.message : 'Failed to load character.');
@@ -112,6 +120,11 @@ export class PreFightComponent implements OnInit {
       if (info.spec) {
         const enc = await this.encounterSvc.getEncounters(info.spec);
         this.encounters.set(enc);
+        if (!enc.length) {
+          this.error.set(`No parse data ingested yet for ${info.spec}. Run "npm run ingest" to populate encounter data.`);
+        }
+      } else {
+        this.error.set('Could not detect spec — no recent WCL reports found for this character.');
       }
     } catch (err) {
       this.error.set(err instanceof Error ? err.message : 'Invalid character URL.');

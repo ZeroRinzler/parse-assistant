@@ -1,9 +1,9 @@
 import { Component, computed, input, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { AnalysisFinding, PlayerDefensive, BurstWindow, PlayerBurstWindow } from '../../../core/models/analysis.models';
-import { SpellIconComponent } from '../../../shared/components/spell-icon/spell-icon';
 import { FormatDurationPipe } from '../../../shared/pipes/format-duration-pipe';
 import { CdCardComponent } from '../cd-card/cd-card';
+import { RangeChartComponent, RangeRow } from '../../../shared/components/range-chart/range-chart';
 
 interface CdBucket { issues: AnalysisFinding[]; holds: AnalysisFinding[]; success?: AnalysisFinding; }
 
@@ -22,7 +22,7 @@ interface AbilityRow {
 
 @Component({
   selector: 'wl-defensives-section',
-  imports: [SpellIconComponent, FormatDurationPipe, DecimalPipe, CdCardComponent],
+  imports: [RangeChartComponent, FormatDurationPipe, DecimalPipe, CdCardComponent],
   templateUrl: './defensives-section.html',
   styleUrl: './defensives-section.scss',
 })
@@ -104,6 +104,19 @@ export class DefensivesSectionComponent {
       return { dw, idx, notReached, playerPct, topPct, minPct, maxPct, cls, badge, pBar, tBar, tMinP, tMaxP, rW, avgOff, playerAbMap };
     });
   });
+
+  protected dwAbChartRows(cardIdx: number): RangeRow[] {
+    const card = this.dwCards()[cardIdx];
+    if (!card) return [];
+    return (card.dw.ability_breakdown || []).map(ab => ({
+      spellId: ab.spell_id,
+      label: `Spell ${ab.spell_id}`,
+      playerPct: card.playerAbMap[ab.spell_id]?.pct ?? null,
+      topAvg: ab.avg_pct,
+      topMin: ab.min_pct ?? ab.avg_pct * 0.7,
+      topMax: ab.max_pct ?? ab.avg_pct * 1.3,
+    }));
+  }
 
   protected dwAbRows(cardIdx: number): AbilityRow[] {
     const card = this.dwCards()[cardIdx];
