@@ -19,6 +19,7 @@
 import fs from 'fs';
 import path from 'path';
 import readline from 'readline';
+import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -63,6 +64,26 @@ function getKnownSpecs() {
   return fs.readdirSync(DATA_DIR).filter(d => {
     try { return fs.statSync(path.join(DATA_DIR, d)).isDirectory(); } catch { return false; }
   }).sort();
+}
+
+// ── Clipboard ────────────────────────────────────────────────────────────────
+
+function copyToClipboard(text) {
+  try {
+    if (process.platform === 'darwin') {
+      execSync('pbcopy', { input: text });
+    } else if (process.platform === 'win32') {
+      execSync('clip', { input: text });
+    } else {
+      // Wayland first, then X11 fallbacks
+      try { execSync('wl-copy', { input: text }); }
+      catch { try { execSync('xclip -selection clipboard', { input: text }); }
+      catch { execSync('xsel --clipboard --input', { input: text }); } }
+    }
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // ── Prompt building ───────────────────────────────────────────────────────────
@@ -132,9 +153,15 @@ async function rulebookMenu(spec) {
         console.error(`\nError: ${err.message}`);
         continue;
       }
-      console.log('\n══ PROMPT START (copy everything below this line) ═══════════\n');
-      console.log(prompt);
-      console.log('\n══ PROMPT END ═══════════════════════════════════════════════\n');
+      const copied = copyToClipboard(prompt);
+      if (copied) {
+        console.log(`\n✓ Prompt copied to clipboard (${prompt.length.toLocaleString()} chars). Paste it into your LLM.\n`);
+      } else {
+        console.log('\n══ PROMPT START (copy everything below this line) ═══════════\n');
+        console.log(prompt);
+        console.log('\n══ PROMPT END ═══════════════════════════════════════════════\n');
+        console.log('(Could not copy automatically — clipboard tool not found. Copy the text above manually.)\n');
+      }
     }
 
     if (idx === 1) {
