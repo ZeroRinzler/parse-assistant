@@ -71,7 +71,7 @@ async function pickSpec() {
 
 async function guidesMenu(spec) {
   while (true) {
-    const guides = await api('GET', `/api/admin/guides?spec=${spec}`).catch(() => []);
+    const guides = await api('GET', `/api/admin/guides/${spec}`).catch(() => []);
     console.log(`\n── Guides for ${spec} (${guides.length}) ─────────────────────`);
     guides.forEach((g, i) =>
       console.log(`  ${i + 1}. [${g.status}] ${g.guide_type.toUpperCase()} ${g.url.slice(0, 80)}`));

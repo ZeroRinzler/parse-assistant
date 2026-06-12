@@ -18,7 +18,7 @@ _WCL_CLASS_NAMES = {
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -99,9 +99,13 @@ async def spa_routes():
 
 
 @app.get("/admin", include_in_schema=False)
-@app.get("/contribute", include_in_schema=False)
-async def admin_frontend():
-    return RedirectResponse(url="/static/admin.html")
+async def admin_redirect():
+    """The admin UI is now a CLI tool. Run `npm run admin` in frontend/ instead."""
+    return PlainTextResponse(
+        "The admin web UI has been replaced by a CLI tool.\n"
+        "Run: npm run admin  (from the frontend/ directory)\n",
+        status_code=200,
+    )
 
 
 # ── Player analysis API ───────────────────────────────────────────────────────
@@ -691,10 +695,14 @@ class AddGuideRequest(BaseModel):
     guide_type: str = "web"
 
 
+@app.get("/api/admin/specs")
+async def list_admin_specs():
+    return {"specs": store.list_specs_with_samples()}
+
+
 @app.get("/api/admin/guides/{spec}")
 async def list_guides(spec: str):
-    guides = store.get_guides(spec)
-    return {"guides": guides}
+    return store.get_guides(spec)
 
 
 @app.post("/api/admin/guides")
@@ -1008,7 +1016,6 @@ async def ingest_all_stream(spec: str):
     )
 
 
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 app.mount("/data",   StaticFiles(directory=str(DATA_DIR)),   name="data")
 # Serve Angular asset files (JS chunks, CSS) at root so <base href="/"> works
 if ANGULAR_DIST.exists():

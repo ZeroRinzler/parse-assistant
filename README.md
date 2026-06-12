@@ -26,14 +26,12 @@ python3 -m uvicorn main:app --host 0.0.0.0 --port 8000
 | `http://localhost:8000/pre` | Pre-fight brief - what top parsers do on each boss |
 | `http://localhost:8000/live` | Live mode - auto-selects newest pull, polls every 12s |
 | `http://localhost:8000` | Post-raid - full cooldown analysis for any fight |
-| `http://localhost:8000/admin` | Contribute - guide management, rulebook generation, parse ingestion |
-
 ## Setup flow
 
-1. **Contribute → Guides tab**: select your spec, add one or more guide URLs (Wowhead, Icy-Veins, YouTube, or SimC APL GitHub URLs), scrape them.
-2. **Contribute → Guides tab**: click "Copy AI Prompt" - copies a complete prompt including the skill instructions and all scraped guide content. Paste it into any LLM (Claude, ChatGPT, etc.).
-3. **Contribute → Guides tab**: paste the LLM's JSON output back and click "Save & Activate" - the rulebook goes live immediately.
-4. **Contribute → Top Parses tab**: click "Ingest All Bosses" - fetches and analyzes the top 10 WCL parses for every current-expansion boss. This powers the comparison table, data-derived thresholds, hold pattern detection, and burst window analysis.
+1. **Admin CLI** (from `frontend/`): `npm run admin` — interactive CLI for guide management, rulebook generation, and parse ingestion.
+2. **Add guides**: select your spec, add one or more guide URLs (Wowhead, Icy-Veins, YouTube, or SimC APL GitHub URLs), scrape them.
+3. **Generate rulebook**: click "Copy AI Prompt" - copies a complete prompt including the skill instructions and all scraped guide content. Paste it into any LLM (Claude, ChatGPT, etc.), then paste the JSON output back to save.
+4. **Ingest parses**: "Ingest all bosses" — fetches and analyzes the top 10 WCL parses for every current-expansion boss. This powers data-derived thresholds, hold pattern detection, and burst window analysis.
 5. **Player page**: paste a WCL report URL - fight and player selectors appear automatically. Analysis runs on selection.
 
 Steps 1–4 are per-spec and only need to be done once (or whenever you want to refresh the data).
@@ -47,7 +45,7 @@ Two workflows keep spec data up to date automatically:
 | `ingest-parses.yml` | Daily at 06:00 UTC (or manual) | `scripts/ingest_parses.py` |
 | `scrape-guides.yml` | Manual (`workflow_dispatch`) | `scripts/scrape_guides.py` |
 
-Set `WCL_CLIENT_ID` and `WCL_CLIENT_SECRET` as repository secrets. The workflows commit an updated `data/warcraft.db` back to the repo after each run. The Contribute page shows the same data and can trigger the same workflows locally.
+Set `WCL_CLIENT_ID` and `WCL_CLIENT_SECRET` as repository secrets. The workflows commit updated `data/specs/**` files back to the repo after each run.
 
 ## Credentials needed
 

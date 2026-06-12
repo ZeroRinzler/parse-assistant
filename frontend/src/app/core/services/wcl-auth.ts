@@ -64,8 +64,7 @@ export class WclAuthService {
   }
 
   private _redirectUri(): string {
-    const base = window.location.origin + window.location.pathname.replace(/\/[^/]+$/, '');
-    return `${base}/callback`;
+    return `${window.location.origin}/callback`;
   }
 
   private _generateVerifier(): string {
