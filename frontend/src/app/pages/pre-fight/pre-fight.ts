@@ -54,8 +54,6 @@ export class PreFightComponent implements OnInit {
   protected readonly loading = signal(false);
   protected readonly loadingBrief = signal(false);
   protected readonly error = signal('');
-  protected readonly urlInput = signal('');
-
   protected readonly gearStats = computed(() => this.bench()?.gear ?? null);
   protected readonly manualSpecInput = signal('');
 
@@ -103,29 +101,6 @@ export class PreFightComponent implements OnInit {
       }
     } catch (err) {
       this.error.set(err instanceof Error ? err.message : 'Failed to load character.');
-    } finally {
-      this.loading.set(false);
-    }
-  }
-
-  protected async loadCharFromUrl(): Promise<void> {
-    const url = this.urlInput().trim();
-    if (!url) return;
-    this.error.set('');
-    this.loading.set(true);
-    this.charInfo.set(null);
-    this.encounters.set([]);
-    try {
-      const { region, server, name } = this._parseCharUrl(url);
-      const info = await this.wclApi.charLookup(name, server, region);
-      this.charInfo.set(info);
-      if (info.spec) {
-        await this._loadEncountersForSpec(info.spec);
-      } else {
-        this.error.set('Could not auto-detect spec. Enter it manually below.');
-      }
-    } catch (err) {
-      this.error.set(err instanceof Error ? err.message : 'Invalid character URL.');
     } finally {
       this.loading.set(false);
     }
@@ -190,9 +165,4 @@ export class PreFightComponent implements OnInit {
     return { status: 'warn', note: `Build differs — most common used by ${top?.pct ?? 0}% of top parsers` };
   }
 
-  private _parseCharUrl(url: string): { region: string; server: string; name: string } {
-    const m = url.match(/warcraftlogs\.com\/character\/([^/?#]+)\/([^/?#]+)\/([^/?#]+)/i);
-    if (m) return { region: m[1].toLowerCase(), server: m[2].toLowerCase(), name: m[3] };
-    throw new Error('Not a valid WCL character URL (expected /character/region/server/name)');
-  }
 }

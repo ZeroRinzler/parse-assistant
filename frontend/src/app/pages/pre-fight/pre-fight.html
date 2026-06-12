@@ -60,17 +60,6 @@
         }
       }
 
-      <!-- Check another character by URL -->
-      <div class="url-section">
-        <div class="url-label">Check another character</div>
-        <div class="url-row">
-          <mat-form-field appearance="outline" class="flex-1">
-            <input matInput [ngModel]="urlInput()" (ngModelChange)="urlInput.set($event)" placeholder="https://www.warcraftlogs.com/character/us/server/Name"
-                   (keydown.enter)="loadCharFromUrl()" />
-          </mat-form-field>
-          <button mat-flat-button color="primary" (click)="loadCharFromUrl()">Load</button>
-        </div>
-      </div>
     </mat-card>
 
     @if (loadingBrief()) {
