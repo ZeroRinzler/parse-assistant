@@ -280,14 +280,15 @@ Burst windows are computed in two layers.
 **Per-parse** (`_find_burst_windows` in `parses_analyzer.py`):
 1. Collect all `type: "damage"` events with `amount + absorbed > 0`.
 2. Slide an **8-second window** across every event timestamp; for each start position, sum all damage whose timestamp falls within `[ts, ts + 8000ms]`.
-3. Pick the **top 4 non-overlapping** windows by total damage — two windows must be ≥8s apart to both qualify.
-4. Each window stores: `time_s` (relative to fight start), `pct_of_total` (fraction of the parse's total damage), `window_damage`, `target_count`, and a per-ability breakdown (top 6 abilities by damage, each with their fraction of window damage).
+3. Keep **all non-overlapping** windows above a significance threshold (≥ 3% of total fight damage). Two windows must be ≥8s apart to both qualify.
+4. Each window stores: `time_s` (relative to fight start), `pct_of_total` (fraction of the parse's total damage), `window_damage`, and a per-ability breakdown (top 6 abilities by damage, each with their fraction of window damage).
 
 **Across parses** (`cluster_burst_windows` in `analysis_utils.py`):
 1. Pool all per-parse windows from every ingested sample.
 2. Group windows whose `time_s` falls within **15s of the running cluster median** — greedy, first-fit.
 3. Discard clusters present in fewer than **max(2, 35% of samples)** parses.
 4. For surviving clusters, surface CDs active in ≥50% of member parses, and abilities appearing in ≥50% of member parses.
+5. Per-ability breakdown includes `avg_pct`, `min_pct`, `max_pct` (candle range) across member parses.
 
 ### Remaining static values
 
@@ -313,11 +314,11 @@ Source: `design-doc.md` (architecture blueprint) + `intial-research.md` (researc
 | All analysis thresholds derived from top-parse data | ✅ Done | First-cast delay, gap tolerance, downtime floor, efficiency band, BL timing - all data-derived with static fallbacks |
 | Single-button all-boss parse ingestion | ✅ Done | SSE-streamed per-boss progress; always top 10; overwrites on re-run; boss overview table with sample counts and last-ingested dates |
 | Hold pattern detection | ✅ Done | Per-CD-cast-index hold targets aggregated from top parses; "Timing Suggestions" section in UI |
-| AoE burst window analysis | ✅ Done | Top 4 non-overlapping 8s damage peaks per parse; clustered across parses; "Burst Windows" card in UI |
+| AoE burst window analysis | ✅ Done | Variable-count 8s damage peaks (all windows > 3% of total damage); clustered across parses; candle diagrams per ability in detail breakdown; "Burst Windows" card in UI |
 | Per-fight player filtering | ✅ Done | `friendlyPlayers` from WCL per fight; player dropdown updates on fight change |
 | Fight dropdown attempt numbering | ✅ Done | Wipes show `✗ #N` per-boss; kills show `✓` |
 | Pre-fight gear check | ✅ Done | `/pre` page; character URL input; talents/trinkets/enchants vs top-parse aggregates; enchant names resolved live via `gameData.enchant(id)` - no hardcoding |
-| Defensive cooldown analysis | ✅ Done | `SPEC_DEFENSIVES` in rulebook.py; player usage with damage absorbed per window; comparison vs top-parse avg; 30s damage-taken segments |
+| Defensive cooldown analysis | ✅ Done | Defensives from rulebook JSON (fallback: `SPEC_DEFENSIVES`); per-defensive timing analysis (lost/held/hold suggestions matching offensive cd-card style); defensive windows (significant incoming damage spikes with candle diagrams) |
 | GitHub Actions ingestion pipeline | ✅ Done | `.github/workflows/ingest-parses.yml` (daily schedule + manual); `scripts/ingest_parses.py` and `scripts/scrape_guides.py` work identically locally |
 | File-based storage - no SQLite | ✅ Done | `store.py` replaces `db.py`; all data in `data/specs/`; guides stored WITH content; parse samples in `parse_samples/{enc_id}.json`; encounter bench files pre-computed with full aggregation; GHA commits `data/specs/**` only |
 | Pre-computed encounter bench files | ✅ Done | `data/specs/{Spec}/encounters/{enc_id}.json` written after each boss ingestion; contains per-CD thresholds (with sample_count), burst windows, gear aggregates, defensive summary, and top_dtk_comparison; `analysis_utils.py` holds shared clustering/aggregation logic |
