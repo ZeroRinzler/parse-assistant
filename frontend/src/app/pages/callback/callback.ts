@@ -46,10 +46,11 @@ export class CallbackComponent implements OnInit {
     }
 
     if (!code) {
+      const expectedUri = new URL('callback', document.baseURI).href;
       this.error.set(
         'No authorization code received from Warcraft Logs. ' +
         'Make sure your WCL API client has the redirect URI ' +
-        `"${window.location.origin}/callback" registered at warcraftlogs.com/api/clients/.`
+        `"${expectedUri}" registered at warcraftlogs.com/api/clients/.`
       );
       return;
     }

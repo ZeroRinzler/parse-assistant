@@ -64,7 +64,7 @@ export class WclAuthService {
   }
 
   private _redirectUri(): string {
-    return `${window.location.origin}/callback`;
+    return new URL('callback', document.baseURI).href;
   }
 
   private _generateVerifier(): string {

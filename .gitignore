@@ -18,6 +18,8 @@ data/tmp/
 *.log
 logs/
 
+static/angular/
+
 # Editor / OS
 .idea/
 .vscode/
