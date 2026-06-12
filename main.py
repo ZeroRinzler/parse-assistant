@@ -271,6 +271,8 @@ async def analyze(req: AnalyzeRequest):
             result["top_dtk_comparison"] = enc_data["top_dtk_comparison"]
         if enc_data.get("top_dtk_segments"):
             result["top_dtk_segments"] = enc_data["top_dtk_segments"]
+        if enc_data.get("defensive_windows"):
+            result["top_defensive_windows"] = enc_data["defensive_windows"]
 
     # Player burst windows
     from parses_analyzer import _find_burst_windows as _player_find_bw
@@ -294,9 +296,9 @@ async def analyze(req: AnalyzeRequest):
     result["player_burst_windows"] = player_bw
 
     # Player defensive analysis
-    from rulebook import SPEC_DEFENSIVES as _SPEC_DEFENSIVES
-    spec_defensives = _SPEC_DEFENSIVES.get(spec) or []
+    spec_defensives = store.get_spec_defensives(spec)
     player_defensive_usage: list[dict] = []
+    defensive_findings: list[dict] = []
 
     buff_windows_by_sid: dict[int, list[list]] = {}
     for e in buff_events:
@@ -310,10 +312,15 @@ async def analyze(req: AnalyzeRequest):
                     w[1] = t_s
                     break
 
+    per_def_bench = (enc_data.get("per_defensive_benchmarks") or {}) if enc_data else {}
+
     for defn in spec_defensives:
         sid = defn["spell_id"]
         duration = defn.get("duration") or 0
+        cooldown_s = defn.get("cooldown") or 90
         windows: list[dict] = []
+        cast_times: list[float] = []
+
         for w in (buff_windows_by_sid.get(sid) or []):
             w_start = w[0]
             w_end = w[1] if w[1] is not None else (w_start + duration if duration else w_start + 5)
@@ -324,8 +331,9 @@ async def analyze(req: AnalyzeRequest):
                 and w_start <= (e["timestamp"] - start) / 1000 <= w_end
             )
             windows.append({"start_s": round(w_start, 1), "end_s": round(w_end, 1), "dmg_during": int(dmg_during)})
+            cast_times.append(round(w_start, 1))
 
-        if not windows:
+        if not cast_times:
             def_casts = [
                 c for c in cast_events
                 if c.get("type") == "cast" and c.get("abilityGameID") == sid
@@ -340,16 +348,99 @@ async def analyze(req: AnalyzeRequest):
                     and t_s <= (e["timestamp"] - start) / 1000 <= w_end
                 )
                 windows.append({"start_s": round(t_s, 1), "end_s": round(w_end, 1), "dmg_during": int(dmg_during)})
+                cast_times.append(round(t_s, 1))
+
+        cast_times_sorted = sorted(cast_times)
+        first_cast_s = cast_times_sorted[0] if cast_times_sorted else None
+        total_uses = len(cast_times_sorted)
 
         player_defensive_usage.append({
             "name": defn["name"],
             "spell_id": sid,
-            "cooldown": defn.get("cooldown", 0),
-            "uses": len(windows),
+            "cooldown": cooldown_s,
+            "uses": total_uses,
+            "cast_times_s": cast_times_sorted,
+            "first_cast_s": first_cast_s,
             "windows": windows,
         })
 
+        # ── Per-defensive timing findings (mirrors analyzer.py for offensive CDs) ──
+        bench = per_def_bench.get(defn["name"])
+        def_name = defn["name"]
+
+        # Lost casts
+        expected_uses = 1 + int(player_fight_dur_s / cooldown_s)
+        if total_uses < expected_uses:
+            lost = expected_uses - total_uses
+            defensive_findings.append({
+                "severity": "warning",
+                "category": "lost_cooldown",
+                "cd_name": def_name,
+                "message": f"Lost {lost} cast{'s' if lost > 1 else ''} of {def_name} (used {total_uses}, expected ~{expected_uses})",
+                "details": {"remedy": f"Use {def_name} more proactively — press it when incoming damage is high rather than saving it for the perfect moment."},
+            })
+
+        if cast_times_sorted and bench:
+            avg_fc = bench.get("avg_first_cast_s")
+            stddev_fc = bench.get("stddev_first_cast_s")
+            if avg_fc is not None and first_cast_s is not None:
+                threshold_fc = avg_fc + 2 * (stddev_fc or 10)
+                if first_cast_s > threshold_fc:
+                    defensive_findings.append({
+                        "severity": "warning",
+                        "category": "cooldown_delay",
+                        "cd_name": def_name,
+                        "message": f"{def_name} opener at {first_cast_s:.1f}s (top parsers: {avg_fc:.1f}s avg)",
+                        "details": {"remedy": f"Use {def_name} earlier in the fight — top parsers press it around {avg_fc:.0f}s in."},
+                    })
+
+            avg_gap = bench.get("avg_gap_s")
+            stddev_gap = bench.get("stddev_gap_s")
+            if avg_gap is not None and len(cast_times_sorted) >= 2:
+                gap_threshold = avg_gap + 2 * (stddev_gap or avg_gap * 0.2)
+                for j in range(1, len(cast_times_sorted)):
+                    gap = cast_times_sorted[j] - cast_times_sorted[j - 1]
+                    if gap > gap_threshold:
+                        defensive_findings.append({
+                            "severity": "info",
+                            "category": "cooldown_delay",
+                            "cd_name": def_name,
+                            "message": f"{def_name} held {gap:.0f}s between cast {j} and {j+1} (avg gap: {avg_gap:.0f}s)",
+                            "details": {"remedy": f"Don't sit on {def_name} — top parsers reuse it every ~{avg_gap:.0f}s on average."},
+                        })
+
+            hold_targets = bench.get("hold_targets") or {}
+            for cast_idx_str, ht in hold_targets.items():
+                cast_idx = int(cast_idx_str)
+                if cast_idx < len(cast_times_sorted):
+                    actual = cast_times_sorted[cast_idx]
+                    target = ht["target_s"]
+                    sigma = max(ht.get("stddev_s") or 15.0, 15.0)
+                    if actual < target - sigma:
+                        defensive_findings.append({
+                            "severity": "info",
+                            "category": "hold_suggestion",
+                            "cd_name": def_name,
+                            "message": f"Consider delaying {def_name} cast {cast_idx + 1} to ~{target:.0f}s",
+                            "details": {"cd_name": def_name, "remedy": f"Top parsers wait until ~{target:.0f}s for cast {cast_idx + 1} of {def_name} — a big incoming hit is likely around then."},
+                        })
+
+        if not defensive_findings or not any(f["cd_name"] == def_name for f in defensive_findings):
+            if total_uses >= expected_uses:
+                defensive_findings.append({
+                    "severity": "success",
+                    "category": "defensive_usage",
+                    "cd_name": def_name,
+                    "message": f"Good {def_name} usage ({total_uses} cast{'s' if total_uses != 1 else ''})",
+                })
+
     result["player_defensives"] = player_defensive_usage
+    result["defensive_findings"] = defensive_findings
+
+    # Player defensive windows
+    from parses_analyzer import _find_defensive_windows as _player_find_dw
+    player_dw = _player_find_dw(damage_taken_events, start, buff_windows_by_sid, spec_defensives)
+    result["player_defensive_windows"] = player_dw
 
     # Player damage taken analysis
     fight_dur_s = player_fight_dur_s

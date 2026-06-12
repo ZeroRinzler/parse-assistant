@@ -44,6 +44,15 @@ def get_spec_cooldowns(spec: str) -> Optional[list[dict]]:
     return SPEC_COOLDOWNS.get(spec)
 
 
+def get_spec_defensives(spec: str) -> list[dict]:
+    """Return defensives from the generated rulebook, falling back to the static dict."""
+    if spec in _rulebook_cache:
+        defs = _rulebook_cache[spec].get("defensives")
+        if defs:
+            return defs
+    return SPEC_DEFENSIVES.get(spec) or []
+
+
 def get_cached_rulebook(spec: str) -> Optional[dict]:
     return _rulebook_cache.get(spec)
 
@@ -350,8 +359,10 @@ def sync_encounter_file(spec: str, encounter_id: int) -> None:
     # ── Gear ──────────────────────────────────────────────────────────────────
     gear = aggregate_gear(samples)
 
-    # ── Defensive benchmark ───────────────────────────────────────────────────
-    spec_defensives = SPEC_DEFENSIVES.get(spec) or []
+    # ── Defensive benchmarks ──────────────────────────────────────────────────
+    spec_defensives = get_spec_defensives(spec)
+
+    # Legacy summary (uses count only) - kept for backward compat
     agg_def_uses: dict[str, list[int]] = {}
     for s in samples:
         for d in (s.get("cooldown_data") or {}).get("defensives") or []:
@@ -370,6 +381,64 @@ def sync_encounter_file(spec: str, encounter_id: int) -> None:
             "max_uses": max(uses),
             "sample_count": len(uses),
         })
+
+    # Per-defensive timing benchmarks (mirrors per_cd_benchmarks)
+    agg_def: dict[str, list] = defaultdict(list)
+    for s in samples:
+        cd_data = s.get("cooldown_data") or {}
+        fight_dur = cd_data.get("fight_duration_s", 0)
+        for d in cd_data.get("defensives") or []:
+            agg_def[d["name"]].append({**d, "fight_duration_s": fight_dur})
+
+    per_defensive_benchmarks: dict = {}
+    for def_name, entries in agg_def.items():
+        top_first_casts = [e["first_cast_s"] for e in entries if e.get("first_cast_s") is not None]
+        all_def_gaps: list[float] = []
+        for e in entries:
+            times = e.get("cast_times_s", [])
+            for j in range(1, len(times)):
+                all_def_gaps.append(times[j] - times[j - 1])
+
+        hold_by_cast_idx: dict[int, list[float]] = defaultdict(list)
+        for e in entries:
+            for hw in e.get("hold_windows", []):
+                hold_by_cast_idx[hw["cast_index"]].append(hw["actual_s"])
+        hold_targets: dict = {}
+        for cast_idx, times in hold_by_cast_idx.items():
+            if len(times) >= max(2, len(entries) * 0.4):
+                hold_targets[str(cast_idx)] = {
+                    "target_s": round(statistics.median(times), 1),
+                    "stddev_s": round(statistics.stdev(times) if len(times) > 1 else 20.0, 1),
+                    "count": len(times),
+                    "total_samples": len(entries),
+                }
+
+        avg_uses_list = [e.get("uses", 0) for e in entries]
+        upm_list = [
+            e["uses"] / (e["fight_duration_s"] / 60)
+            for e in entries if e.get("fight_duration_s") and e.get("uses")
+        ]
+
+        per_defensive_benchmarks[def_name] = {
+            "sample_count": len(entries),
+            "avg_first_cast_s": round(statistics.mean(top_first_casts), 1) if top_first_casts else None,
+            "stddev_first_cast_s": round(statistics.stdev(top_first_casts), 1) if len(top_first_casts) > 1 else None,
+            "avg_gap_s": round(statistics.mean(all_def_gaps), 1) if all_def_gaps else None,
+            "stddev_gap_s": round(statistics.stdev(all_def_gaps), 1) if len(all_def_gaps) > 1 else None,
+            "hold_targets": hold_targets,
+            "avg_uses": round(statistics.mean(avg_uses_list), 1) if avg_uses_list else 0,
+            "avg_uses_per_min": round(statistics.mean(upm_list), 2) if upm_list else None,
+            "majority_hold": sum(1 for e in entries if e.get("cast_pattern") == "hold") > len(entries) * 0.5,
+        }
+
+    # Defensive windows (clustered incoming damage spikes)
+    all_dw: list[dict] = []
+    for s in samples:
+        for dw in (s.get("cooldown_data") or {}).get("defensive_windows", []):
+            all_dw.append(dw)
+    defensive_windows = cluster_burst_windows(all_dw, len(samples)) if all_dw else []
+    for dw in defensive_windows:
+        dw["common_defensives"] = dw.pop("common_cds", [])
 
     # ── Damage taken comparison ───────────────────────────────────────────────
     agg_dtk: dict[int, list[float]] = {}
@@ -434,6 +503,8 @@ def sync_encounter_file(spec: str, encounter_id: int) -> None:
         "burst_windows": burst_windows,
         "gear": gear,
         "top_defensives_summary": top_defensives_summary,
+        "per_defensive_benchmarks": per_defensive_benchmarks,
+        "defensive_windows": defensive_windows,
         "top_dtk_comparison": top_dtk_comparison,
         "top_dtk_segments": top_dtk_segments,
     }

@@ -1,5 +1,4 @@
 import { Component, computed, inject, input, OnChanges } from '@angular/core';
-import { MatChipsModule } from '@angular/material/chips';
 import { AnalysisResult as IAnalysisResult, AnalysisFinding } from '../../../core/models/analysis.models';
 import { IconCacheService } from '../../../core/services/icon-cache';
 import { FormatSpecPipe } from '../../../shared/pipes/format-spec-pipe';
@@ -13,7 +12,7 @@ interface CdBucket { issues: AnalysisFinding[]; holds: AnalysisFinding[]; succes
 @Component({
   selector: 'wl-analysis-result',
   imports: [
-    MatChipsModule, FormatSpecPipe,
+    FormatSpecPipe,
     CdCardComponent, BurstWindowsComponent, DefensivesSectionComponent, DamageTakenComponent,
   ],
   templateUrl: './analysis-result.html',

@@ -1,45 +1,132 @@
-import { Component, computed, input } from '@angular/core';
+import { Component, computed, input, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
-import { PlayerDefensive, TopDefensiveSummary } from '../../../core/models/analysis.models';
+import { AnalysisFinding, PlayerDefensive, BurstWindow, PlayerBurstWindow } from '../../../core/models/analysis.models';
 import { SpellIconComponent } from '../../../shared/components/spell-icon/spell-icon';
 import { FormatDurationPipe } from '../../../shared/pipes/format-duration-pipe';
+import { CdCardComponent } from '../cd-card/cd-card';
+
+interface CdBucket { issues: AnalysisFinding[]; holds: AnalysisFinding[]; success?: AnalysisFinding; }
+
+interface AbilityRow {
+  spell_id: number;
+  avg_pct: number;
+  min_pct?: number;
+  max_pct?: number;
+  playerPct: number | null;
+  tBar: number;
+  tMinP: number;
+  rW: number;
+  avgOff: number;
+  playerBar: number;
+}
 
 @Component({
   selector: 'wl-defensives-section',
-  imports: [SpellIconComponent, FormatDurationPipe, DecimalPipe],
+  imports: [SpellIconComponent, FormatDurationPipe, DecimalPipe, CdCardComponent],
   templateUrl: './defensives-section.html',
   styleUrl: './defensives-section.scss',
 })
 export class DefensivesSectionComponent {
   readonly defensives = input.required<PlayerDefensive[]>();
-  readonly topSummary = input<TopDefensiveSummary[]>([]);
+  readonly defensiveFindings = input<AnalysisFinding[]>([]);
+  readonly topDefensiveWindows = input<BurstWindow[]>([]);
+  readonly playerDefensiveWindows = input<PlayerBurstWindow[]>([]);
   readonly fightDuration = input<number>(0);
 
-  protected readonly topBySpellId = computed(() => {
-    const m: Record<number, TopDefensiveSummary> = {};
-    for (const t of this.topSummary()) m[t.spell_id] = t;
-    return m;
+  protected readonly expandedIdx = signal<number | null>(null);
+
+  protected readonly defEntries = computed(() => {
+    const findings = this.defensiveFindings();
+    const defensives = this.defensives();
+    const byName: Record<string, CdBucket> = {};
+
+    for (const f of findings) {
+      if (f.severity === 'success') continue;
+      const n = f.cd_name!;
+      if (!byName[n]) byName[n] = { issues: [], holds: [] };
+      if (f.category === 'hold_suggestion' && f.details?.cd_name) {
+        byName[n].holds.push(f);
+      } else {
+        byName[n].issues.push(f);
+      }
+    }
+    for (const f of findings) {
+      if (f.severity !== 'success') continue;
+      const n = f.cd_name!;
+      if (n && !byName[n]) byName[n] = { issues: [], holds: [] };
+      if (n) byName[n].success = f;
+    }
+
+    const spellMap: Record<string, number> = {};
+    for (const d of defensives) spellMap[d.name] = d.spell_id;
+
+    return Object.entries(byName).map(([name, bucket]) => ({
+      name, bucket, spellId: spellMap[name] ?? null
+    }));
   });
 
-  protected cards = computed(() => {
-    const topMap = this.topBySpellId();
-    return this.defensives().map(def => {
-      const top = topMap[def.spell_id];
-      const expected = def.cooldown > 0 ? Math.floor(this.fightDuration() / def.cooldown) : null;
-      const maxVal = Math.max(def.uses, top?.max_uses ?? 0, expected ?? 0, 1);
+  protected readonly topDefWindows = computed(() => this.topDefensiveWindows());
 
-      const pBar = Math.min(def.uses / maxVal * 100, 100);
-      const tBar = top ? Math.min(top.avg_uses / maxVal * 100, 100) : null;
-      const tMinP = top?.min_uses != null ? Math.min(top.min_uses / maxVal * 100, 100) : null;
-      const tMaxP = top?.max_uses != null ? Math.min(top.max_uses / maxVal * 100, 100) : null;
-      const rW = (tMinP != null && tMaxP != null && tMaxP > tMinP) ? tMaxP - tMinP : 0;
-      const avgOff = rW > 0 && tBar != null ? Math.min(((tBar - tMinP!) / rW) * 100, 100) : 50;
+  protected readonly maxDwVal = computed(() => {
+    const allVals = this.topDefWindows().flatMap((dw, i) => {
+      const p = this.playerDefensiveWindows()[i]?.pct_of_total;
+      return [dw.pct_avg, dw.pct_max, p].filter((v): v is number => v != null);
+    });
+    return Math.max(...allVals, 0.01);
+  });
 
-      let pValCls = '';
-      if (top) pValCls = def.uses >= top.avg_uses ? 'delta-good' : def.uses >= top.min_uses ? 'delta-warn' : 'delta-bad';
-      const lowUse = expected != null && def.uses < (top?.min_uses ?? expected);
+  protected readonly dwCards = computed(() => {
+    const fightDur = this.fightDuration();
+    const maxV = this.maxDwVal();
+    return this.topDefWindows().map((dw, idx) => {
+      const notReached = dw.time_s > fightDur;
+      const playerDw = notReached ? null : (this.playerDefensiveWindows()[idx] ?? null);
+      const topPct = dw.pct_avg ?? 0;
+      const playerPct = playerDw?.pct_of_total ?? null;
+      const minPct = dw.pct_min ?? topPct * 0.7;
+      const maxPct = dw.pct_max ?? topPct * 1.3;
 
-      return { def, top, expected, pBar, tBar, tMinP, tMaxP, rW, avgOff, pValCls, lowUse };
+      let cls = 'bw-ok', badge = 'On Par';
+      if (notReached) { cls = 'bw-future'; badge = 'Not reached'; }
+      else if (playerPct === null) { cls = 'bw-missing'; badge = 'No data'; }
+      else if (playerPct > maxPct + (dw.pct_stddev ?? 0.01)) { cls = 'bw-low'; badge = 'High damage taken'; }
+
+      const pBar = playerPct != null ? Math.min(playerPct / maxV * 100, 100) : 0;
+      const tBar = topPct > 0 ? Math.min(topPct / maxV * 100, 100) : 0;
+      const tMinP = Math.min(minPct / maxV * 100, 100);
+      const tMaxP = Math.min(maxPct / maxV * 100, 100);
+      const rW = tMaxP - tMinP;
+      const avgOff = rW > 0 ? Math.min(((tBar - tMinP) / rW) * 100, 100) : 50;
+
+      const playerAbMap: Record<number, { pct: number }> = {};
+      for (const a of (playerDw?.ability_breakdown || [])) playerAbMap[a.spell_id] = a;
+
+      return { dw, idx, notReached, playerPct, topPct, minPct, maxPct, cls, badge, pBar, tBar, tMinP, tMaxP, rW, avgOff, playerAbMap };
     });
   });
+
+  protected dwAbRows(cardIdx: number): AbilityRow[] {
+    const card = this.dwCards()[cardIdx];
+    if (!card) return [];
+    const abs = card.dw.ability_breakdown || [];
+    const allAbPcts = abs.map(a => a.max_pct ?? a.avg_pct);
+    const playerVals = Object.values(card.playerAbMap).map(a => a.pct);
+    const maxAbVal = Math.max(...allAbPcts, ...playerVals, 0.01);
+    return abs.map(ab => {
+      const playerPct = card.playerAbMap[ab.spell_id]?.pct ?? null;
+      const tBar = Math.min(ab.avg_pct / maxAbVal * 100, 100);
+      const minPct = ab.min_pct ?? ab.avg_pct * 0.7;
+      const maxPct = ab.max_pct ?? ab.avg_pct * 1.3;
+      const tMinP = Math.min(minPct / maxAbVal * 100, 100);
+      const tMaxP = Math.min(maxPct / maxAbVal * 100, 100);
+      const rW = tMaxP - tMinP;
+      const avgOff = rW > 0 ? Math.min(((tBar - tMinP) / rW) * 100, 100) : 50;
+      const playerBar = playerPct != null ? Math.min(playerPct / maxAbVal * 100, 100) : 0;
+      return { ...ab, playerPct, tBar, tMinP, rW, avgOff, playerBar };
+    });
+  }
+
+  protected toggleExpand(idx: number): void {
+    this.expandedIdx.update(v => v === idx ? null : idx);
+  }
 }

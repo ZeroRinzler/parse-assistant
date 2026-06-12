@@ -1,8 +1,10 @@
 BLOODLUST_SPELL_IDS = {2825, 32182, 80353, 90355, 264667, 390386}
 BLOODLUST_DURATION_S = 40
 
-# Major defensive cooldowns by spec - used for defensive usage analysis.
-# duration: buff/effect duration in seconds (for damage-prevented estimate).
+# DEPRECATED: Static defensive cooldown fallbacks. Per-spec defensives should be
+# provided via the generated rulebook JSON (defensives[] array) so they stay
+# accurate across patches and expansions. Access via store.get_spec_defensives()
+# which prefers the rulebook value. Only used when no rulebook exists for the spec.
 SPEC_DEFENSIVES: dict[str, list[dict]] = {
     # Warriors
     "ArmsWarrior":   [{"name": "Die by the Sword",   "spell_id": 118038, "cooldown": 120, "duration": 10}],
@@ -83,8 +85,10 @@ SPEC_DEFENSIVES: dict[str, list[dict]] = {
     ],
 }
 
-# Major offensive cooldowns by WCL actor subType name.
-# cooldown: base cooldown in seconds; duration: buff/effect duration in seconds.
+# DEPRECATED: Static offensive cooldown fallbacks. Per-spec cooldowns should be
+# provided via the generated rulebook JSON (major_cooldowns[] array) so they stay
+# accurate across patches and expansions. Access via store.get_spec_cooldowns()
+# which prefers the rulebook value. Only used when no rulebook exists for the spec.
 SPEC_COOLDOWNS: dict[str, list[dict]] = {
     "RetributionPaladin": [
         {"name": "Avenging Wrath", "spell_id": 31884, "cooldown": 120, "duration": 20},

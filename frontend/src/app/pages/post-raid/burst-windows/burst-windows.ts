@@ -60,7 +60,40 @@ export class BurstWindowsComponent {
     });
   });
 
+  protected abRows(cardIdx: number): AbilityRow[] {
+    const card = this.cards()[cardIdx];
+    if (!card) return [];
+    const abs = card.bw.ability_breakdown || [];
+    const allAbPcts = abs.map(a => a.max_pct ?? a.avg_pct);
+    const maxAbVal = Math.max(...allAbPcts, card.playerAbMap ? Math.max(...Object.values(card.playerAbMap).map(a => a.pct), 0) : 0, 0.01);
+    return abs.map(ab => {
+      const playerPct = card.playerAbMap[ab.spell_id]?.pct ?? null;
+      const tBar = Math.min(ab.avg_pct / maxAbVal * 100, 100);
+      const minPct = ab.min_pct ?? ab.avg_pct * 0.7;
+      const maxPct = ab.max_pct ?? ab.avg_pct * 1.3;
+      const tMinP = Math.min(minPct / maxAbVal * 100, 100);
+      const tMaxP = Math.min(maxPct / maxAbVal * 100, 100);
+      const rW = tMaxP - tMinP;
+      const avgOff = rW > 0 ? Math.min(((tBar - tMinP) / rW) * 100, 100) : 50;
+      const playerBar = playerPct != null ? Math.min(playerPct / maxAbVal * 100, 100) : 0;
+      return { ...ab, playerPct, tBar, tMinP, rW, avgOff, playerBar };
+    });
+  }
+
   protected toggleExpand(idx: number): void {
     this.expandedIdx.update(v => v === idx ? null : idx);
   }
+}
+
+interface AbilityRow {
+  spell_id: number;
+  avg_pct: number;
+  min_pct?: number;
+  max_pct?: number;
+  playerPct: number | null;
+  tBar: number;
+  tMinP: number;
+  rW: number;
+  avgOff: number;
+  playerBar: number;
 }

@@ -1,5 +1,7 @@
 # warcraft-learner
 
+**[Live site → gpolcode.github.io/warcraft-learner](https://gpolcode.github.io/warcraft-learner/)**
+
 A web-based diagnostic tool for Mythic WoW raiders. It fetches combat data from Warcraft Logs, evaluates it against spec-specific rulebooks (static or AI-generated from guides), and delivers prescriptive, coaching-style feedback with comparison against top-parse players.
 
 ## What it does

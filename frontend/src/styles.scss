@@ -54,6 +54,172 @@ body {
 
 .mat-mdc-form-field-subscript-wrapper { display: none; }
 
+// ── Shared comparison candle styles (used by burst-windows, defensives, comparison-chart) ──
+.cmp-legend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.cmp-leg-item { display: flex; align-items: center; gap: 4px; }
+.cmp-range-note { font-size: 10px; color: var(--border); }
+.cmp-no-data { font-size: 11px; color: var(--muted); font-style: italic; }
+
+.cmp-leg {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+
+  &.player { background: var(--accent); opacity: 0.7; }
+  &.top    { background: var(--muted); opacity: 0.5; }
+}
+
+.cmp-item {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+
+  &:last-child { border-bottom: none; }
+  &.cmp-highlight { background: rgba(248, 81, 73, 0.04); border-radius: 4px; padding: 6px 4px; }
+}
+
+.cmp-item-label {
+  font-size: 12px;
+  color: var(--text);
+  margin-bottom: 4px;
+
+  a { color: var(--accent); text-decoration: none; &:hover { text-decoration: underline; } }
+}
+
+.cmp-item-bars { display: flex; flex-direction: column; gap: 2px; }
+
+.cmp-subrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cmp-track {
+  flex: 1;
+  height: 12px;
+  position: relative;
+  background: var(--surface);
+  border-radius: 3px;
+  overflow: visible;
+}
+
+.cmp-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s;
+
+  &.player { background: var(--accent); opacity: 0.6; }
+  &.top    { background: var(--muted); opacity: 0.3; }
+}
+
+.cmp-candle {
+  position: absolute;
+  top: 1px;
+  height: 10px;
+  background: rgba(88, 166, 255, 0.15);
+  border: 1px solid rgba(88, 166, 255, 0.4);
+  border-radius: 2px;
+}
+
+.cmp-candle-tick {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  background: var(--accent);
+  transform: translateX(-50%);
+}
+
+.cmp-val {
+  width: 80px;
+  text-align: right;
+  font-size: 11px;
+  color: var(--muted);
+  flex-shrink: 0;
+
+  &.top { color: var(--muted); }
+  &.delta-good { color: var(--success); }
+  &.delta-warn { color: var(--warning); }
+  &.delta-bad  { color: var(--critical); }
+}
+
+.cmp-range {
+  display: block;
+  font-size: 9px;
+  color: var(--border);
+}
+
+// ── Burst window / defensive window shared card layout ───────────────────────
+.bw-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bw-status-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+
+  &.bw-badge-bw-ok      { color: var(--success); border: 1px solid var(--success); }
+  &.bw-badge-bw-low     { color: var(--critical); border: 1px solid var(--critical); }
+  &.bw-badge-bw-warn    { color: var(--warning); border: 1px solid var(--warning); }
+  &.bw-badge-bw-future  { color: var(--muted); border: 1px solid var(--border); }
+  &.bw-badge-bw-missing { color: var(--muted); border: 1px solid var(--border); }
+}
+
+.bw-expand-btn {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 3px;
+  margin-left: auto;
+
+  &:hover { background: var(--surface); }
+}
+
+.bw-cmp-wrap {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.bw-future-wrap { opacity: 0.6; }
+
+// ── Ability breakdown (shared by burst-windows and defensives-section) ────────
+.bw-breakdown {
+  margin-top: 10px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ab-row { display: flex; flex-direction: column; gap: 4px; }
+
+.ab-name { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+
+.ab-link { color: var(--accent); text-decoration: none; &:hover { text-decoration: underline; } }
+
+.ab-candle-row { display: flex; align-items: center; gap: 6px; font-size: 11px; padding-left: 4px; }
+
 // ── Comparison chart ──────────────────────────────────────────────────────────
 .cmp-chart {
   width: 100%;

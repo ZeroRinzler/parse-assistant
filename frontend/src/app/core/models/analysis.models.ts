@@ -14,6 +14,8 @@ export interface AnalysisFinding {
 export interface AbilityBreakdown {
   spell_id: number;
   avg_pct: number;
+  min_pct?: number;
+  max_pct?: number;
   pct?: number;
 }
 
@@ -24,6 +26,7 @@ export interface BurstWindow {
   pct_max?: number;
   pct_stddev?: number;
   common_cds?: string[];
+  common_defensives?: string[];
   avg_targets?: number;
   ability_breakdown?: AbilityBreakdown[];
   window_length_s?: number;
@@ -46,8 +49,9 @@ export interface PlayerDefensive {
   name: string;
   cooldown: number;
   uses: number;
-  windows: DefensiveWindow[];
   cast_times_s?: number[];
+  first_cast_s?: number;
+  windows: DefensiveWindow[];
 }
 
 export interface TopDefensiveSummary {
@@ -90,6 +94,9 @@ export interface AnalysisResult {
   player_fight_duration_s?: number;
   player_defensives?: PlayerDefensive[];
   top_defensives_summary?: TopDefensiveSummary[];
+  defensive_findings?: AnalysisFinding[];
+  top_defensive_windows?: BurstWindow[];
+  player_defensive_windows?: PlayerBurstWindow[];
   player_dmg_taken_by_ability?: DmgTakenAbility[];
   player_total_dmg_taken?: number;
   top_dtk_comparison?: TopDtkComparison[];

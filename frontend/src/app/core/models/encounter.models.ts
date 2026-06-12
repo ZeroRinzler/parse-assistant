@@ -25,7 +25,7 @@ export interface BurstWindowBench {
   common_cds: string[];
   avg_targets: number;
   window_length_s?: number;
-  ability_breakdown?: Array<{ spell_id: number; avg_pct: number; count?: number }>;
+  ability_breakdown?: Array<{ spell_id: number; avg_pct: number; min_pct?: number; max_pct?: number; count?: number }>;
 }
 
 export interface EncounterBench {
@@ -36,18 +36,34 @@ export interface EncounterBench {
   per_cd_benchmarks: Record<string, PerCdBenchmark>;
   burst_windows: BurstWindowBench[];
   defensive_windows?: DefensiveWindowBench[];
+  per_defensive_benchmarks?: Record<string, PerDefensiveBenchmark>;
   gear?: EncounterGearStats;
 }
 
 export interface DefensiveWindowBench {
   time_s: number;
   stddev_s: number;
-  duration_s: number;
-  stddev_duration_s?: number;
-  pct_dmg_reduced: number;
   count: number;
+  total_samples: number;
+  pct_avg: number;
+  pct_min?: number;
+  pct_max?: number;
+  pct_stddev?: number;
+  common_defensives: string[];
+  avg_targets?: number;
+  ability_breakdown?: Array<{ spell_id: number; avg_pct: number; min_pct?: number; max_pct?: number; count?: number }>;
+}
+
+export interface PerDefensiveBenchmark {
   sample_count: number;
-  window_length_s?: number;
+  avg_first_cast_s: number | null;
+  stddev_first_cast_s: number | null;
+  avg_gap_s: number | null;
+  stddev_gap_s: number | null;
+  hold_targets: Record<string, { target_s: number; stddev_s: number; count: number; total_samples: number }>;
+  avg_uses: number;
+  avg_uses_per_min: number | null;
+  majority_hold: boolean;
 }
 
 export interface EncounterGearStats {

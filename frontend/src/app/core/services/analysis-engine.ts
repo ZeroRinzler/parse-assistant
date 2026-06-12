@@ -388,7 +388,8 @@ export class AnalysisEngineService {
             return { start_s: Math.round(tS * 10) / 10, end_s: Math.round(wE * 10) / 10, dmg_during: Math.round(dmg) };
           });
       }
-      return { name: def.name, spell_id: sid, cooldown: def.cooldown, uses: windows.length, windows };
+      const cast_times_s = windows.map(w => w.start_s).sort((a, b) => a - b);
+      return { name: def.name, spell_id: sid, cooldown: def.cooldown, uses: windows.length, cast_times_s, windows };
     });
   }
 

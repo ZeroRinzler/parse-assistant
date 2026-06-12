@@ -46,6 +46,8 @@ def cluster_burst_windows(windows: list[dict], total_samples: int, merge_s: floa
                 {
                     "spell_id": sid,
                     "avg_pct": round(statistics.mean(pcts_list), 3),
+                    "min_pct": round(min(pcts_list), 3),
+                    "max_pct": round(max(pcts_list), 3),
                     "count": len(pcts_list),
                 }
                 for sid, pcts_list in ability_totals.items()

@@ -44,7 +44,7 @@ warcraft-learner/
 ├── store.py             # File-based storage - guides, rulebooks, parse samples, encounter bench
 ├── analyzer.py          # Rules engine - evaluates cast events against a rulebook
 ├── wcl_client.py        # Warcraft Logs OAuth2 + GraphQL client (handles pagination)
-├── rulebook.py          # Static fallback cooldowns for 22+ DPS specs
+├── rulebook.py          # Static fallback cooldowns/defensives for 22+ DPS specs (deprecated - prefer rulebook JSON)
 ├── scraper.py           # Web (BeautifulSoup/lxml) + YouTube transcript scraping
 ├── parses_analyzer.py   # WCL characterRankings + per-parse cooldown timing analysis + gear extraction
 ├── analysis_utils.py    # Shared aggregation - cluster_burst_windows, aggregate_gear
@@ -94,7 +94,7 @@ warcraft-learner/
 6. Response includes: **Needs Improvement** (critical/warning), **Timing Suggestions** (info/hold_suggestion), and **Doing Well** (success). Also includes `rulebook_source` ("generated", "static", or "none") shown under the player name.
 7. If parse samples exist for the fight's encounter, a **vs Top N Parses** comparison table is appended. Uses **uses-per-minute** (not raw counts) to normalize across kill-time differences between the player and top performers. A **Burst Windows** card shows the top recurring 8s damage spikes across top parses with the CDs active in them. Windows beyond the player's fight duration are shown in a dimmed "Not reached" state rather than "No data".
 8. The response includes `ability_icons` - a `{spell_id: {icon, name}}` map extracted from `masterData.abilities` in the report. The frontend seeds its icon cache from this data. WCL removed `gameData.spell()` so this is now the only reliable source of spell icons and names for report abilities.
-9. Cooldown rules come from the **dynamic rulebook** if one exists (loaded from `data/specs/{spec}/rulebook.json` into the in-memory cache in `store.py` on startup), otherwise from the static `SPEC_COOLDOWNS` dict in `rulebook.py`.
+9. Cooldown rules come from the **dynamic rulebook** if one exists (loaded from `data/specs/{spec}/rulebook.json` into the in-memory cache in `store.py` on startup), otherwise from the static `SPEC_COOLDOWNS` / `SPEC_DEFENSIVES` dicts in `rulebook.py` (deprecated fallbacks - see rulebook schema note below). Always access via `store.get_spec_cooldowns(spec)` and `store.get_spec_defensives(spec)`.
 
 ### Ingestion pipeline (`/admin`)
 1. **Add guides** - POST `/api/admin/guides` with `{spec, url, guide_type}`. Type is `"web"`, `"youtube"`, or `"simc"`. GitHub blob URLs are auto-converted to raw.githubusercontent.com. Up to 60 k chars stored per guide.
@@ -168,6 +168,9 @@ Key fields stored inside the `cooldown_data` JSON blob:
 | `enchants` | top-level | List of `{slot, id, name}` for all gear slots with a `permanentEnchant` |
 
 ### Rulebook JSON schema
+
+**Design requirement**: All spec-specific spell IDs (cooldowns and defensives) **must** come from the generated rulebook JSON, not from static dicts in `rulebook.py`. `SPEC_COOLDOWNS` and `SPEC_DEFENSIVES` in `rulebook.py` are static fallbacks for specs that have no rulebook yet — they exist only to prevent crashes on first run. New specs should get a rulebook generated via the admin workflow before being used in production. Access cooldowns via `store.get_spec_cooldowns(spec)` and defensives via `store.get_spec_defensives(spec)` — both prefer the rulebook value. This keeps the tool accurate across WoW patches and expansions without code changes.
+
 ```json
 {
   "spec": "SubtletyRogue",
@@ -179,6 +182,15 @@ Key fields stored inside the `cooldown_data` JSON blob:
       "duration": 20,
       "align_with_bloodlust": true,
       "opener_priority": 1,
+      "usage_rule": "..."
+    }
+  ],
+  "defensives": [
+    {
+      "name": "Cloak of Shadows",
+      "spell_id": 31224,
+      "cooldown": 120,
+      "duration": 5,
       "usage_rule": "..."
     }
   ],

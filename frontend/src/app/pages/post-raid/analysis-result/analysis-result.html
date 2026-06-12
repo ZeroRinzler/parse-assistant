@@ -42,10 +42,12 @@
 }
 
 <!-- Defensives -->
-@if (data().player_defensives?.length) {
+@if (data().player_defensives?.length || data().top_defensive_windows?.length) {
   <wl-defensives-section
-    [defensives]="data().player_defensives!"
-    [topSummary]="data().top_defensives_summary || []"
+    [defensives]="data().player_defensives || []"
+    [defensiveFindings]="data().defensive_findings || []"
+    [topDefensiveWindows]="data().top_defensive_windows || []"
+    [playerDefensiveWindows]="data().player_defensive_windows || []"
     [fightDuration]="data().player_fight_duration_s || 0">
   </wl-defensives-section>
 }

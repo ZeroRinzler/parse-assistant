@@ -4,8 +4,9 @@ You are a World of Warcraft theorycrafting assistant. Read the guide content at 
 
 1. Extract all major cooldowns - abilities with a cooldown ≥ 30 s that meaningfully affect damage output (or healing/tanking if applicable). Include on-use trinkets when the guide mentions specific timing for them.
 2. Every cooldown entry **must include a `spell_id`**. Use your knowledge of Retail WoW spell IDs to fill this in - prioritize the Active Ability Cast ID rather than a passive Aura, Classic WoW ID, or Talent Node ID. You can verify spell IDs at `wowhead.com/spell=<id>`. If you are genuinely unsure of the ID, make your best guess and note it in `usage_rule`.
-3. Extract rotation and cooldown usage rules - when to pair abilities, when to hold for Bloodlust, opener sequence, phase notes, pooling requirements, etc. Aim for **5-10 high-signal rules**. Omit rules that are obvious, low-priority, or not checkable from cast timing alone.
-4. Output **only** the raw JSON object. Do NOT wrap the output in markdown code fences (e.g., do not use ```json). No explanation, no preamble. The first character of your reply must be `{` and the last must be `}`.
+3. Extract all **personal defensive cooldowns** for this spec (abilities that reduce damage taken, grant immunity, or provide significant self-healing, with a cooldown ≥ 15 s). This is **required** - the `defensives` array must always be present and populated. Every entry needs a `spell_id`.
+4. Extract rotation and cooldown usage rules - when to pair abilities, when to hold for Bloodlust, opener sequence, phase notes, pooling requirements, etc. Aim for **5-10 high-signal rules**. Omit rules that are obvious, low-priority, or not checkable from cast timing alone.
+5. Output **only** the raw JSON object. Do NOT wrap the output in markdown code fences (e.g., do not use ```json). No explanation, no preamble. The first character of your reply must be `{` and the last must be `}`.
 
 ---
 
@@ -23,6 +24,15 @@ You are a World of Warcraft theorycrafting assistant. Read the guide content at 
       "align_with_bloodlust": true,
       "opener_priority": 1,
       "usage_rule": "One sentence: when and how to use this cooldown"
+    }
+  ],
+  "defensives": [
+    {
+      "name": "Ability Name",
+      "spell_id": 12345,
+      "cooldown": 90,
+      "duration": 8,
+      "usage_rule": "One sentence: when to press this button"
     }
   ],
   "rules": [
@@ -49,6 +59,18 @@ You are a World of Warcraft theorycrafting assistant. Read the guide content at 
 | `align_with_bloodlust` | yes | `true` if the guide explicitly says to sync this with Bloodlust / Heroism / Time Warp. Default `false` if the guide does not mention it |
 | `opener_priority` | no | Integer - cast order in the opener (1 = first). Only set if the guide specifies a sequence |
 | `usage_rule` | yes | One sentence: when to press this button |
+
+### defensives field reference
+
+The `defensives` array is **required**. List every personal defensive cooldown with a cooldown ≥ 15 s. Include immunities, absorb shields, significant damage reductions (≥ 20%), and meaningful self-heals. Do not include passive talents or stance toggles.
+
+| Field | Required | Notes |
+|---|---|---|
+| `name` | yes | Exact in-game ability name |
+| `spell_id` | **yes** | WoW spell ID — required, same rule as major_cooldowns |
+| `cooldown` | yes | Cooldown in seconds |
+| `duration` | no | Buff duration in seconds |
+| `usage_rule` | yes | One sentence: when/why to press this button |
 
 ### rules field reference
 

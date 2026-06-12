@@ -6,7 +6,7 @@ import json
 from typing import Optional
 
 import store
-from rulebook import BLOODLUST_SPELL_IDS, SPEC_COOLDOWNS, SPEC_DEFENSIVES
+from rulebook import BLOODLUST_SPELL_IDS, SPEC_COOLDOWNS
 from wcl_client import WCLClient
 
 # WCL uses separate className / specName strings
@@ -299,16 +299,66 @@ async def fetch_top_rankings(
     }
 
 
+def _find_significant_windows(
+    hits_ts: list[float],
+    hits_dmg: list[int],
+    hits_aids: list[int],
+    fight_start_ms: float,
+    total: int,
+    window_ms: int,
+    min_pct_threshold: float,
+) -> list[dict]:
+    """Core sliding-window logic shared by offensive and defensive window finders."""
+    n = len(hits_ts)
+    j = 0
+    window_sum = 0
+    candidates: list[tuple[float, float]] = []
+    for i in range(n):
+        while j < n and hits_ts[j] <= hits_ts[i] + window_ms:
+            window_sum += hits_dmg[j]
+            j += 1
+        candidates.append((hits_ts[i], window_sum))
+        window_sum -= hits_dmg[i]
+
+    min_dmg = total * min_pct_threshold
+    candidates.sort(key=lambda x: -x[1])
+    selected: list[dict] = []
+    for ts, dmg in candidates:
+        if dmg < min_dmg:
+            break  # sorted descending — no more qualify
+        if any(abs(ts - (fight_start_ms + s["time_s"] * 1000)) < window_ms for s in selected):
+            continue
+        t_end = ts + window_ms
+        ability_dmg: dict[int, int] = {}
+        for k in range(n):
+            if hits_ts[k] < ts or hits_ts[k] > t_end:
+                continue
+            if hits_aids[k]:
+                ability_dmg[hits_aids[k]] = ability_dmg.get(hits_aids[k], 0) + hits_dmg[k]
+        top_abilities = sorted(ability_dmg.items(), key=lambda x: -x[1])[:6]
+        selected.append({
+            "time_s": round((ts - fight_start_ms) / 1000, 1),
+            "pct_of_total": round(dmg / total, 3),
+            "window_damage": dmg,
+            "total_damage": total,
+            "ability_breakdown": [
+                {"spell_id": sid, "damage": d, "pct": round(d / dmg, 3) if dmg else 0}
+                for sid, d in top_abilities
+            ],
+        })
+    return sorted(selected, key=lambda s: s["time_s"])
+
+
 def _find_burst_windows(
     damage_events: list[dict],
     fight_start_ms: float,
     window_ms: int = 8000,
-    top_n: int = 4,
+    min_pct_threshold: float = 0.03,
 ) -> list[dict]:
     """
-    Find top N non-overlapping 8s burst windows by total damage dealt.
-    Returns [{time_s, pct_of_total, active_cds, ability_breakdown, window_damage}]
-    sorted by fight time.
+    Find all significant non-overlapping outgoing burst windows.
+    A window is significant if it captures >= min_pct_threshold of total fight damage.
+    Returns [{time_s, pct_of_total, active_cds, ability_breakdown, window_damage}] sorted by time.
     """
     hits = sorted(
         (
@@ -326,57 +376,69 @@ def _find_burst_windows(
     if not total:
         return []
 
-    hit_ts   = [h[0] for h in hits]
-    hit_dmg  = [h[1] for h in hits]
-    hit_tids = [h[2] for h in hits]
-    hit_aids = [h[3] for h in hits]
+    result = _find_significant_windows(
+        [h[0] for h in hits],
+        [h[1] for h in hits],
+        [h[3] for h in hits],
+        fight_start_ms, total, window_ms, min_pct_threshold,
+    )
+    for w in result:
+        w["active_cds"] = []
+        w["target_count"] = 1
+    return result
 
-    n = len(hits)
-    j = 0
-    window_sum = 0
-    candidates: list[tuple[float, float]] = []
-    for i in range(n):
-        while j < n and hit_ts[j] <= hit_ts[i] + window_ms:
-            window_sum += hit_dmg[j]
-            j += 1
-        candidates.append((hit_ts[i], window_sum))
-        window_sum -= hit_dmg[i]
 
-    candidates.sort(key=lambda x: -x[1])
-    selected: list[dict] = []
-    for ts, dmg in candidates:
-        if not any(abs(ts - (fight_start_ms + s["time_s"] * 1000)) < window_ms for s in selected):
-            t_end = ts + window_ms
-            targets = {hit_tids[k] for k in range(n) if ts <= hit_ts[k] <= t_end and hit_tids[k]}
+def _find_defensive_windows(
+    damage_taken_events: list[dict],
+    fight_start_ms: float,
+    buff_windows: dict[int, list],
+    spec_defensives: list[dict],
+    window_ms: int = 8000,
+    min_pct_threshold: float = 0.03,
+) -> list[dict]:
+    """
+    Find all significant incoming damage windows and record which defensives were active.
+    Analogous to _find_burst_windows but for damage taken.
+    """
+    hits = sorted(
+        (
+            e["timestamp"],
+            e.get("amount", 0) + e.get("absorbed", 0),
+            e.get("abilityGameID", 0),
+        )
+        for e in damage_taken_events
+        if e.get("type") == "damage" and (e.get("amount", 0) + e.get("absorbed", 0)) > 0
+    )
+    if not hits:
+        return []
+    total = sum(d for _, d, _ in hits)
+    if not total:
+        return []
 
-            # Per-ability breakdown for this window
-            ability_dmg: dict[int, int] = {}
-            for k in range(n):
-                if ts <= hit_ts[k] <= t_end and hit_aids[k]:
-                    ability_dmg[hit_aids[k]] = ability_dmg.get(hit_aids[k], 0) + hit_dmg[k]
-            top_abilities = sorted(ability_dmg.items(), key=lambda x: -x[1])[:6]
-            ability_breakdown = [
-                {
-                    "spell_id": sid,
-                    "damage": d,
-                    "pct": round(d / dmg, 3) if dmg else 0,
-                }
-                for sid, d in top_abilities
-            ]
-
-            selected.append({
-                "time_s": round((ts - fight_start_ms) / 1000, 1),
-                "pct_of_total": round(dmg / total, 3),
-                "window_damage": dmg,
-                "total_damage": total,
-                "active_cds": [],
-                "target_count": len(targets) if targets else 1,
-                "ability_breakdown": ability_breakdown,
-            })
-        if len(selected) >= top_n:
-            break
-
-    return sorted(selected, key=lambda s: s["time_s"])
+    result = _find_significant_windows(
+        [h[0] for h in hits],
+        [h[1] for h in hits],
+        [h[2] for h in hits],
+        fight_start_ms, total, window_ms, min_pct_threshold,
+    )
+    # Annotate with which defensives were active
+    for w in result:
+        t_s = w["time_s"]
+        t_end_s = t_s + window_ms / 1000
+        active_defs: list[str] = []
+        for defn in spec_defensives:
+            sid = defn["spell_id"]
+            dur = defn.get("duration") or 0
+            if dur <= 0:
+                continue
+            for bw in (buff_windows.get(sid) or []):
+                bw_start = bw[0]
+                bw_end = bw[1] if bw[1] is not None else bw_start + dur
+                if bw_start <= t_end_s and bw_end >= t_s:
+                    active_defs.append(defn["name"])
+                    break
+        w["active_cds"] = active_defs  # use active_cds key for cluster_burst_windows compatibility
+    return result
 
 
 async def analyze_parse(
@@ -527,7 +589,7 @@ async def analyze_parse(
     gear_data = _extract_combatant_info(combatant_info) if combatant_info else {}
 
     # ── Defensive cooldown tracking ───────────────────────────────────────────
-    spec_defensives = SPEC_DEFENSIVES.get(spec) or []
+    spec_defensives = store.get_spec_defensives(spec)
     defensive_summary: list[dict] = []
 
     # Build buff window lookup: {spell_id: [(start_s, end_s)]}
@@ -546,11 +608,13 @@ async def analyze_parse(
     for defn in spec_defensives:
         sid = defn["spell_id"]
         duration = defn.get("duration") or 0
+        cooldown_s = defn.get("cooldown") or 90
         windows = []
+        cast_times: list[float] = []
+
         for w in (buff_windows.get(sid) or []):
             w_start = w[0]
             w_end = w[1] if w[1] is not None else (w_start + duration if duration else w_start + 5)
-            # Compute damage taken during this defensive window
             dmg_during = sum(
                 e.get("amount", 0) + e.get("absorbed", 0)
                 for e in damage_taken_events
@@ -558,9 +622,10 @@ async def analyze_parse(
                 and w_start <= (e["timestamp"] - start) / 1000 <= w_end
             )
             windows.append({"start_s": round(w_start, 1), "end_s": round(w_end, 1), "dmg_during": int(dmg_during)})
+            cast_times.append(round(w_start, 1))
 
         # Also track explicit casts (for defensives that don't apply a self-buff)
-        if not windows:
+        if not cast_times:
             casts = [
                 round((c["timestamp"] - start) / 1000, 1)
                 for c in cast_events
@@ -575,14 +640,43 @@ async def analyze_parse(
                     and t_s <= (e["timestamp"] - start) / 1000 <= w_end
                 )
                 windows.append({"start_s": t_s, "end_s": round(w_end, 1), "dmg_during": int(dmg_during)})
+                cast_times.append(t_s)
 
-        if windows:
+        # Timing analysis: hold windows (same logic as offensive CDs)
+        cast_times_sorted = sorted(cast_times)
+        hold_windows_def: list[dict] = []
+        for j in range(1, len(cast_times_sorted)):
+            expected_s = cast_times_sorted[j - 1] + cooldown_s
+            actual_s = cast_times_sorted[j]
+            hold_amount_s = actual_s - expected_s
+            if hold_amount_s > 8:
+                hold_windows_def.append({
+                    "cast_index": j,
+                    "expected_s": round(expected_s, 1),
+                    "actual_s": round(actual_s, 1),
+                    "hold_amount_s": round(hold_amount_s, 1),
+                })
+
+        cast_pattern = "hold" if hold_windows_def else "on_cooldown"
+        first_cast_s = cast_times_sorted[0] if cast_times_sorted else None
+
+        if cast_times_sorted:
             defensive_summary.append({
                 "name": defn["name"],
                 "spell_id": sid,
-                "uses": len(windows),
+                "cooldown": cooldown_s,
+                "uses": len(cast_times_sorted),
+                "cast_times_s": cast_times_sorted,
+                "first_cast_s": first_cast_s,
+                "hold_windows": hold_windows_def,
+                "cast_pattern": cast_pattern,
                 "windows": windows,
             })
+
+    # Defensive windows - significant incoming damage spikes where parsers use personals
+    defensive_windows = _find_defensive_windows(
+        damage_taken_events, start, buff_windows, spec_defensives
+    )
 
     # ── Damage taken analysis ─────────────────────────────────────────────────
     # 30s segments of incoming damage + top source abilities
@@ -621,6 +715,7 @@ async def analyze_parse(
         "cooldowns": cd_summary,
         "burst_windows": burst_windows,
         "defensives": defensive_summary,
+        "defensive_windows": defensive_windows,
         "dmg_taken_segments": dmg_segments,
         "dmg_taken_by_ability": dmg_taken_by_ability,
         "total_dmg_taken": total_dmg_taken,
