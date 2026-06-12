@@ -1,2 +1,0 @@
-I want you to overhaul the offensives feature. Something I want to change is how the windows get defined. See Burst window definition as a basis. What should change is that their count and length can be variable. It rather should show all significant windows.
-The UI should not change much, but the Detail breakdown should now also use candle diagrams for each of the abilities. If you need more infos from the logs please go ahead and read them out. Please store them in a format required in the UI.

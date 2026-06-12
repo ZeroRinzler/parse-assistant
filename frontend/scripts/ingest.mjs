@@ -472,7 +472,7 @@ function findSignificantWindows(hitsTs, hitsDmg, hitsAids, fightStartMs, total, 
   return selected.sort((a, b) => a.time_s - b.time_s);
 }
 
-function findBurstWindows(damageEvents, fightStartMs, windowMs = 8000, minPctThreshold = 0.03) {
+function findBurstWindows(damageEvents, fightStartMs, cdSummary, specCds, minPctThreshold = 0.03) {
   const hits = damageEvents
     .filter(e => e.type === 'damage' && (e.amount || 0) + (e.absorbed || 0) > 0)
     .map(e => [e.timestamp, (e.amount || 0) + (e.absorbed || 0), e.targetID || 0, e.abilityGameID || 0])
@@ -482,18 +482,72 @@ function findBurstWindows(damageEvents, fightStartMs, windowMs = 8000, minPctThr
   const total = hits.reduce((s, h) => s + h[1], 0);
   if (!total) return [];
 
-  const result = findSignificantWindows(
-    hits.map(h => h[0]), hits.map(h => h[1]), hits.map(h => h[3]),
-    fightStartMs, total, windowMs, minPctThreshold
-  );
-  for (const w of result) {
-    w.active_cds = [];
-    w.target_count = 1;
+  // Build windows from CD cast times × CD durations
+  const rawWins = [];
+  for (const cdEntry of (cdSummary || [])) {
+    const cdDef = specCds?.find(c => c.name === cdEntry.name);
+    const dur = cdDef?.duration || 0;
+    if (dur <= 0) continue;
+    for (const castS of (cdEntry.cast_times_s || [])) {
+      rawWins.push({ startS: castS, endS: castS + dur, cdNames: [cdEntry.name] });
+    }
   }
-  return result;
+
+  // Fall back to 8s sliding window when no CD duration info is available
+  if (!rawWins.length) {
+    const fallback = findSignificantWindows(
+      hits.map(h => h[0]), hits.map(h => h[1]), hits.map(h => h[3]),
+      fightStartMs, total, 8000, minPctThreshold,
+    );
+    for (const w of fallback) { w.active_cds = []; w.target_count = 1; w.window_length_s = 8; }
+    return fallback;
+  }
+
+  // Merge overlapping or near-adjacent windows (≤3s gap)
+  rawWins.sort((a, b) => a.startS - b.startS);
+  const merged = [{ ...rawWins[0], cdNames: [...rawWins[0].cdNames] }];
+  for (let i = 1; i < rawWins.length; i++) {
+    const prev = merged[merged.length - 1];
+    const cur = rawWins[i];
+    if (cur.startS <= prev.endS + 3) {
+      prev.endS = Math.max(prev.endS, cur.endS);
+      for (const n of cur.cdNames) { if (!prev.cdNames.includes(n)) prev.cdNames.push(n); }
+    } else {
+      merged.push({ ...cur, cdNames: [...cur.cdNames] });
+    }
+  }
+
+  const result = [];
+  for (const win of merged) {
+    const startMs = fightStartMs + win.startS * 1000;
+    const endMs = fightStartMs + win.endS * 1000;
+    const windowHits = hits.filter(h => h[0] >= startMs && h[0] <= endMs);
+    const windowDmg = windowHits.reduce((s, h) => s + h[1], 0);
+    if (!windowDmg || windowDmg / total < minPctThreshold) continue;
+
+    const abilityDmg = new Map();
+    for (const [, dmg, , aid] of windowHits) {
+      if (aid) abilityDmg.set(aid, (abilityDmg.get(aid) || 0) + dmg);
+    }
+    const topAbilities = [...abilityDmg.entries()]
+      .sort((a, b) => b[1] - a[1]).slice(0, 6)
+      .map(([sid, d]) => ({ spell_id: sid, damage: d, pct: Math.round(d / windowDmg * 1000) / 1000 }));
+
+    result.push({
+      time_s: Math.round(win.startS * 10) / 10,
+      window_length_s: Math.round((win.endS - win.startS) * 10) / 10,
+      pct_of_total: Math.round(windowDmg / total * 1000) / 1000,
+      window_damage: windowDmg,
+      total_damage: total,
+      ability_breakdown: topAbilities,
+      active_cds: win.cdNames,
+      target_count: 1,
+    });
+  }
+  return result.sort((a, b) => a.time_s - b.time_s);
 }
 
-function findDefensiveWindows(damageTakenEvents, fightStartMs, buffWindows, specDefensives, windowMs = 8000, minPctThreshold = 0.03) {
+function findDefensiveWindows(damageTakenEvents, fightStartMs, buffWindows, specDefensives) {
   const hits = damageTakenEvents
     .filter(e => e.type === 'damage' && (e.amount || 0) + (e.absorbed || 0) > 0)
     .map(e => [e.timestamp, (e.amount || 0) + (e.absorbed || 0), e.abilityGameID || 0])
@@ -503,30 +557,79 @@ function findDefensiveWindows(damageTakenEvents, fightStartMs, buffWindows, spec
   const total = hits.reduce((s, h) => s + h[1], 0);
   if (!total) return [];
 
-  const result = findSignificantWindows(
-    hits.map(h => h[0]), hits.map(h => h[1]), hits.map(h => h[2]),
-    fightStartMs, total, windowMs, minPctThreshold
-  );
-  for (const w of result) {
-    const tS = w.time_s;
-    const tEndS = tS + windowMs / 1000;
-    const activeDefs = [];
-    for (const defn of specDefensives) {
-      const sid = defn.spell_id;
-      const dur = defn.duration || 0;
-      if (dur <= 0) continue;
-      for (const bw of (buffWindows.get(sid) || [])) {
-        const bwStart = bw[0];
-        const bwEnd = bw[1] != null ? bw[1] : bwStart + dur;
-        if (bwStart <= tEndS && bwEnd >= tS) {
-          activeDefs.push(defn.name);
-          break;
-        }
+  const result = [];
+
+  for (const defn of specDefensives) {
+    const sid = defn.spell_id;
+    const dur = defn.duration || 5;
+
+    for (const bw of (buffWindows.get(sid) || [])) {
+      // buffWindows store relative-seconds from fight start
+      const startS = bw[0];
+      const endS = bw[1] != null ? bw[1] : startS + dur;
+      const startMs = fightStartMs + startS * 1000;
+      const endMs = fightStartMs + endS * 1000;
+
+      const windowHits = hits.filter(h => h[0] >= startMs && h[0] <= endMs);
+      const windowDmg = windowHits.reduce((s, h) => s + h[1], 0);
+      const pct = total ? Math.round(windowDmg / total * 1000) / 1000 : 0;
+
+      const abilityDmg = new Map();
+      for (const [, dmg, aid] of windowHits) {
+        if (aid) abilityDmg.set(aid, (abilityDmg.get(aid) || 0) + dmg);
       }
+      const topAbilities = [...abilityDmg.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 6)
+        .map(([abilityId, d]) => ({
+          spell_id: abilityId,
+          damage: d,
+          pct: windowDmg ? Math.round(d / windowDmg * 1000) / 1000 : 0,
+        }));
+
+      result.push({
+        time_s: Math.round(startS * 10) / 10,
+        window_length_s: Math.round((endS - startS) * 10) / 10,
+        pct_of_total: pct,
+        window_damage: windowDmg,
+        total_damage: total,
+        ability_breakdown: topAbilities,
+        active_cds: [defn.name],
+        defensive_name: defn.name,
+        spell_id: sid,
+      });
     }
-    w.active_cds = activeDefs;
   }
-  return result;
+
+  return result.sort((a, b) => a.time_s - b.time_s);
+}
+
+// Defensive windows cluster per-defensive first (so Cloak at 1:00 and Feint at 1:00
+// remain separate clusters), then by time within each defensive group.
+function clusterDefensiveWindows(windows, totalSamples, mergeS = 20.0) {
+  if (!windows.length) return [];
+  const byDefensive = new Map();
+  for (const w of windows) {
+    const name = w.defensive_name || w.active_cds?.[0] || '';
+    if (!byDefensive.has(name)) byDefensive.set(name, []);
+    byDefensive.get(name).push(w);
+  }
+  const result = [];
+  for (const [defensiveName, defWindows] of byDefensive.entries()) {
+    for (const cl of groupByTime(defWindows, mergeS)) {
+      if (cl.length < Math.max(2, totalSamples * 0.35)) continue;
+      const base = clusterBaseStats(cl, totalSamples);
+      result.push({
+        ...base,
+        window_length_s: round(mean(cl.map(c => c.window_length_s || 5))),
+        defensive_name: defensiveName,
+        spell_id: cl[0].spell_id,
+        common_defensives: [defensiveName],
+        common_cds: [defensiveName],
+      });
+    }
+  }
+  return result.sort((a, b) => a.time_s - b.time_s);
 }
 
 // ── Parse analysis ────────────────────────────────────────────────────────────
@@ -673,22 +776,8 @@ async function analyzeParse(wcl, spec, reportCode, fightId, playerName, combatan
     castEffPct = Math.round(Math.max(0, (1 - downtimeMs / 1000 / fightDurS) * 100) * 10) / 10;
   }
 
-  // Burst windows
-  const burstWindows = findBurstWindows(damageEvents, start);
-  for (const bw of burstWindows) {
-    const bwT = bw.time_s;
-    const active = [];
-    for (const cdEntry of cdSummary) {
-      const cdDef = specCds.find(c => c.name === cdEntry.name) || {};
-      const dur = cdDef.duration || 0;
-      if (dur > 0) {
-        for (const t of cdEntry.cast_times_s) {
-          if (t <= bwT && bwT <= t + dur) { active.push(cdEntry.name); break; }
-        }
-      }
-    }
-    bw.active_cds = active;
-  }
+  // Burst windows — sized by CD durations, active_cds set inside
+  const burstWindows = findBurstWindows(damageEvents, start, cdSummary, specCds);
 
   // Gear data from combatant info
   const gearData = combatantInfo ? extractCombatantInfo(combatantInfo) : {};
@@ -853,77 +942,80 @@ function round(v, decimals = 1) {
   return Math.round(v * 10 ** decimals) / 10 ** decimals;
 }
 
-function clusterBurstWindows(windows, totalSamples, mergeS = 15.0) {
-  if (!windows.length) return [];
+// ── Shared clustering primitives ─────────────────────────────────────────────
+
+// Greedy: group windows by proximity in time (within mergeS seconds of running cluster median).
+function groupByTime(windows, mergeS) {
   const sorted = [...windows].sort((a, b) => a.time_s - b.time_s);
   const clusters = [];
   for (const w of sorted) {
     let placed = false;
     for (const cl of clusters) {
-      const center = median(cl.map(c => c.time_s));
-      if (Math.abs(w.time_s - center) <= mergeS) {
-        cl.push(w);
-        placed = true;
-        break;
+      if (Math.abs(w.time_s - median(cl.map(c => c.time_s))) <= mergeS) {
+        cl.push(w); placed = true; break;
       }
     }
     if (!placed) clusters.push([w]);
   }
+  return clusters;
+}
 
+// Common statistics for a cluster of windows (time, pct, ability breakdown).
+function clusterBaseStats(cl, totalSamples) {
+  const times = cl.map(c => c.time_s);
+  const pcts  = cl.map(c => c.pct_of_total);
+  const sorted = [...pcts].sort((a, b) => a - b);
+
+  const abilityTotals = new Map();
+  for (const c of cl) {
+    for (const ab of (c.ability_breakdown || [])) {
+      if (!abilityTotals.has(ab.spell_id)) abilityTotals.set(ab.spell_id, []);
+      abilityTotals.get(ab.spell_id).push(ab.pct);
+    }
+  }
+  const ability_breakdown = [...abilityTotals.entries()]
+    .filter(([, ps]) => ps.length >= cl.length * 0.5)
+    .map(([sid, ps]) => ({
+      spell_id: sid,
+      avg_pct: round(mean(ps), 3),
+      min_pct: round(Math.min(...ps), 3),
+      max_pct: round(Math.max(...ps), 3),
+      count: ps.length,
+    }))
+    .sort((a, b) => b.avg_pct - a.avg_pct)
+    .slice(0, 6);
+
+  return {
+    time_s: round(median(times)),
+    stddev_s: round(stdev(times)),
+    count: cl.length,
+    total_samples: totalSamples,
+    pct_avg: round(mean(pcts), 3),
+    pct_stddev: round(stdev(pcts), 3),
+    pct_min: round(sorted[0], 3),
+    pct_max: round(sorted[sorted.length - 1], 3),
+    ability_breakdown,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+function clusterBurstWindows(windows, totalSamples, mergeS = 15.0) {
+  if (!windows.length) return [];
   const result = [];
-  for (const cl of clusters) {
+  for (const cl of groupByTime(windows, mergeS)) {
     if (cl.length < Math.max(2, totalSamples * 0.35)) continue;
-    const times = cl.map(c => c.time_s);
-    const pcts = cl.map(c => c.pct_of_total);
-
+    const base = clusterBaseStats(cl, totalSamples);
     const cdCounts = new Map();
     for (const c of cl) {
-      for (const name of (c.active_cds || [])) {
-        cdCounts.set(name, (cdCounts.get(name) || 0) + 1);
-      }
+      for (const name of (c.active_cds || [])) cdCounts.set(name, (cdCounts.get(name) || 0) + 1);
     }
-    const commonCds = [...cdCounts.entries()]
+    const common_cds = [...cdCounts.entries()]
       .sort((a, b) => b[1] - a[1])
       .filter(([, cnt]) => cnt >= cl.length * 0.5)
       .map(([name]) => name);
-
-    const avgTargets = round(mean(cl.map(c => c.target_count || 1)));
-    const pctStddev = round(stdev(pcts), 3);
-
-    const abilityTotals = new Map();
-    for (const c of cl) {
-      for (const ab of (c.ability_breakdown || [])) {
-        if (!abilityTotals.has(ab.spell_id)) abilityTotals.set(ab.spell_id, []);
-        abilityTotals.get(ab.spell_id).push(ab.pct);
-      }
-    }
-
-    const abilityBreakdown = [...abilityTotals.entries()]
-      .filter(([, pctsList]) => pctsList.length >= cl.length * 0.5)
-      .map(([sid, pctsList]) => ({
-        spell_id: sid,
-        avg_pct: round(mean(pctsList), 3),
-        min_pct: round(Math.min(...pctsList), 3),
-        max_pct: round(Math.max(...pctsList), 3),
-        count: pctsList.length,
-      }))
-      .sort((a, b) => b.avg_pct - a.avg_pct)
-      .slice(0, 6);
-
-    const parsePcts = [...pcts].sort((a, b) => a - b);
-    result.push({
-      time_s: round(median(times)),
-      stddev_s: round(stdev(times)),
-      count: cl.length,
-      total_samples: totalSamples,
-      pct_avg: round(mean(pcts), 3),
-      pct_stddev: pctStddev,
-      pct_min: round(parsePcts[0], 3),
-      pct_max: round(parsePcts[parsePcts.length - 1], 3),
-      common_cds: commonCds,
-      avg_targets: avgTargets,
-      ability_breakdown: abilityBreakdown,
-    });
+    const window_length_s = round(mean(cl.map(c => c.window_length_s || 8)));
+    result.push({ ...base, common_cds, avg_targets: round(mean(cl.map(c => c.target_count || 1))), window_length_s });
   }
   return result.sort((a, b) => a.time_s - b.time_s);
 }
@@ -1255,11 +1347,7 @@ function syncEncounterFile(spec, encounterId) {
   for (const s of samples) {
     for (const dw of ((s.cooldown_data || {}).defensive_windows || [])) allDw.push(dw);
   }
-  const defensiveWindowsClustered = allDw.length ? clusterBurstWindows(allDw, samples.length) : [];
-  for (const dw of defensiveWindowsClustered) {
-    dw.common_defensives = dw.common_cds;
-    delete dw.common_cds;
-  }
+  const defensiveWindowsClustered = allDw.length ? clusterDefensiveWindows(allDw, samples.length) : [];
 
   // Damage taken comparison
   const aggDtk = new Map();

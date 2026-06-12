@@ -3,7 +3,7 @@ import { WclApiService } from './wcl-api';
 import { EncounterService } from './encounter';
 import { IconCacheService } from './icon-cache';
 import { AnalysisResult, AnalysisFinding, BurstWindow, PlayerBurstWindow, PlayerDefensive } from '../models/analysis.models';
-import { EncounterBench } from '../models/encounter.models';
+import { EncounterBench, PerDefensiveBenchmark } from '../models/encounter.models';
 import { WclFight } from '../models/wcl.models';
 
 const BLOODLUST_IDS = new Set([2825, 32182, 80353, 90355, 264667, 390386]);
@@ -93,8 +93,27 @@ export class AnalysisEngineService {
       if (b.top_dtk_segments?.length) result.top_dtk_segments = b.top_dtk_segments as never;
     }
 
-    result.player_burst_windows = this._findPlayerBurstWindows(dmgEvents as WclEvent[], fStart, specCds, castEvents as WclEvent[]);
+    if (result.burst_windows?.length) {
+      result.player_burst_windows = this._findPlayerBurstWindows(result.burst_windows, dmgEvents as WclEvent[], fStart);
+    }
     result.player_defensives = this._analyzeDefensives(spec, castEvents as WclEvent[], buffEvents as WclEvent[], dtEvents as WclEvent[], fStart, fEnd, rulebook);
+
+    const specDefs = (rulebook as { defensives?: CdSpec[] } | null)?.defensives ?? null;
+    if (specDefs?.length && result.player_defensives.length) {
+      result.defensive_findings = this._analyzeDefensiveFindings(
+        result.player_defensives,
+        (bench as Partial<EncounterBench>)?.per_defensive_benchmarks ?? {},
+        (fEnd - fStart) / 1000,
+      );
+    }
+
+    const topDefWindows = (bench as Partial<EncounterBench>)?.defensive_windows;
+    if (topDefWindows?.length) {
+      result.top_defensive_windows = topDefWindows as unknown as BurstWindow[];
+      result.player_defensive_windows = this._computePlayerDefensiveWindows(
+        result.top_defensive_windows, dtEvents as WclEvent[], fStart,
+      );
+    }
 
     const dtk = this._analyzeDamageTaken(dtEvents as WclEvent[], abilityMap, fStart, fEnd);
     result.player_dmg_taken_segment_pcts = dtk.segmentPcts;
@@ -307,48 +326,132 @@ export class AnalysisEngineService {
   }
 
   private _findPlayerBurstWindows(
-    dmgEvents: WclEvent[], fStart: number,
-    specCds: CdSpec[] | null, castEvents: WclEvent[],
+    topBurstWindows: BurstWindow[], dmgEvents: WclEvent[], fStart: number,
   ): PlayerBurstWindow[] {
     const sorted = dmgEvents
       .filter(e => e.timestamp >= fStart && ((e.amount || 0) + (e.absorbed || 0)) > 0)
       .sort((a, b) => a.timestamp - b.timestamp);
-    if (!sorted.length) return [];
-    const WINDOW_S = 8;
     const totalDmg = sorted.reduce((s, e) => s + (e.amount || 0) + (e.absorbed || 0), 0) || 1;
-    const candidates = sorted.map(e => {
-      const tS = (e.timestamp - fStart) / 1000;
-      const tot = sorted.filter(f => { const ft = (f.timestamp - fStart) / 1000; return ft >= tS && ft < tS + WINDOW_S; })
-        .reduce((s, f) => s + (f.amount || 0) + (f.absorbed || 0), 0);
-      return { time_s: Math.round(tS * 10) / 10, total: tot };
+
+    return topBurstWindows.map(bw => {
+      const winLenS = bw.window_length_s ?? 8;
+      const winEvents = sorted.filter(e => {
+        const tS = (e.timestamp - fStart) / 1000;
+        return tS >= bw.time_s && tS < bw.time_s + winLenS;
+      });
+      const winTotal = winEvents.reduce((s, e) => s + (e.amount || 0) + (e.absorbed || 0), 0);
+      const byAb: Record<number, number> = {};
+      for (const e of winEvents) {
+        if (e.abilityGameID) byAb[e.abilityGameID] = (byAb[e.abilityGameID] || 0) + (e.amount || 0) + (e.absorbed || 0);
+      }
+      const ability_breakdown = Object.entries(byAb).sort((a, b) => b[1] - a[1]).slice(0, 10)
+        .map(([sid, dmg]) => ({ spell_id: parseInt(sid, 10), pct: Math.round(dmg / (winTotal || 1) * 1000) / 1000 }));
+      return { time_s: bw.time_s, pct_of_total: Math.round(winTotal / totalDmg * 1000) / 1000, ability_breakdown };
     });
-    const peaks = [...candidates].sort((a, b) => b.total - a.total);
-    const result: { time_s: number; total: number }[] = [];
-    for (const w of peaks) {
-      if (result.length >= 4) break;
-      if (result.some(r => Math.abs(r.time_s - w.time_s) < WINDOW_S)) continue;
-      result.push(w);
-    }
-    result.sort((a, b) => a.time_s - b.time_s);
-    return result.map(w => {
-      const active: string[] = [];
-      if (specCds) {
-        for (const cd of specCds) {
-          if (!(cd.duration ?? 0 > 0)) continue;
-          const cdCasts = castEvents.filter(c => c.type === 'cast' && c.abilityGameID === cd.spell_id && c.timestamp >= fStart);
-          for (const c of cdCasts) {
-            const ct = (c.timestamp - fStart) / 1000;
-            if (ct <= w.time_s && w.time_s <= ct + (cd.duration ?? 0)) { active.push(cd.name); break; }
+  }
+
+  private _analyzeDefensiveFindings(
+    playerDefensives: PlayerDefensive[],
+    perDefBench: Record<string, PerDefensiveBenchmark>,
+    fightDurS: number,
+  ): AnalysisFinding[] {
+    const findings: AnalysisFinding[] = [];
+
+    for (const def of playerDefensives) {
+      const { name, cooldown: cooldownS, uses, cast_times_s } = def;
+      const expected = 1 + Math.floor(fightDurS / cooldownS);
+      const b = perDefBench[name];
+      const issues: AnalysisFinding[] = [];
+      const suggestions: AnalysisFinding[] = [];
+
+      if (uses === 0) {
+        issues.push({ severity: 'critical', category: 'lost_cooldown', cd_name: name, timestamp_ms: undefined,
+          message: `${name} was never used. Expected ~${expected} use(s) in a ${_fmt(fightDurS)} fight.` });
+      } else if (uses < expected) {
+        issues.push({ severity: 'critical', category: 'lost_cooldown', cd_name: name, timestamp_ms: undefined,
+          message: `${name} — ${uses} of ${expected} expected uses. Lost ${expected - uses} use(s).` });
+      }
+
+      if (cast_times_s?.length) {
+        const firstS = cast_times_s[0];
+        if (b?.avg_first_cast_s != null) {
+          const sdF = b.stddev_first_cast_s ?? 15;
+          if (firstS > b.avg_first_cast_s + 2 * sdF) {
+            issues.push({ severity: 'warning', category: 'cooldown_delay', cd_name: name,
+              timestamp_ms: Math.round(firstS * 1000),
+              message: `${name} first use at ${_fmt(firstS)} — ${(firstS - b.avg_first_cast_s).toFixed(0)}s later than top parsers (${_fmt(b.avg_first_cast_s)} avg).` });
+          }
+        } else if (firstS > 90) {
+          issues.push({ severity: 'warning', category: 'cooldown_delay', cd_name: name,
+            timestamp_ms: Math.round(firstS * 1000),
+            message: `${name} first use at ${_fmt(firstS)} — unusually late.` });
+        }
+
+        for (let i = 1; i < cast_times_s.length; i++) {
+          const gap = cast_times_s[i] - cast_times_s[i - 1];
+          if (b?.avg_gap_s != null) {
+            const sdG = b.stddev_gap_s ?? cooldownS * 0.2;
+            if (gap > b.avg_gap_s + 2 * sdG) {
+              issues.push({ severity: 'warning', category: 'cooldown_delay', cd_name: name,
+                timestamp_ms: Math.round(cast_times_s[i] * 1000),
+                message: `${name} at ${_fmt(cast_times_s[i])}: ${gap.toFixed(0)}s gap vs top-parse avg ${b.avg_gap_s.toFixed(0)}s ±${(b.stddev_gap_s ?? cooldownS * 0.2).toFixed(0)}s.` });
+            }
+          } else if (gap > cooldownS * 1.2) {
+            issues.push({ severity: 'warning', category: 'cooldown_delay', cd_name: name,
+              timestamp_ms: Math.round(cast_times_s[i] * 1000),
+              message: `${name} held ${(gap - cooldownS).toFixed(0)}s past reset at ${_fmt(cast_times_s[i])}.` });
+          }
+        }
+
+        if (b?.hold_targets) {
+          for (const [idxStr, target] of Object.entries(b.hold_targets)) {
+            const k = parseInt(idxStr, 10) - 1;
+            if (k >= cast_times_s.length) continue;
+            const playerT = cast_times_s[k];
+            const tol = Math.max(target.stddev_s ?? 20, 15);
+            if (playerT < target.target_s - tol) {
+              suggestions.push({ severity: 'info', category: 'hold_suggestion',
+                timestamp_ms: Math.round(playerT * 1000),
+                message: `${name} use ${idxStr} at ${_fmt(playerT)} — ${target.count}/${target.total_samples} top parsers hold until ~${_fmt(target.target_s)}.`,
+                details: { remedy: `Consider holding ${name} until ~${_fmt(target.target_s)}.`, cd_name: name } });
+            }
           }
         }
       }
-      const winEvents = sorted.filter(e => { const tS = (e.timestamp - fStart) / 1000; return tS >= w.time_s && tS < w.time_s + WINDOW_S; });
-      const winTotal = winEvents.reduce((s, e) => s + (e.amount || 0) + (e.absorbed || 0), 0) || 1;
+
+      if (issues.length) findings.push(...issues);
+      else if (uses > 0) findings.push({ severity: 'success', category: 'cooldown_usage', cd_name: name,
+        message: `${name} — ${uses}/${expected} uses.` });
+      if (uses > 0) findings.push(...suggestions);
+    }
+
+    const order: Record<string, number> = { critical: 0, warning: 1, info: 2, success: 3 };
+    findings.sort((a, b) => (order[a.severity] ?? 4) - (order[b.severity] ?? 4));
+    return findings;
+  }
+
+  private _computePlayerDefensiveWindows(
+    topDefWindows: BurstWindow[], dtEvents: WclEvent[], fStart: number,
+  ): PlayerBurstWindow[] {
+    const sorted = dtEvents
+      .filter(e => e.timestamp >= fStart && ((e.amount || 0) + (e.absorbed || 0)) > 0)
+      .sort((a, b) => a.timestamp - b.timestamp);
+    const totalDmg = sorted.reduce((s, e) => s + (e.amount || 0) + (e.absorbed || 0), 0) || 1;
+
+    return topDefWindows.map(dw => {
+      const winLenS = dw.window_length_s ?? 8;
+      const winEvents = sorted.filter(e => {
+        const tS = (e.timestamp - fStart) / 1000;
+        return tS >= dw.time_s && tS < dw.time_s + winLenS;
+      });
+      const winTotal = winEvents.reduce((s, e) => s + (e.amount || 0) + (e.absorbed || 0), 0);
       const byAb: Record<number, number> = {};
-      for (const e of winEvents) { if (e.abilityGameID) byAb[e.abilityGameID] = (byAb[e.abilityGameID] || 0) + (e.amount || 0) + (e.absorbed || 0); }
-      const ability_breakdown = Object.entries(byAb).sort((a, b) => b[1] - a[1]).slice(0, 10)
-        .map(([sid, dmg]) => ({ spell_id: parseInt(sid, 10), pct: Math.round(dmg / winTotal * 1000) / 1000 }));
-      return { time_s: w.time_s, pct_of_total: Math.round(w.total / totalDmg * 1000) / 1000, ability_breakdown };
+      for (const e of winEvents) {
+        if (e.abilityGameID) byAb[e.abilityGameID] = (byAb[e.abilityGameID] || 0) + (e.amount || 0) + (e.absorbed || 0);
+      }
+      const ability_breakdown = Object.entries(byAb).sort((a, b) => b[1] - a[1]).slice(0, 6)
+        .map(([sid, dmg]) => ({ spell_id: parseInt(sid, 10), pct: Math.round(dmg / (winTotal || 1) * 1000) / 1000 }));
+      return { time_s: dw.time_s, pct_of_total: Math.round(winTotal / totalDmg * 1000) / 1000, ability_breakdown };
     });
   }
 

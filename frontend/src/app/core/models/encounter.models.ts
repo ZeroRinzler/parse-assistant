@@ -43,6 +43,7 @@ export interface EncounterBench {
 export interface DefensiveWindowBench {
   time_s: number;
   stddev_s: number;
+  window_length_s?: number;
   count: number;
   total_samples: number;
   pct_avg: number;
@@ -50,6 +51,8 @@ export interface DefensiveWindowBench {
   pct_max?: number;
   pct_stddev?: number;
   common_defensives: string[];
+  defensive_name?: string;
+  spell_id?: number;
   avg_targets?: number;
   ability_breakdown?: Array<{ spell_id: number; avg_pct: number; min_pct?: number; max_pct?: number; count?: number }>;
 }

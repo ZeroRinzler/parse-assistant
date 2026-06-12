@@ -75,10 +75,12 @@ mat-expansion-panel.panel-critical { border-left: 3px solid var(--critical); }
   background: var(--surface-alt);
   padding: 12px 14px;
 
-  &.bw-low    { border-left: 3px solid var(--critical); }
-  &.bw-future { opacity: 0.5; }
-  &.bw-missing { opacity: 0.7; }
+  &.bw-high-dtk { border-left: 3px solid var(--critical); }
+  &.bw-future   { opacity: 0.5; }
+  &.bw-missing  { opacity: 0.7; }
 }
+
+.bw-win-len { font-size: 11px; color: var(--muted); }
 
 .bw-time {
   font-weight: 600;

@@ -112,11 +112,14 @@ export class DefensivesSectionComponent {
       const playerPct = playerDw?.pct_of_total ?? null;
       const minPct = dw.pct_min ?? topPct * 0.7;
       const maxPct = dw.pct_max ?? topPct * 1.3;
+      const winLenS = dw.window_length_s ?? 8;
+      const spellId = dw.spell_id ?? null;
+      const defensiveName = dw.defensive_name ?? dw.common_defensives?.[0] ?? '';
 
       let cls = 'bw-ok', badge = 'On Par';
       if (notReached) { cls = 'bw-future'; badge = 'Not reached'; }
       else if (playerPct === null) { cls = 'bw-missing'; badge = 'No data'; }
-      else if (playerPct > maxPct + (dw.pct_stddev ?? 0.01)) { cls = 'bw-low'; badge = 'High damage taken'; }
+      else if (playerPct > maxPct + (dw.pct_stddev ?? 0.01)) { cls = 'bw-high-dtk'; badge = 'High damage taken'; }
 
       const pBar = playerPct != null ? Math.min(playerPct / maxV * 100, 100) : 0;
       const tBar = topPct > 0 ? Math.min(topPct / maxV * 100, 100) : 0;
@@ -128,7 +131,7 @@ export class DefensivesSectionComponent {
       const playerAbMap: Record<number, { pct: number }> = {};
       for (const a of (playerDw?.ability_breakdown || [])) playerAbMap[a.spell_id] = a;
 
-      return { dw, idx, notReached, playerPct, topPct, minPct, maxPct, cls, badge, pBar, tBar, tMinP, tMaxP, rW, avgOff, playerAbMap };
+      return { dw, idx, notReached, playerPct, topPct, minPct, maxPct, winLenS, spellId, defensiveName, cls, badge, pBar, tBar, tMinP, tMaxP, rW, avgOff, playerAbMap };
     });
   });
 

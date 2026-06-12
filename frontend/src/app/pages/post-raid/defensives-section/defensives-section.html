@@ -46,7 +46,7 @@
   </div>
 }
 
-<!-- Defensive windows (significant incoming damage spikes) -->
+<!-- Defensive windows: when top parsers use each defensive and how much damage they absorbed -->
 @if (topDefWindows().length > 0) {
   <p class="section-label" style="margin-top:18px">Defensive Windows</p>
   <div class="cmp-legend">
@@ -59,7 +59,13 @@
         <div class="bw-card-header">
           <span class="bw-time">{{ card.dw.time_s | formatDuration }}</span>
           <span class="bw-status-badge" [class]="'bw-badge-' + card.cls">{{ card.badge }}</span>
-          <span class="bw-cds">{{ card.dw.common_defensives?.join(', ') || 'No common defensives' }}</span>
+          <span class="bw-cds">
+            @if (card.spellId) {
+              <wl-spell-icon [spellId]="card.spellId" size="small"></wl-spell-icon>
+            }
+            {{ card.defensiveName }}
+            <span class="bw-win-len">({{ card.winLenS }}s)</span>
+          </span>
           @if (card.dw.ability_breakdown?.length) {
             <button class="bw-expand-btn" (click)="toggleExpand(card.idx); $event.stopPropagation()">
               Detail {{ expandedIdx() === card.idx ? '▴' : '▾' }}
