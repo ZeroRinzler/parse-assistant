@@ -1,7 +1,8 @@
-import { Component, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-loading-spinner',
   imports: [MatProgressSpinnerModule],
   template: `

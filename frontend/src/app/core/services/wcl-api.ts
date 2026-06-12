@@ -1,4 +1,6 @@
 import { Injectable, inject } from '@angular/core';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
 import { WclAuthService } from './wcl-auth';
 import { WclReport, CharacterInfo, CharacterGear, WclUserCharacter } from '../models/wcl.models';
 
@@ -53,6 +55,7 @@ query($name:String!,$serverSlug:String!,$serverRegion:String!,$encID:Int!){
 @Injectable({ providedIn: 'root' })
 export class WclApiService {
   private readonly auth = inject(WclAuthService);
+  private readonly http = inject(HttpClient);
 
   async query<T = unknown>(gql: string, variables: Record<string, unknown> = {}): Promise<T> {
     const token = this.auth.getToken();
@@ -60,17 +63,23 @@ export class WclApiService {
       this.auth.logout();
       throw new Error('Not logged in to WCL — click "Sign In" to authorize.');
     }
-    const resp = await fetch(API_URL, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: gql, variables }),
-    });
-    if (resp.status === 401) {
-      this.auth.logout();
-      throw new Error('WCL session expired — sign in again.');
+    let body: { data?: T; errors?: { message?: string }[] };
+    try {
+      body = await firstValueFrom(this.http.post<{ data?: T; errors?: { message?: string }[] }>(
+        API_URL,
+        { query: gql, variables },
+        { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } },
+      ));
+    } catch (e) {
+      if (e instanceof HttpErrorResponse) {
+        if (e.status === 401) {
+          this.auth.logout();
+          throw new Error('WCL session expired — sign in again.');
+        }
+        throw new Error(`WCL API error (${e.status})`);
+      }
+      throw e;
     }
-    if (!resp.ok) throw new Error(`WCL API error (${resp.status})`);
-    const body = await resp.json();
     if (body.errors?.length) throw new Error(body.errors[0].message || 'WCL GraphQL error');
     return body.data as T;
   }

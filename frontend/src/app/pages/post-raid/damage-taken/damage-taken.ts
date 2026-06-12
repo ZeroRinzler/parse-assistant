@@ -1,4 +1,4 @@
-import { Component, computed, inject, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { DmgTakenAbility, TopDtkComparison, DmgTakenSegment } from '../../../core/models/analysis.models';
 import { ComparisonChartComponent, ChartRow } from '../../../shared/components/comparison-chart/comparison-chart';
@@ -7,6 +7,7 @@ import { FormatDurationPipe } from '../../../shared/pipes/format-duration-pipe';
 import { IconCacheService } from '../../../core/services/icon-cache';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-damage-taken',
   imports: [DecimalPipe, ComparisonChartComponent, FormatDurationPipe],
   templateUrl: './damage-taken.html',

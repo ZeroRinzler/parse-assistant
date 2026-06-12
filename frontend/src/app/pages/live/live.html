@@ -6,7 +6,7 @@
       <div class="input-row">
         <mat-form-field appearance="outline" class="flex-1">
           <mat-label>Report URL or Code</mat-label>
-          <input matInput [(ngModel)]="reportInput" placeholder="https://www.warcraftlogs.com/reports/…"
+          <input matInput [formControl]="reportControl" placeholder="https://www.warcraftlogs.com/reports/…"
                  (keydown.enter)="startLive()" />
         </mat-form-field>
         <button mat-flat-button color="primary" (click)="startLive()">Watch</button>

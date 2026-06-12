@@ -1,4 +1,4 @@
-import { Component, computed, inject, input, OnChanges } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, OnChanges } from '@angular/core';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatIconModule } from '@angular/material/icon';
 import { AnalysisResult as IAnalysisResult, AnalysisFinding } from '../../../core/models/analysis.models';
@@ -20,6 +20,7 @@ const CAT_LABEL: Record<string, string> = {
 };
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-analysis-result',
   imports: [
     MatExpansionModule, MatIconModule, SpellIconComponent,

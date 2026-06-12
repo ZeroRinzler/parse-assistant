@@ -1,10 +1,11 @@
-import { Component, computed, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { BurstWindow, PlayerBurstWindow } from '../../../core/models/analysis.models';
 import { FormatDurationPipe } from '../../../shared/pipes/format-duration-pipe';
 import { RangeChartComponent, RangeRow } from '../../../shared/components/range-chart/range-chart';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-burst-windows',
   imports: [RangeChartComponent, FormatDurationPipe, DecimalPipe],
   templateUrl: './burst-windows.html',

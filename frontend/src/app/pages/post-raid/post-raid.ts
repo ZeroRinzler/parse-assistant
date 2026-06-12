@@ -1,6 +1,7 @@
-import { Component, OnInit, inject, signal, computed } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, inject, signal, computed } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
-import { FormsModule } from '@angular/forms';
+import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
@@ -24,9 +25,10 @@ function extractCode(url: string): string {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-post-raid',
   imports: [
-    FormsModule, MatFormFieldModule, MatInputModule, MatSelectModule,
+    ReactiveFormsModule, MatFormFieldModule, MatInputModule, MatSelectModule,
     MatButtonModule, MatCardModule,
     AuthBannerComponent, LoadingSpinnerComponent, AnalysisResultComponent,
     FormatDurationPipe, FormatSpecPipe,
@@ -44,7 +46,10 @@ export class PostRaidComponent implements OnInit {
 
   protected readonly isLoggedIn = this.auth.isLoggedIn;
 
-  protected readonly reportInput = signal('');
+  protected readonly reportControl = new FormControl('', { nonNullable: true });
+  protected readonly fightControl = new FormControl<number | null>(null);
+  protected readonly playerControl = new FormControl<number | null>(null);
+
   protected readonly loadingReport = signal(false);
   protected readonly loadingAnalysis = signal(false);
   protected readonly loadingMsg = signal('Loading…');
@@ -52,8 +57,8 @@ export class PostRaidComponent implements OnInit {
 
   protected readonly fights = signal<WclFight[]>([]);
   protected readonly players = signal<WclPlayer[]>([]);
-  protected readonly selectedFightId = signal<number | null>(null);
-  protected readonly selectedPlayerId = signal<number | null>(null);
+  protected readonly selectedFightId = toSignal(this.fightControl.valueChanges, { initialValue: this.fightControl.value });
+  protected readonly selectedPlayerId = toSignal(this.playerControl.valueChanges, { initialValue: this.playerControl.value });
   protected readonly result = signal<AnalysisResult | null>(null);
 
   private _reportCode = '';
@@ -70,7 +75,7 @@ export class PostRaidComponent implements OnInit {
     const params = this.route.snapshot.queryParamMap;
     const r = params.get('report');
     if (r) {
-      this.reportInput.set(r);
+      this.reportControl.setValue(r);
       await this.loadReport(params.get('fight') ? parseInt(params.get('fight')!, 10) : null,
                             params.get('player') ? parseInt(params.get('player')!, 10) : null);
     }
@@ -82,7 +87,7 @@ export class PostRaidComponent implements OnInit {
 
   protected async loadReport(autoFight: number | null = null, autoPlayer: number | null = null): Promise<void> {
     this.error.set('');
-    const url = this.reportInput().trim();
+    const url = this.reportControl.value.trim();
     if (!url) return;
     this._reportCode = extractCode(url);
 
@@ -117,7 +122,7 @@ export class PostRaidComponent implements OnInit {
       if (report.masterData?.abilities) this.icons.seed(report.masterData.abilities);
 
       const lastFight = this.fights()[this.fights().length - 1];
-      this.selectedFightId.set(autoFight ?? lastFight?.id ?? null);
+      this.fightControl.setValue(autoFight ?? lastFight?.id ?? null);
       this._applyAutoPlayer(autoPlayer);
       this._syncUrl();
       await this.analyzePlayer();
@@ -164,10 +169,10 @@ export class PostRaidComponent implements OnInit {
     if (chars.length) {
       const names = new Set(chars.map(c => c.name.toLowerCase()));
       const match = this.visiblePlayers().find(p => names.has(p.name.toLowerCase()));
-      if (match) { this.selectedPlayerId.set(match.id); return; }
+      if (match) { this.playerControl.setValue(match.id); return; }
     }
-    if (autoPlayer) { this.selectedPlayerId.set(autoPlayer); return; }
-    this.selectedPlayerId.set(this.visiblePlayers()[0]?.id ?? null);
+    if (autoPlayer) { this.playerControl.setValue(autoPlayer); return; }
+    this.playerControl.setValue(this.visiblePlayers()[0]?.id ?? null);
   }
 
   private _syncUrl(): void {

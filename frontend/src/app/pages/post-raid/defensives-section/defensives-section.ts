@@ -1,4 +1,4 @@
-import { Component, computed, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { AnalysisFinding, PlayerDefensive, BurstWindow, PlayerBurstWindow } from '../../../core/models/analysis.models';
@@ -30,6 +30,7 @@ interface AbilityRow {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-defensives-section',
   imports: [MatExpansionModule, SpellIconComponent, RangeChartComponent, FormatDurationPipe, DecimalPipe],
   templateUrl: './defensives-section.html',

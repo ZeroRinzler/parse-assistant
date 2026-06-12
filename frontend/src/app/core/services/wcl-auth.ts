@@ -1,4 +1,6 @@
-import { Injectable, signal, computed } from '@angular/core';
+import { Injectable, inject, signal, computed } from '@angular/core';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
 
 const CLIENT_ID = 'a1ff2833-d873-4e41-9965-eea3f622586f';
 const AUTH_URL = 'https://www.warcraftlogs.com/oauth/authorize';
@@ -6,6 +8,7 @@ const TOKEN_URL = 'https://www.warcraftlogs.com/oauth/token';
 
 @Injectable({ providedIn: 'root' })
 export class WclAuthService {
+  private readonly http = inject(HttpClient);
   private readonly _token = signal<string | null>(this._loadToken());
   readonly isLoggedIn = computed(() => this._token() !== null);
 
@@ -37,19 +40,27 @@ export class WclAuthService {
   async exchangeCode(code: string): Promise<void> {
     const verifier = sessionStorage.getItem('wcl_code_verifier');
     if (!verifier) throw new Error('No code verifier — auth flow was not started in this browser tab');
-    const resp = await fetch(TOKEN_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'authorization_code',
-        client_id: CLIENT_ID,
-        code,
-        redirect_uri: this._redirectUri(),
-        code_verifier: verifier,
-      }),
+    const params = new URLSearchParams({
+      grant_type: 'authorization_code',
+      client_id: CLIENT_ID,
+      code,
+      redirect_uri: this._redirectUri(),
+      code_verifier: verifier,
     });
-    if (!resp.ok) throw new Error(`WCL token exchange failed (${resp.status}): ${await resp.text()}`);
-    const data = await resp.json();
+    let data: { access_token: string; expires_in?: number };
+    try {
+      data = await firstValueFrom(this.http.post<{ access_token: string; expires_in?: number }>(
+        TOKEN_URL,
+        params.toString(),
+        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
+      ));
+    } catch (e) {
+      const status = e instanceof HttpErrorResponse ? e.status : 0;
+      const detail = e instanceof HttpErrorResponse
+        ? (typeof e.error === 'string' ? e.error : JSON.stringify(e.error))
+        : '';
+      throw new Error(`WCL token exchange failed (${status}): ${detail}`);
+    }
     localStorage.setItem('wcl_token', data.access_token);
     localStorage.setItem('wcl_token_expiry', String(Date.now() + (data.expires_in || 3600) * 1000));
     sessionStorage.removeItem('wcl_code_verifier');

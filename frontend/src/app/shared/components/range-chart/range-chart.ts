@@ -1,4 +1,4 @@
-import { Component, OnChanges, input, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnChanges, input, inject } from '@angular/core';
 import { NgApexchartsModule, ApexChart, ApexDataLabels, ApexTooltip, ApexPlotOptions, ApexXAxis, ApexYAxis, ApexFill, ApexGrid } from 'ng-apexcharts';
 import { IconCacheService } from '../../../core/services/icon-cache';
 
@@ -12,6 +12,7 @@ export interface RangeRow {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-range-chart',
   imports: [NgApexchartsModule],
   template: `

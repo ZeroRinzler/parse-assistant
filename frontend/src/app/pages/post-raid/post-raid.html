@@ -5,7 +5,7 @@
     <mat-card class="input-card">
       <mat-form-field appearance="outline" class="full-width">
         <mat-label>Warcraft Logs Report URL or Code</mat-label>
-        <input matInput [(ngModel)]="reportInput" placeholder="https://www.warcraftlogs.com/reports/AbCdEfGh…"
+        <input matInput [formControl]="reportControl" placeholder="https://www.warcraftlogs.com/reports/AbCdEfGh…"
                (input)="onReportChange()" (keydown.enter)="loadReport()" />
       </mat-form-field>
 
@@ -14,7 +14,7 @@
           <div class="selector-row">
             <mat-form-field appearance="outline" class="flex-1">
               <mat-label>Fight</mat-label>
-              <mat-select [(ngModel)]="selectedFightId" (ngModelChange)="onFightChange()">
+              <mat-select [formControl]="fightControl" (selectionChange)="onFightChange()">
                 @for (f of fights(); track f.id) {
                   <mat-option [value]="f.id">
                     {{ f.name }} [{{ f.kill ? '✓' : '✗ #' + f.attempt }}] {{ f.duration_s | formatDuration }}
@@ -25,7 +25,7 @@
 
             <mat-form-field appearance="outline" class="flex-1">
               <mat-label>Player</mat-label>
-              <mat-select [(ngModel)]="selectedPlayerId" (ngModelChange)="onPlayerChange()">
+              <mat-select [formControl]="playerControl" (selectionChange)="onPlayerChange()">
                 @for (p of visiblePlayers(); track p.id) {
                   <mat-option [value]="p.id">{{ p.name }} — {{ p.spec | formatSpec }}</mat-option>
                 }

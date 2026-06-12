@@ -1,9 +1,10 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { WclAuthService } from '../../core/services/wcl-auth';
 import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner/loading-spinner';
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-callback',
   imports: [LoadingSpinnerComponent],
   template: `

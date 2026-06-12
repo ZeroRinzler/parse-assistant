@@ -11,7 +11,7 @@
       @if (linkedChars().length > 0) {
         <mat-form-field appearance="outline" class="full-width">
           <mat-label>Your Characters</mat-label>
-          <mat-select [ngModel]="selectedLinkedChar()" (ngModelChange)="onLinkedCharChange($event)">
+          <mat-select [formControl]="linkedCharControl" (selectionChange)="onLinkedCharChange($event.value)">
             @for (c of linkedChars(); track c.id) {
               <mat-option [value]="c">{{ c.name }} — {{ c.serverSlug }}</mat-option>
             }
@@ -38,7 +38,7 @@
           <div class="manual-spec-row">
             <mat-form-field appearance="outline" class="flex-1">
               <mat-label>Spec (e.g. SubtletyRogue)</mat-label>
-              <input matInput [ngModel]="manualSpecInput()" (ngModelChange)="manualSpecInput.set($event)"
+              <input matInput [formControl]="manualSpecControl"
                      (keydown.enter)="applyManualSpec()" placeholder="SubtletyRogue" />
             </mat-form-field>
             <button mat-flat-button color="primary" (click)="applyManualSpec()">Apply</button>
@@ -49,7 +49,7 @@
           <div class="enc-row">
             <mat-form-field appearance="outline" class="full-width">
               <mat-label>Encounter</mat-label>
-              <mat-select [ngModel]="selectedEncId()" (ngModelChange)="selectedEncId.set($event); onEncChange()" [disabled]="!encounters().length">
+              <mat-select [formControl]="encControl" (selectionChange)="onEncChange()">
                 <mat-option [value]="0">— select encounter —</mat-option>
                 @for (e of encounters(); track e.id) {
                   <mat-option [value]="e.id">{{ e.name }} ({{ e.sample_count }} parses)</mat-option>

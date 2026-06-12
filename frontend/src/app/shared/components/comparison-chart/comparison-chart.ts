@@ -1,4 +1,4 @@
-import { Component, computed, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 
 export interface ChartRow {
   labelHtml: string;
@@ -10,6 +10,7 @@ export interface ChartRow {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-comparison-chart',
   imports: [],
   templateUrl: './comparison-chart.html',

@@ -1,6 +1,7 @@
-import { Component, OnInit, inject, signal, computed } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, inject, signal, computed } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
-import { FormsModule } from '@angular/forms';
+import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
@@ -25,9 +26,10 @@ const SLOT_NAMES: Record<number, string> = {
 };
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-pre-fight',
   imports: [
-    FormsModule, MatFormFieldModule, MatInputModule, MatSelectModule,
+    ReactiveFormsModule, MatFormFieldModule, MatInputModule, MatSelectModule,
     MatButtonModule, MatCardModule, MatIconModule,
     AuthBannerComponent, LoadingSpinnerComponent, FormatDurationPipe, FormatSpecPipe,
   ],
@@ -43,26 +45,28 @@ export class PreFightComponent implements OnInit {
 
   protected readonly isLoggedIn = this.auth.isLoggedIn;
 
+  protected readonly linkedCharControl = new FormControl<WclUserCharacter | null>(null);
+  protected readonly manualSpecControl = new FormControl('', { nonNullable: true });
+  protected readonly encControl = new FormControl<number>({ value: 0, disabled: true }, { nonNullable: true });
+
   protected readonly linkedChars = signal<WclUserCharacter[]>([]);
-  protected readonly selectedLinkedChar = signal<WclUserCharacter | null>(null);
   protected readonly charInfo = signal<CharacterInfo | null>(null);
   protected readonly charGear = signal<CharacterGear | null>(null);
   protected readonly encounters = signal<EncounterEntry[]>([]);
-  protected readonly selectedEncId = signal<number>(0);
+  protected readonly selectedEncId = toSignal(this.encControl.valueChanges, { initialValue: this.encControl.value });
   protected readonly bench = signal<EncounterBench | null>(null);
   protected readonly rulebook = signal<{ major_cooldowns?: unknown[] } | null>(null);
   protected readonly loading = signal(false);
   protected readonly loadingBrief = signal(false);
   protected readonly error = signal('');
   protected readonly gearStats = computed(() => this.bench()?.gear ?? null);
-  protected readonly manualSpecInput = signal('');
 
   async ngOnInit(): Promise<void> {
     if (!this.auth.isLoggedIn()) return;
     await this._init();
     const autoEnc = parseInt(this.route.snapshot.queryParamMap.get('encounter') || '0', 10);
     if (autoEnc && this.charInfo()?.spec) {
-      this.selectedEncId.set(autoEnc);
+      this.encControl.setValue(autoEnc);
       await this.onEncChange();
     }
   }
@@ -76,13 +80,12 @@ export class PreFightComponent implements OnInit {
     }
     this.linkedChars.set(chars);
     if (chars.length) {
-      this.selectedLinkedChar.set(chars[0]);
+      this.linkedCharControl.setValue(chars[0]);
       await this._loadLinkedChar(chars[0]);
     }
   }
 
   protected async onLinkedCharChange(char: WclUserCharacter): Promise<void> {
-    this.selectedLinkedChar.set(char);
     await this._loadLinkedChar(char);
   }
 
@@ -107,7 +110,7 @@ export class PreFightComponent implements OnInit {
   }
 
   protected async applyManualSpec(): Promise<void> {
-    const spec = this.manualSpecInput().trim();
+    const spec = this.manualSpecControl.value.trim();
     if (!spec) return;
     const info = this.charInfo();
     if (!info) return;
@@ -119,7 +122,10 @@ export class PreFightComponent implements OnInit {
   private async _loadEncountersForSpec(spec: string): Promise<void> {
     const enc = await this.encounterSvc.getEncounters(spec);
     this.encounters.set(enc);
-    if (!enc.length) {
+    if (enc.length) {
+      this.encControl.enable({ emitEvent: false });
+    } else {
+      this.encControl.disable({ emitEvent: false });
       this.error.set(`No parse data ingested yet for ${spec}. Run "npm run ingest" to populate encounter data.`);
     }
   }

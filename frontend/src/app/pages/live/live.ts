@@ -1,5 +1,5 @@
-import { Component, OnInit, OnDestroy, inject, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
+import { ChangeDetectionStrategy, Component, OnInit, OnDestroy, inject, signal } from '@angular/core';
+import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
@@ -22,9 +22,10 @@ function extractCode(url: string): string {
 }
 
 @Component({
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-live',
   imports: [
-    FormsModule, MatFormFieldModule, MatInputModule, MatButtonModule,
+    ReactiveFormsModule, MatFormFieldModule, MatInputModule, MatButtonModule,
     MatCardModule, MatChipsModule,
     AuthBannerComponent, LoadingSpinnerComponent, AnalysisResultComponent,
   ],
@@ -38,7 +39,7 @@ export class LiveComponent implements OnInit, OnDestroy {
 
   protected readonly isLoggedIn = this.auth.isLoggedIn;
 
-  protected readonly reportInput = signal('');
+  protected readonly reportControl = new FormControl('', { nonNullable: true });
   protected readonly loading = signal(false);
   protected readonly error = signal('');
   protected readonly status = signal('');
@@ -72,7 +73,7 @@ export class LiveComponent implements OnInit, OnDestroy {
       );
       const code = d?.characterData?.character?.recentReports?.data?.[0]?.code;
       if (code) {
-        this.reportInput.set(code);
+        this.reportControl.setValue(code);
         await this.startLive();
       }
     } catch { /* silent - user can enter manually */ }
@@ -80,7 +81,7 @@ export class LiveComponent implements OnInit, OnDestroy {
 
   protected async startLive(): Promise<void> {
     this._stopPolling();
-    const url = this.reportInput().trim();
+    const url = this.reportControl.value.trim();
     if (!url) return;
     this._reportCode = extractCode(url);
     await this._poll();
