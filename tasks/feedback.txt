@@ -1,0 +1,12 @@
+open tasks:
+- the pre page does not load the characters from the profile as described in crosslink.txt
+- the encounter dropdown is disabled on the pre page
+- fully remove all python code by porting the ingestion pipelines to javascript. this way this should also not use a hosted api but rather just output the files. as described in use_angular.txt: These should be replaced by new javascript-based scripts in the package json. This should also help to reuse as much querying from wcl as possible. Ths scrips should be manually executed by a human and guide the user through any required inputs.
+- the post / live page should select a player which is should be a character from the logged in user. this does not happen here: http://localhost:8000/?report=ZAc4CqzMrbfNgPyX&fight=30&player=101
+- remove this tag AI-generated rulebook
+- the current candle diagram looks really bad. use an existing library that provides such a component.
+- the spell component is not used everywhere. this should be consistently used. it also should show the wowhead tooltip
+- delete any deprecate code like the ones caused by static_values.txt
+- the llm generated this temp-sub.json file. however this fails with the following error. fix the skill or the api that this does not happen: Failed to parse JSON: HTTP 422: {"detail":[{"type":"missing","loc":["body","rulebook"],"msg":"Field required","input":{"spec":"SubtletyRogue","major_cooldowns":[{"name":"Shadow Blades","spell_id":121471,"cooldown":90,"duration":20,"
+- dont implement a card yourself, use an existing component
+- 
