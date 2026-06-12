@@ -19,7 +19,7 @@
 import fs from 'fs';
 import path from 'path';
 import readline from 'readline';
-import { execSync } from 'child_process';
+import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -68,22 +68,27 @@ function getKnownSpecs() {
 
 // ── Clipboard ────────────────────────────────────────────────────────────────
 
+function trySpawn(cmd, args, input) {
+  const r = spawnSync(cmd, args, { input, encoding: 'utf8', timeout: 3000 });
+  return r.status === 0 && !r.error;
+}
+
 function copyToClipboard(text) {
-  try {
-    if (process.platform === 'darwin') {
-      execSync('pbcopy', { input: text });
-    } else if (process.platform === 'win32') {
-      execSync('clip', { input: text });
-    } else {
-      // Wayland first, then X11 fallbacks
-      try { execSync('wl-copy', { input: text }); }
-      catch { try { execSync('xclip -selection clipboard', { input: text }); }
-      catch { execSync('xsel --clipboard --input', { input: text }); } }
-    }
-    return true;
-  } catch {
-    return false;
+  if (process.platform === 'darwin') {
+    return trySpawn('pbcopy', [], text);
   }
+  if (process.platform === 'win32') {
+    return trySpawn('clip', [], text);
+  }
+  // Linux — try Wayland then X11
+  const isWayland = !!process.env.WAYLAND_DISPLAY;
+  if (isWayland) {
+    if (trySpawn('wl-copy', [], text)) return true;
+  }
+  if (trySpawn('xclip', ['-selection', 'clipboard'], text)) return true;
+  if (trySpawn('xsel', ['--clipboard', '--input'], text)) return true;
+  if (!isWayland && trySpawn('wl-copy', [], text)) return true;
+  return false;
 }
 
 // ── Prompt building ───────────────────────────────────────────────────────────
@@ -160,7 +165,10 @@ async function rulebookMenu(spec) {
         console.log('\n══ PROMPT START (copy everything below this line) ═══════════\n');
         console.log(prompt);
         console.log('\n══ PROMPT END ═══════════════════════════════════════════════\n');
-        console.log('(Could not copy automatically — clipboard tool not found. Copy the text above manually.)\n');
+        const hint = process.platform === 'linux'
+          ? '  Install clipboard support: sudo dnf install wl-clipboard   (Fedora/Wayland)\n  or: sudo apt install xclip   (Debian/Ubuntu)'
+          : '';
+        console.log(`Could not copy automatically — clipboard tool not found.\n${hint}\n`);
       }
     }
 
