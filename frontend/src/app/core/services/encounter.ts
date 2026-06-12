@@ -27,7 +27,7 @@ export class EncounterService {
 
   async getRulebook(spec: string): Promise<Rulebook | null> {
     try {
-      return await firstValueFrom(this.http.get<{ major_cooldowns?: unknown[]; [key: string]: unknown }>(`${DATA_BASE}${spec}/rulebook.json`));
+      return await firstValueFrom(this.http.get<Rulebook>(`${DATA_BASE}${spec}/rulebook.json`));
     } catch { /* ignore */ }
     return null;
   }
