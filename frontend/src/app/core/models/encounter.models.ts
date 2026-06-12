@@ -1,3 +1,5 @@
+import { TopDefensiveSummary, TopDtkComparison, DmgTakenSegment } from './analysis.models';
+
 export interface EncounterEntry {
   id: number;
   name: string;
@@ -5,11 +7,23 @@ export interface EncounterEntry {
   last_ingested?: string;
 }
 
+export interface UsesPerMin {
+  avg: number;
+  stddev: number;
+  min: number;
+  max: number;
+}
+
 export interface PerCdBenchmark {
   avg_first_cast_s: number | null;
   stddev_first_cast_s: number | null;
+  avg_gap_s: number | null;
+  stddev_gap_s: number | null;
+  avg_bl_offset_s: number | null;
+  stddev_bl_offset_s: number | null;
   avg_uses: number | null;
   avg_uses_per_min: number | null;
+  uses_per_min?: UsesPerMin;
   bl_pct: number;
   majority_hold: boolean;
   hold_targets: Record<string, { target_s: number; stddev_s: number; count: number; total_samples: number }>;
@@ -29,15 +43,23 @@ export interface BurstWindowBench {
 }
 
 export interface EncounterBench {
+  spec?: string;
   encounter_id: number;
   encounter_name: string;
   sample_count: number;
   avg_duration_s: number;
+  last_ingested?: string;
+  downtime_threshold_ms?: number;
+  top_avg_efficiency?: number;
+  top_efficiency_stddev?: number;
   per_cd_benchmarks: Record<string, PerCdBenchmark>;
   burst_windows: BurstWindowBench[];
   defensive_windows?: DefensiveWindowBench[];
   per_defensive_benchmarks?: Record<string, PerDefensiveBenchmark>;
   gear?: EncounterGearStats;
+  top_defensives_summary?: TopDefensiveSummary[];
+  top_dtk_comparison?: TopDtkComparison[];
+  top_dtk_segments?: DmgTakenSegment[];
 }
 
 export interface DefensiveWindowBench {

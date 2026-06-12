@@ -212,6 +212,9 @@ body {
   gap: 10px;
 }
 
+// Reserve height while the deferred chart chunk loads, to avoid layout shift.
+.chart-placeholder { min-height: 80px; }
+
 .ab-row { display: flex; flex-direction: column; gap: 4px; }
 
 .ab-name { display: flex; align-items: center; gap: 6px; font-size: 12px; }

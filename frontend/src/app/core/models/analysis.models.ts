@@ -7,7 +7,6 @@ export interface AnalysisFinding {
   details?: {
     cd_name?: string;
     remedy?: string;
-    [key: string]: unknown;
   };
 }
 
@@ -17,6 +16,7 @@ export interface AbilityBreakdown {
   min_pct?: number;
   max_pct?: number;
   pct?: number;
+  count?: number;
 }
 
 export interface BurstWindow {

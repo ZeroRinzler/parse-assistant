@@ -23,6 +23,15 @@ export interface WclAbility {
   icon: string;
 }
 
+/** A single combat-log event row as returned by WCL's `events` query. */
+export interface WclEvent {
+  type: string;
+  timestamp: number;
+  abilityGameID: number;
+  amount?: number;
+  absorbed?: number;
+}
+
 export interface WclReport {
   title: string;
   fights: WclFight[];

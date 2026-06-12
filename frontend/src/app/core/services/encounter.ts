@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { EncounterEntry, EncounterBench } from '../models/encounter.models';
+import { Rulebook } from '../models/rulebook.models';
 
 const DATA_BASE = new URL('data/specs/', document.baseURI).href;
 
@@ -24,7 +25,7 @@ export class EncounterService {
     return null;
   }
 
-  async getRulebook(spec: string): Promise<{ major_cooldowns?: unknown[]; [key: string]: unknown } | null> {
+  async getRulebook(spec: string): Promise<Rulebook | null> {
     try {
       return await firstValueFrom(this.http.get<{ major_cooldowns?: unknown[]; [key: string]: unknown }>(`${DATA_BASE}${spec}/rulebook.json`));
     } catch { /* ignore */ }

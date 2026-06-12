@@ -103,7 +103,11 @@
         <!-- Ability breakdown chart -->
         @if (expandedIdx() === card.idx && card.dw.ability_breakdown?.length) {
           <div class="bw-breakdown">
-            <wl-range-chart [rows]="dwAbChartRows(card.idx)" unit="pct" [higherIsBetter]="false"></wl-range-chart>
+            @defer (on immediate) {
+              <wl-range-chart [rows]="dwAbChartRows(card.idx)" unit="pct" [higherIsBetter]="false"></wl-range-chart>
+            } @placeholder {
+              <div class="chart-placeholder"></div>
+            }
           </div>
         }
       </div>

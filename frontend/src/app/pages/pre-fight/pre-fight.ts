@@ -13,6 +13,7 @@ import { WclApiService } from '../../core/services/wcl-api';
 import { EncounterService } from '../../core/services/encounter';
 import { CharacterInfo, CharacterGear, WclUserCharacter } from '../../core/models/wcl.models';
 import { EncounterEntry, EncounterBench, EncounterGearStats } from '../../core/models/encounter.models';
+import { Rulebook } from '../../core/models/rulebook.models';
 import { AuthBannerComponent } from '../../shared/components/auth-banner/auth-banner';
 import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner/loading-spinner';
 import { FormatDurationPipe } from '../../shared/pipes/format-duration-pipe';
@@ -55,7 +56,7 @@ export class PreFightComponent implements OnInit {
   protected readonly encounters = signal<EncounterEntry[]>([]);
   protected readonly selectedEncId = toSignal(this.encControl.valueChanges, { initialValue: this.encControl.value });
   protected readonly bench = signal<EncounterBench | null>(null);
-  protected readonly rulebook = signal<{ major_cooldowns?: unknown[] } | null>(null);
+  protected readonly rulebook = signal<Rulebook | null>(null);
   protected readonly loading = signal(false);
   protected readonly loadingBrief = signal(false);
   protected readonly error = signal('');
@@ -148,7 +149,7 @@ export class PreFightComponent implements OnInit {
       ]);
       if ((gearData as CharacterGear).found) this.charGear.set(gearData as CharacterGear);
       this.bench.set(benchData);
-      this.rulebook.set(rulebookData as { major_cooldowns?: unknown[] });
+      this.rulebook.set(rulebookData);
     } catch (err) {
       this.error.set(err instanceof Error ? err.message : 'Failed to load encounter data.');
     } finally {

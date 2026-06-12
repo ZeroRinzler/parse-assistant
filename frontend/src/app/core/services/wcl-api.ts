@@ -2,7 +2,23 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { WclAuthService } from './wcl-auth';
-import { WclReport, CharacterInfo, CharacterGear, WclUserCharacter } from '../models/wcl.models';
+import { WclReport, CharacterInfo, CharacterGear, WclUserCharacter, WclEvent } from '../models/wcl.models';
+
+interface PlayerDetailEntry { id: number; type: string; name: string; specs?: Array<{ spec: string }>; }
+type PlayerDetailGroups = Record<string, PlayerDetailEntry[]>;
+
+interface WclGearItem { id?: number | string; name?: string; permanentEnchant?: number | string; permanentEnchantName?: string; }
+interface WclTalentNode { node?: { nodeId?: number }; nodeId?: number; }
+type WclTalentTree = { class?: Record<string, WclTalentNode[]>; spec?: Record<string, WclTalentNode[]> };
+type WclTalents = string | Array<{ talentID?: number; id?: number }> | WclTalentTree;
+interface WclRankEntry {
+  startTime?: number;
+  spec?: string;
+  class?: number;
+  report?: { code?: string };
+  gear?: WclGearItem[];
+  talents?: WclTalents;
+}
 
 const API_URL = 'https://www.warcraftlogs.com/api/v2/user';
 
@@ -90,13 +106,13 @@ export class WclApiService {
   }
 
   async getPlayerDetails(code: string, fightId: number): Promise<Record<number | string, string>> {
-    const d = await this.query<{ reportData: { report: { playerDetails: unknown } } }>(PD_Q, { code, fightIDs: [fightId] });
+    const d = await this.query<{ reportData: { report: { playerDetails: string | { data?: { playerDetails?: PlayerDetailGroups } } } } }>(PD_Q, { code, fightIDs: [fightId] });
     const raw = d.reportData.report.playerDetails;
-    const outer = typeof raw === 'string' ? JSON.parse(raw) : raw as Record<string, unknown>;
-    const details = (outer?.['data'] as Record<string, unknown>)?.['playerDetails'] ?? outer ?? {};
+    const outer = (typeof raw === 'string' ? JSON.parse(raw) : raw) as { data?: { playerDetails?: PlayerDetailGroups } } & PlayerDetailGroups;
+    const details: PlayerDetailGroups = outer?.data?.playerDetails ?? outer ?? {};
     const map: Record<number | string, string> = {};
     for (const role of ['dps', 'healers', 'tanks', 'unknown']) {
-      for (const p of ((details as Record<string, unknown[]>)[role] || []) as Array<{id:number;type:string;specs?:Array<{spec:string}>;name:string}>) {
+      for (const p of (details[role] || [])) {
         const cls = (p.type || '').replace(/ /g, '');
         const spec = ((p.specs || [])[0]?.spec || '').replace(/ /g, '');
         if (spec && cls) map[p.id] = spec + cls;
@@ -109,13 +125,13 @@ export class WclApiService {
   async getAllEvents(
     code: string, fightId: number, dataType: string,
     startTime: number, endTime: number, sourceId?: number
-  ): Promise<unknown[]> {
-    const events: unknown[] = [];
+  ): Promise<WclEvent[]> {
+    const events: WclEvent[] = [];
     let ts = startTime;
     for (;;) {
       const vars: Record<string, unknown> = { code, fightIDs: [fightId], dataType, startTime: ts, endTime };
       if (sourceId != null) vars['sourceID'] = sourceId;
-      const d = await this.query<{ reportData: { report: { events: { data: unknown[]; nextPageTimestamp?: number } } } }>(EVENTS_Q, vars);
+      const d = await this.query<{ reportData: { report: { events: { data: WclEvent[]; nextPageTimestamp?: number } } } }>(EVENTS_Q, vars);
       const page = d.reportData.report.events;
       events.push(...(page.data || []));
       if (!page.nextPageTimestamp) break;
@@ -168,23 +184,22 @@ export class WclApiService {
   }
 
   async getCharGear(name: string, server: string, region: string, encounterId: number): Promise<CharacterGear> {
-    const d = await this.query<{ characterData: { character: { encounterRankings: unknown } } }>(
+    const d = await this.query<{ characterData: { character: { encounterRankings: string | { ranks?: WclRankEntry[] } } } }>(
       CHAR_ENC_Q, { name, serverSlug: server, serverRegion: region, encID: encounterId }
     );
     const raw = d?.characterData?.character?.encounterRankings;
     if (raw == null) throw new Error(`Character not found: ${name}-${server} (${region})`);
-    const rankData = typeof raw === 'string' ? JSON.parse(raw) : raw as { ranks?: unknown[] };
-    const ranks = (rankData?.ranks || []) as Array<Record<string, unknown>>;
+    const rankData = typeof raw === 'string' ? JSON.parse(raw) as { ranks?: WclRankEntry[] } : raw;
+    const ranks = rankData?.ranks || [];
     if (!ranks.length) return { found: false, message: 'No ranked kills found for this encounter.' };
 
     const mostRecent = ranks.reduce((best, r) =>
-      ((r['startTime'] as number) || 0) > ((best['startTime'] as number) || 0) ? r : best
+      (r.startTime || 0) > (best.startTime || 0) ? r : best
     );
 
     const gear = this._extractCombatantInfo(mostRecent);
-    const specPart = mostRecent['spec'] as string || '';
-    const classId = mostRecent['class'] as number;
-    const className = CLASS_NAMES[classId] || '';
+    const specPart = mostRecent.spec || '';
+    const className = CLASS_NAMES[mostRecent.class ?? -1] || '';
     const fullSpec = specPart && className ? specPart + className : specPart;
 
     const enchantIds = [...new Set(gear.enchants!.filter(e => e.id).map(e => e.id))];
@@ -199,25 +214,25 @@ export class WclApiService {
       } catch { /* enchant names are non-critical */ }
     }
 
-    return { found: true, spec: fullSpec, source_report: (mostRecent['report'] as { code?: string } | undefined)?.code || null, ...gear };
+    return { found: true, spec: fullSpec, source_report: mostRecent.report?.code || null, ...gear };
   }
 
-  private _extractCombatantInfo(entry: Record<string, unknown>): Partial<CharacterGear> {
+  private _extractCombatantInfo(entry: WclRankEntry): Partial<CharacterGear> {
     if (!entry) return { talent_key: '', trinkets: [], enchants: [] };
-    const gearArr = (entry['gear'] || []) as Array<Record<string, unknown>>;
-    const talentsR = entry['talents'];
+    const gearArr = entry.gear || [];
+    const talentsR = entry.talents;
     const trinkets: CharacterGear['trinkets'] = [];
     const enchants: CharacterGear['enchants'] = [];
 
     gearArr.forEach((item, idx) => {
-      if (!item?.['id']) return;
-      const id = typeof item['id'] === 'string' ? parseInt(item['id'] as string, 10) : item['id'] as number;
-      const name = item['name'] as string || '';
+      if (item?.id == null) return;
+      const id = typeof item.id === 'string' ? parseInt(item.id, 10) : item.id;
+      const name = item.name || '';
       if (idx === 12 || idx === 13) trinkets!.push({ slot: idx, id, name });
-      const enc = item['permanentEnchant'];
+      const enc = item.permanentEnchant;
       if (enc) {
-        const eid = typeof enc === 'string' ? parseInt(enc, 10) : enc as number;
-        enchants!.push({ slot: idx, id: eid, name: item['permanentEnchantName'] as string || '' });
+        const eid = typeof enc === 'string' ? parseInt(enc, 10) : enc;
+        enchants!.push({ slot: idx, id: eid, name: item.permanentEnchantName || '' });
       }
     });
 
@@ -225,17 +240,16 @@ export class WclApiService {
     if (typeof talentsR === 'string' && talentsR) {
       talentKey = talentsR;
     } else if (Array.isArray(talentsR) && talentsR.length) {
-      const ids = (talentsR as Array<{ talentID?: number; id?: number }>).filter(t => t?.talentID || t?.id).map(t => t.talentID ?? t.id!);
+      const ids = talentsR.filter(t => t?.talentID || t?.id).map(t => (t.talentID ?? t.id)!);
       if (ids.length) talentKey = 'v1:' + [...ids].sort().join(',');
-    } else if (talentsR && typeof talentsR === 'object') {
+    } else if (talentsR && typeof talentsR === 'object' && !Array.isArray(talentsR)) {
       const ids: number[] = [];
-      for (const sectionKey of ['class', 'spec']) {
-        const section = (talentsR as Record<string, unknown>)[sectionKey];
-        if (!section || typeof section !== 'object') continue;
-        for (const rowArr of Object.values(section as object)) {
+      for (const section of [talentsR.class, talentsR.spec]) {
+        if (!section) continue;
+        for (const rowArr of Object.values(section)) {
           if (!Array.isArray(rowArr)) continue;
           for (const e of rowArr) {
-            const nid = (e as { node?: { nodeId?: number }; nodeId?: number })?.node?.nodeId ?? (e as { nodeId?: number }).nodeId;
+            const nid = e?.node?.nodeId ?? e?.nodeId;
             if (nid != null) ids.push(nid);
           }
         }
