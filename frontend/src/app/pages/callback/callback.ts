@@ -35,10 +35,22 @@ export class CallbackComponent implements OnInit {
   async ngOnInit(): Promise<void> {
     const params = new URLSearchParams(window.location.search);
     const code = params.get('code');
+    const oauthError = params.get('error');
+    const oauthDesc = params.get('error_description');
     const returnPath = sessionStorage.getItem('wcl_return_path') || '/';
 
+    if (oauthError) {
+      const desc = oauthDesc ? `: ${decodeURIComponent(oauthDesc.replace(/\+/g, ' '))}` : '';
+      this.error.set(`WCL OAuth error — ${oauthError}${desc}`);
+      return;
+    }
+
     if (!code) {
-      this.error.set('No authorization code received from Warcraft Logs.');
+      this.error.set(
+        'No authorization code received from Warcraft Logs. ' +
+        'Make sure your WCL API client has the redirect URI ' +
+        `"${window.location.origin}/callback" registered at warcraftlogs.com/api/clients/.`
+      );
       return;
     }
 

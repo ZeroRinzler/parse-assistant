@@ -30,7 +30,6 @@ export class WclAuthService {
       response_type: 'code',
       code_challenge: challenge,
       code_challenge_method: 'S256',
-      scope: 'view:user-profile',
     });
     window.location.href = `${AUTH_URL}?${params}`;
   }
