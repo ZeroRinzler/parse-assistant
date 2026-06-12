@@ -27,20 +27,37 @@
         <div class="char-badge">
           <mat-icon class="badge-icon">check_circle</mat-icon>
           <span class="char-name">{{ charInfo()!.name }}</span>
-          <span class="char-spec">{{ charInfo()!.spec | formatSpec }} — {{ charInfo()!.server }}</span>
+          @if (charInfo()!.spec) {
+            <span class="char-spec">{{ charInfo()!.spec | formatSpec }} — {{ charInfo()!.server }}</span>
+          } @else {
+            <span class="char-spec">{{ charInfo()!.server }}</span>
+          }
         </div>
 
-        <div class="enc-row">
-          <mat-form-field appearance="outline" class="full-width">
-            <mat-label>Encounter</mat-label>
-            <mat-select [ngModel]="selectedEncId()" (ngModelChange)="selectedEncId.set($event); onEncChange()" [disabled]="!encounters().length">
-              <mat-option [value]="0">— select encounter —</mat-option>
-              @for (e of encounters(); track e.id) {
-                <mat-option [value]="e.id">{{ e.name }} ({{ e.sample_count }} parses)</mat-option>
-              }
-            </mat-select>
-          </mat-form-field>
-        </div>
+        @if (!charInfo()!.spec) {
+          <div class="manual-spec-row">
+            <mat-form-field appearance="outline" class="flex-1">
+              <mat-label>Spec (e.g. SubtletyRogue)</mat-label>
+              <input matInput [ngModel]="manualSpecInput()" (ngModelChange)="manualSpecInput.set($event)"
+                     (keydown.enter)="applyManualSpec()" placeholder="SubtletyRogue" />
+            </mat-form-field>
+            <button mat-flat-button color="primary" (click)="applyManualSpec()">Apply</button>
+          </div>
+        }
+
+        @if (charInfo()!.spec) {
+          <div class="enc-row">
+            <mat-form-field appearance="outline" class="full-width">
+              <mat-label>Encounter</mat-label>
+              <mat-select [ngModel]="selectedEncId()" (ngModelChange)="selectedEncId.set($event); onEncChange()" [disabled]="!encounters().length">
+                <mat-option [value]="0">— select encounter —</mat-option>
+                @for (e of encounters(); track e.id) {
+                  <mat-option [value]="e.id">{{ e.name }} ({{ e.sample_count }} parses)</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+          </div>
+        }
       }
 
       <!-- Check another character by URL -->

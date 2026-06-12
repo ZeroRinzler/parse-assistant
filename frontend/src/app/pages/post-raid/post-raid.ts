@@ -96,7 +96,10 @@ export class PostRaidComponent implements OnInit {
         throw new Error('Sign in with WCL to load reports.');
       }
       this.loadingMsg.set('Fetching report from WCL…');
-      const report = await this.wclApi.getReport(this._reportCode);
+      const [report] = await Promise.all([
+        this.wclApi.getReport(this._reportCode),
+        this.wclApi.fetchUserCharacters().catch(() => {}),
+      ]);
       const bossAttempt: Record<number, number> = {};
       this.fights.set(
         (report.fights || []).filter(f => (f.encounterID || 0) > 0).sort((a, b) => a.startTime - b.startTime).map(f => {

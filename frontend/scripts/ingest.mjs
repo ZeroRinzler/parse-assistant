@@ -1464,6 +1464,12 @@ async function main() {
   console.log('Warcraft Learner — Parse Ingestion CLI');
   console.log('No Python server required.\n');
 
+  // ── CLI mode (non-interactive) ──────────────────────────────────────────────
+  const argv = process.argv.slice(2);
+  const cliSpec = argv.find((_, i) => argv[i - 1] === '--spec');
+  const cliAll = argv.includes('--all');
+  const cliTopN = parseInt(argv.find((_, i) => argv[i - 1] === '--top-n') || '10', 10) || 10;
+
   let wcl;
   try {
     wcl = new WCLClient();
@@ -1472,7 +1478,6 @@ async function main() {
     process.exit(1);
   }
 
-  // Fetch encounters once
   process.stdout.write('Fetching WCL encounters...');
   let encounters;
   try {
@@ -1483,6 +1488,20 @@ async function main() {
     process.exit(1);
   }
 
+  if (cliSpec || cliAll) {
+    const specs = cliAll ? getKnownSpecs() : [cliSpec];
+    if (!specs.length) {
+      console.error('No specs found in data directory. Run with --spec SpecName to specify one.');
+      process.exit(1);
+    }
+    for (const spec of specs) {
+      await ingestSpecNonInteractive(wcl, spec, encounters, cliTopN);
+    }
+    rl.close();
+    return;
+  }
+
+  // ── Interactive mode ────────────────────────────────────────────────────────
   while (true) {
     const spec = await pickSpec();
     if (!spec) break;
@@ -1494,6 +1513,46 @@ async function main() {
   }
 
   rl.close();
+}
+
+async function ingestSpecNonInteractive(wcl, spec, encounters, topN = 10) {
+  console.log(`\nIngesting ${spec} — all ${encounters.length} encounters (top ${topN})`);
+  for (const enc of encounters) {
+    process.stdout.write(`\n[${enc.name}] Fetching top ${topN} rankings...`);
+    let rankings;
+    try {
+      rankings = await fetchTopRankings(wcl, spec, enc.id, topN);
+    } catch (err) {
+      console.log(` FAILED: ${err.message}`);
+      continue;
+    }
+    console.log(` ${rankings.length} rankings found`);
+
+    const samplesPath = getSamplesPath(spec, enc.id);
+    if (fs.existsSync(samplesPath)) fs.unlinkSync(samplesPath);
+
+    let done = 0;
+    for (const ranking of rankings) {
+      process.stdout.write(`\r  [${enc.name}] Analyzing ${done + 1}/${rankings.length}: ${ranking.player}...    `);
+      try {
+        const cooldownData = await analyzeParse(
+          wcl, spec, ranking.report_code, ranking.fight_id, ranking.player, ranking.combatant_info,
+        );
+        if (cooldownData) {
+          saveParseSample(spec, enc.id, enc.name, ranking.report_code, ranking.fight_id, ranking.player, cooldownData);
+        }
+      } catch (err) {
+        process.stdout.write(` (skip: ${err.message.slice(0, 40)})`);
+      }
+      done++;
+    }
+    process.stdout.write(`\r  [${enc.name}] ${done}/${rankings.length} parses analyzed.          \n`);
+
+    process.stdout.write(`  [${enc.name}] Computing bench data...`);
+    syncEncounterFile(spec, enc.id);
+    console.log(' done');
+  }
+  console.log(`\nIngestion complete for ${spec}.`);
 }
 
 main().catch(err => {

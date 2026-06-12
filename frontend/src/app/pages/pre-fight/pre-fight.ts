@@ -57,6 +57,7 @@ export class PreFightComponent implements OnInit {
   protected readonly urlInput = signal('');
 
   protected readonly gearStats = computed(() => this.bench()?.gear ?? null);
+  protected readonly manualSpecInput = signal('');
 
   async ngOnInit(): Promise<void> {
     if (!this.auth.isLoggedIn()) return;
@@ -91,13 +92,9 @@ export class PreFightComponent implements OnInit {
       const info = await this.wclApi.charLookup(char.name, char.serverSlug, char.serverRegion);
       this.charInfo.set(info);
       if (info.spec) {
-        const enc = await this.encounterSvc.getEncounters(info.spec);
-        this.encounters.set(enc);
-        if (!enc.length) {
-          this.error.set(`No parse data ingested yet for ${info.spec}. Run "npm run ingest" to populate encounter data.`);
-        }
+        await this._loadEncountersForSpec(info.spec);
       } else {
-        this.error.set('Could not detect spec — no recent WCL reports found for this character.');
+        this.error.set('Could not auto-detect spec. Enter it manually below.');
       }
     } catch (err) {
       this.error.set(err instanceof Error ? err.message : 'Failed to load character.');
@@ -118,18 +115,32 @@ export class PreFightComponent implements OnInit {
       const info = await this.wclApi.charLookup(name, server, region);
       this.charInfo.set(info);
       if (info.spec) {
-        const enc = await this.encounterSvc.getEncounters(info.spec);
-        this.encounters.set(enc);
-        if (!enc.length) {
-          this.error.set(`No parse data ingested yet for ${info.spec}. Run "npm run ingest" to populate encounter data.`);
-        }
+        await this._loadEncountersForSpec(info.spec);
       } else {
-        this.error.set('Could not detect spec — no recent WCL reports found for this character.');
+        this.error.set('Could not auto-detect spec. Enter it manually below.');
       }
     } catch (err) {
       this.error.set(err instanceof Error ? err.message : 'Invalid character URL.');
     } finally {
       this.loading.set(false);
+    }
+  }
+
+  protected async applyManualSpec(): Promise<void> {
+    const spec = this.manualSpecInput().trim();
+    if (!spec) return;
+    const info = this.charInfo();
+    if (!info) return;
+    this.charInfo.set({ ...info, spec });
+    this.error.set('');
+    await this._loadEncountersForSpec(spec);
+  }
+
+  private async _loadEncountersForSpec(spec: string): Promise<void> {
+    const enc = await this.encounterSvc.getEncounters(spec);
+    this.encounters.set(enc);
+    if (!enc.length) {
+      this.error.set(`No parse data ingested yet for ${spec}. Run "npm run ingest" to populate encounter data.`);
     }
   }
 

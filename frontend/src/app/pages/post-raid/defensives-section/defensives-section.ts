@@ -1,9 +1,18 @@
 import { Component, computed, input, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
+import { MatExpansionModule } from '@angular/material/expansion';
 import { AnalysisFinding, PlayerDefensive, BurstWindow, PlayerBurstWindow } from '../../../core/models/analysis.models';
 import { FormatDurationPipe } from '../../../shared/pipes/format-duration-pipe';
-import { CdCardComponent } from '../cd-card/cd-card';
+import { SpellIconComponent } from '../../../shared/components/spell-icon/spell-icon';
 import { RangeChartComponent, RangeRow } from '../../../shared/components/range-chart/range-chart';
+
+const CAT_LABEL: Record<string, string> = {
+  lost_cooldown: 'lost cast',
+  cooldown_delay: 'held',
+  cooldown_alignment: 'BL miss',
+  cast_efficiency: 'downtime',
+  hold_suggestion: 'hold tip',
+};
 
 interface CdBucket { issues: AnalysisFinding[]; holds: AnalysisFinding[]; success?: AnalysisFinding; }
 
@@ -22,7 +31,7 @@ interface AbilityRow {
 
 @Component({
   selector: 'wl-defensives-section',
-  imports: [RangeChartComponent, FormatDurationPipe, DecimalPipe, CdCardComponent],
+  imports: [MatExpansionModule, SpellIconComponent, RangeChartComponent, FormatDurationPipe, DecimalPipe],
   templateUrl: './defensives-section.html',
   styleUrl: './defensives-section.scss',
 })
@@ -60,10 +69,28 @@ export class DefensivesSectionComponent {
     const spellMap: Record<string, number> = {};
     for (const d of defensives) spellMap[d.name] = d.spell_id;
 
-    return Object.entries(byName).map(([name, bucket]) => ({
-      name, bucket, spellId: spellMap[name] ?? null
-    }));
+    return Object.entries(byName).map(([name, bucket]) => {
+      const hasCritical = bucket.issues.some(f => f.severity === 'critical');
+      const hasIssue = bucket.issues.length > 0 || bucket.holds.length > 0;
+      const metaItems: string[] = [];
+      for (const f of bucket.issues) {
+        const lbl = CAT_LABEL[f.category];
+        if (lbl && !metaItems.includes(lbl)) metaItems.push(lbl);
+      }
+      if (bucket.holds.length) metaItems.push(`${bucket.holds.length} hold tip${bucket.holds.length > 1 ? 's' : ''}`);
+      return {
+        name, bucket, spellId: spellMap[name] ?? null,
+        hasCritical, hasIssue, metaItems,
+        allFindings: [...bucket.issues, ...bucket.holds],
+      };
+    });
   });
+
+  protected formatMs(ms: number | undefined): string {
+    if (ms == null) return '';
+    const s = ms / 1000;
+    return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+  }
 
   protected readonly topDefWindows = computed(() => this.topDefensiveWindows());
 

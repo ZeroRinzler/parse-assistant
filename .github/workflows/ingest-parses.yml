@@ -24,13 +24,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-node@v4
         with:
-          python-version: '3.11'
-          cache: 'pip'
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        working-directory: frontend
+        run: npm ci
 
       - name: Run parse ingestion
         env:
@@ -40,15 +42,15 @@ jobs:
           SPEC="${{ github.event.inputs.spec }}"
           TOP_N="${{ github.event.inputs.top_n || '10' }}"
           if [ -n "$SPEC" ]; then
-            python3 scripts/ingest_parses.py --spec "$SPEC" --top-n "$TOP_N"
+            node frontend/scripts/ingest.mjs --spec "$SPEC" --top-n "$TOP_N"
           else
-            python3 scripts/ingest_parses.py --all --top-n "$TOP_N"
+            node frontend/scripts/ingest.mjs --all --top-n "$TOP_N"
           fi
 
       - name: Commit updated spec files
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: 'chore: refresh parse samples [skip ci]'
-          file_pattern: 'data/specs/**'
+          file_pattern: 'frontend/public/data/specs/**'
           commit_user_name: 'github-actions[bot]'
           commit_user_email: 'github-actions[bot]@users.noreply.github.com'

@@ -2,10 +2,47 @@
   <h2>{{ data().player }} <span class="result-spec">{{ data().spec | formatSpec }}</span></h2>
 </div>
 
-<!-- Cooldown cards -->
+<!-- Cooldown panels -->
 <div class="cd-list">
   @for (entry of cdEntries(); track entry.name) {
-    <wl-cd-card [name]="entry.name" [bucket]="entry.bucket" [spellId]="entry.spellId"></wl-cd-card>
+    <mat-expansion-panel
+      [class.panel-warning]="entry.hasIssue && !entry.hasCritical"
+      [class.panel-critical]="entry.hasCritical"
+      [expanded]="entry.hasIssue"
+      [disabled]="!entry.hasIssue">
+      <mat-expansion-panel-header>
+        <mat-panel-title class="cd-panel-title">
+          <div class="cd-dot"
+               [class.dot-warn]="entry.hasIssue && !entry.hasCritical"
+               [class.dot-crit]="entry.hasCritical"></div>
+          @if (entry.spellId) {
+            <wl-spell-icon [spellId]="entry.spellId"></wl-spell-icon>
+          }
+          <span class="cd-name">{{ entry.name }}</span>
+        </mat-panel-title>
+        @if (entry.metaItems.length) {
+          <mat-panel-description class="cd-meta">
+            @for (item of entry.metaItems; track item; let last = $last) {
+              <span class="cd-meta-item">{{ item }}</span>{{ !last ? ' · ' : '' }}
+            }
+          </mat-panel-description>
+        }
+      </mat-expansion-panel-header>
+
+      <div class="cd-findings">
+        @for (f of entry.allFindings; track f.message) {
+          <div class="cd-issue">
+            @if (f.timestamp_ms != null) {
+              <span class="cd-issue-ts">{{ formatMs(f.timestamp_ms) }}</span>
+            }
+            <span class="cd-issue-msg">{{ f.message }}</span>
+            @if (f.details?.remedy) {
+              <div class="cd-remedy">{{ f.details!.remedy }}</div>
+            }
+          </div>
+        }
+      </div>
+    </mat-expansion-panel>
   }
   @if (cdEntries().length === 0 && cdBuckets().ruleFindings.length === 0) {
     <div class="no-findings">✓ No significant cooldown issues detected.</div>

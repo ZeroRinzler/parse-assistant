@@ -290,6 +290,28 @@ async function main() {
   console.log('Warcraft Learner — Guide Scraper CLI');
   console.log('No Python server required.\n');
 
+  // ── CLI mode (non-interactive) ──────────────────────────────────────────────
+  const argv = process.argv.slice(2);
+  const cliSpec = argv.find((_, i) => argv[i - 1] === '--spec');
+  const cliUrl  = argv.find((_, i) => argv[i - 1] === '--url');
+  const cliType = argv.find((_, i) => argv[i - 1] === '--type') || 'web';
+
+  if (cliSpec && cliUrl) {
+    if (!['web', 'youtube', 'simc'].includes(cliType)) {
+      console.error(`Unknown guide type: ${cliType}. Use web, youtube, or simc.`);
+      process.exit(1);
+    }
+    const guides = loadGuides(cliSpec);
+    const newGuide = { id: nextId(guides), spec: cliSpec, url: cliUrl, guide_type: cliType, content: '', status: 'pending' };
+    guides.push(newGuide);
+    saveGuides(cliSpec, guides);
+    console.log(`Added guide #${newGuide.id} for ${cliSpec}. Scraping...`);
+    await scrapeGuideById(cliSpec, newGuide.id);
+    rl.close();
+    return;
+  }
+
+  // ── Interactive mode ────────────────────────────────────────────────────────
   while (true) {
     const spec = await pickSpec();
     if (!spec) break;

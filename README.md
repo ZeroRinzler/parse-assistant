@@ -2,39 +2,49 @@
 
 **[Live site → gpolcode.github.io/warcraft-learner](https://gpolcode.github.io/warcraft-learner/)**
 
-A web-based diagnostic tool for Mythic WoW raiders. It fetches combat data from Warcraft Logs, evaluates it against spec-specific rulebooks (static or AI-generated from guides), and delivers prescriptive, coaching-style feedback with comparison against top-parse players.
+A web-based diagnostic tool for Mythic WoW raiders. It fetches combat data from Warcraft Logs, evaluates it against spec-specific rulebooks (AI-generated from guides), and delivers prescriptive, coaching-style feedback with comparison against top-parse players.
 
 ## What it does
 
-- **Analyzes your cooldown usage** - finds lost casts, poor BL alignment, slow openers, and held cooldowns. All thresholds are derived from real top-parse data for the same encounter, not arbitrary constants.
-- **Compares you to top parsers** - uses-per-minute and first-cast timing benchmarked against the top 10 WCL parses for that boss.
-- **Detects hold patterns** - identifies when top parsers consistently delay a cooldown past its reset time, and flags when you're using it earlier than they do.
-- **Maps burst windows** - finds the top recurring 8-second damage spikes across top parses and shows which cooldowns are active in them.
-- **Evaluates rotation rules** - the rule engine checks things like "Shadow Dance should always follow Secret Technique" or "don't use Dance within 15s of an incoming Shadow Blades" - all driven by a rulebook, not hardcoded spec logic.
-- **Per-fight player filtering** - the player dropdown shows only participants in the selected fight (no roster-swap clutter from earlier or later attempts).
+- **Analyzes your cooldown usage** — finds lost casts, poor BL alignment, slow openers, and held cooldowns. All thresholds are derived from real top-parse data for the same encounter, not arbitrary constants.
+- **Compares you to top parsers** — uses-per-minute and first-cast timing benchmarked against the top 10 WCL parses for that boss.
+- **Detects hold patterns** — identifies when top parsers consistently delay a cooldown past its reset time, and flags when you're using it earlier than they do.
+- **Maps burst windows** — finds the top recurring 8-second damage spikes across top parses and shows which cooldowns are active in them.
+- **Evaluates rotation rules** — the rule engine checks things like "Shadow Dance should always follow Secret Technique" or "don't use Dance within 15s of an incoming Shadow Blades" — driven by a rulebook, not hardcoded spec logic.
+- **Pre-fight gear check** — compare your current trinkets, talents, and enchants against what top parsers are running on each boss.
 
 ## Quick start
 
 ```bash
-cp .env.example .env   # fill in WCL OAuth credentials
-python3 -m pip install -r requirements.txt
-python3 -m uvicorn main:app --host 0.0.0.0 --port 8000
+cd frontend
+cp ../.env.example ../.env   # fill in WCL OAuth credentials
+npm install
+npm start                    # Angular dev server on http://localhost:4200
 ```
 
-| URL | Description |
-|---|---|
-| `http://localhost:8000/pre` | Pre-fight brief - what top parsers do on each boss |
-| `http://localhost:8000/live` | Live mode - auto-selects newest pull, polls every 12s |
-| `http://localhost:8000` | Post-raid - full cooldown analysis for any fight |
+No Python server required. The Angular app is fully static and communicates directly with the WCL API via OAuth2 PKCE.
+
 ## Setup flow
 
-1. **Admin CLI** (from `frontend/`): `npm run admin` — interactive CLI for guide management, rulebook generation, and parse ingestion.
-2. **Add guides**: select your spec, add one or more guide URLs (Wowhead, Icy-Veins, YouTube, or SimC APL GitHub URLs), scrape them.
-3. **Generate rulebook**: click "Copy AI Prompt" - copies a complete prompt including the skill instructions and all scraped guide content. Paste it into any LLM (Claude, ChatGPT, etc.), then paste the JSON output back to save.
-4. **Ingest parses**: "Ingest all bosses" — fetches and analyzes the top 10 WCL parses for every current-expansion boss. This powers data-derived thresholds, hold pattern detection, and burst window analysis.
-5. **Player page**: paste a WCL report URL - fight and player selectors appear automatically. Analysis runs on selection.
+1. **Admin CLI**: `npm run admin` — interactive CLI for guide management and rulebook generation.
+2. **Ingest parses**: `npm run ingest` — fetches and analyzes the top 10 WCL parses for every current-expansion boss. Powers data-derived thresholds, hold pattern detection, and burst window analysis.
+3. **Add guides**: `npm run scrape` — add guide URLs (web, YouTube, SimC APL), scrape their content.
+4. **Generate rulebook**: in `npm run admin`, select a spec → "Print AI prompt" → paste into any LLM (Claude, ChatGPT, etc.) → paste the JSON output back to save the rulebook.
+5. **Player page**: sign in with WCL, paste a report URL — fight and player selectors appear automatically.
 
-Steps 1–4 are per-spec and only need to be done once (or whenever you want to refresh the data).
+Steps 1–4 are per-spec and only need to be done once (or to refresh data).
+
+## Scripts
+
+All scripts run from `frontend/`:
+
+| Command | Description |
+|---|---|
+| `npm start` | Angular dev server (port 4200) |
+| `npm run build` | Production build to `../static/angular/` |
+| `npm run ingest` | Ingest top WCL parses for a spec (interactive or `--spec Name --all`) |
+| `npm run scrape` | Add and scrape guide URLs (interactive or `--spec --url --type`) |
+| `npm run admin` | Manage rulebooks (generate prompt, save AI JSON output) |
 
 ## GitHub Actions automation
 
@@ -42,16 +52,17 @@ Two workflows keep spec data up to date automatically:
 
 | Workflow | Trigger | Script |
 |---|---|---|
-| `ingest-parses.yml` | Daily at 06:00 UTC (or manual) | `scripts/ingest_parses.py` |
-| `scrape-guides.yml` | Manual (`workflow_dispatch`) | `scripts/scrape_guides.py` |
+| `ingest-parses.yml` | Daily at 06:00 UTC (or manual) | `node frontend/scripts/ingest.mjs` |
+| `scrape-guides.yml` | Manual (`workflow_dispatch`) | `node frontend/scripts/scrape.mjs` |
 
-Set `WCL_CLIENT_ID` and `WCL_CLIENT_SECRET` as repository secrets. The workflows commit updated `data/specs/**` files back to the repo after each run.
+Set `WCL_CLIENT_ID` and `WCL_CLIENT_SECRET` as repository secrets. The workflows commit updated `frontend/public/data/specs/**` files back to the repo after each run.
 
 ## Credentials needed
 
 | Secret | Where to get it |
 |---|---|
 | `WCL_CLIENT_ID` | [Warcraft Logs API clients](https://www.warcraftlogs.com/api/clients/) |
+| `WCL_CLIENT_SECRET` | Same page — required for server-side ingestion scripts |
 
 No Anthropic API key is required. The rulebook generation workflow uses a copy-prompt → paste-back flow that works with any LLM.
 
@@ -71,31 +82,30 @@ All analysis thresholds adapt to the encounter and spec via top-parse data:
 
 If no parse samples exist for the encounter, all checks fall back to conservative static values.
 
-## Rulebook workflow
-
-The AI integration was replaced with a copy-prompt / paste-back workflow:
-
-1. Scrape one or more guides for a spec.
-2. Click "Copy AI Prompt" - this assembles the skill file (`prompts/rulebook_skill.md`) with your guide content into a single prompt ready to paste.
-3. Paste it into any LLM, copy the JSON output.
-4. Paste the JSON into the "Step 2 - Paste AI Output" panel and click "Save & Activate".
-
-The `prompts/rulebook_skill.md` file controls the schema and instructions the LLM receives. Edit it to improve outputs over time.
-
 ## Architecture overview
 
 ```
-main.py            - FastAPI app, all API routes
-analyzer.py        - Deterministic rules engine (cooldown checks + hold suggestions)
-parses_analyzer.py - WCL rankings fetcher, per-parse timing + hold pattern + burst window analysis
-wcl_client.py      - WCL OAuth2 + GraphQL client (with friendlyPlayers per-fight)
-rulebook.py        - Static fallback cooldown definitions (22+ DPS specs)
-db.py              - SQLite persistence + in-memory rulebook cache
-scraper.py         - Web page + YouTube transcript + GitHub raw file scraping
-prompts/
-  rulebook_skill.md - LLM skill file: schema, field reference, condition examples
-static/index.html  - Player UI (vanilla JS, URL-persistent state)
-static/admin.html  - Admin UI (vanilla JS)
+frontend/
+├── src/app/
+│   ├── pages/
+│   │   ├── post-raid/     — post-raid analysis UI
+│   │   ├── pre-fight/     — pre-fight gear/talent check
+│   │   └── live/          — live raid mode (auto-polls)
+│   └── core/services/
+│       ├── wcl-auth.ts    — WCL OAuth2 PKCE login
+│       ├── wcl-api.ts     — WCL GraphQL client
+│       ├── analysis.ts    — delegates to AnalysisEngineService
+│       └── analysis-engine.ts — TypeScript port of the full analyzer
+├── scripts/
+│   ├── ingest.mjs         — parse ingestion CLI (no server needed)
+│   ├── scrape.mjs         — guide scraper CLI
+│   └── admin.mjs          — rulebook management CLI
+└── public/data/specs/     — static data files (served by Angular dev server)
+    └── {Spec}/
+        ├── rulebook.json
+        ├── guides.json
+        ├── encounters.json
+        └── encounters/{id}.json
 ```
 
-See `CLAUDE.md` for full technical reference including data models, API endpoints, rulebook JSON schema, and the rule condition engine.
+See `CLAUDE.md` for the full technical reference including data models, rulebook JSON schema, and the rule condition engine.
