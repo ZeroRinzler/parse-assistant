@@ -1,6 +1,8 @@
 {
     "permissions": {
         "allow": [
+            "Bash(claude mcp *)",
+            "Skill(run)",
             "Bash",
             "Read",
             "Edit",

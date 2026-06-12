@@ -9,7 +9,7 @@ A web-based diagnostic tool for Mythic WoW raiders. It fetches combat data from 
 - **Analyzes your cooldown usage** — finds lost casts, poor BL alignment, slow openers, and held cooldowns. All thresholds are derived from real top-parse data for the same encounter, not arbitrary constants.
 - **Compares you to top parsers** — uses-per-minute and first-cast timing benchmarked against the top 10 WCL parses for that boss.
 - **Detects hold patterns** — identifies when top parsers consistently delay a cooldown past its reset time, and flags when you're using it earlier than they do.
-- **Maps burst windows** — finds the top recurring 8-second damage spikes across top parses and shows which cooldowns are active in them.
+- **Maps burst windows** — finds recurring damage windows across top parses (anchored to CD casts, variable length) and shows which cooldowns are active in them.
 - **Evaluates rotation rules** — the rule engine checks things like "Shadow Dance should always follow Secret Technique" or "don't use Dance within 15s of an incoming Shadow Blades" — driven by a rulebook, not hardcoded spec logic.
 - **Pre-fight gear check** — compare your current trinkets, talents, and enchants against what top parsers are running on each boss.
 
@@ -78,7 +78,7 @@ All analysis thresholds adapt to the encounter and spec via top-parse data:
 | Downtime floor | p90 of pooled inter-cast gaps from top parses |
 | Efficiency warning | 1σ below top-parse avg triggers warning; 2σ triggers critical |
 | BL timing | avg BL-offset across top parses ± 2σ |
-| Burst windows | top 4 non-overlapping 8s damage peaks, clustered across top parses |
+| Burst windows | CD-cast-centric windows (variable length), clustered across top parses |
 
 If no parse samples exist for the encounter, all checks fall back to conservative static values.
 
