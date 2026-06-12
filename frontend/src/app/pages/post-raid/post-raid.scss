@@ -1,0 +1,37 @@
+.container {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 32px 20px 64px;
+}
+
+.input-card {
+  margin-bottom: 20px;
+  padding: 20px;
+}
+
+.full-width { width: 100%; }
+
+.selectors {
+  margin-top: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+}
+
+.selector-row {
+  display: flex;
+  gap: 14px;
+
+  .flex-1 { flex: 1; }
+}
+
+.error-msg {
+  background: rgba(224, 82, 82, 0.1);
+  border: 1px solid rgba(224, 82, 82, 0.3);
+  border-radius: 8px;
+  padding: 14px 16px;
+  color: var(--critical);
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.result-card { padding: 24px; }

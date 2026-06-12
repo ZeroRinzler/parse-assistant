@@ -1,0 +1,87 @@
+<p class="section-label">Burst Windows</p>
+<div class="cmp-legend">
+  <span class="cmp-leg-item"><span class="cmp-leg player"></span> You</span>
+  <span class="cmp-leg-item"><span class="cmp-leg top"></span> Top 10 avg <span class="cmp-range-note">(shaded range)</span></span>
+</div>
+<div class="bw-list">
+  @for (card of cards(); track card.idx) {
+    <div class="bw-card" [class]="card.cls" [class.expanded]="expandedIdx() === card.idx">
+      <div class="bw-card-header">
+        <span class="bw-time">{{ card.bw.time_s | formatDuration }}</span>
+        <span class="bw-status-badge" [class]="'bw-badge-' + card.cls">{{ card.badge }}</span>
+        <span class="bw-cds">{{ card.bw.common_cds?.join(', ') || '-' }}</span>
+        @if (card.bw.ability_breakdown?.length) {
+          <button class="bw-expand-btn" (click)="toggleExpand(card.idx); $event.stopPropagation()">
+            Detail {{ expandedIdx() === card.idx ? '▴' : '▾' }}
+          </button>
+        }
+      </div>
+
+      <!-- Comparison bars -->
+      <div class="bw-cmp-wrap" [class.bw-future-wrap]="card.notReached">
+        @if (!card.notReached) {
+          <div class="cmp-subrow">
+            <span class="cmp-leg player"></span>
+            <div class="cmp-track">
+              <div class="cmp-fill player" [style.width.%]="card.pBar"></div>
+            </div>
+            <span class="cmp-val">{{ card.playerPct != null ? (card.playerPct * 100 | number:'1.1-1') + '%' : '-' }}</span>
+          </div>
+        }
+        <div class="cmp-subrow">
+          <span class="cmp-leg top"></span>
+          <div class="cmp-track">
+            @if (card.rW > 0.5) {
+              <div class="cmp-candle" [style.left.%]="card.tMinP" [style.width.%]="card.rW">
+                <div class="cmp-candle-tick" [style.left.%]="card.avgOff"></div>
+              </div>
+            }
+            <div class="cmp-fill top" [style.width.%]="card.tBar"></div>
+          </div>
+          <span class="cmp-val top">
+            {{ (card.topPct * 100 | number:'1.1-1') }}%
+            <span class="cmp-range">{{ (card.minPct * 100 | number:'1.1-1') }}%–{{ (card.maxPct * 100 | number:'1.1-1') }}%</span>
+          </span>
+        </div>
+      </div>
+
+      <!-- Ability breakdown -->
+      @if (expandedIdx() === card.idx && card.bw.ability_breakdown?.length) {
+        <div class="bw-breakdown">
+          <table class="bw-ab-table">
+            <thead>
+              <tr>
+                <th>Ability</th>
+                @if (!card.notReached) { <th>You</th> }
+                <th>Top avg</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (topAb of card.bw.ability_breakdown!; track topAb.spell_id) {
+                <tr>
+                  <td>
+                    <wl-spell-icon [spellId]="topAb.spell_id"></wl-spell-icon>
+                    <a [href]="'https://www.wowhead.com/spell=' + topAb.spell_id" target="_blank" class="ab-link">
+                      Spell {{ topAb.spell_id }}
+                    </a>
+                  </td>
+                  @if (!card.notReached) {
+                    <td>
+                      @if (card.playerAbMap[topAb.spell_id]) {
+                        {{ (card.playerAbMap[topAb.spell_id].pct * 100 | number:'1.1-1') }}%
+                        <span [class]="card.playerAbMap[topAb.spell_id].pct >= topAb.avg_pct ? 'delta-good' : 'delta-bad'">
+                          {{ card.playerAbMap[topAb.spell_id].pct >= topAb.avg_pct ? '+' : '' }}{{ ((card.playerAbMap[topAb.spell_id].pct - topAb.avg_pct) * 100 | number:'1.1-1') }}%
+                        </span>
+                      } @else { <span>-</span> }
+                    </td>
+                  }
+                  <td class="delta-ok">{{ (topAb.avg_pct * 100 | number:'1.1-1') }}%</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </div>
+  }
+</div>

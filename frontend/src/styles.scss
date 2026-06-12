@@ -1,0 +1,186 @@
+@use '@angular/material' as mat;
+
+html {
+  height: 100%;
+  color-scheme: dark;
+
+  @include mat.theme(
+    (
+      color: (
+        primary: mat.$azure-palette,
+        tertiary: mat.$blue-palette,
+        theme-type: dark,
+      ),
+      typography: Roboto,
+      density: 0,
+    )
+  );
+
+  // App-level design tokens
+  --bg: #0e1117;
+  --surface: #161b22;
+  --surface-alt: #1c2128;
+  --border: #30363d;
+  --text: #e6edf3;
+  --muted: #8b949e;
+  --accent: #58a6ff;
+  --critical: #f85149;
+  --warning: #d29922;
+  --success: #3fb950;
+  --info: #58a6ff;
+  --gold: #c8a96e;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  margin: 0;
+  height: 100%;
+}
+
+// ── Scrollbar ────────────────────────────────────────────────────────────────
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+// ── Material overrides ────────────────────────────────────────────────────────
+.mat-mdc-card {
+  background-color: var(--surface) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 10px !important;
+}
+
+.mat-mdc-form-field-subscript-wrapper { display: none; }
+
+// ── Comparison chart ──────────────────────────────────────────────────────────
+.cmp-chart {
+  width: 100%;
+  font-size: 12px;
+}
+
+.cmp-chart-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+
+  &:last-child { border-bottom: none; }
+}
+
+.cmp-label {
+  width: 120px;
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cmp-bar-track {
+  flex: 1;
+  position: relative;
+  height: 20px;
+}
+
+.cmp-bar-bg {
+  position: absolute;
+  inset: 4px 0;
+  background: var(--surface-alt);
+  border-radius: 3px;
+}
+
+.cmp-bar-fill {
+  position: absolute;
+  top: 4px;
+  left: 0;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--accent);
+  opacity: 0.4;
+  transition: width 0.3s;
+}
+
+.cmp-candle {
+  position: absolute;
+  top: 2px;
+  width: 2px;
+  height: 16px;
+  background: var(--muted);
+  border-radius: 1px;
+}
+
+.cmp-candle-box {
+  position: absolute;
+  top: 5px;
+  height: 10px;
+  background: rgba(88, 166, 255, 0.2);
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+}
+
+.cmp-value {
+  width: 56px;
+  text-align: right;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+
+  &.good { color: var(--success); }
+  &.bad  { color: var(--critical); }
+}
+
+// ── Burst window cards ────────────────────────────────────────────────────────
+.bw-card {
+  margin-bottom: 12px;
+  padding: 14px 16px;
+}
+
+.bw-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.bw-time {
+  font-weight: 600;
+  color: var(--accent);
+  font-size: 13px;
+  min-width: 48px;
+}
+
+.bw-cds {
+  flex: 1;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.bw-body {
+  margin-top: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+// ── Defensive table ────────────────────────────────────────────────────────────
+.def-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.def-table th, .def-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+
+.def-table th { color: var(--muted); font-weight: 500; }
+
+// ── Severity badges ────────────────────────────────────────────────────────────
+.badge-critical { color: var(--critical); }
+.badge-warning  { color: var(--warning); }
+.badge-success  { color: var(--success); }
+.badge-info     { color: var(--info); }

@@ -74,27 +74,34 @@ def _build_spec_map(report: dict) -> dict[int, str]:
     return spec_map
 
 
-# ── Frontend ──────────────────────────────────────────────────────────────────
+# ── Frontend (Angular SPA) ────────────────────────────────────────────────────
+
+ANGULAR_DIST = STATIC_DIR / "angular" / "browser"
+_ANGULAR_INDEX = ANGULAR_DIST / "index.html"
+
+
+def _serve_angular() -> FileResponse:
+    if _ANGULAR_INDEX.exists():
+        return FileResponse(str(_ANGULAR_INDEX))
+    raise HTTPException(status_code=404, detail="Angular build not found. Run `npm run build` in frontend/.")
+
 
 @app.get("/", include_in_schema=False)
 async def frontend():
-    return RedirectResponse(url="/static/index.html")
+    return _serve_angular()
+
+
+@app.get("/pre", include_in_schema=False)
+@app.get("/live", include_in_schema=False)
+@app.get("/callback", include_in_schema=False)
+async def spa_routes():
+    return _serve_angular()
 
 
 @app.get("/admin", include_in_schema=False)
 @app.get("/contribute", include_in_schema=False)
 async def admin_frontend():
     return RedirectResponse(url="/static/admin.html")
-
-
-@app.get("/pre", include_in_schema=False)
-async def pre_frontend():
-    return RedirectResponse(url="/static/pre.html")
-
-
-@app.get("/live", include_in_schema=False)
-async def live_frontend():
-    return RedirectResponse(url="/static/live.html")
 
 
 # ── Player analysis API ───────────────────────────────────────────────────────
@@ -912,3 +919,6 @@ async def ingest_all_stream(spec: str):
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 app.mount("/data",   StaticFiles(directory=str(DATA_DIR)),   name="data")
+# Serve Angular asset files (JS chunks, CSS) at root so <base href="/"> works
+if ANGULAR_DIST.exists():
+    app.mount("/", StaticFiles(directory=str(ANGULAR_DIST)), name="angular-assets")

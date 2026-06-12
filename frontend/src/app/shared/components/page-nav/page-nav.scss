@@ -1,0 +1,41 @@
+.page-nav {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 16px;
+  position: relative;
+  gap: 4px;
+}
+
+.nav-links {
+  display: flex;
+  gap: 2px;
+
+  a {
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 600;
+
+    &.active { color: var(--gold); }
+  }
+}
+
+.nav-right {
+  position: absolute;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.auth-btn {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+
+  &--connected {
+    color: var(--success);
+  }
+}

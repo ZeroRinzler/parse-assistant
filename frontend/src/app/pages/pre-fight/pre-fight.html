@@ -1,0 +1,154 @@
+@if (!isLoggedIn()) {
+  <wl-auth-banner></wl-auth-banner>
+} @else {
+  <div class="container">
+    @if (error()) {
+      <div class="error-msg">⚠ {{ error() }}</div>
+    }
+
+    <mat-card class="char-card">
+      <!-- Linked character selector -->
+      @if (linkedChars().length > 1) {
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Your Characters</mat-label>
+          <mat-select [ngModel]="selectedLinkedChar()" (ngModelChange)="onLinkedCharChange($event)">
+            @for (c of linkedChars(); track c.id) {
+              <mat-option [value]="c">{{ c.name }} — {{ c.serverSlug }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+      }
+
+      @if (loading()) {
+        <wl-loading-spinner message="Looking up character…"></wl-loading-spinner>
+      }
+
+      @if (charInfo() && !loading()) {
+        <div class="char-badge">
+          <mat-icon class="badge-icon">check_circle</mat-icon>
+          <span class="char-name">{{ charInfo()!.name }}</span>
+          <span class="char-spec">{{ charInfo()!.spec | formatSpec }} — {{ charInfo()!.server }}</span>
+        </div>
+
+        <div class="enc-row">
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Encounter</mat-label>
+            <mat-select [ngModel]="selectedEncId()" (ngModelChange)="selectedEncId.set($event); onEncChange()" [disabled]="!encounters().length">
+              <mat-option [value]="0">— select encounter —</mat-option>
+              @for (e of encounters(); track e.id) {
+                <mat-option [value]="e.id">{{ e.name }} ({{ e.sample_count }} parses)</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+        </div>
+      }
+
+      <!-- Check another character by URL -->
+      <div class="url-section">
+        <div class="url-label">Check another character</div>
+        <div class="url-row">
+          <mat-form-field appearance="outline" class="flex-1">
+            <input matInput [(ngModel)]="urlInput" placeholder="https://www.warcraftlogs.com/character/us/server/Name"
+                   (keydown.enter)="loadCharFromUrl()" />
+          </mat-form-field>
+          <button mat-flat-button color="primary" (click)="loadCharFromUrl()">Load</button>
+        </div>
+      </div>
+    </mat-card>
+
+    @if (loadingBrief()) {
+      <wl-loading-spinner message="Loading brief…"></wl-loading-spinner>
+    }
+
+    @if (selectedEncId() && !loadingBrief()) {
+      <!-- Gear / Talent / Trinket / Enchant cards -->
+      @if (gearStats() || charGear()) {
+        <div class="gear-grid">
+          <!-- Talents -->
+          <mat-card class="gear-card">
+            <div class="gear-card-head">
+              @let ts = talentStatus(gearStats());
+              <span class="gear-dot" [class]="ts.status"></span>
+              <span class="gear-title">Talents</span>
+            </div>
+            <p>{{ talentStatus(gearStats()).note }}</p>
+          </mat-card>
+
+          <!-- Trinkets -->
+          <mat-card class="gear-card">
+            <div class="gear-card-head">
+              <span class="gear-dot ok"></span>
+              <span class="gear-title">Trinkets</span>
+            </div>
+            @if (charGear()) {
+              @for (slot of [12, 13]; track slot) {
+                @let playerItem = charGear()!.trinkets?.find(t => t.slot === slot);
+                @let topItems = gearStats()?.trinkets?.[slot] || [];
+                <div class="gear-row">
+                  <span class="gear-slot">{{ slotName(slot) }}</span>
+                  @if (playerItem) {
+                    <span>{{ playerItem.name || 'Item #' + playerItem.id }}</span>
+                    @if (topItems.length && !topItems.find(t => t.id === playerItem!.id)) {
+                      <span class="gear-top">Top: {{ topItems[0]?.name }} ({{ topItems[0]?.pct }}%)</span>
+                    }
+                  } @else {
+                    <span class="missing">missing</span>
+                  }
+                </div>
+              }
+            }
+          </mat-card>
+
+          <!-- Enchants -->
+          <mat-card class="gear-card">
+            <div class="gear-card-head">
+              <span class="gear-dot ok"></span>
+              <span class="gear-title">Enchants</span>
+            </div>
+            @if (charGear()) {
+              @for (enc of charGear()!.enchants || []; track enc.slot) {
+                <div class="gear-row">
+                  <span class="gear-slot">{{ slotName(enc.slot) }}</span>
+                  <span>{{ enc.name || 'Enchant #' + enc.id }}</span>
+                </div>
+              }
+            }
+          </mat-card>
+        </div>
+      }
+
+      <!-- Brief: burst windows + CD guide -->
+      @if (bench()) {
+        <mat-card class="brief-card">
+          <div class="stats-bar">
+            @if (bench()!.avg_duration_s) {
+              <div class="stat">
+                <div class="stat-val">{{ bench()!.avg_duration_s | formatDuration }}</div>
+                <div class="stat-lbl">Avg Kill Time</div>
+              </div>
+            }
+            @if (bench()!.burst_windows?.length) {
+              <div class="stat">
+                <div class="stat-val">{{ bench()!.burst_windows!.length }}</div>
+                <div class="stat-lbl">Burst Windows</div>
+              </div>
+            }
+          </div>
+
+          @if (bench()!.burst_windows?.length) {
+            <p class="card-title" style="margin-top:16px">Burst Windows</p>
+            @for (bw of bench()!.burst_windows!; track bw.time_s) {
+              <div class="bw-row">
+                <span class="bw-time">{{ bw.time_s | formatDuration }}</span>
+                <span class="bw-cds">{{ bw.common_cds?.join(', ') || 'no tracked CD' }}</span>
+                @if ((bw.avg_targets ?? 1) >= 2) {
+                  <span class="bw-aoe">AoE</span>
+                }
+              </div>
+            }
+          }
+        </mat-card>
+      }
+    }
+  </div>
+}

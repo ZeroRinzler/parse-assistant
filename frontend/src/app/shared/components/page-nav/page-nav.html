@@ -1,0 +1,37 @@
+<nav class="page-nav">
+  <div class="nav-links">
+    <a routerLink="/pre" routerLinkActive="active" mat-button>Pre-Fight</a>
+    <a routerLink="/live" routerLinkActive="active" mat-button>Live</a>
+    <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact:true}" mat-button>Post-Raid</a>
+  </div>
+
+  <div class="nav-right">
+    <a [href]="githubUrl" target="_blank" rel="noopener noreferrer" mat-icon-button
+       matTooltip="View on GitHub" aria-label="GitHub repository">
+      <mat-icon svgIcon="github"></mat-icon>
+    </a>
+
+    @if (auth.isLoggedIn()) {
+      <button mat-button [matMenuTriggerFor]="authMenu" class="auth-btn auth-btn--connected">
+        <mat-icon>account_circle</mat-icon>
+        WCL
+        <mat-icon>arrow_drop_down</mat-icon>
+      </button>
+      <mat-menu #authMenu="matMenu">
+        <button mat-menu-item disabled>
+          <mat-icon>check_circle</mat-icon>
+          <span>Signed in to Warcraft Logs</span>
+        </button>
+        <button mat-menu-item (click)="signOut()">
+          <mat-icon>logout</mat-icon>
+          <span>Sign out</span>
+        </button>
+      </mat-menu>
+    } @else {
+      <button mat-button class="auth-btn" (click)="signIn()">
+        <mat-icon>login</mat-icon>
+        Sign in to WCL
+      </button>
+    }
+  </div>
+</nav>

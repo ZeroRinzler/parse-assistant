@@ -1,0 +1,61 @@
+<p class="section-label">Defensives</p>
+<div class="cmp-legend">
+  <span class="cmp-leg-item"><span class="cmp-leg player"></span> You</span>
+  <span class="cmp-leg-item"><span class="cmp-leg top"></span> Top 10 avg <span class="cmp-range-note">(shaded range)</span></span>
+</div>
+<div class="bw-list">
+  @for (card of cards(); track card.def.spell_id) {
+    <div class="bw-card" [class.bw-low]="card.lowUse">
+      <div class="bw-card-header">
+        <wl-spell-icon [spellId]="card.def.spell_id"></wl-spell-icon>
+        <a [href]="'https://www.wowhead.com/spell=' + card.def.spell_id" target="_blank" class="cd-name">
+          {{ card.def.name }}
+        </a>
+        <span class="bw-cds def-windows">
+          @for (w of card.def.windows; track w.start_s) {
+            <span class="def-window">
+              {{ w.start_s | formatDuration }}–{{ w.end_s | formatDuration }}
+              @if (w.dmg_during > 0) {
+                <small>{{ w.dmg_during | number }} absorbed</small>
+              }
+            </span>
+          }
+          @if (!card.def.windows.length) {
+            <span class="def-none">not used</span>
+          }
+        </span>
+      </div>
+      <div class="bw-cmp-wrap">
+        <div class="cmp-subrow">
+          <span class="cmp-leg player"></span>
+          <div class="cmp-track">
+            <div class="cmp-fill player" [style.width.%]="card.pBar"></div>
+          </div>
+          <span class="cmp-val" [class]="card.pValCls">
+            {{ card.def.uses }} use{{ card.def.uses !== 1 ? 's' : '' }}
+            @if (card.expected != null) { <small>/ ~{{ card.expected }} expected</small> }
+          </span>
+        </div>
+        @if (card.tBar != null) {
+          <div class="cmp-subrow">
+            <span class="cmp-leg top"></span>
+            <div class="cmp-track">
+              @if (card.rW > 0.5) {
+                <div class="cmp-candle" [style.left.%]="card.tMinP!" [style.width.%]="card.rW">
+                  <div class="cmp-candle-tick" [style.left.%]="card.avgOff"></div>
+                </div>
+              }
+              <div class="cmp-fill top" [style.width.%]="card.tBar"></div>
+            </div>
+            <span class="cmp-val top">
+              {{ card.top!.avg_uses | number:'1.1-1' }} avg
+              <span class="cmp-range">({{ card.top!.min_uses }}–{{ card.top!.max_uses }})</span>
+            </span>
+          </div>
+        } @else {
+          <div class="cmp-subrow"><span class="cmp-no-data">Re-ingest to compare</span></div>
+        }
+      </div>
+    </div>
+  }
+</div>

@@ -1,0 +1,65 @@
+.result-header {
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.result-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+
+  h2 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text);
+  }
+}
+
+.result-spec { color: var(--muted); font-weight: 400; font-size: 14px; }
+
+.rulebook-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 500;
+  border: 1px solid;
+
+  &.source-generated { color: var(--success); border-color: var(--success); }
+  &.source-static    { color: var(--warning); border-color: var(--warning); }
+  &.source-none      { color: var(--muted); border-color: var(--border); }
+}
+
+.section-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 16px 0 8px;
+}
+
+.cd-list { display: flex; flex-direction: column; gap: 6px; }
+
+.no-findings {
+  font-size: 13px;
+  color: var(--success);
+  padding: 10px 0;
+}
+
+.rule-list { display: flex; flex-direction: column; gap: 6px; }
+
+.rule-item {
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--surface-alt);
+  border-left: 3px solid var(--border);
+  font-size: 13px;
+
+  &.sev-warning { border-left-color: var(--warning); }
+}
+
+.rule-item-msg { color: var(--text); font-weight: 500; display: block; }
+.rule-remedy   { color: var(--muted); font-size: 12px; margin-top: 4px; }

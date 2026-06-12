@@ -1,0 +1,62 @@
+<div class="result-header">
+  <div class="result-title">
+    <h2>{{ data().player }} <span class="result-spec">{{ data().spec | formatSpec }}</span></h2>
+    <span class="rulebook-badge" [class]="'source-' + data().rulebook_source">
+      {{ ruleSourceLabel(data().rulebook_source) }}
+    </span>
+  </div>
+</div>
+
+<!-- Cooldown cards -->
+<div class="cd-list">
+  @for (entry of cdEntries(); track entry.name) {
+    <wl-cd-card [name]="entry.name" [bucket]="entry.bucket" [spellId]="entry.spellId"></wl-cd-card>
+  }
+  @if (cdEntries().length === 0 && cdBuckets().ruleFindings.length === 0) {
+    <div class="no-findings">✓ No significant cooldown issues detected.</div>
+  }
+</div>
+
+<!-- Rule violations -->
+@if (cdBuckets().ruleFindings.length) {
+  <p class="section-label" style="margin-top:18px">Rotation Rules</p>
+  <div class="rule-list">
+    @for (f of cdBuckets().ruleFindings; track f.message) {
+      <div class="rule-item" [class.sev-warning]="f.severity === 'warning'">
+        <span class="rule-item-msg">{{ f.message }}</span>
+        @if (f.details?.remedy) {
+          <div class="rule-remedy">{{ f.details!.remedy }}</div>
+        }
+      </div>
+    }
+  </div>
+}
+
+<!-- Burst windows -->
+@if (data().burst_windows?.length) {
+  <wl-burst-windows
+    [topWindows]="data().burst_windows!"
+    [playerWindows]="data().player_burst_windows || []"
+    [fightDuration]="data().player_fight_duration_s || 0">
+  </wl-burst-windows>
+}
+
+<!-- Defensives -->
+@if (data().player_defensives?.length) {
+  <wl-defensives-section
+    [defensives]="data().player_defensives!"
+    [topSummary]="data().top_defensives_summary || []"
+    [fightDuration]="data().player_fight_duration_s || 0">
+  </wl-defensives-section>
+}
+
+<!-- Damage taken -->
+@if (data().player_dmg_taken_by_ability?.length || data().top_dtk_comparison?.length) {
+  <wl-damage-taken
+    [byAbility]="data().player_dmg_taken_by_ability || []"
+    [total]="data().player_total_dmg_taken || 0"
+    [topComparison]="data().top_dtk_comparison || []"
+    [segmentPcts]="data().player_dmg_taken_segment_pcts || []"
+    [topSegments]="data().top_dtk_segments || []">
+  </wl-damage-taken>
+}

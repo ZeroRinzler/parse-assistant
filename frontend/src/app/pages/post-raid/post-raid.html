@@ -1,0 +1,53 @@
+@if (!isLoggedIn()) {
+  <wl-auth-banner></wl-auth-banner>
+} @else {
+  <div class="container">
+    <mat-card class="input-card">
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Warcraft Logs Report URL or Code</mat-label>
+        <input matInput [(ngModel)]="reportInput" placeholder="https://www.warcraftlogs.com/reports/AbCdEfGh…"
+               (input)="onReportChange()" (keydown.enter)="loadReport()" />
+      </mat-form-field>
+
+      @if (fights().length) {
+        <div class="selectors">
+          <div class="selector-row">
+            <mat-form-field appearance="outline" class="flex-1">
+              <mat-label>Fight</mat-label>
+              <mat-select [(ngModel)]="selectedFightId" (ngModelChange)="onFightChange()">
+                @for (f of fights(); track f.id) {
+                  <mat-option [value]="f.id">
+                    {{ f.name }} [{{ f.kill ? '✓' : '✗ #' + f.attempt }}] {{ f.duration_s | formatDuration }}
+                  </mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" class="flex-1">
+              <mat-label>Player</mat-label>
+              <mat-select [(ngModel)]="selectedPlayerId" (ngModelChange)="onPlayerChange()">
+                @for (p of visiblePlayers(); track p.id) {
+                  <mat-option [value]="p.id">{{ p.name }} — {{ p.spec | formatSpec }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+          </div>
+        </div>
+      }
+    </mat-card>
+
+    @if (error()) {
+      <div class="error-msg">⚠ {{ error() }}</div>
+    }
+
+    @if (loadingReport() || loadingAnalysis()) {
+      <wl-loading-spinner [message]="loadingMsg()"></wl-loading-spinner>
+    }
+
+    @if (result() && !loadingAnalysis()) {
+      <mat-card class="result-card">
+        <wl-analysis-result [data]="result()!"></wl-analysis-result>
+      </mat-card>
+    }
+  </div>
+}
