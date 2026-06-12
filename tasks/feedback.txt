@@ -1,2 +1,0 @@
-open tasks:
-- the new candle diagram looks really bad. please create a markdown with different options of already existing libraries with such a diagram
