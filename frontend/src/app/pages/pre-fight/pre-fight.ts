@@ -70,7 +70,12 @@ export class PreFightComponent implements OnInit {
   }
 
   private async _init(): Promise<void> {
-    const chars = await this.wclApi.fetchUserCharacters().catch(() => []);
+    let chars: WclUserCharacter[] = [];
+    try {
+      chars = await this.wclApi.fetchUserCharacters();
+    } catch (err) {
+      this.error.set(`Could not load your WCL characters: ${err instanceof Error ? err.message : String(err)}`);
+    }
     this.linkedChars.set(chars);
     if (chars.length) {
       this.selectedLinkedChar.set(chars[0]);

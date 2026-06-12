@@ -33,7 +33,7 @@ query($code:String!,$fightIDs:[Int]!,$dataType:EventDataType,$sourceID:Int,$star
   }}
 }`;
 
-const USER_CHARS_Q = `{userData{currentUser{characters{id name serverSlug serverRegion}}}}`;
+const USER_CHARS_Q = `{userData{currentUser{characters{id name server{slug region{slug}}}}}}`;
 
 const CHAR_Q = `
 query($name:String!,$serverSlug:String!,$serverRegion:String!){
@@ -116,8 +116,14 @@ export class WclApiService {
   }
 
   async fetchUserCharacters(): Promise<WclUserCharacter[]> {
-    const d = await this.query<{ userData: { currentUser: { characters: WclUserCharacter[] } } }>(USER_CHARS_Q);
-    const chars = d?.userData?.currentUser?.characters || [];
+    const d = await this.query<{ userData: { currentUser: { characters: Array<{ id: number; name: string; server: { slug: string; region: { slug: string } } }> } } }>(USER_CHARS_Q);
+    const raw = d?.userData?.currentUser?.characters || [];
+    const chars: WclUserCharacter[] = raw.map(c => ({
+      id: c.id,
+      name: c.name,
+      serverSlug: c.server?.slug || '',
+      serverRegion: c.server?.region?.slug || '',
+    }));
     try { localStorage.setItem('wcl_user_chars', JSON.stringify(chars)); } catch { /* ignore */ }
     return chars;
   }
