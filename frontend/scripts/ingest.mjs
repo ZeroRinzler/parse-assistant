@@ -11,7 +11,6 @@
  *   npm run ingest
  *
  * Requires: WCL_CLIENT_ID and WCL_CLIENT_SECRET in .env at the repo root.
- * No Python server needed.
  */
 
 import fs from 'fs';
@@ -1462,7 +1461,6 @@ async function ingestSpec(wcl, spec, encounters) {
 
 async function main() {
   console.log('Warcraft Learner — Parse Ingestion CLI');
-  console.log('No Python server required.\n');
 
   // ── CLI mode (non-interactive) ──────────────────────────────────────────────
   const argv = process.argv.slice(2);

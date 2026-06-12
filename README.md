@@ -22,7 +22,7 @@ npm install
 npm start                    # Angular dev server on http://localhost:4200
 ```
 
-No Python server required. The Angular app is fully static and communicates directly with the WCL API via OAuth2 PKCE.
+The Angular app is fully static and communicates directly with the WCL API via OAuth2 PKCE.
 
 ## Setup flow
 

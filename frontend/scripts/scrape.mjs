@@ -3,7 +3,7 @@
  * Warcraft Learner — Standalone Guide Scraper CLI
  *
  * Manages guides for specs: add URLs, scrape content, view, delete.
- * Writes directly to data/specs/{spec}/guides.json — no Python server needed.
+ * Writes directly to data/specs/{spec}/guides.json
  *
  * Usage:
  *   npm run scrape
@@ -288,7 +288,6 @@ async function pickSpec() {
 
 async function main() {
   console.log('Warcraft Learner — Guide Scraper CLI');
-  console.log('No Python server required.\n');
 
   // ── CLI mode (non-interactive) ──────────────────────────────────────────────
   const argv = process.argv.slice(2);

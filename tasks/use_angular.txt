@@ -1,5 +1,0 @@
-Please convert the application to Angular. For this install the Angular Skills:
-npx skills add https://github.com/angular/skills
-The target is to fully decouple the services and the ui. Strictly follow the opinionated Angular guidelines. For the components use an already existing Material library. I want you to create small, reusable components for the example skills+icon+tooltip.
-The admin pages can be fully deleted. These should be replaced by new javascript-based scripts in the package json. This should also help to reuse as much querying from wcl as possible. Ths scrips should be manually executed by a human and guide the user through any required inputs.
-At the end please remove any leftover legacy code.
