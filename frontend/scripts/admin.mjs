@@ -19,7 +19,7 @@
 import fs from 'fs';
 import path from 'path';
 import readline from 'readline';
-import { spawnSync } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -68,26 +68,43 @@ function getKnownSpecs() {
 
 // ── Clipboard ────────────────────────────────────────────────────────────────
 
-function trySpawn(cmd, args, input) {
+function trySpawnSync(cmd, args, input) {
   const r = spawnSync(cmd, args, { input, encoding: 'utf8', timeout: 3000 });
   return r.status === 0 && !r.error;
 }
 
-function copyToClipboard(text) {
+// wl-copy stays running as a clipboard provider (Wayland design) — must be detached
+function wlCopy(text) {
+  return new Promise(resolve => {
+    try {
+      const proc = spawn('wl-copy', [], {
+        detached: true,
+        stdio: ['pipe', 'ignore', 'ignore'],
+      });
+      proc.on('error', () => resolve(false));
+      proc.stdin.write(text, 'utf8');
+      proc.stdin.end();
+      proc.unref();
+      setTimeout(() => resolve(true), 150);
+    } catch {
+      resolve(false);
+    }
+  });
+}
+
+async function copyToClipboard(text) {
   if (process.platform === 'darwin') {
-    return trySpawn('pbcopy', [], text);
+    return trySpawnSync('pbcopy', [], text);
   }
   if (process.platform === 'win32') {
-    return trySpawn('clip', [], text);
+    return trySpawnSync('clip', [], text);
   }
   // Linux — try Wayland then X11
   const isWayland = !!process.env.WAYLAND_DISPLAY;
-  if (isWayland) {
-    if (trySpawn('wl-copy', [], text)) return true;
-  }
-  if (trySpawn('xclip', ['-selection', 'clipboard'], text)) return true;
-  if (trySpawn('xsel', ['--clipboard', '--input'], text)) return true;
-  if (!isWayland && trySpawn('wl-copy', [], text)) return true;
+  if (isWayland && await wlCopy(text)) return true;
+  if (trySpawnSync('xclip', ['-selection', 'clipboard'], text)) return true;
+  if (trySpawnSync('xsel', ['--clipboard', '--input'], text)) return true;
+  if (!isWayland && await wlCopy(text)) return true;
   return false;
 }
 
@@ -158,7 +175,7 @@ async function rulebookMenu(spec) {
         console.error(`\nError: ${err.message}`);
         continue;
       }
-      const copied = copyToClipboard(prompt);
+      const copied = await copyToClipboard(prompt);
       if (copied) {
         console.log(`\n✓ Prompt copied to clipboard (${prompt.length.toLocaleString()} chars). Paste it into your LLM.\n`);
       } else {
