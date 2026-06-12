@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { EncounterEntry, EncounterBench } from '../models/encounter.models';
 
-const DATA_BASE = '/data/specs/';
+const DATA_BASE = new URL('data/specs/', document.baseURI).href;
 
 @Injectable({ providedIn: 'root' })
 export class EncounterService {
