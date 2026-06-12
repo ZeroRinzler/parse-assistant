@@ -134,15 +134,24 @@ function buildPrompt(spec) {
 
 // ── Rulebook management ───────────────────────────────────────────────────────
 
-async function readMultilineInput(prompt) {
-  console.log(prompt);
-  console.log('(Paste the JSON, then press Enter + Ctrl+D when done)\n');
+// Reads pasted JSON by accumulating lines until JSON.parse succeeds.
+// Reuses the existing rl interface so the menu stays alive after pasting.
+function readJsonPaste() {
+  console.log('Paste the JSON output (auto-detects when complete):\n');
   return new Promise(resolve => {
-    let data = '';
-    const tmp = readline.createInterface({ input: process.stdin });
-    tmp.on('line', line => { data += line + '\n'; });
-    tmp.on('close', () => resolve(data.trim()));
-    rl.close(); // close the outer rl so stdin can be read
+    const lines = [];
+    const onLine = line => {
+      lines.push(line);
+      const acc = lines.join('\n').trim();
+      if (acc.startsWith('{') || acc.startsWith('[')) {
+        try {
+          JSON.parse(acc);
+          rl.removeListener('line', onLine);
+          resolve(acc);
+        } catch { /* keep reading */ }
+      }
+    };
+    rl.on('line', onLine);
   });
 }
 
@@ -190,7 +199,7 @@ async function rulebookMenu(spec) {
     }
 
     if (idx === 1) {
-      const json = await readMultilineInput('Paste the AI JSON output:');
+      const json = await readJsonPaste();
       try {
         const parsed = JSON.parse(json);
         if (!parsed.spec) parsed.spec = spec;
@@ -212,7 +221,7 @@ async function rulebookMenu(spec) {
         console.error(`\nFailed to parse JSON: ${err.message}`);
         console.error('Make sure you pasted the raw JSON object (starting with {, ending with }).');
       }
-      return; // stdin was closed during paste
+      continue;
     }
   }
 }
