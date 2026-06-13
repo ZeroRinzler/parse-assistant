@@ -1,0 +1,205 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://warcraft-learner/rulebook.schema.json",
+  "title": "warcraft-learner spec rulebook",
+  "description": "AI-generated rulebook for a single WoW specialization. Extract all major offensive cooldowns, all personal defensive cooldowns, and 5-10 high-signal rotation/cooldown usage rules from the supplied guide content. Output ONLY the raw JSON object - no markdown fences, no preamble. The first character must be '{' and the last must be '}'.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["spec", "major_cooldowns", "defensives", "rules", "source_summary"],
+  "properties": {
+    "spec": {
+      "type": "string",
+      "description": "WCL spec name, e.g. SubtletyRogue. Must match the spec being analysed."
+    },
+    "major_cooldowns": {
+      "type": "array",
+      "description": "All major cooldowns: abilities with a cooldown >= 30s that meaningfully affect damage output (or healing/tanking if applicable). Include on-use trinkets when the guide mentions specific timing for them.",
+      "items": { "$ref": "#/$defs/majorCooldown" }
+    },
+    "defensives": {
+      "type": "array",
+      "description": "REQUIRED and must be populated. Every personal defensive cooldown with a cooldown >= 15s: immunities, absorb shields, significant damage reductions (>= 20%), and meaningful self-heals. Do NOT include passive talents or stance toggles.",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/defensive" }
+    },
+    "rules": {
+      "type": "array",
+      "description": "5-10 high-signal rotation and cooldown usage rules: when to pair abilities, when to hold for Bloodlust, opener sequence, phase notes, pooling requirements, etc. Omit rules that are obvious, low-priority, or not checkable from cast timing alone.",
+      "items": { "$ref": "#/$defs/rule" }
+    },
+    "source_summary": {
+      "type": "string",
+      "description": "2-3 sentences summarising the cooldown strategy these guides recommend."
+    },
+    "guide_count": {
+      "type": "integer",
+      "description": "Added automatically by the admin CLI on save - do not populate manually."
+    },
+    "saved_at": {
+      "type": "string",
+      "description": "Added automatically by the admin CLI on save - do not populate manually."
+    }
+  },
+  "$defs": {
+    "majorCooldown": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "spell_id", "cooldown", "align_with_bloodlust", "usage_rule"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Exact ability name as it appears in-game."
+        },
+        "spell_id": {
+          "type": "integer",
+          "description": "WoW spell ID - REQUIRED. Prioritize the Active Ability Cast ID rather than a passive Aura, Classic WoW ID, or Talent Node ID. Verify at wowhead.com/spell=<id>. If genuinely unsure, supply your best guess and note it in usage_rule."
+        },
+        "cooldown": {
+          "type": "number",
+          "description": "Cooldown in seconds.",
+          "exclusiveMinimum": 0
+        },
+        "duration": {
+          "type": "number",
+          "description": "Optional. Active buff/window duration in seconds.",
+          "exclusiveMinimum": 0
+        },
+        "align_with_bloodlust": {
+          "type": "boolean",
+          "description": "true if the guide explicitly says to sync this with Bloodlust / Heroism / Time Warp. Default false if the guide does not mention it."
+        },
+        "opener_priority": {
+          "type": "integer",
+          "description": "Optional. Cast order in the opener (1 = first). Only set if the guide specifies a sequence.",
+          "minimum": 1
+        },
+        "usage_rule": {
+          "type": "string",
+          "description": "One sentence: when and how to use this cooldown."
+        }
+      }
+    },
+    "defensive": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "spell_id", "cooldown", "usage_rule"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Exact in-game ability name."
+        },
+        "spell_id": {
+          "type": "integer",
+          "description": "WoW spell ID - REQUIRED, same rule as major_cooldowns."
+        },
+        "cooldown": {
+          "type": "number",
+          "description": "Cooldown in seconds.",
+          "exclusiveMinimum": 0
+        },
+        "duration": {
+          "type": "number",
+          "description": "Optional. Buff duration in seconds.",
+          "exclusiveMinimum": 0
+        },
+        "usage_rule": {
+          "type": "string",
+          "description": "One sentence: when/why to press this button."
+        }
+      }
+    },
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "priority", "description", "action"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Rule category. cooldown_pairing: two abilities must be cast together or in sequence. cd_hold: an ability should be delayed until an anchor cooldown is available. opener: specific sequence or timing required at pull. rotation: ongoing priority or combo maintained throughout the fight. positioning: player must be in a specific location (melee range, behind target, etc.). aoe_switch: behavior changes when multiple targets are present.",
+          "enum": ["cooldown_pairing", "cd_hold", "opener", "rotation", "positioning", "aoe_switch"]
+        },
+        "priority": {
+          "type": "string",
+          "description": "critical (fundamentally breaks the spec if ignored), high (major DPS loss), medium (moderate optimization), low (minor min-maxing).",
+          "enum": ["critical", "high", "medium", "low"]
+        },
+        "description": {
+          "type": "string",
+          "description": "Short rule title shown in the UI (<= 60 chars)."
+        },
+        "condition": {
+          "description": "Machine-readable trigger. Use null when the rule does not map cleanly to a supported kind. Rules with condition null are never auto-detected - they surface as display-only text, so only include them if the action alone is worth showing to the player.",
+          "anyOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/castWithoutPrior" },
+            { "$ref": "#/$defs/holdCooldownForAnchor" }
+          ]
+        },
+        "action": {
+          "type": "string",
+          "description": "Second-person prescriptive instruction. Must tell the player what to DO, not describe what the rule checks. Good: 'Always cast Secret Technique within 5s of Shadow Dance.' Bad: 'Shadow Dance was cast without Secret Technique beforehand.'"
+        }
+      }
+    },
+    "castWithoutPrior": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Flag each cast of spell_id that is not paired with required_spell_id within window_s seconds.",
+      "required": ["kind", "spell_id", "spell_name", "required_spell_id", "required_spell_name", "window_s"],
+      "properties": {
+        "kind": { "const": "cast_without_prior" },
+        "spell_id": { "type": "integer", "description": "The spell whose casts are checked." },
+        "spell_name": { "type": "string" },
+        "required_spell_id": { "type": "integer", "description": "The companion spell that must precede/accompany spell_id." },
+        "required_spell_name": { "type": "string" },
+        "window_s": { "type": "number", "description": "Seconds within which the required spell must appear.", "exclusiveMinimum": 0 },
+        "exception": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Optional. Exempt casts that occur within a specific context window (e.g. during a major 2-minute cooldown window).",
+          "required": ["context_spell_id", "context_window_s", "position"],
+          "properties": {
+            "context_spell_id": { "type": "integer" },
+            "context_window_s": { "type": "number", "exclusiveMinimum": 0 },
+            "position": { "type": "string", "enum": ["before", "after"] }
+          }
+        }
+      },
+      "examples": [
+        {
+          "kind": "cast_without_prior",
+          "spell_id": 185313,
+          "spell_name": "Shadow Dance",
+          "required_spell_id": 280719,
+          "required_spell_name": "Secret Technique",
+          "window_s": 5,
+          "exception": { "context_spell_id": 121471, "context_window_s": 20, "position": "before" }
+        }
+      ]
+    },
+    "holdCooldownForAnchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Flag casts of spell_ids that land within hold_window_s seconds before a non-opener cast of anchor_spell_id.",
+      "required": ["kind", "spell_ids", "spell_names", "anchor_spell_id", "anchor_spell_name", "hold_window_s"],
+      "properties": {
+        "kind": { "const": "hold_cooldown_for_anchor" },
+        "spell_ids": { "type": "array", "items": { "type": "integer" }, "description": "Spells that should be held for the anchor." },
+        "spell_names": { "type": "array", "items": { "type": "string" } },
+        "anchor_spell_id": { "type": "integer", "description": "The anchor cooldown the spells should be saved for." },
+        "anchor_spell_name": { "type": "string" },
+        "hold_window_s": { "type": "number", "description": "Seconds before the anchor cast within which the held spells are flagged.", "exclusiveMinimum": 0 }
+      },
+      "examples": [
+        {
+          "kind": "hold_cooldown_for_anchor",
+          "spell_ids": [185313, 280719],
+          "spell_names": ["Shadow Dance", "Secret Technique"],
+          "anchor_spell_id": 121471,
+          "anchor_spell_name": "Shadow Blades",
+          "hold_window_s": 15
+        }
+      ]
+    }
+  }
+}

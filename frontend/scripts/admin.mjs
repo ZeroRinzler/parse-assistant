@@ -21,12 +21,14 @@ import path from 'path';
 import readline from 'readline';
 import { spawn, spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
+import Ajv from 'ajv';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const FRONTEND_ROOT = path.resolve(__dirname, '..');
 const DATA_DIR = path.join(FRONTEND_ROOT, 'public', 'data', 'specs');
 const PROMPTS_DIR = path.resolve(__dirname, '..', '..', 'prompts');
+const SCHEMA_PATH = path.join(PROMPTS_DIR, 'rulebook.schema.json');
 const MAX_GUIDE_CHARS = 60_000;
 
 // ── Readline helpers ──────────────────────────────────────────────────────────
@@ -110,12 +112,25 @@ async function copyToClipboard(text) {
 
 // ── Prompt building ───────────────────────────────────────────────────────────
 
+function loadSchema() {
+  if (!fs.existsSync(SCHEMA_PATH)) throw new Error(`Schema file not found: ${SCHEMA_PATH}`);
+  const raw = fs.readFileSync(SCHEMA_PATH, 'utf8');
+  try {
+    return { text: raw, schema: JSON.parse(raw) };
+  } catch (err) {
+    throw new Error(`Schema file is not valid JSON: ${err.message}`);
+  }
+}
+
 function buildPrompt(spec) {
   const skillPath = path.join(PROMPTS_DIR, 'rulebook_skill.md');
   if (!fs.existsSync(skillPath)) throw new Error(`Skill file not found: ${skillPath}`);
 
+  const { text: schemaText } = loadSchema();
+
   let skill = fs.readFileSync(skillPath, 'utf8');
   skill = skill.replace(/\{\{spec\}\}/g, spec);
+  skill = skill.replace(/\{\{schema\}\}/g, () => schemaText.trim());
 
   const guidesPath = path.join(DATA_DIR, spec, 'guides.json');
   const guides = readJson(guidesPath) || [];
@@ -130,6 +145,28 @@ function buildPrompt(spec) {
   );
 
   return `${skill}\n\n## Guide Content\n\n${sections.join('\n\n')}`;
+}
+
+// ── JSON Schema validation ──────────────────────────────────────────────────
+//
+// Validates pasted rulebook JSON against prompts/rulebook.schema.json using
+// ajv (draft-07). strict:false silences ajv's warnings about the draft-2019
+// $defs/examples annotation keywords, which it still resolves correctly.
+
+let _validator = null;
+function getValidator() {
+  if (_validator) return _validator;
+  const { schema } = loadSchema();
+  const ajv = new Ajv({ allErrors: true, strict: false });
+  _validator = ajv.compile(schema);
+  return _validator;
+}
+
+// Returns an array of human-readable error strings (empty = valid).
+function validateRulebook(value) {
+  const validate = getValidator();
+  if (validate(value)) return [];
+  return (validate.errors || []).map(e => `${e.instancePath || '(root)'} ${e.message}`);
 }
 
 // ── Rulebook management ───────────────────────────────────────────────────────
@@ -204,6 +241,15 @@ async function rulebookMenu(spec) {
         const parsed = JSON.parse(json);
         if (!parsed.spec) parsed.spec = spec;
 
+        const errors = validateRulebook(parsed);
+        if (errors.length) {
+          console.error(`\n✗ Pasted JSON failed schema validation (${errors.length} error(s)):`);
+          errors.slice(0, 20).forEach(e => console.error(`  - ${e}`));
+          if (errors.length > 20) console.error(`  ...and ${errors.length - 20} more`);
+          console.error('\nRulebook NOT saved. Fix the issues and paste again.');
+          continue;
+        }
+
         const guidesPath = path.join(DATA_DIR, spec, 'guides.json');
         const guides = readJson(guidesPath) || [];
         const guideCount = guides.filter(g => g.status === 'scraped').length;
@@ -260,7 +306,12 @@ async function main() {
   rl.close();
 }
 
-main().catch(err => {
-  console.error('\nFatal error:', err.message);
-  process.exit(1);
-});
+// Only run the interactive CLI when invoked directly (not when imported, e.g. by tests).
+if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
+  main().catch(err => {
+    console.error('\nFatal error:', err.message);
+    process.exit(1);
+  });
+}
+
+export { loadSchema, buildPrompt, validateRulebook };
