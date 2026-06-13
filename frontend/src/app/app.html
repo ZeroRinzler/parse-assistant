@@ -1,4 +1,7 @@
 <wl-page-nav></wl-page-nav>
 <main>
+  @if (!isLoggedIn() && !isCallbackRoute()) {
+    <wl-auth-banner />
+  }
   <router-outlet />
 </main>

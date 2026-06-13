@@ -1,7 +1,4 @@
-@if (!isLoggedIn()) {
-  <wl-auth-banner></wl-auth-banner>
-} @else {
-  <div class="container">
+<div class="container">
     @if (error()) {
       <div class="error-msg">⚠ {{ error() }}</div>
     }
@@ -156,5 +153,4 @@
         </mat-card>
       }
     }
-  </div>
-}
+</div>

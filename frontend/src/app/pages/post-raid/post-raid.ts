@@ -13,7 +13,6 @@ import { AnalysisService } from '../../core/services/analysis';
 import { IconCacheService } from '../../core/services/icon-cache';
 import { WclFight, WclPlayer } from '../../core/models/wcl.models';
 import { AnalysisResult } from '../../core/models/analysis.models';
-import { AuthBannerComponent } from '../../shared/components/auth-banner/auth-banner';
 import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner/loading-spinner';
 import { AnalysisResultComponent } from './analysis-result/analysis-result';
 import { FormatDurationPipe } from '../../shared/pipes/format-duration-pipe';
@@ -30,7 +29,7 @@ function extractCode(url: string): string {
   imports: [
     ReactiveFormsModule, MatFormFieldModule, MatInputModule, MatSelectModule,
     MatButtonModule, MatCardModule,
-    AuthBannerComponent, LoadingSpinnerComponent, AnalysisResultComponent,
+    LoadingSpinnerComponent, AnalysisResultComponent,
     FormatDurationPipe, FormatSpecPipe,
   ],
   templateUrl: './post-raid.html',
@@ -43,8 +42,6 @@ export class PostRaidComponent implements OnInit {
   private readonly icons = inject(IconCacheService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
-
-  protected readonly isLoggedIn = this.auth.isLoggedIn;
 
   protected readonly reportControl = new FormControl('', { nonNullable: true });
   protected readonly fightControl = new FormControl<number | null>(null);

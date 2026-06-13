@@ -14,7 +14,6 @@ import { EncounterService } from '../../core/services/encounter';
 import { CharacterInfo, CharacterGear, WclUserCharacter } from '../../core/models/wcl.models';
 import { EncounterEntry, EncounterBench, EncounterGearStats } from '../../core/models/encounter.models';
 import { Rulebook } from '../../core/models/rulebook.models';
-import { AuthBannerComponent } from '../../shared/components/auth-banner/auth-banner';
 import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner/loading-spinner';
 import { FormatDurationPipe } from '../../shared/pipes/format-duration-pipe';
 import { FormatSpecPipe } from '../../shared/pipes/format-spec-pipe';
@@ -32,7 +31,7 @@ const SLOT_NAMES: Record<number, string> = {
   imports: [
     ReactiveFormsModule, MatFormFieldModule, MatInputModule, MatSelectModule,
     MatButtonModule, MatCardModule, MatIconModule,
-    AuthBannerComponent, LoadingSpinnerComponent, FormatDurationPipe, FormatSpecPipe,
+    LoadingSpinnerComponent, FormatDurationPipe, FormatSpecPipe,
   ],
   templateUrl: './pre-fight.html',
   styleUrl: './pre-fight.scss',
@@ -43,8 +42,6 @@ export class PreFightComponent implements OnInit {
   private readonly encounterSvc = inject(EncounterService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
-
-  protected readonly isLoggedIn = this.auth.isLoggedIn;
 
   protected readonly linkedCharControl = new FormControl<WclUserCharacter | null>(null);
   protected readonly manualSpecControl = new FormControl('', { nonNullable: true });

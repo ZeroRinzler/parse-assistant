@@ -10,7 +10,6 @@ import { WclApiService } from '../../core/services/wcl-api';
 import { AnalysisService } from '../../core/services/analysis';
 import { AnalysisResult } from '../../core/models/analysis.models';
 import { WclFight } from '../../core/models/wcl.models';
-import { AuthBannerComponent } from '../../shared/components/auth-banner/auth-banner';
 import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner/loading-spinner';
 import { AnalysisResultComponent } from '../post-raid/analysis-result/analysis-result';
 
@@ -27,7 +26,7 @@ function extractCode(url: string): string {
   imports: [
     ReactiveFormsModule, MatFormFieldModule, MatInputModule, MatButtonModule,
     MatCardModule, MatChipsModule,
-    AuthBannerComponent, LoadingSpinnerComponent, AnalysisResultComponent,
+    LoadingSpinnerComponent, AnalysisResultComponent,
   ],
   templateUrl: './live.html',
   styleUrl: './live.scss',
@@ -36,8 +35,6 @@ export class LiveComponent implements OnInit, OnDestroy {
   private readonly auth = inject(WclAuthService);
   private readonly wclApi = inject(WclApiService);
   private readonly analysisSvc = inject(AnalysisService);
-
-  protected readonly isLoggedIn = this.auth.isLoggedIn;
 
   protected readonly reportControl = new FormControl('', { nonNullable: true });
   protected readonly loading = signal(false);
