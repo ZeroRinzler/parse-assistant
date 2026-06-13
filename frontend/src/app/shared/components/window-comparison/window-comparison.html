@@ -1,0 +1,69 @@
+@for (w of windows(); track $index; let i = $index) {
+
+  <mat-card class="mt-2">
+    <!-- Header: status glyph, time range, spell icons, detail toggle -->
+    <mat-card-header class="items-center">
+      <mat-icon
+        [class.badge-success]="w.status === 'good'"
+        [class.badge-warning]="w.status === 'warn'"
+        [class.badge-critical]="w.status === 'bad'">
+        {{ w.statusIcon }}
+      </mat-icon>
+      <span class="mr-auto tabular-nums">{{ w.timeStartS | formatDuration }} - {{ w.timeEndS | formatDuration }}</span>
+      @for (sid of w.spellIds; track sid) {
+        <wl-spell-icon class="mr-2" [spellId]="sid"></wl-spell-icon>
+      }
+      @for (lbl of w.labels; track lbl) {
+        <span class="mr-2 text-[var(--muted)]">{{ lbl }}</span>
+      }
+      @if (w.detailRows.length) {
+        <button class="mr-2" mat-icon-button (click)="toggle(i)">
+          <mat-icon>{{ isOpen(i) ? 'expand_less' : 'expand_more' }}</mat-icon>
+        </button>
+      }
+    </mat-card-header>
+
+    <mat-card-content>
+      <!-- Overview range chart: always visible -->
+      <div>
+        <wl-range-chart
+          [rows]="[w.overview]"
+          unit="pct"
+          [higherIsBetter]="higherIsBetter()"
+          [maxVal]="overviewMax()"
+          [showLegend]="true"
+          [showLabels]="false"
+          [rowHeight]="34">
+        </wl-range-chart>
+      </div>
+
+      <!-- Detail: spell icon column beside the per-ability chart -->
+      @if (isOpen(i) && w.detailRows.length) {
+        <mat-divider></mat-divider>
+        <div class="flex items-start">
+          <div class="flex flex-col shrink-0">
+            @for (row of w.detailRows; track row.spellId) {
+              <div class="h-[52px] flex items-center">
+                @if (row.spellId) {
+                  <wl-spell-icon [spellId]="row.spellId"></wl-spell-icon>
+                }
+              </div>
+            }
+            <div class="h-7"></div>
+          </div>
+          <div class="flex-1 min-w-0">
+            <wl-range-chart
+              [rows]="w.detailRows"
+              unit="pct"
+              [higherIsBetter]="higherIsBetter()"
+              [maxVal]="detailMax(i)"
+              [showLabels]="false"
+              [showLegend]="false">
+            </wl-range-chart>
+          </div>
+        </div>
+      }
+    </mat-card-content>
+  </mat-card>
+
+}

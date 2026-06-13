@@ -1,10 +1,9 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, OnChanges } from '@angular/core';
-import { MatExpansionModule } from '@angular/material/expansion';
+import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { AnalysisResult as IAnalysisResult, AnalysisFinding } from '../../../core/models/analysis.models';
 import { IconCacheService } from '../../../core/services/icon-cache';
-import { FormatSpecPipe } from '../../../shared/pipes/format-spec-pipe';
-import { SpellIconComponent } from '../../../shared/components/spell-icon/spell-icon';
+import { FindingEntry, FindingListComponent } from '../../../shared/components/finding-list/finding-list';
 import { BurstWindowsComponent } from '../burst-windows/burst-windows';
 import { DefensivesSectionComponent } from '../defensives-section/defensives-section';
 import { DamageTakenComponent } from '../damage-taken/damage-taken';
@@ -23,12 +22,10 @@ const CAT_LABEL: Record<string, string> = {
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-analysis-result',
   imports: [
-    MatExpansionModule, MatIconModule, SpellIconComponent,
-    FormatSpecPipe,
+    MatCardModule, MatIconModule, FindingListComponent,
     BurstWindowsComponent, DefensivesSectionComponent, DamageTakenComponent,
   ],
   templateUrl: './analysis-result.html',
-  styleUrl: './analysis-result.scss',
 })
 export class AnalysisResultComponent implements OnChanges {
   private readonly icons = inject(IconCacheService);
@@ -62,7 +59,7 @@ export class AnalysisResultComponent implements OnChanges {
     return { byCD, ruleFindings };
   });
 
-  protected readonly cdEntries = computed(() =>
+  protected readonly cdEntries = computed<FindingEntry[]>(() =>
     Object.entries(this.cdBuckets().byCD).map(([name, bucket]) => {
       const hasCritical = bucket.issues.some(f => f.severity === 'critical');
       const hasIssue = bucket.issues.length > 0 || bucket.holds.length > 0;
@@ -73,18 +70,12 @@ export class AnalysisResultComponent implements OnChanges {
       }
       if (bucket.holds.length) metaItems.push(`${bucket.holds.length} hold tip${bucket.holds.length > 1 ? 's' : ''}`);
       return {
-        name, bucket, spellId: this.data().cd_spell_ids?.[name] ?? null,
+        name, spellId: this.data().cd_spell_ids?.[name] ?? null,
         hasCritical, hasIssue, metaItems,
-        allFindings: [...bucket.issues, ...bucket.holds],
+        findings: [...bucket.issues, ...bucket.holds],
       };
     })
   );
-
-  protected formatMs(ms: number | undefined): string {
-    if (ms == null) return '';
-    const s = ms / 1000;
-    return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
-  }
 
   ngOnChanges(): void {
     const d = this.data();
@@ -93,6 +84,8 @@ export class AnalysisResultComponent implements OnChanges {
       ...Object.values(d.cd_spell_ids || {}),
       ...(d.burst_windows || []).flatMap(bw => (bw.ability_breakdown || []).map(a => a.spell_id)),
       ...(d.player_defensives || []).map(def => def.spell_id),
+      ...(d.player_dmg_taken_by_ability || []).map(a => a.spell_id),
+      ...(d.top_dtk_comparison || []).map(t => t.spell_id),
     ];
     const missing = allIds.filter(id => !this.icons.get(id));
     if (missing.length) this.icons.fetchMissing(missing);

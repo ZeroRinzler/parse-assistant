@@ -30,10 +30,10 @@ export class IconCacheService {
     return this._cache()[String(spellId)] ?? null;
   }
 
-  iconUrl(spellId: number | string, size: 'small' | 'medium' | 'large' = 'small'): string | null {
+  iconUrl(spellId: number | string): string | null {
     const info = this.get(spellId);
     if (!info?.icon) return null;
-    return `https://wow.zamimg.com/images/wow/icons/${size}/${info.icon}.jpg`;
+    return `https://wow.zamimg.com/images/wow/icons/small/${info.icon}.jpg`;
   }
 
   fetchMissing(_spellIds: number[]): void {

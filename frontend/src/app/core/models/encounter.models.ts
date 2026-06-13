@@ -1,4 +1,4 @@
-import { TopDefensiveSummary, TopDtkComparison, DmgTakenSegment } from './analysis.models';
+import { TopDefensiveSummary, TopDtkComparison } from './analysis.models';
 
 export interface EncounterEntry {
   id: number;
@@ -59,7 +59,6 @@ export interface EncounterBench {
   gear?: EncounterGearStats;
   top_defensives_summary?: TopDefensiveSummary[];
   top_dtk_comparison?: TopDtkComparison[];
-  top_dtk_segments?: DmgTakenSegment[];
 }
 
 export interface DefensiveWindowBench {

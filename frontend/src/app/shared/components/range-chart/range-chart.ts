@@ -41,7 +41,7 @@ interface OverlayPoint {
     @if (showLegend()) {
       <div class="rc-legend">
         <span class="rc-li"><span class="rc-sw range"></span>Top range</span>
-        <span class="rc-li"><span class="rc-sw avg"></span>Top avg</span>
+        <span class="rc-li"><span class="rc-sw avg"></span>Top average</span>
         <span class="rc-li"><span class="rc-sw you"></span>You</span>
       </div>
     }
@@ -73,7 +73,7 @@ export class RangeChartComponent implements AfterViewInit, OnChanges, OnDestroy 
   readonly higherIsBetter = input<boolean>(true);
   // Fix the x-axis maximum so multiple charts (e.g. per-window cards) share a scale.
   readonly maxVal = input<number | null>(null);
-  // Show the built-in "Top range / Top avg / You" legend.
+  // Show the built-in "Top range / Top average / You" legend.
   readonly showLegend = input<boolean>(true);
   // Show the category (y-axis) tick labels. Disable for single-row charts where
   // the surrounding card already provides context.
@@ -228,8 +228,8 @@ export class RangeChartComponent implements AfterViewInit, OnChanges, OnDestroy 
                 if (!items.length) return [];
                 const r = rows[items[0].dataIndex];
                 const top = r.topAvg != null
-                  ? `Top avg: ${this.fmt(r.topAvg)} (${this.fmt(r.topMin)}–${this.fmt(r.topMax)})`
-                  : 'Top avg: -';
+                  ? `Top average: ${this.fmt(r.topAvg)} (${this.fmt(r.topMin)}–${this.fmt(r.topMax)})`
+                  : 'Top average: -';
                 return [`You: ${this.fmt(r.playerPct)}`, top];
               },
             },

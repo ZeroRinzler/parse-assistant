@@ -68,7 +68,6 @@ export function computeAnalysis(input: AnalysisInput): AnalysisResult {
     if (bench.burst_windows?.length) result.burst_windows = bench.burst_windows;
     if (bench.top_defensives_summary?.length) result.top_defensives_summary = bench.top_defensives_summary;
     if (bench.top_dtk_comparison?.length) result.top_dtk_comparison = bench.top_dtk_comparison;
-    if (bench.top_dtk_segments?.length) result.top_dtk_segments = bench.top_dtk_segments;
   }
 
   if (result.burst_windows?.length) {
@@ -90,8 +89,7 @@ export function computeAnalysis(input: AnalysisInput): AnalysisResult {
     result.player_defensive_windows = _computePlayerDefensiveWindows(topDefWindows, dtEvents, fStart);
   }
 
-  const dtk = _analyzeDamageTaken(dtEvents, abilityMap, fStart, fEnd);
-  result.player_dmg_taken_segment_pcts = dtk.segmentPcts;
+  const dtk = _analyzeDamageTaken(dtEvents, abilityMap);
   result.player_dmg_taken_by_ability = dtk.top;
   result.player_total_dmg_taken = dtk.total;
 
@@ -217,7 +215,7 @@ function _analyzeCore(
       const effPct = Math.max(0, (1 - totalDtS / fightDurS) * 100);
       const severity: Severity = effPct - topE < -topSD ? 'critical' : 'warning';
       findings.push({ severity, category: 'cast_efficiency',
-        message: `Cast efficiency: ${effPct.toFixed(1)}% (top avg ${topE.toFixed(0)}%) - ${totalDtS.toFixed(1)}s in gaps.` });
+        message: `Cast efficiency: ${effPct.toFixed(1)}% (Top average ${topE.toFixed(0)}%) - ${totalDtS.toFixed(1)}s in gaps.` });
     }
   }
 
@@ -446,23 +444,18 @@ function _analyzeDefensives(
 }
 
 function _analyzeDamageTaken(
-  dtEvents: WclEvent[], abilityMap: Record<string, { name: string }>, fStart: number, fEnd: number,
-): { segmentPcts: number[]; top: Array<{ spell_id: number; name: string; damage: number; pct: number }>; total: number } {
-  const fightDurS = (fEnd - fStart) / 1000, segS = 30;
-  const nSegs = Math.max(1, Math.floor(fightDurS / segS) + 1);
-  const segs = Array(nSegs).fill(0);
+  dtEvents: WclEvent[], abilityMap: Record<string, { name: string }>,
+): { top: Array<{ spell_id: number; name: string; damage: number; pct: number }>; total: number } {
   const byAb: Record<number, number> = {};
+  let total = 0;
   for (const e of dtEvents) {
     const amt = (e.amount || 0) + (e.absorbed || 0); if (!amt) continue;
-    const tS = (e.timestamp - fStart) / 1000;
-    segs[Math.min(Math.floor(tS / segS), nSegs - 1)] += amt;
+    total += amt;
     if (e.abilityGameID) byAb[e.abilityGameID] = (byAb[e.abilityGameID] || 0) + amt;
   }
-  const total = segs.reduce((a, b) => a + b, 0);
-  const segmentPcts = segs.map(s => total ? Math.round(s / total * 10000) / 10000 : 0);
   const top = Object.entries(byAb).sort((a, b) => b[1] - a[1]).slice(0, 10)
     .map(([sid, dmg]) => ({ spell_id: parseInt(sid, 10), name: abilityMap[sid]?.name || '', damage: Math.round(dmg), pct: total ? Math.round(dmg / total * 1000) / 1000 : 0 }));
-  return { segmentPcts, top, total: Math.round(total) };
+  return { top, total: Math.round(total) };
 }
 
 function _sortBySeverity(findings: AnalysisFinding[]): void {

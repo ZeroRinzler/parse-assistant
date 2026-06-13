@@ -1,108 +1,14 @@
-<p class="section-label">Defensives</p>
+<p class="mt-6 text-xl font-medium">Defensives</p>
+<p class="text-sm text-[var(--muted)]">How your defensive cooldowns compare to top parses - expand a row for details.</p>
 
 <!-- Per-defensive findings -->
 @if (defEntries().length > 0) {
-  <div class="cd-list">
-    @for (entry of defEntries(); track entry.name) {
-      <mat-expansion-panel
-        [class.panel-warning]="entry.hasIssue && !entry.hasCritical"
-        [class.panel-critical]="entry.hasCritical"
-        [expanded]="entry.hasIssue"
-        [disabled]="!entry.hasIssue">
-        <mat-expansion-panel-header>
-          <mat-panel-title class="cd-panel-title">
-            <div class="cd-dot"
-                 [class.dot-warn]="entry.hasIssue && !entry.hasCritical"
-                 [class.dot-crit]="entry.hasCritical"></div>
-            @if (entry.spellId) {
-              <wl-spell-icon [spellId]="entry.spellId"></wl-spell-icon>
-            }
-            <span class="cd-name">{{ entry.name }}</span>
-          </mat-panel-title>
-          @if (entry.metaItems.length) {
-            <mat-panel-description class="cd-meta">
-              @for (item of entry.metaItems; track item; let last = $last) {
-                <span class="cd-meta-item">{{ item }}</span>{{ !last ? ' · ' : '' }}
-              }
-            </mat-panel-description>
-          }
-        </mat-expansion-panel-header>
-
-        <div class="cd-findings">
-          @for (f of entry.allFindings; track f.message) {
-            <div class="cd-issue">
-              @if (f.timestamp_ms != null) {
-                <span class="cd-issue-ts">{{ formatMs(f.timestamp_ms) }}</span>
-              }
-              <span class="cd-issue-msg">{{ f.message }}</span>
-              @if (f.details?.remedy) {
-                <div class="cd-remedy">{{ f.details!.remedy }}</div>
-              }
-            </div>
-          }
-        </div>
-      </mat-expansion-panel>
-    }
-  </div>
+  <wl-finding-list [entries]="defEntries()"></wl-finding-list>
 }
 
 <!-- Defensive windows: when top parsers use each defensive and how much damage they absorbed -->
-@if (topDefWindows().length > 0) {
-  <p class="section-label" style="margin-top:18px">Defensive Windows</p>
-  <p class="section-note">Each bar is the damage taken while the defensive was active, as a share of your total damage taken this fight - lower is better.</p>
-  <div class="cmp-legend">
-    <span class="cmp-leg-item"><span class="cmp-leg player"></span> You</span>
-    <span class="cmp-leg-item"><span class="cmp-leg top"></span> Top 10 avg <span class="cmp-range-note">(shaded range)</span></span>
-  </div>
-  <div class="bw-list">
-    @for (card of dwCards(); track card.idx) {
-      <div class="bw-card" [class]="card.cls" [class.expanded]="expandedIdx() === card.idx">
-        <div class="bw-card-header">
-          <span class="bw-time">{{ card.dw.time_s | formatDuration }}</span>
-          <span class="bw-status-badge" [class]="'bw-badge-' + card.cls">{{ card.badge }}</span>
-          <span class="bw-cds">
-            @if (card.spellId) {
-              <wl-spell-icon [spellId]="card.spellId" size="small"></wl-spell-icon>
-            }
-            {{ card.defensiveName }}
-            <span class="bw-win-len">({{ card.winLenS }}s)</span>
-          </span>
-          @if (card.dw.ability_breakdown?.length) {
-            <button class="bw-expand-btn" (click)="toggleExpand(card.idx); $event.stopPropagation()">
-              Detail {{ expandedIdx() === card.idx ? '▴' : '▾' }}
-            </button>
-          }
-        </div>
-
-        <div class="bw-cmp-wrap" [class.bw-future-wrap]="card.notReached">
-          <wl-range-chart
-            [rows]="card.rangeRows"
-            unit="pct"
-            [higherIsBetter]="false"
-            [maxVal]="maxDwVal()"
-            [showLegend]="false"
-            [showLabels]="false"
-            [rowHeight]="34">
-          </wl-range-chart>
-          @if (!card.notReached) {
-            <div class="bw-cmp-caption">
-              <span class="bw-cmp-you">You {{ card.playerPct != null ? (card.playerPct * 100 | number:'1.1-1') + '%' : '-' }}</span>
-              <span class="bw-cmp-top">Top {{ (card.topPct * 100 | number:'1.1-1') }}% ({{ (card.minPct * 100 | number:'1.1-1') }}–{{ (card.maxPct * 100 | number:'1.1-1') }}%)</span>
-            </div>
-          }
-        </div>
-
-        <!-- Ability breakdown chart -->
-        @if (expandedIdx() === card.idx && card.dw.ability_breakdown?.length) {
-          <div class="bw-breakdown">
-            @defer (on immediate) {
-              <wl-range-chart [rows]="dwAbChartRows(card.idx)" unit="pct" [higherIsBetter]="false"></wl-range-chart>
-            } @placeholder {
-              <div class="chart-placeholder"></div>
-            }
-          </div>
-        }
-      </div>
-    }
-  </div>
+@if (defWindows().length > 0) {
+  <p class="mt-6 text-xl font-medium">Defensive Windows</p>
+  <p class="text-sm text-[var(--muted)]">Each bar is the damage taken while the defensive was active, as a share of your total damage taken this fight - lower is better.</p>
+  <wl-window-comparison [windows]="defWindows()" [higherIsBetter]="false"></wl-window-comparison>
 }

@@ -814,23 +814,18 @@ async function analyzeParse(wcl, spec, reportCode, fightId, playerName, combatan
   const defensiveWindows = findDefensiveWindows(damageTakenEvents, start, buffWindows, specDefensives);
 
   // Damage taken analysis
-  const segmentS = 30;
-  const nSegments = Math.max(1, Math.floor(fightDurS / segmentS) + 1);
-  const dmgSegments = new Array(nSegments).fill(0);
   const abilityDmgTaken = new Map();
+  let totalDmgTaken = 0;
 
   for (const e of damageTakenEvents) {
     if (e.type !== 'damage') continue;
     const amt = (e.amount || 0) + (e.absorbed || 0);
     if (!amt) continue;
-    const tS = (e.timestamp - start) / 1000;
-    const seg = Math.min(Math.floor(tS / segmentS), nSegments - 1);
-    dmgSegments[seg] += amt;
+    totalDmgTaken += amt;
     const sid = e.abilityGameID;
     if (sid) abilityDmgTaken.set(sid, (abilityDmgTaken.get(sid) || 0) + amt);
   }
 
-  const totalDmgTaken = dmgSegments.reduce((s, v) => s + v, 0);
   const topDmgAbilities = [...abilityDmgTaken.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, 8)
@@ -851,7 +846,6 @@ async function analyzeParse(wcl, spec, reportCode, fightId, playerName, combatan
     burst_windows: burstWindows,
     defensives: defensiveSummary,
     defensive_windows: defensiveWindows,
-    dmg_taken_segments: dmgSegments,
     dmg_taken_by_ability: topDmgAbilities,
     total_dmg_taken: totalDmgTaken,
     talent_key: gearData.talent_key || '',
@@ -1318,30 +1312,6 @@ function syncEncounterFile(spec, encounterId) {
   topDtkComparison.sort((a, b) => b.avg_pct - a.avg_pct);
   const topDtkComparisonTrimmed = topDtkComparison.slice(0, 12);
 
-  // Per-segment damage taken comparison
-  const segPctLists = [];
-  for (const s of samples) {
-    const cd = s.cooldown_data || {};
-    const segs = cd.dmg_taken_segments || [];
-    const total = cd.total_dmg_taken || segs.reduce((a, b) => a + b, 0) || 0;
-    if (total > 0) segPctLists.push(segs.map(seg => seg / total));
-  }
-
-  const topDtkSegments = [];
-  if (segPctLists.length) {
-    const maxSegs = Math.max(...segPctLists.map(s => s.length));
-    for (let i = 0; i < maxSegs; i++) {
-      const vals = segPctLists.filter(s => i < s.length).map(s => s[i]);
-      if (!vals.length) continue;
-      topDtkSegments.push({
-        seg_index: i,
-        avg_pct: round(mean(vals), 4),
-        stddev_pct: vals.length > 1 ? round(stdev(vals), 4) : 0,
-        sample_count: vals.length,
-      });
-    }
-  }
-
   const out = {
     spec, encounter_id: encounterId, encounter_name: encName,
     sample_count: samples.length,
@@ -1357,7 +1327,6 @@ function syncEncounterFile(spec, encounterId) {
     per_defensive_benchmarks: perDefensiveBenchmarks,
     defensive_windows: defensiveWindowsClustered,
     top_dtk_comparison: topDtkComparisonTrimmed,
-    top_dtk_segments: topDtkSegments,
   };
 
   const encPath = getEncounterPath(spec, encounterId);

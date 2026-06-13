@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, OnInit, OnDestroy, inject, signal } from '@angular/core';
+import { Router } from '@angular/router';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -35,6 +36,7 @@ export class LiveComponent implements OnInit, OnDestroy {
   private readonly auth = inject(WclAuthService);
   private readonly wclApi = inject(WclApiService);
   private readonly analysisSvc = inject(AnalysisService);
+  private readonly router = inject(Router);
 
   protected readonly reportControl = new FormControl('', { nonNullable: true });
   protected readonly loading = signal(false);
@@ -95,6 +97,14 @@ export class LiveComponent implements OnInit, OnDestroy {
     if (this._pollTimer) { clearInterval(this._pollTimer); this._pollTimer = null; }
   }
 
+  private _syncUrl(fightId: number, playerId: number): void {
+    const p: Record<string, string> = {};
+    if (this._reportCode) p['report'] = this._reportCode;
+    if (fightId) p['fight'] = String(fightId);
+    if (playerId) p['player'] = String(playerId);
+    this.router.navigate([], { queryParams: p, replaceUrl: true });
+  }
+
   private async _poll(): Promise<void> {
     this.error.set('');
     this.status.set('Checking for new pulls…');
@@ -118,6 +128,7 @@ export class LiveComponent implements OnInit, OnDestroy {
       const playerMatch = this._players.find(p => names.has(p.name.toLowerCase())) ?? this._players[0];
       if (!playerMatch) { this.loading.set(false); this.status.set('No player found.'); return; }
 
+      this._syncUrl(latestFight.id, playerMatch.id);
       const data = await this.analysisSvc.analyze(this._reportCode, latestFight.id, playerMatch.id, this._fights, this._masterAbilities);
       this.result.set(data);
       this.status.set(`Updated at ${new Date().toLocaleTimeString()} - ${latestFight.name}`);

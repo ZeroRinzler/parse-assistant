@@ -1,10 +1,12 @@
-import { ChangeDetectionStrategy, Component, computed, input, signal } from '@angular/core';
-import { DecimalPipe } from '@angular/common';
-import { MatExpansionModule } from '@angular/material/expansion';
+import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { AnalysisFinding, PlayerDefensive, BurstWindow, PlayerBurstWindow } from '../../../core/models/analysis.models';
-import { FormatDurationPipe } from '../../../shared/pipes/format-duration-pipe';
-import { SpellIconComponent } from '../../../shared/components/spell-icon/spell-icon';
-import { RangeChartComponent, RangeRow } from '../../../shared/components/range-chart/range-chart';
+import { IconCacheService } from '../../../core/services/icon-cache';
+import { FindingEntry, FindingListComponent } from '../../../shared/components/finding-list/finding-list';
+import {
+  ComparisonWindow,
+  WindowComparisonComponent,
+  WindowStatus,
+} from '../../../shared/components/window-comparison/window-comparison';
 
 const CAT_LABEL: Record<string, string> = {
   lost_cooldown: 'lost cast',
@@ -19,20 +21,19 @@ interface CdBucket { issues: AnalysisFinding[]; holds: AnalysisFinding[]; succes
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-defensives-section',
-  imports: [MatExpansionModule, SpellIconComponent, RangeChartComponent, FormatDurationPipe, DecimalPipe],
+  imports: [FindingListComponent, WindowComparisonComponent],
   templateUrl: './defensives-section.html',
-  styleUrl: './defensives-section.scss',
 })
 export class DefensivesSectionComponent {
+  private readonly icons = inject(IconCacheService);
+
   readonly defensives = input.required<PlayerDefensive[]>();
   readonly defensiveFindings = input<AnalysisFinding[]>([]);
   readonly topDefensiveWindows = input<BurstWindow[]>([]);
   readonly playerDefensiveWindows = input<PlayerBurstWindow[]>([]);
   readonly fightDuration = input<number>(0);
 
-  protected readonly expandedIdx = signal<number | null>(null);
-
-  protected readonly defEntries = computed(() => {
+  protected readonly defEntries = computed<FindingEntry[]>(() => {
     const findings = this.defensiveFindings();
     const defensives = this.defensives();
     const byName: Record<string, CdBucket> = {};
@@ -67,76 +68,60 @@ export class DefensivesSectionComponent {
       }
       if (bucket.holds.length) metaItems.push(`${bucket.holds.length} hold tip${bucket.holds.length > 1 ? 's' : ''}`);
       return {
-        name, bucket, spellId: spellMap[name] ?? null,
+        name, spellId: spellMap[name] ?? null,
         hasCritical, hasIssue, metaItems,
-        allFindings: [...bucket.issues, ...bucket.holds],
+        findings: [...bucket.issues, ...bucket.holds],
       };
     });
   });
 
-  protected formatMs(ms: number | undefined): string {
-    if (ms == null) return '';
-    const s = ms / 1000;
-    return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
-  }
-
-  protected readonly topDefWindows = computed(() => this.topDefensiveWindows());
-
-  protected readonly maxDwVal = computed(() => {
-    const allVals = this.topDefWindows().flatMap((dw, i) => {
-      const p = this.playerDefensiveWindows()[i]?.pct_of_total;
-      return [dw.pct_avg, dw.pct_max, p].filter((v): v is number => v != null);
-    });
-    return Math.max(...allVals, 0.01);
-  });
-
-  protected readonly dwCards = computed(() => {
+  protected readonly defWindows = computed<ComparisonWindow[]>(() => {
     const fightDur = this.fightDuration();
-    return this.topDefWindows().map((dw, idx) => {
+    const players = this.playerDefensiveWindows();
+
+    return this.topDefensiveWindows().map((dw, idx) => {
       const notReached = dw.time_s > fightDur;
-      const playerDw = notReached ? null : (this.playerDefensiveWindows()[idx] ?? null);
+      const playerDw = notReached ? null : (players[idx] ?? null);
       const topPct = dw.pct_avg ?? 0;
       const playerPct = playerDw?.pct_of_total ?? null;
       const minPct = dw.pct_min ?? topPct * 0.7;
       const maxPct = dw.pct_max ?? topPct * 1.3;
-      const winLenS = dw.window_length_s;
       const spellId = dw.spell_id ?? null;
       const defensiveName = dw.defensive_name ?? dw.common_defensives?.[0] ?? '';
 
-      let cls = 'bw-ok', badge = 'On Par';
-      if (notReached) { cls = 'bw-future'; badge = 'Not reached'; }
-      else if (playerPct === null) { cls = 'bw-missing'; badge = 'No data'; }
-      else if (playerPct > maxPct + (dw.pct_stddev ?? 0.01)) { cls = 'bw-high-dtk'; badge = 'High damage taken'; }
+      // Defensive: a lower damage-taken share is better, so taking more is bad.
+      let status: WindowStatus = 'good';
+      let statusIcon = 'check_circle';
+      if (notReached) { status = 'muted'; statusIcon = 'schedule'; }
+      else if (playerPct === null) { status = 'muted'; statusIcon = 'help_outline'; }
+      else if (playerPct > maxPct + (dw.pct_stddev ?? 0.01)) { status = 'bad'; statusIcon = 'error'; }
+      else if (topPct > 0 && playerPct > topPct + (dw.pct_stddev ?? 0.005)) { status = 'warn'; statusIcon = 'warning_amber'; }
+
+      const spellIds = spellId != null ? [spellId] : [];
+      const labels = spellId == null && defensiveName ? [defensiveName] : [];
 
       const playerAbMap: Record<number, { pct: number }> = {};
-      for (const a of (playerDw?.ability_breakdown || [])) playerAbMap[a.spell_id] = a;
+      for (const a of playerDw?.ability_breakdown ?? []) playerAbMap[a.spell_id] = a;
 
-      const rangeRows: RangeRow[] = [{
-        label: '',
-        playerPct,
-        topAvg: topPct,
-        topMin: minPct,
-        topMax: maxPct,
-      }];
+      const detailRows = (dw.ability_breakdown ?? []).map(ab => ({
+        spellId: ab.spell_id,
+        label: this.icons.get(ab.spell_id)?.name || `Spell ${ab.spell_id}`,
+        playerPct: playerAbMap[ab.spell_id]?.pct ?? null,
+        topAvg: ab.avg_pct,
+        topMin: ab.min_pct ?? ab.avg_pct * 0.7,
+        topMax: ab.max_pct ?? ab.avg_pct * 1.3,
+      }));
 
-      return { dw, idx, notReached, playerPct, topPct, minPct, maxPct, winLenS, spellId, defensiveName, cls, badge, playerAbMap, rangeRows };
+      return {
+        timeStartS: dw.time_s,
+        timeEndS: dw.time_s + dw.window_length_s,
+        spellIds,
+        labels,
+        status,
+        statusIcon,
+        overview: { label: '', playerPct, topAvg: topPct, topMin: minPct, topMax: maxPct },
+        detailRows,
+      };
     });
   });
-
-  protected dwAbChartRows(cardIdx: number): RangeRow[] {
-    const card = this.dwCards()[cardIdx];
-    if (!card) return [];
-    return (card.dw.ability_breakdown || []).map(ab => ({
-      spellId: ab.spell_id,
-      label: `Spell ${ab.spell_id}`,
-      playerPct: card.playerAbMap[ab.spell_id]?.pct ?? null,
-      topAvg: ab.avg_pct,
-      topMin: ab.min_pct ?? ab.avg_pct * 0.7,
-      topMax: ab.max_pct ?? ab.avg_pct * 1.3,
-    }));
-  }
-
-  protected toggleExpand(idx: number): void {
-    this.expandedIdx.update(v => v === idx ? null : idx);
-  }
 }

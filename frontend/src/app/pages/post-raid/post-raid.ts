@@ -33,7 +33,6 @@ function extractCode(url: string): string {
     FormatDurationPipe, FormatSpecPipe,
   ],
   templateUrl: './post-raid.html',
-  styleUrl: './post-raid.scss',
 })
 export class PostRaidComponent implements OnInit {
   private readonly auth = inject(WclAuthService);

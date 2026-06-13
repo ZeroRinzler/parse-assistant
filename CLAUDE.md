@@ -114,6 +114,8 @@ Runs `frontend/scripts/ingest.mjs`. Also runs as `ingest-parses.yml` GHA daily +
 
 GHA commits `frontend/public/data/specs/**`, which triggers `deploy-pages.yml` to rebuild and redeploy.
 
+> **Keep data shapes in sync.** The bench/sample shape that `ingest.mjs` writes is mirrored in the frontend consumers - `core/models/analysis.models.ts`, `core/models/encounter.models.ts`, `core/services/analysis-core.ts` - and documented in the **Data models** section below. **Whenever you change what ingestion emits (add/remove/rename a field), check and update all of these together, plus the rulebook skill + schema** (`prompts/rulebook_skill.md`, `prompts/rulebook.schema.json`) since ingestion consumes the rulebook (`duration`, `spell_id`s). Dropping a feature end-to-end means removing it from ingestion **and** every consumer above. Already-committed JSON under `data/specs/**` keeps stale fields until the next re-ingest - harmless, since consumers ignore unknown fields.
+
 ### Rulebook management (`npm run admin` / `npm run scrape`)
 No web UI for admin. Everything is CLI.
 
@@ -267,7 +269,7 @@ Non-obvious things that have caused bugs - read before touching gear extraction 
 | Gap between CD uses | `avg_gap_s + 2σ` across top parses | None - finding skipped without bench |
 | Hold suggestion trigger | Cast index where ≥40% of samples have `hold_amount_s > 8s`; fires if player casts >σ before median | None emitted |
 | Downtime gap floor | p90 of pooled `cast_gap_list_ms` | None - finding skipped without bench (ingest writes 1500ms only if zero gaps) |
-| Efficiency warning band | <1σ below top avg → warning; deeper → critical | None - finding skipped without bench |
+| Efficiency warning band | <1σ below Top average → warning; deeper → critical | None - finding skipped without bench |
 | BL timing | `avg_bl_offset_s ± 2σ` | binary in/out-of-window |
 
 > **Stddev is always emitted by ingestion alongside its mean** (`stdev()` returns 0 for a single sample), so the per-CD/defensive `stddev_*` fields are non-null whenever the matching mean is. The analysis engine relies on the bench value directly - there is no hardcoded-σ secondary fallback. By design, once every spec/encounter has bench data, the "skipped without bench" cases never occur in practice.

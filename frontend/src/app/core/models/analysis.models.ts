@@ -78,12 +78,6 @@ export interface TopDtkComparison {
   stddev_pct: number;
 }
 
-export interface DmgTakenSegment {
-  seg_index: number;
-  avg_pct: number;
-  stddev_pct: number;
-}
-
 export interface AnalysisResult {
   player: string;
   spec: string;
@@ -102,8 +96,6 @@ export interface AnalysisResult {
   player_dmg_taken_by_ability?: DmgTakenAbility[];
   player_total_dmg_taken?: number;
   top_dtk_comparison?: TopDtkComparison[];
-  player_dmg_taken_segment_pcts?: number[];
-  top_dtk_segments?: DmgTakenSegment[];
   comparison_table?: ComparisonEntry[];
 }
 

@@ -1,0 +1,48 @@
+@for (entry of entries(); track entry.name; let i = $index) {
+
+  <mat-card class="mt-2">
+    <!-- Header: status glyph, meta chips (left), spell (right), toggle -->
+    <mat-card-header class="items-center">
+      <mat-icon
+        [class.badge-success]="!entry.hasIssue"
+        [class.badge-warning]="entry.hasIssue && !entry.hasCritical"
+        [class.badge-critical]="entry.hasCritical">
+        {{ statusIcon(entry) }}
+      </mat-icon>
+      <span class="mr-auto">
+        @for (m of entry.metaItems; track m; let last = $last) {
+          {{ m }}{{ !last ? ' · ' : '' }}
+        }
+      </span>
+      @if (entry.spellId) {
+        <wl-spell-icon class="mr-2" [spellId]="entry.spellId"></wl-spell-icon>
+      } @else {
+        <span class="mr-2 font-semibold">{{ entry.name }}</span>
+      }
+      <button mat-icon-button [disabled]="!entry.findings.length" (click)="toggle(i, entry.hasIssue)">
+        <mat-icon>{{ isOpen(i, entry.hasIssue) ? 'expand_less' : 'expand_more' }}</mat-icon>
+      </button>
+    </mat-card-header>
+
+    @if (isOpen(i, entry.hasIssue) && entry.findings.length) {
+      <mat-card-content>
+        <div class="flex flex-col gap-2 py-1">
+          @for (f of entry.findings; track f.message) {
+            <div class="text-xs leading-relaxed">
+              @if (f.timestamp_ms != null) {
+                <span class="mr-1.5 text-[11px] tabular-nums text-[var(--accent)]">{{ f.timestamp_ms / 1000 | formatDuration }}</span>
+              }
+              <span>{{ f.message }}</span>
+              @if (f.details?.remedy) {
+                <div class="mt-1 rounded-r border-l-2 border-[var(--accent)] bg-[rgba(88,166,255,0.07)] px-2.5 py-1.5 text-[11px] leading-relaxed text-[var(--muted)]">
+                  {{ f.details!.remedy }}
+                </div>
+              }
+            </div>
+          }
+        </div>
+      </mat-card-content>
+    }
+  </mat-card>
+
+}
