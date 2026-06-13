@@ -1,12 +1,12 @@
 .container {
   max-width: 860px;
   margin: 0 auto;
-  padding: 32px 20px 64px;
+  padding: 24px 16px 48px;
 }
 
 .input-card {
   margin-bottom: 20px;
-  padding: 20px;
+  padding: 16px;
 }
 
 .full-width { width: 100%; }
@@ -17,11 +17,14 @@
   padding-top: 16px;
 }
 
+// flex-wrap lets the two selectors drop to their own rows on narrow
+// viewports without a media query.
 .selector-row {
   display: flex;
   gap: 14px;
+  flex-wrap: wrap;
 
-  .flex-1 { flex: 1; }
+  .flex-1 { flex: 1 1 200px; }
 }
 
 .error-msg {
@@ -34,4 +37,4 @@
   margin-bottom: 16px;
 }
 
-.result-card { padding: 24px; }
+.result-card { padding: 16px; }

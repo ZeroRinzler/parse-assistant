@@ -1,74 +1,37 @@
-.page-nav {
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
+// Shell scaffold: fixed toolbar on top, sidenav + content fill the rest.
+:host {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 4px 16px;
-  position: relative;
-  gap: 4px;
+  flex-direction: column;
+  height: 100dvh;
 }
 
-.nav-brand {
-  position: absolute;
-  left: 16px;
+.shell-toolbar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  gap: 8px;
+}
+
+.shell-spacer { flex: 1 1 auto; }
+
+.shell-container { flex: 1; }
+
+// Brand wordmark + inlined logo. SVG fills are themed via SCSS (project brand
+// guideline) rather than presentation attributes.
+.shell-brand {
   display: flex;
   align-items: center;
   gap: 8px;
   text-decoration: none;
-  color: var(--text);
-
-  &__mark {
-    width: 24px;
-    height: 24px;
-    display: block;
-  }
-
-  &__shield { fill: var(--gold); }
-  &__bars { fill: var(--surface); }
-
-  &__name {
-    font-size: 14px;
-    font-weight: 700;
-    letter-spacing: 0.2px;
-    color: var(--gold);
-  }
-
-  &:hover &__name { color: var(--text); }
-
-  // Wordmark would crowd the centered links on narrow viewports.
-  @media (max-width: 600px) {
-    &__name { display: none; }
-  }
+  color: var(--gold);
+  font-weight: 700;
+  font-size: 15px;
 }
 
-.nav-links {
-  display: flex;
-  gap: 2px;
-
-  a {
-    color: var(--muted);
-    font-size: 13px;
-    font-weight: 600;
-
-    &.active { color: var(--gold); }
-  }
+.shell-brand__mark {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
 }
 
-.nav-right {
-  position: absolute;
-  right: 16px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.auth-btn {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--muted);
-
-  &--connected {
-    color: var(--success);
-  }
-}
+.shell-brand__shield { fill: var(--gold); }
+.shell-brand__bars { fill: var(--surface); }

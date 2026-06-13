@@ -1,38 +1,68 @@
-<nav class="page-nav">
-  <a routerLink="/" class="nav-brand" aria-label="warcraft-learner home">
-    <svg class="nav-brand__mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
-      <path class="nav-brand__shield" d="M16 4 L27 7 L27 15.5 C27 21.5 22.5 26.5 16 29 C9.5 26.5 5 21.5 5 15.5 L5 7 Z"/>
-      <g class="nav-brand__bars">
+<mat-toolbar class="shell-toolbar">
+  <button mat-icon-button (click)="toggleNav()" aria-label="Toggle navigation menu">
+    <mat-icon>menu</mat-icon>
+  </button>
+
+  <a routerLink="/" class="shell-brand" aria-label="warcraft-learner home">
+    <svg class="shell-brand__mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+      <path class="shell-brand__shield" d="M16 4 L27 7 L27 15.5 C27 21.5 22.5 26.5 16 29 C9.5 26.5 5 21.5 5 15.5 L5 7 Z"/>
+      <g class="shell-brand__bars">
         <rect x="9.5" y="18" width="3" height="4" rx="1"/>
         <rect x="14.5" y="14" width="3" height="8" rx="1"/>
         <rect x="19.5" y="10" width="3" height="12" rx="1"/>
       </g>
     </svg>
-    <span class="nav-brand__name">warcraft-learner</span>
+    <span class="shell-brand__name">warcraft-learner</span>
   </a>
 
-  <div class="nav-links">
-    <a routerLink="/pre" routerLinkActive="active" mat-button>Pre-Fight</a>
-    <a routerLink="/live" routerLinkActive="active" mat-button>Live</a>
-    <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact:true}" mat-button>Post-Raid</a>
-  </div>
+  <span class="shell-spacer"></span>
 
-  <div class="nav-right">
-    <a [href]="githubUrl" target="_blank" rel="noopener noreferrer" mat-icon-button
-       matTooltip="View on GitHub" aria-label="GitHub repository">
-      <mat-icon svgIcon="github"></mat-icon>
-    </a>
-
+  <button mat-icon-button [matMenuTriggerFor]="userMenu" aria-label="Account menu">
+    <mat-icon>account_circle</mat-icon>
+  </button>
+  <mat-menu #userMenu="matMenu">
     @if (auth.isLoggedIn()) {
-      <button mat-flat-button color="primary" (click)="signOut()">
+      <button mat-menu-item (click)="signOut()">
         <mat-icon>logout</mat-icon>
-        Sign out
+        <span>Sign out</span>
       </button>
     } @else {
-      <button mat-flat-button color="primary" (click)="signIn()">
+      <button mat-menu-item (click)="signIn()">
         <mat-icon>login</mat-icon>
-        Sign in
+        <span>Sign in</span>
       </button>
     }
-  </div>
-</nav>
+    <mat-divider />
+    <a mat-menu-item [href]="githubUrl" target="_blank" rel="noopener noreferrer">
+      <mat-icon svgIcon="github"></mat-icon>
+      <span>View on GitHub</span>
+    </a>
+  </mat-menu>
+</mat-toolbar>
+
+<mat-sidenav-container class="shell-container">
+  <mat-sidenav [mode]="sidenavMode()" [opened]="sidenavOpened()"
+               (openedChange)="onOpenedChange($event)">
+    <mat-nav-list>
+      <a mat-list-item routerLink="/pre" routerLinkActive #pre="routerLinkActive"
+         [activated]="pre.isActive" (click)="onNavigate()">
+        <mat-icon matListItemIcon>lightbulb</mat-icon>
+        <span matListItemTitle>Pre-Fight</span>
+      </a>
+      <a mat-list-item routerLink="/live" routerLinkActive #live="routerLinkActive"
+         [activated]="live.isActive" (click)="onNavigate()">
+        <mat-icon matListItemIcon>bolt_boost</mat-icon>
+        <span matListItemTitle>Live</span>
+      </a>
+      <a mat-list-item routerLink="/" routerLinkActive #post="routerLinkActive"
+         [routerLinkActiveOptions]="{exact:true}" [activated]="post.isActive" (click)="onNavigate()">
+        <mat-icon matListItemIcon>analytics</mat-icon>
+        <span matListItemTitle>Post-Raid</span>
+      </a>
+    </mat-nav-list>
+  </mat-sidenav>
+
+  <mat-sidenav-content>
+    <ng-content></ng-content>
+  </mat-sidenav-content>
+</mat-sidenav-container>

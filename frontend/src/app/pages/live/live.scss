@@ -1,10 +1,10 @@
 .container {
   max-width: 860px;
   margin: 0 auto;
-  padding: 32px 20px 64px;
+  padding: 24px 16px 48px;
 }
 
-.input-card { padding: 20px; margin-bottom: 20px; }
+.input-card { padding: 16px; margin-bottom: 20px; }
 
 .input-row {
   display: flex;
@@ -32,4 +32,4 @@
   border-left: 3px solid var(--accent);
 }
 
-.result-card { padding: 24px; }
+.result-card { padding: 16px; }

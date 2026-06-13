@@ -1,13 +1,13 @@
 .container {
   max-width: 860px;
   margin: 0 auto;
-  padding: 32px 20px 64px;
+  padding: 24px 16px 48px;
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-.char-card { padding: 20px; }
+.char-card { padding: 16px; }
 
 .full-width { width: 100%; }
 .flex-1     { flex: 1; }

@@ -31,6 +31,7 @@ export const appConfig: ApplicationConfig = {
     provideEnvironmentInitializer(() => {
       const iconRegistry = inject(MatIconRegistry);
       const sanitizer = inject(DomSanitizer);
+      iconRegistry.setDefaultFontSetClass('material-symbols-outlined');
       iconRegistry.addSvgIconLiteral('github', sanitizer.bypassSecurityTrustHtml(GITHUB_SVG));
     }),
   ],
