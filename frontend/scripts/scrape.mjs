@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * warcraft-learner — Standalone Guide Scraper CLI
+ * warcraft-learner - Standalone Guide Scraper CLI
  *
  * Manages guides for specs: add URLs, scrape content, view, delete.
  * Writes directly to data/specs/{spec}/guides.json
@@ -9,9 +9,9 @@
  *   npm run scrape
  *
  * Supported guide types:
- *   web      — HTML page scraped with fetch + text extraction
- *   youtube  — YouTube transcript via timedtext API
- *   simc     — Raw text file (GitHub raw URLs auto-converted)
+ *   web      - HTML page scraped with fetch + text extraction
+ *   youtube  - YouTube transcript via timedtext API
+ *   simc     - Raw text file (GitHub raw URLs auto-converted)
  */
 
 import fs from 'fs';
@@ -287,7 +287,7 @@ async function pickSpec() {
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
-  console.log('warcraft-learner — Guide Scraper CLI');
+  console.log('warcraft-learner - Guide Scraper CLI');
 
   // ── CLI mode (non-interactive) ──────────────────────────────────────────────
   const argv = process.argv.slice(2);

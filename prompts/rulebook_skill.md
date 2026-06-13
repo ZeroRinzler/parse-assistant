@@ -67,7 +67,7 @@ The `defensives` array is **required**. List every personal defensive cooldown w
 | Field | Required | Notes |
 |---|---|---|
 | `name` | yes | Exact in-game ability name |
-| `spell_id` | **yes** | WoW spell ID — required, same rule as major_cooldowns |
+| `spell_id` | **yes** | WoW spell ID - required, same rule as major_cooldowns |
 | `cooldown` | yes | Cooldown in seconds |
 | `duration` | no | Buff duration in seconds |
 | `usage_rule` | yes | One sentence: when/why to press this button |

@@ -120,7 +120,7 @@ export class LiveComponent implements OnInit, OnDestroy {
 
       const data = await this.analysisSvc.analyze(this._reportCode, latestFight.id, playerMatch.id, this._fights, this._masterAbilities);
       this.result.set(data);
-      this.status.set(`Updated at ${new Date().toLocaleTimeString()} — ${latestFight.name}`);
+      this.status.set(`Updated at ${new Date().toLocaleTimeString()} - ${latestFight.name}`);
     } catch (err) {
       this.error.set(err instanceof Error ? err.message : 'Poll failed.');
     } finally {

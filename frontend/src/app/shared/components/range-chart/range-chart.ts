@@ -89,7 +89,7 @@ export class RangeChartComponent implements AfterViewInit, OnChanges, OnDestroy 
     Math.max(60, this.rows().length * this.rowHeight() + 28));
 
   private fmt(v: number | null): string {
-    if (v == null) return '—';
+    if (v == null) return '-';
     return this.unit() === 'pct' ? (v * 100).toFixed(1) + '%' : String(v);
   }
 
@@ -229,7 +229,7 @@ export class RangeChartComponent implements AfterViewInit, OnChanges, OnDestroy 
                 const r = rows[items[0].dataIndex];
                 const top = r.topAvg != null
                   ? `Top avg: ${this.fmt(r.topAvg)} (${this.fmt(r.topMin)}–${this.fmt(r.topMax)})`
-                  : 'Top avg: —';
+                  : 'Top avg: -';
                 return [`You: ${this.fmt(r.playerPct)}`, top];
               },
             },

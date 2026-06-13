@@ -79,7 +79,7 @@ export class WclApiService {
     const token = this.auth.getToken();
     if (!token) {
       this.auth.logout();
-      throw new Error('Not logged in to WCL — click "Sign In" to authorize.');
+      throw new Error('Not logged in to WCL - click "Sign In" to authorize.');
     }
     let body: { data?: T; errors?: { message?: string }[] };
     try {
@@ -92,7 +92,7 @@ export class WclApiService {
       if (e instanceof HttpErrorResponse) {
         if (e.status === 401) {
           this.auth.logout();
-          throw new Error('WCL session expired — sign in again.');
+          throw new Error('WCL session expired - sign in again.');
         }
         throw new Error(`WCL API error (${e.status})`);
       }
@@ -207,7 +207,7 @@ export class WclApiService {
         const parts = enchantIds.map(id => `e${id}: enchant(id:${id}){id name}`).join(' ');
         const encD = await this.query<{ gameData: Record<string, { id: number; name: string }> }>(`query{gameData{${parts}}}`);
         gd = encD?.gameData || {};
-      } catch { /* leave gd empty — any unresolved name surfaces as a visible marker below */ }
+      } catch { /* leave gd empty - any unresolved name surfaces as a visible marker below */ }
       for (const e of enchants) {
         if (!e.name && e.id) e.name = gd[`e${e.id}`]?.name || 'Unknown enchant';
       }

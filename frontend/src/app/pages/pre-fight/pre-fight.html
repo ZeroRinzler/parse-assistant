@@ -10,7 +10,7 @@
           <mat-label>Your Characters</mat-label>
           <mat-select [formControl]="linkedCharControl" (selectionChange)="onLinkedCharChange($event.value)">
             @for (c of linkedChars(); track c.id) {
-              <mat-option [value]="c">{{ c.name }} — {{ c.serverSlug }}</mat-option>
+              <mat-option [value]="c">{{ c.name }} - {{ c.serverSlug }}</mat-option>
             }
           </mat-select>
         </mat-form-field>
@@ -25,7 +25,7 @@
           <mat-icon class="badge-icon">check_circle</mat-icon>
           <span class="char-name">{{ charInfo()!.name }}</span>
           @if (charInfo()!.spec) {
-            <span class="char-spec">{{ charInfo()!.spec | formatSpec }} — {{ charInfo()!.server }}</span>
+            <span class="char-spec">{{ charInfo()!.spec | formatSpec }} - {{ charInfo()!.server }}</span>
           } @else {
             <span class="char-spec">{{ charInfo()!.server }}</span>
           }
@@ -47,7 +47,7 @@
             <mat-form-field appearance="outline" class="full-width">
               <mat-label>Encounter</mat-label>
               <mat-select [formControl]="encControl" (selectionChange)="onEncChange()">
-                <mat-option [value]="0">— select encounter —</mat-option>
+                <mat-option [value]="0">- select encounter -</mat-option>
                 @for (e of encounters(); track e.id) {
                   <mat-option [value]="e.id">{{ e.name }} ({{ e.sample_count }} parses)</mat-option>
                 }

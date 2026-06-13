@@ -39,7 +39,7 @@ export class WclAuthService {
 
   async exchangeCode(code: string): Promise<void> {
     const verifier = sessionStorage.getItem('wcl_code_verifier');
-    if (!verifier) throw new Error('No code verifier — auth flow was not started in this browser tab');
+    if (!verifier) throw new Error('No code verifier - auth flow was not started in this browser tab');
     const params = new URLSearchParams({
       grant_type: 'authorization_code',
       client_id: CLIENT_ID,

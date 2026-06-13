@@ -14,7 +14,7 @@ npm start        # Angular dev server on http://localhost:4200
 npm run build    # Production build → ../static/angular/browser/ (gitignored)
 ```
 
-The build is deployed to GitHub Pages via `.github/workflows/deploy-pages.yml` — never commit the output manually.
+The build is deployed to GitHub Pages via `.github/workflows/deploy-pages.yml` - never commit the output manually.
 
 ## Scripts
 

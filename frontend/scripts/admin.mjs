@@ -1,19 +1,19 @@
 #!/usr/bin/env node
 /**
- * warcraft-learner — Rulebook Admin CLI
+ * warcraft-learner - Rulebook Admin CLI
  *
  * Manages AI-generated rulebooks for specs.
  * Reads scraped guides from frontend/public/data/specs/{spec}/guides.json,
  * builds the LLM prompt, and writes the pasted AI output directly to
- * frontend/public/data/specs/{spec}/rulebook.json — no server needed.
+ * frontend/public/data/specs/{spec}/rulebook.json - no server needed.
  *
  * Usage:
  *   npm run admin
  *   npm run admin -- rulebook   (jump to rulebook menu)
  *
  * Related scripts:
- *   npm run scrape   — add and scrape guide URLs
- *   npm run ingest   — ingest top WCL parses
+ *   npm run scrape   - add and scrape guide URLs
+ *   npm run ingest   - ingest top WCL parses
  */
 
 import fs from 'fs';
@@ -73,7 +73,7 @@ function trySpawnSync(cmd, args, input) {
   return r.status === 0 && !r.error;
 }
 
-// wl-copy stays running as a clipboard provider (Wayland design) — must be detached
+// wl-copy stays running as a clipboard provider (Wayland design) - must be detached
 function wlCopy(text) {
   return new Promise(resolve => {
     try {
@@ -99,7 +99,7 @@ async function copyToClipboard(text) {
   if (process.platform === 'win32') {
     return trySpawnSync('clip', [], text);
   }
-  // Linux — try Wayland then X11
+  // Linux - try Wayland then X11
   const isWayland = !!process.env.WAYLAND_DISPLAY;
   if (isWayland && await wlCopy(text)) return true;
   if (trySpawnSync('xclip', ['-selection', 'clipboard'], text)) return true;
@@ -194,7 +194,7 @@ async function rulebookMenu(spec) {
         const hint = process.platform === 'linux'
           ? '  Install clipboard support: sudo dnf install wl-clipboard   (Fedora/Wayland)\n  or: sudo apt install xclip   (Debian/Ubuntu)'
           : '';
-        console.log(`Could not copy automatically — clipboard tool not found.\n${hint}\n`);
+        console.log(`Could not copy automatically - clipboard tool not found.\n${hint}\n`);
       }
     }
 
@@ -232,7 +232,7 @@ async function pickSpec() {
   const specs = getKnownSpecs();
   console.log('\nKnown specs in data/specs/:');
   if (specs.length) specs.forEach((s, i) => console.log(`  [${i + 1}] ${s}`));
-  else console.log('  (none yet — run "npm run scrape" to add guides for a spec)');
+  else console.log('  (none yet - run "npm run scrape" to add guides for a spec)');
   const raw = await ask('\nEnter spec name or number (e.g. SubtletyRogue): ');
   const n = parseInt(raw);
   if (n >= 1 && n <= specs.length) return specs[n - 1];
@@ -243,7 +243,7 @@ async function pickSpec() {
 
 async function main() {
   const arg = process.argv[2];
-  console.log('warcraft-learner — Rulebook Admin');
+  console.log('warcraft-learner - Rulebook Admin');
   console.log('For guides: npm run scrape');
   console.log('For parses: npm run ingest\n');
 

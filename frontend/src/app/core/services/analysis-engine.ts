@@ -29,7 +29,7 @@ export class AnalysisEngineService {
     if (!fight) throw new Error('Fight not found');
     const { startTime: fStart, endTime: fEnd, encounterID } = fight;
 
-    // Kick off the heavy event queries immediately — they don't depend on spec —
+    // Kick off the heavy event queries immediately - they don't depend on spec -
     // and resolve the player's spec concurrently. Only the (small, static)
     // rulebook/bench files depend on spec, so they're fetched once it's known.
     const eventsP = Promise.all([
@@ -85,7 +85,7 @@ export class AnalysisEngineService {
       else entry.resolve(data.result!);
     });
     worker.addEventListener('error', () => {
-      // Worker crashed — reject in-flight requests and drop it so the next call rebuilds.
+      // Worker crashed - reject in-flight requests and drop it so the next call rebuilds.
       for (const { reject } of this.pending.values()) reject(new Error('Analysis worker error'));
       this.pending.clear();
       this.worker = null;

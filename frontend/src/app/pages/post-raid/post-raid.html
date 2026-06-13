@@ -24,7 +24,7 @@
               <mat-label>Player</mat-label>
               <mat-select [formControl]="playerControl" (selectionChange)="onPlayerChange()">
                 @for (p of visiblePlayers(); track p.id) {
-                  <mat-option [value]="p.id">{{ p.name }} — {{ p.spec | formatSpec }}</mat-option>
+                  <mat-option [value]="p.id">{{ p.name }} - {{ p.spec | formatSpec }}</mat-option>
                 }
               </mat-select>
             </mat-form-field>

@@ -6,13 +6,13 @@ The app is a **fully static Angular SPA** deployed on GitHub Pages. There is no 
 
 ## Branding & naming
 
-- **The product name is always `warcraft-learner`** — lowercase, hyphenated, exactly that casing. Never "Warcraft Learner", "WarcraftLearner", or any other variant. This applies to the page `<title>`, nav wordmark, CLI banners, READMEs, and any new user-facing copy.
-- **Do not confuse it with "Warcraft Logs"** (a.k.a. WCL) — that is the external data provider, a separate product. Leave "Warcraft Logs" / "WCL" strings as-is; only our own app name is normalized to `warcraft-learner`.
-- **Logo / favicon** — a gold shield with an ascending bar chart (martial "Warcraft" + the analytics/"learner" angle). Single source of truth: `frontend/public/favicon.svg`. It also drives the `.ico` and the nav-bar mark.
-  - `favicon.ico` is **regenerated from** `favicon.svg` (16/32/48px) — do not hand-edit the binary. Regen with `sharp` + `png-to-ico` (rasterize the SVG at high density, resize to each size, pack into one `.ico`).
+- **The product name is always `warcraft-learner`** - lowercase, hyphenated, exactly that casing. Never "Warcraft Learner", "WarcraftLearner", or any other variant. This applies to the page `<title>`, nav wordmark, CLI banners, READMEs, and any new user-facing copy.
+- **Do not confuse it with "Warcraft Logs"** (a.k.a. WCL) - that is the external data provider, a separate product. Leave "Warcraft Logs" / "WCL" strings as-is; only our own app name is normalized to `warcraft-learner`.
+- **Logo / favicon** - a gold shield with an ascending bar chart (martial "Warcraft" + the analytics/"learner" angle). Single source of truth: `frontend/public/favicon.svg`. It also drives the `.ico` and the nav-bar mark.
+  - `favicon.ico` is **regenerated from** `favicon.svg` (16/32/48px) - do not hand-edit the binary. Regen with `sharp` + `png-to-ico` (rasterize the SVG at high density, resize to each size, pack into one `.ico`).
   - `index.html` references the SVG favicon first (`type="image/svg+xml"`) with the `.ico` as legacy fallback.
-  - The nav-bar logo (`shared/components/page-nav`) is the **same artwork inlined as SVG** in the template, so it themes with CSS vars. Set its fills via SCSS classes (`fill: var(--gold)` / `var(--surface)`) — **not** `fill="var(--…)"` presentation attributes, which browsers don't reliably honor.
-  - Brand gold is `--gold` (`#e5cc80`) — the Warcraft Logs 100-parse ("Astounding") gold, chosen deliberately since the tool benchmarks against top parses. The favicon's literal hex colors must track the design tokens in `styles.scss`.
+  - The nav-bar logo (`shared/components/page-nav`) is the **same artwork inlined as SVG** in the template, so it themes with CSS vars. Set its fills via SCSS classes (`fill: var(--gold)` / `var(--surface)`) - **not** `fill="var(--…)"` presentation attributes, which browsers don't reliably honor.
+  - Brand gold is `--gold` (`#e5cc80`) - the Warcraft Logs 100-parse ("Astounding") gold, chosen deliberately since the tool benchmarks against top parses. The favicon's literal hex colors must track the design tokens in `styles.scss`.
 
 ## URL routing
 
@@ -36,12 +36,12 @@ Character URL input + encounter dropdown; no persistent URL state beyond navigat
 
 ```
 warcraft-learner/
-├── frontend/                   # The entire application — Angular 22
+├── frontend/                   # The entire application - Angular 22
 │   ├── src/app/
 │   │   ├── pages/
 │   │   │   ├── post-raid/      # Main player analyzer (/)
 │   │   │   ├── pre-fight/      # Pre-fight gear check (/pre)
-│   │   │   ├── live/           # Live analysis — polls for new pulls (/live)
+│   │   │   ├── live/           # Live analysis - polls for new pulls (/live)
 │   │   │   └── callback/       # OAuth2 PKCE callback (/callback)
 │   │   └── core/
 │   │       ├── services/
@@ -51,7 +51,7 @@ warcraft-learner/
 │   │       │   └── wcl-auth.ts         # PKCE OAuth2 flow
 │   │       └── models/                 # TypeScript interfaces
 │   ├── public/
-│   │   └── data/specs/         # Static data files — served as assets
+│   │   └── data/specs/         # Static data files - served as assets
 │   │       └── {Spec}/
 │   │           ├── rulebook.json       # AI-generated rulebook
 │   │           ├── guides.json         # Guide list with scraped content
@@ -73,38 +73,38 @@ warcraft-learner/
 └── .env.example
 ```
 
-**Data location**: `frontend/public/data/specs/` — Angular's `public/` directory serves these at `/data/specs/` in both the dev server and the built app. The dev server also has a `proxy.conf.json` wired in (stale — points to a `localhost:8000` that no longer exists; can be removed).
+**Data location**: `frontend/public/data/specs/` - Angular's `public/` directory serves these at `/data/specs/` in both the dev server and the built app. The dev server also has a `proxy.conf.json` wired in (stale - points to a `localhost:8000` that no longer exists; can be removed).
 
-**Build output** (`static/angular/`) is gitignored — rebuilt by `deploy-pages.yml` on every push to `main`.
+**Build output** (`static/angular/`) is gitignored - rebuilt by `deploy-pages.yml` on every push to `main`.
 
 ## Key flows
 
 ### Player analysis (client-side, `analysis-engine.ts`)
 1. Accepts a WCL report code + fight ID + player actor ID.
-2. Fetches `playerDetails` to resolve spec (`SubtletyRogue`). WCL changed `actor.subType` in Midnight to return class-only — `playerDetails` is the reliable source.
+2. Fetches `playerDetails` to resolve spec (`SubtletyRogue`). WCL changed `actor.subType` in Midnight to return class-only - `playerDetails` is the reliable source.
 3. Fetches `Casts`, `Buffs`, `DamageDone`, and `DamageTaken` events directly from WCL (PKCE token).
 4. Loads static bench data from `/data/specs/{spec}/encounters/{enc_id}.json` and rulebook from `/data/specs/{spec}/rulebook.json`.
 5. `analysis-engine.ts` checks per offensive cooldown:
-   - **Lost casts** — `expected = 1 + floor(fight_duration / cd_cooldown)` vs actual.
-   - **Bloodlust alignment** — flags major CDs whose BL-window cast timing is >2σ from top-parse average. Falls back to binary in/out-of-window check.
-   - **First-cast delay** — flags opener CDs whose first cast is >2σ later than `avg_first_cast_s`. Skipped when no bench.
-   - **Held past reset** — gap between casts >2σ above `avg_gap_s`. Skipped when no bench.
-   - **Hold suggestions** — cast index where ≥40% of top parsers delay >8s past on-cooldown time; fires if player casts >σ before median hold time.
-   - **Cast efficiency** — player downtime (gaps above p90 of top-parse inter-cast gaps) vs top-parse average.
-   - **Success** — emitted when a CD has zero issues.
-6. **Rule engine** — evaluates `rules[]` entries with a machine-readable `condition`. Two kinds:
-   - `cast_without_prior` — spell cast without a required companion within `window_s`.
-   - `hold_cooldown_for_anchor` — spell(s) used within `hold_window_s` before an anchor spell.
+   - **Lost casts** - `expected = 1 + floor(fight_duration / cd_cooldown)` vs actual.
+   - **Bloodlust alignment** - flags major CDs whose BL-window cast timing is >2σ from top-parse average. Falls back to binary in/out-of-window check.
+   - **First-cast delay** - flags opener CDs whose first cast is >2σ later than `avg_first_cast_s`. Skipped when no bench.
+   - **Held past reset** - gap between casts >2σ above `avg_gap_s`. Skipped when no bench.
+   - **Hold suggestions** - cast index where ≥40% of top parsers delay >8s past on-cooldown time; fires if player casts >σ before median hold time.
+   - **Cast efficiency** - player downtime (gaps above p90 of top-parse inter-cast gaps) vs top-parse average.
+   - **Success** - emitted when a CD has zero issues.
+6. **Rule engine** - evaluates `rules[]` entries with a machine-readable `condition`. Two kinds:
+   - `cast_without_prior` - spell cast without a required companion within `window_s`.
+   - `hold_cooldown_for_anchor` - spell(s) used within `hold_window_s` before an anchor spell.
    Rule findings include a `details.remedy` field (the rule's `action` text) shown as a coaching callout.
-7. **Defensive analysis** mirrors offensive: `_analyzeDefensiveFindings` produces lost/held/hold-suggestion findings per defensive. Defensive windows are **buff-window-centric** — each window = when the defensive was actually active (apply→remove), compared against top-parse averages.
+7. **Defensive analysis** mirrors offensive: `_analyzeDefensiveFindings` produces lost/held/hold-suggestion findings per defensive. Defensive windows are **buff-window-centric** - each window = when the defensive was actually active (apply→remove), compared against top-parse averages.
 8. Response sections: **Needs Improvement** (critical/warning), **Timing Suggestions** (info/hold_suggestion), **Doing Well** (success).
 9. **Burst Windows** card shows top recurring damage windows from top parses (CD-cast-centric, variable length). **Defensive Windows** shows when top parsers used each defensive and how much damage they mitigated.
-10. Ability icons come from `masterData.abilities` in the WCL report response — the only reliable source since WCL removed `gameData.spell()`.
+10. Ability icons come from `masterData.abilities` in the WCL report response - the only reliable source since WCL removed `gameData.spell()`.
 
 ### Ingestion (`npm run ingest`)
 Runs `frontend/scripts/ingest.mjs`. Also runs as `ingest-parses.yml` GHA daily + manually.
 
-1. Authenticates to WCL with client credentials (from `.env` — server-side secret, only used in CLI/GHA, never in the browser).
+1. Authenticates to WCL with client credentials (from `.env` - server-side secret, only used in CLI/GHA, never in the browser).
 2. Queries `characterRankings` for each boss to find top 10 parses.
 3. Fetches `Casts`, `Buffs`, `DamageDone`, `DamageTaken` per parse.
 4. Computes per-parse: CD timing summaries, `burst_windows` (CD-cast-centric), `defensive_windows` (buff-window-centric), talent key, trinkets, enchants.
@@ -117,24 +117,24 @@ GHA commits `frontend/public/data/specs/**`, which triggers `deploy-pages.yml` t
 ### Rulebook management (`npm run admin` / `npm run scrape`)
 No web UI for admin. Everything is CLI.
 
-1. **Add + scrape guides** — `npm run scrape`: add guide URLs, scrape content (web/YouTube/SimC APL), store in `guides.json`.
-2. **Build AI prompt** — `npm run admin` → "Copy prompt": assembles `prompts/rulebook_skill.md` + all scraped guide content into a clipboard-ready prompt.
-3. **Save rulebook** — paste AI output → `npm run admin` → "Save rulebook": writes to `rulebook.json`. No validation server needed — the CLI validates schema directly.
+1. **Add + scrape guides** - `npm run scrape`: add guide URLs, scrape content (web/YouTube/SimC APL), store in `guides.json`.
+2. **Build AI prompt** - `npm run admin` → "Copy prompt": assembles `prompts/rulebook_skill.md` + all scraped guide content into a clipboard-ready prompt.
+3. **Save rulebook** - paste AI output → `npm run admin` → "Save rulebook": writes to `rulebook.json`. No validation server needed - the CLI validates schema directly.
 
 ### Pre-fight gear check (`/pre`)
 Entirely client-side. No backend calls.
 
 1. User enters a character name/server/region (or WCL character URL).
-2. `wcl-api.ts` queries `characterData.character.encounterRankings(includeCombatantInfo: true)` directly on WCL for the selected encounter — extracts gear, talents from the player's most recent ranked kill.
+2. `wcl-api.ts` queries `characterData.character.encounterRankings(includeCombatantInfo: true)` directly on WCL for the selected encounter - extracts gear, talents from the player's most recent ranked kill.
 3. Bench data (talent distributions, trinket usage, enchant usage) loaded from static `/data/specs/{spec}/encounters/{enc_id}.json`.
 4. Three cards rendered client-side:
-   - **Talents** — compares player's `v2:` talent fingerprint against top-parse distribution.
-   - **Trinkets** — per-slot (12 = Trinket 1, 13 = Trinket 2) comparison.
-   - **Enchants** — per-slot; missing enchants on high-consensus slots (≥70% of top parsers) flagged as warnings.
+   - **Talents** - compares player's `v2:` talent fingerprint against top-parse distribution.
+   - **Trinkets** - per-slot (12 = Trinket 1, 13 = Trinket 2) comparison.
+   - **Enchants** - per-slot; missing enchants on high-consensus slots (≥70% of top parsers) flagged as warnings.
 
 ### Encounter selection
 Encounters loaded from `/data/specs/{spec}/encounters.json` (static file). Filtered client-side to:
-- Current expansion only (first unique expansion name in WCL API response — WCL returns newest first).
+- Current expansion only (first unique expansion name in WCL API response - WCL returns newest first).
 - Excludes zones matching: `beta`, `ptr`, `mythic+`, `complete raids`, `delves`, `torghast`.
 
 ## Data models
@@ -159,7 +159,7 @@ List of raw parse samples. Source of truth for bench files.
 |---|---|---|
 | `fight_duration_s` | top-level | Fight length in seconds |
 | `cast_efficiency_pct` | top-level | % of fight time actively casting |
-| `cast_gap_list_ms` | top-level | Sorted inter-cast gaps — used to derive p90 downtime threshold |
+| `cast_gap_list_ms` | top-level | Sorted inter-cast gaps - used to derive p90 downtime threshold |
 | `cooldowns[].cast_times_s` | per-CD | Cast timestamps relative to fight start |
 | `cooldowns[].bl_offset_s` | per-CD | Seconds between BL-window cast and BL start |
 | `cooldowns[].bl_aligned` | per-CD | Whether this parse cast the CD inside BL window |
@@ -173,7 +173,7 @@ List of raw parse samples. Source of truth for bench files.
 
 ### Rulebook JSON schema
 
-All spell IDs **must** come from the rulebook — never hardcode spec-specific IDs.
+All spell IDs **must** come from the rulebook - never hardcode spec-specific IDs.
 
 ```json
 {
@@ -213,7 +213,7 @@ All spell IDs **must** come from the rulebook — never hardcode spec-specific I
 
 ### Rule condition schema
 
-**`cast_without_prior`** — spell cast without a required companion within a time window:
+**`cast_without_prior`** - spell cast without a required companion within a time window:
 ```json
 {
   "kind": "cast_without_prior",
@@ -224,7 +224,7 @@ All spell IDs **must** come from the rulebook — never hardcode spec-specific I
 }
 ```
 
-**`hold_cooldown_for_anchor`** — spell(s) used within hold window before an anchor spell:
+**`hold_cooldown_for_anchor`** - spell(s) used within hold window before an anchor spell:
 ```json
 {
   "kind": "hold_cooldown_for_anchor",
@@ -238,7 +238,7 @@ Rules without a `condition` (or `null`) are silently skipped.
 
 ## WCL API quirks
 
-Non-obvious things that have caused bugs — read before touching gear extraction or spec resolution.
+Non-obvious things that have caused bugs - read before touching gear extraction or spec resolution.
 
 | Quirk | Detail |
 |---|---|
@@ -263,14 +263,14 @@ Non-obvious things that have caused bugs — read before touching gear extractio
 
 | Threshold | Derived from | Fallback |
 |---|---|---|
-| First-cast delay | `avg_first_cast_s + 2σ` across top parses | None — finding skipped without bench |
-| Gap between CD uses | `avg_gap_s + 2σ` across top parses | None — finding skipped without bench |
+| First-cast delay | `avg_first_cast_s + 2σ` across top parses | None - finding skipped without bench |
+| Gap between CD uses | `avg_gap_s + 2σ` across top parses | None - finding skipped without bench |
 | Hold suggestion trigger | Cast index where ≥40% of samples have `hold_amount_s > 8s`; fires if player casts >σ before median | None emitted |
-| Downtime gap floor | p90 of pooled `cast_gap_list_ms` | None — finding skipped without bench (ingest writes 1500ms only if zero gaps) |
-| Efficiency warning band | <1σ below top avg → warning; deeper → critical | None — finding skipped without bench |
+| Downtime gap floor | p90 of pooled `cast_gap_list_ms` | None - finding skipped without bench (ingest writes 1500ms only if zero gaps) |
+| Efficiency warning band | <1σ below top avg → warning; deeper → critical | None - finding skipped without bench |
 | BL timing | `avg_bl_offset_s ± 2σ` | binary in/out-of-window |
 
-> **Stddev is always emitted by ingestion alongside its mean** (`stdev()` returns 0 for a single sample), so the per-CD/defensive `stddev_*` fields are non-null whenever the matching mean is. The analysis engine relies on the bench value directly — there is no hardcoded-σ secondary fallback. By design, once every spec/encounter has bench data, the "skipped without bench" cases never occur in practice.
+> **Stddev is always emitted by ingestion alongside its mean** (`stdev()` returns 0 for a single sample), so the per-CD/defensive `stddev_*` fields are non-null whenever the matching mean is. The analysis engine relies on the bench value directly - there is no hardcoded-σ secondary fallback. By design, once every spec/encounter has bench data, the "skipped without bench" cases never occur in practice.
 | Burst window clustering | windows within 15s merged; ≥35% of samples required | n/a |
 | Defensive window clustering | per-defensive grouping, within 20s merged; ≥35% of samples required | n/a |
 | Comparison table (uses/min) | `top_stddev_uses_per_min` per CD | ±0.05 |
@@ -287,7 +287,7 @@ Non-obvious things that have caused bugs — read before touching gear extractio
 6. Falls back to 8s sliding window if no CD duration data.
 
 **Across parses** (`clusterBurstWindows`):
-1. `groupByTime(windows, 15s)` — greedy: windows within 15s of cluster median go in same group.
+1. `groupByTime(windows, 15s)` - greedy: windows within 15s of cluster median go in same group.
 2. Discard clusters in fewer than max(2, 35% of samples).
 3. Surface CDs and abilities in ≥50% of member parses.
 4. `window_length_s` = mean of member window lengths.
@@ -311,7 +311,7 @@ Both cluster functions share `groupByTime()` and `clusterBaseStats()` helpers.
 
 | Value | Location | Notes |
 |---|---|---|
-| `bl_time - 30` to `bl_time + 55` BL window | `ingest.mjs` | BL duration (40s) + 15s grace. Defines what we measure — not worth deriving from data. |
+| `bl_time - 30` to `bl_time + 55` BL window | `ingest.mjs` | BL duration (40s) + 15s grace. Defines what we measure - not worth deriving from data. |
 
 ### Built
 

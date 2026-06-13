@@ -49,7 +49,7 @@
 <!-- Defensive windows: when top parsers use each defensive and how much damage they absorbed -->
 @if (topDefWindows().length > 0) {
   <p class="section-label" style="margin-top:18px">Defensive Windows</p>
-  <p class="section-note">Each bar is the damage taken while the defensive was active, as a share of your total damage taken this fight — lower is better.</p>
+  <p class="section-note">Each bar is the damage taken while the defensive was active, as a share of your total damage taken this fight - lower is better.</p>
   <div class="cmp-legend">
     <span class="cmp-leg-item"><span class="cmp-leg player"></span> You</span>
     <span class="cmp-leg-item"><span class="cmp-leg top"></span> Top 10 avg <span class="cmp-range-note">(shaded range)</span></span>
@@ -86,7 +86,7 @@
           </wl-range-chart>
           @if (!card.notReached) {
             <div class="bw-cmp-caption">
-              <span class="bw-cmp-you">You {{ card.playerPct != null ? (card.playerPct * 100 | number:'1.1-1') + '%' : '—' }}</span>
+              <span class="bw-cmp-you">You {{ card.playerPct != null ? (card.playerPct * 100 | number:'1.1-1') + '%' : '-' }}</span>
               <span class="bw-cmp-top">Top {{ (card.topPct * 100 | number:'1.1-1') }}% ({{ (card.minPct * 100 | number:'1.1-1') }}–{{ (card.maxPct * 100 | number:'1.1-1') }}%)</span>
             </div>
           }

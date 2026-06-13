@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /**
- * warcraft-learner — Standalone Parse Ingestion CLI
+ * warcraft-learner - Standalone Parse Ingestion CLI
  *
  * Fetches top WCL parses for a spec+encounter and writes:
- *   data/specs/{spec}/parse_samples/{enc_id}.json  — raw samples
- *   data/specs/{spec}/encounters/{enc_id}.json      — aggregated bench data
- *   data/specs/{spec}/encounters.json               — encounter index
+ *   data/specs/{spec}/parse_samples/{enc_id}.json  - raw samples
+ *   data/specs/{spec}/encounters/{enc_id}.json      - aggregated bench data
+ *   data/specs/{spec}/encounters.json               - encounter index
  *
  * Usage:
  *   npm run ingest
@@ -323,7 +323,7 @@ function extractGear(rankingEntry) {
   return { trinkets, enchants };
 }
 
-// `characterRankings` talents — old WCL format: [{talentID: N, points: P}].
+// `characterRankings` talents - old WCL format: [{talentID: N, points: P}].
 function talentKeyV1(talents) {
   if (!Array.isArray(talents) || !talents.length) return '';
   const ids = talents
@@ -334,7 +334,7 @@ function talentKeyV1(talents) {
   return ids.length ? 'v1:' + ids.join(',') : '';
 }
 
-// `encounterRankings` talents — Midnight format: {class:{row:[{node:{nodeId}}]}, spec:{...}}.
+// `encounterRankings` talents - Midnight format: {class:{row:[{node:{nodeId}}]}, spec:{...}}.
 function talentKeyV2(talents) {
   if (!talents || typeof talents !== 'object') return '';
   const nodeIds = [];
@@ -717,7 +717,7 @@ async function analyzeParse(wcl, spec, reportCode, fightId, playerName, combatan
     castEffPct = Math.round(Math.max(0, (1 - downtimeMs / 1000 / fightDurS) * 100) * 10) / 10;
   }
 
-  // Burst windows — sized by CD durations, active_cds set inside
+  // Burst windows - sized by CD durations, active_cds set inside
   const burstWindows = findBurstWindows(damageEvents, start, cdSummary, specCds);
 
   // Gear data from combatant info
@@ -1403,14 +1403,14 @@ async function pickSpec() {
   if (n >= 1 && n <= specs.length) return specs[n - 1];
   const trimmed = raw.trim();
   if (SPEC_TO_WCL[trimmed]) return trimmed;
-  console.log(`Warning: "${trimmed}" is not in SPEC_TO_WCL — WCL rankings may fail.`);
+  console.log(`Warning: "${trimmed}" is not in SPEC_TO_WCL - WCL rankings may fail.`);
   return trimmed;
 }
 
 // ── Main ingestion flow ───────────────────────────────────────────────────────
 
 async function ingestSpec(wcl, spec, encounters) {
-  console.log(`\nIngesting ${spec} — ${encounters.length} encounter(s) available`);
+  console.log(`\nIngesting ${spec} - ${encounters.length} encounter(s) available`);
 
   const allEncs = encounters;
   if (!allEncs.length) {
@@ -1429,7 +1429,7 @@ async function ingestSpec(wcl, spec, encounters) {
   console.log(`\nEncounters (${allEncs.length} total):`);
   allEncs.forEach((enc, i) => {
     const count = existingSamples.get(enc.id) || 0;
-    console.log(`  [${i + 1}] ${enc.name} — ${count} samples`);
+    console.log(`  [${i + 1}] ${enc.name} - ${count} samples`);
   });
 
   const choice = await ask('\nEnter encounter number(s) to ingest (comma-separated), "all", or "back": ');
@@ -1490,7 +1490,7 @@ async function ingestSpec(wcl, spec, encounters) {
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
-  console.log('warcraft-learner — Parse Ingestion CLI');
+  console.log('warcraft-learner - Parse Ingestion CLI');
 
   // ── CLI mode (non-interactive) ──────────────────────────────────────────────
   const argv = process.argv.slice(2);
@@ -1544,7 +1544,7 @@ async function main() {
 }
 
 async function ingestSpecNonInteractive(wcl, spec, encounters, topN = 10) {
-  console.log(`\nIngesting ${spec} — all ${encounters.length} encounters (top ${topN})`);
+  console.log(`\nIngesting ${spec} - all ${encounters.length} encounters (top ${topN})`);
   for (const enc of encounters) {
     process.stdout.write(`\n[${enc.name}] Fetching top ${topN} rankings...`);
     let rankings;

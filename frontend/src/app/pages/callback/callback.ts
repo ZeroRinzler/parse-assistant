@@ -42,7 +42,7 @@ export class CallbackComponent implements OnInit {
 
     if (oauthError) {
       const desc = oauthDesc ? `: ${decodeURIComponent(oauthDesc.replace(/\+/g, ' '))}` : '';
-      this.error.set(`WCL OAuth error — ${oauthError}${desc}`);
+      this.error.set(`WCL OAuth error - ${oauthError}${desc}`);
       return;
     }
 

@@ -2,7 +2,7 @@ name: Ingest Parse Samples
 
 on:
   schedule:
-    # Runs daily at 06:00 UTC — after EU/US raid nights have concluded
+    # Runs daily at 06:00 UTC - after EU/US raid nights have concluded
     - cron: '0 6 * * *'
   workflow_dispatch:
     inputs:

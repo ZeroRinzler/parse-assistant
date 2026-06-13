@@ -21,7 +21,7 @@ function _fmt(s: number): string {
   return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 }
 
-/** Everything the pure computation needs — all data already fetched on the main thread. */
+/** Everything the pure computation needs - all data already fetched on the main thread. */
 export interface AnalysisInput {
   playerName: string;
   spec: string;
@@ -38,7 +38,7 @@ export interface AnalysisInput {
 
 /**
  * Run the full client-side analysis. Mirrors the post-fetch portion of the old
- * `AnalysisEngineService.run()`. Returns a plain `AnalysisResult` — safe to
+ * `AnalysisEngineService.run()`. Returns a plain `AnalysisResult` - safe to
  * `postMessage` back from a worker.
  */
 export function computeAnalysis(input: AnalysisInput): AnalysisResult {
@@ -137,7 +137,7 @@ function _analyzeCore(
           message: `${cdName} was never used. In a ${_fmt(fightDurS)} fight with a ${cooldownS}s cooldown you should have ~${expected} cast(s).` });
       } else if (actual < expected) {
         cdIssues.push({ severity: 'critical', category: 'lost_cooldown', cd_name: cdName, timestamp_ms: undefined,
-          message: `${cdName} — ${actual} of ${expected} expected casts. Lost ${expected - actual} use(s) in a ${_fmt(fightDurS)} fight.` });
+          message: `${cdName} - ${actual} of ${expected} expected casts. Lost ${expected - actual} use(s) in a ${_fmt(fightDurS)} fight.` });
       }
 
       const b = perCdBench[cdName];
@@ -147,7 +147,7 @@ function _analyzeCore(
           const sdF = b.stddev_first_cast_s;
           if (firstS > b.avg_first_cast_s + 2 * sdF) cdIssues.push({ severity: 'warning', category: 'cooldown_delay', cd_name: cdName,
             timestamp_ms: rel(cdCasts[0].timestamp),
-            message: `${cdName} opener at ${_fmt(firstS)} — ${(firstS - b.avg_first_cast_s).toFixed(0)}s later than top parsers (${_fmt(b.avg_first_cast_s)} avg ±${sdF.toFixed(0)}s).` });
+            message: `${cdName} opener at ${_fmt(firstS)} - ${(firstS - b.avg_first_cast_s).toFixed(0)}s later than top parsers (${_fmt(b.avg_first_cast_s)} avg ±${sdF.toFixed(0)}s).` });
         }
       }
 
@@ -190,14 +190,14 @@ function _analyzeCore(
           const playerT = times[k], tol = target.stddev_s;
           if (playerT < target.target_s - tol) cdSugg.push({ severity: 'info', category: 'hold_suggestion',
             timestamp_ms: rel(cdCasts[k].timestamp),
-            message: `${cdName} cast ${idxStr} at ${_fmt(playerT)} — ${target.count}/${target.total_samples} top parsers hold until ~${_fmt(target.target_s)}.`,
+            message: `${cdName} cast ${idxStr} at ${_fmt(playerT)} - ${target.count}/${target.total_samples} top parsers hold until ~${_fmt(target.target_s)}.`,
             details: { remedy: `Consider holding ${cdName} until ~${_fmt(target.target_s)}.`, cd_name: cdName } });
         }
       }
 
       if (cdIssues.length) findings.push(...cdIssues);
       else if (actual > 0) findings.push({ severity: 'success', category: 'cooldown_usage', cd_name: cdName,
-        message: `${cdName} — ${actual}/${expected} casts${blAligned && wantsBL ? ', BL-aligned' : ''}.` });
+        message: `${cdName} - ${actual}/${expected} casts${blAligned && wantsBL ? ', BL-aligned' : ''}.` });
       if (actual > 0) findings.push(...cdSugg);
     }
   }
@@ -217,7 +217,7 @@ function _analyzeCore(
       const effPct = Math.max(0, (1 - totalDtS / fightDurS) * 100);
       const severity: Severity = effPct - topE < -topSD ? 'critical' : 'warning';
       findings.push({ severity, category: 'cast_efficiency',
-        message: `Cast efficiency: ${effPct.toFixed(1)}% (top avg ${topE.toFixed(0)}%) — ${totalDtS.toFixed(1)}s in gaps.` });
+        message: `Cast efficiency: ${effPct.toFixed(1)}% (top avg ${topE.toFixed(0)}%) - ${totalDtS.toFixed(1)}s in gaps.` });
     }
   }
 
@@ -329,7 +329,7 @@ function _analyzeDefensiveFindings(
         message: `${name} was never used. Expected ~${expected} use(s) in a ${_fmt(fightDurS)} fight.` });
     } else if (uses < expected) {
       issues.push({ severity: 'critical', category: 'lost_cooldown', cd_name: name, timestamp_ms: undefined,
-        message: `${name} — ${uses} of ${expected} expected uses. Lost ${expected - uses} use(s).` });
+        message: `${name} - ${uses} of ${expected} expected uses. Lost ${expected - uses} use(s).` });
     }
 
     if (cast_times_s?.length) {
@@ -339,7 +339,7 @@ function _analyzeDefensiveFindings(
         if (firstS > b.avg_first_cast_s + 2 * sdF) {
           issues.push({ severity: 'warning', category: 'cooldown_delay', cd_name: name,
             timestamp_ms: Math.round(firstS * 1000),
-            message: `${name} first use at ${_fmt(firstS)} — ${(firstS - b.avg_first_cast_s).toFixed(0)}s later than top parsers (${_fmt(b.avg_first_cast_s)} avg).` });
+            message: `${name} first use at ${_fmt(firstS)} - ${(firstS - b.avg_first_cast_s).toFixed(0)}s later than top parsers (${_fmt(b.avg_first_cast_s)} avg).` });
         }
       }
 
@@ -364,7 +364,7 @@ function _analyzeDefensiveFindings(
           if (playerT < target.target_s - tol) {
             suggestions.push({ severity: 'info', category: 'hold_suggestion',
               timestamp_ms: Math.round(playerT * 1000),
-              message: `${name} use ${idxStr} at ${_fmt(playerT)} — ${target.count}/${target.total_samples} top parsers hold until ~${_fmt(target.target_s)}.`,
+              message: `${name} use ${idxStr} at ${_fmt(playerT)} - ${target.count}/${target.total_samples} top parsers hold until ~${_fmt(target.target_s)}.`,
               details: { remedy: `Consider holding ${name} until ~${_fmt(target.target_s)}.`, cd_name: name } });
           }
         }
@@ -373,7 +373,7 @@ function _analyzeDefensiveFindings(
 
     if (issues.length) findings.push(...issues);
     else if (uses > 0) findings.push({ severity: 'success', category: 'cooldown_usage', cd_name: name,
-      message: `${name} — ${uses}/${expected} uses.` });
+      message: `${name} - ${uses}/${expected} uses.` });
     if (uses > 0) findings.push(...suggestions);
   }
 

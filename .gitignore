@@ -1,4 +1,4 @@
-# Environment — never commit secrets
+# Environment - never commit secrets
 .env
 .env.*
 !.env.example
@@ -9,7 +9,7 @@ venv/
 env/
 ENV/
 
-# Data — all persistent data is file-based under data/specs/ (no SQLite)
+# Data - all persistent data is file-based under data/specs/ (no SQLite)
 data/*.db
 data/*.log
 data/tmp/

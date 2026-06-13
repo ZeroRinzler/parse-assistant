@@ -166,7 +166,7 @@ export class PreFightComponent implements OnInit {
     const match = topStats.talent_builds.find(b => b.key === gear.talent_key);
     if (match && match.pct >= 40) return { status: 'ok', note: `Matches top parse build (${match.pct}% of parses)` };
     const top = topStats.talent_builds[0];
-    return { status: 'warn', note: `Build differs — most common used by ${top?.pct ?? 0}% of top parsers` };
+    return { status: 'warn', note: `Build differs - most common used by ${top?.pct ?? 0}% of top parsers` };
   }
 
 }
