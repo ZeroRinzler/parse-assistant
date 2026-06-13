@@ -19,10 +19,6 @@ export class PageNavComponent {
   protected readonly auth = inject(WclAuthService);
   protected readonly githubUrl = GITHUB_URL;
 
-  protected readonly authLabel = computed(() =>
-    this.auth.isLoggedIn() ? 'Signed in to WCL' : 'Sign in to WCL'
-  );
-
   protected signIn(): void {
     this.auth.login();
   }

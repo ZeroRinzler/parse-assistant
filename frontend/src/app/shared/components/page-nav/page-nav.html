@@ -24,25 +24,14 @@
     </a>
 
     @if (auth.isLoggedIn()) {
-      <button mat-button [matMenuTriggerFor]="authMenu" class="auth-btn auth-btn--connected">
-        <mat-icon>account_circle</mat-icon>
-        WCL
-        <mat-icon>arrow_drop_down</mat-icon>
+      <button mat-flat-button color="primary" (click)="signOut()">
+        <mat-icon>logout</mat-icon>
+        Sign out
       </button>
-      <mat-menu #authMenu="matMenu">
-        <button mat-menu-item disabled>
-          <mat-icon>check_circle</mat-icon>
-          <span>Signed in to Warcraft Logs</span>
-        </button>
-        <button mat-menu-item (click)="signOut()">
-          <mat-icon>logout</mat-icon>
-          <span>Sign out</span>
-        </button>
-      </mat-menu>
     } @else {
-      <button mat-button class="auth-btn" (click)="signIn()">
+      <button mat-flat-button color="primary" (click)="signIn()">
         <mat-icon>login</mat-icon>
-        Sign in to WCL
+        Sign in
       </button>
     }
   </div>
