@@ -54,7 +54,7 @@ body {
 
 .mat-mdc-form-field-subscript-wrapper { display: none; }
 
-// ── Shared comparison candle styles (used by burst-windows, defensives, comparison-chart) ──
+// ── Shared comparison candle styles (legends used by burst-windows, defensives, damage-taken) ──
 .cmp-legend {
   display: flex;
   align-items: center;
@@ -201,6 +201,16 @@ body {
 }
 
 .bw-future-wrap { opacity: 0.6; }
+
+.bw-cmp-caption {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 11px;
+  color: var(--muted);
+
+  .bw-cmp-you { color: var(--accent); }
+}
 
 // ── Ability breakdown (shared by burst-windows and defensives-section) ────────
 .bw-breakdown {

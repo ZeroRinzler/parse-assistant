@@ -1,15 +1,15 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { DmgTakenAbility, TopDtkComparison, DmgTakenSegment } from '../../../core/models/analysis.models';
-import { ComparisonChartComponent, ChartRow } from '../../../shared/components/comparison-chart/comparison-chart';
-
-import { FormatDurationPipe } from '../../../shared/pipes/format-duration-pipe';
+import { RangeChartComponent, RangeRow } from '../../../shared/components/range-chart/range-chart';
 import { IconCacheService } from '../../../core/services/icon-cache';
+
+const SEGMENT_LENGTH_S = 30;
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-damage-taken',
-  imports: [DecimalPipe, ComparisonChartComponent, FormatDurationPipe],
+  imports: [DecimalPipe, RangeChartComponent],
   templateUrl: './damage-taken.html',
   styleUrl: './damage-taken.scss',
 })
@@ -33,11 +33,13 @@ export class DamageTakenComponent {
     return m;
   });
 
+  // Shared x-axis max for the per-ability candlestick chart.
   protected readonly maxVal = computed(() => {
     const all = [...this.byAbility().map(a => a.pct), ...this.topComparison().map(t => t.avg_pct), ...this.topComparison().map(t => t.max_pct)];
     return Math.max(...all, 0.01);
   });
 
+  // Shared x-axis max for the per-segment candlestick chart.
   protected readonly segMaxVal = computed(() => {
     const tsm = this.topSegMap();
     const all = this.segmentPcts().flatMap((p, i) => {
@@ -47,7 +49,21 @@ export class DamageTakenComponent {
     return Math.max(...all, 0.01);
   });
 
-  protected readonly chartRows = computed((): ChartRow[] => {
+  protected readonly segmentRows = computed((): RangeRow[] => {
+    const tsm = this.topSegMap();
+    return this.segmentPcts().map((p, i) => {
+      const t = tsm[i];
+      return {
+        label: this.fmtTime(i * SEGMENT_LENGTH_S),
+        playerPct: p,
+        topAvg: t?.avg_pct ?? null,
+        topMin: t ? Math.max(0, t.avg_pct - t.stddev_pct) : null,
+        topMax: t ? t.avg_pct + t.stddev_pct : null,
+      };
+    });
+  });
+
+  protected readonly abilityRows = computed((): RangeRow[] => {
     const topM = this.topMap();
     const playerMap: Record<number, DmgTakenAbility> = {};
     for (const ab of this.byAbility()) playerMap[ab.spell_id] = ab;
@@ -56,42 +72,30 @@ export class DamageTakenComponent {
       ...Object.keys(topM).map(Number),
     ]);
     return [...mergedIds].map(sid => {
-      const ab = playerMap[sid] ?? { spell_id: sid, name: '', damage: 0, pct: 0 };
+      const ab = playerMap[sid];
       const top = topM[sid];
-      const icon = this.icons.get(sid);
-      const name = icon?.name || ab.name || `Spell ${sid}`;
-      const iconUrl = this.icons.iconUrl(sid, 'small');
-      const iconHtml = iconUrl ? `<img src="${iconUrl}" width="18" height="18" style="border-radius:3px;vertical-align:middle" alt="">` : '';
+      const name = this.icons.get(sid)?.name || ab?.name || `Spell ${sid}`;
       return {
-        labelHtml: `<span style="display:flex;align-items:center;gap:6px">${iconHtml}
-          <a href="https://www.wowhead.com/spell=${sid}" target="_blank">${name}</a>
-        </span>`,
-        playerVal: ab.pct,
+        spellId: sid,
+        label: name,
+        playerPct: ab?.pct ?? null,
         topAvg: top?.avg_pct ?? null,
         topMin: top?.min_pct ?? null,
         topMax: top?.max_pct ?? null,
-        highlight: top != null && ab.pct > top.avg_pct + Math.max(top.stddev_pct ?? 0, 0.02),
       };
-    }).sort((a, b) => {
-      const ah = a.highlight ? 1 : 0, bh = b.highlight ? 1 : 0;
-      if (ah !== bh) return bh - ah;
-      return Math.max(b.playerVal ?? 0, b.topAvg ?? 0) - Math.max(a.playerVal ?? 0, a.topAvg ?? 0);
-    });
+    }).sort((a, b) =>
+      Math.max(b.playerPct ?? 0, b.topAvg ?? 0) - Math.max(a.playerPct ?? 0, a.topAvg ?? 0));
   });
 
-  protected readonly outliers = computed(() => this.chartRows().filter(r => r.highlight));
+  protected readonly outlierCount = computed(() => {
+    const topM = this.topMap();
+    return this.byAbility().filter(ab => {
+      const t = topM[ab.spell_id];
+      return t != null && ab.pct > t.avg_pct + Math.max(t.stddev_pct ?? 0, 0.02);
+    }).length;
+  });
 
-  protected barHeight(val: number, maxV: number): number {
-    return Math.round(val / maxV * 78);
-  }
-
-  protected segTime(i: number): number {
-    return i * 30;
-  }
-
-  protected isHighSeg(i: number): boolean {
-    const t = this.topSegMap()[i];
-    const p = this.segmentPcts()[i] ?? 0;
-    return t != null && p > t.avg_pct + Math.max(t.stddev_pct ?? 0, 0.02);
+  private fmtTime(s: number): string {
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   }
 }

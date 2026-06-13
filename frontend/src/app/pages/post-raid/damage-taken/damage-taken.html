@@ -4,36 +4,28 @@
     @if (total() > 0) {
       <span class="dtk-total">Total: <strong>{{ total() | number }}</strong></span>
     }
-    @if (outliers().length) {
-      <span class="outlier-note">{{ outliers().length }} {{ outliers().length === 1 ? 'source' : 'sources' }} above top-10 avg</span>
+    @if (outlierCount()) {
+      <span class="outlier-note">{{ outlierCount() }} {{ outlierCount() === 1 ? 'source' : 'sources' }} above top-10 avg</span>
     }
   </div>
 
-  @if (segmentPcts().length) {
-    <div class="dtk-legend">
-      <span class="dtk-dot dtk-dot-player"></span> You
-      @if (topSegments().length) {
-        <span class="dtk-dot dtk-dot-top" style="margin-left:8px"></span> Top avg
-      }
-    </div>
-    <div class="dtk-bars">
-      @for (pct of segmentPcts(); track $index; let i = $index) {
-        <div class="dtk-bar-group" [class.dtk-bar-high]="isHighSeg(i)"
-             [title]="segTime(i) + 's: ' + (pct * 100 | number:'1.1-1') + '%'">
-          @if (topSegMap()[i]) {
-            <div class="dtk-bar-top" [style.height.px]="barHeight(topSegMap()[i].avg_pct, segMaxVal())"></div>
-          }
-          <div class="dtk-bar-player" [style.height.px]="barHeight(pct, segMaxVal())"></div>
-          <div class="dtk-bar-label">{{ segTime(i) | formatDuration }}</div>
-        </div>
-      }
-    </div>
+  @if (segmentRows().length) {
+    <p class="dtk-subhead">Damage taken over time (30s segments)</p>
+    <wl-range-chart
+      [rows]="segmentRows()"
+      unit="pct"
+      [higherIsBetter]="false"
+      [maxVal]="segMaxVal()">
+    </wl-range-chart>
   }
 
-  <wl-comparison-chart
-    [rows]="chartRows()"
-    [higherIsBetter]="false"
-    unit="pct"
-    [maxVal]="maxVal()">
-  </wl-comparison-chart>
+  @if (abilityRows().length) {
+    <p class="dtk-subhead">By ability</p>
+    <wl-range-chart
+      [rows]="abilityRows()"
+      unit="pct"
+      [higherIsBetter]="false"
+      [maxVal]="maxVal()">
+    </wl-range-chart>
+  }
 </div>

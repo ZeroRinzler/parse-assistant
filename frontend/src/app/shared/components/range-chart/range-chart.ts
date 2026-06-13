@@ -17,9 +17,10 @@ export interface RangeRow {
   spellId?: number;
   label: string;
   playerPct: number | null;
-  topAvg: number;
-  topMin: number;
-  topMax: number;
+  // Top-parse range. All three may be null when no comparison data exists for a row.
+  topAvg: number | null;
+  topMin: number | null;
+  topMax: number | null;
 }
 
 // Colors (kept from the previous ApexCharts implementation)
@@ -29,7 +30,7 @@ const COLOR_AVG = '#60cfff';
 const COLOR_YOU = '#ffd700'; // "You" value rendered as a yellow dot
 
 interface OverlayPoint {
-  avg: number;
+  avg: number | null;
   player: number | null;
 }
 
@@ -37,11 +38,13 @@ interface OverlayPoint {
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-range-chart',
   template: `
-    <div class="rc-legend">
-      <span class="rc-li"><span class="rc-sw range"></span>Top range</span>
-      <span class="rc-li"><span class="rc-sw avg"></span>Top avg</span>
-      <span class="rc-li"><span class="rc-sw you"></span>You</span>
-    </div>
+    @if (showLegend()) {
+      <div class="rc-legend">
+        <span class="rc-li"><span class="rc-sw range"></span>Top range</span>
+        <span class="rc-li"><span class="rc-sw avg"></span>Top avg</span>
+        <span class="rc-li"><span class="rc-sw you"></span>You</span>
+      </div>
+    }
     <div class="rc-wrap" [style.height.px]="height()">
       <canvas #canvas></canvas>
     </div>
@@ -68,12 +71,22 @@ export class RangeChartComponent implements AfterViewInit, OnChanges, OnDestroy 
   readonly rows = input.required<RangeRow[]>();
   readonly unit = input<'pct' | 'raw'>('pct');
   readonly higherIsBetter = input<boolean>(true);
+  // Fix the x-axis maximum so multiple charts (e.g. per-window cards) share a scale.
+  readonly maxVal = input<number | null>(null);
+  // Show the built-in "Top range / Top avg / You" legend.
+  readonly showLegend = input<boolean>(true);
+  // Show the category (y-axis) tick labels. Disable for single-row charts where
+  // the surrounding card already provides context.
+  readonly showLabels = input<boolean>(true);
+  // Vertical space per row, in px.
+  readonly rowHeight = input<number>(52);
 
   private readonly canvasRef = viewChild<ElementRef<HTMLCanvasElement>>('canvas');
   private chart?: Chart;
   private viewReady = false;
 
-  protected readonly height = computed(() => Math.max(80, this.rows().length * 52 + 20));
+  protected readonly height = computed(() =>
+    Math.max(60, this.rows().length * this.rowHeight() + 28));
 
   private fmt(v: number | null): string {
     if (v == null) return '—';
@@ -85,6 +98,8 @@ export class RangeChartComponent implements AfterViewInit, OnChanges, OnDestroy 
   }
 
   // Draws the average tick and the player "You" dot on top of each range bar.
+  // Positions are derived from the scales (not the bar element) so rows without
+  // a top-parse range still place the player dot correctly.
   private readonly overlayPlugin: Plugin<'bar'> = {
     id: 'rangeOverlay',
     afterDatasetsDraw: (chart) => {
@@ -92,22 +107,25 @@ export class RangeChartComponent implements AfterViewInit, OnChanges, OnDestroy 
       if (!points) return;
       const { ctx } = chart;
       const xScale = chart.scales['x'];
-      const meta = chart.getDatasetMeta(0);
-      points.forEach((p, i) => {
-        const bar = meta.data[i];
-        if (!bar) return;
-        const { y, height } = bar.getProps(['y', 'height'], true) as { y: number; height: number };
-        const thickness = Math.max(8, height);
+      const yScale = chart.scales['y'];
+      const band = points.length > 0 ? (yScale.bottom - yScale.top) / points.length : 0;
+      const thickness = Math.max(8, Math.min(18, band * 0.7));
 
-        // Average tick
-        const ax = xScale.getPixelForValue(p.avg);
+      points.forEach((p, i) => {
+        const y = yScale.getPixelForValue(i);
+        if (!Number.isFinite(y)) return;
+
         ctx.save();
-        ctx.strokeStyle = COLOR_AVG;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(ax, y - thickness / 2);
-        ctx.lineTo(ax, y + thickness / 2);
-        ctx.stroke();
+        // Average tick
+        if (p.avg != null) {
+          const ax = xScale.getPixelForValue(p.avg);
+          ctx.strokeStyle = COLOR_AVG;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(ax, y - thickness / 2);
+          ctx.lineTo(ax, y + thickness / 2);
+          ctx.stroke();
+        }
 
         // Player "You" dot
         if (p.player != null) {
@@ -147,18 +165,27 @@ export class RangeChartComponent implements AfterViewInit, OnChanges, OnDestroy 
 
     this.chart?.destroy();
 
+    // Explicit axis max keeps independent charts comparable and ensures player
+    // dots stay in view even when a row has no top-parse range bar.
+    const axisMax = this.maxVal() ?? Math.max(
+      0.001,
+      ...rows.flatMap(r => [r.playerPct, r.topAvg, r.topMax].filter((v): v is number => v != null)),
+    );
+
     const config: ChartConfiguration<'bar'> = {
       type: 'bar',
       data: {
         labels: cats,
         datasets: [{
           label: 'Top range',
-          data: rows.map(r => [r.topMin, r.topMax] as [number, number]),
+          data: rows.map(r =>
+            (r.topMin != null && r.topMax != null) ? [r.topMin, r.topMax] as [number, number] : null),
           backgroundColor: COLOR_RANGE_FILL,
           borderColor: COLOR_RANGE,
           borderWidth: 1,
           borderSkipped: false,
           borderRadius: 2,
+          maxBarThickness: 18,
           barPercentage: 0.6,
           categoryPercentage: 0.85,
         }],
@@ -171,6 +198,7 @@ export class RangeChartComponent implements AfterViewInit, OnChanges, OnDestroy 
         scales: {
           x: {
             min: 0,
+            max: axisMax,
             grid: { color: '#333' },
             ticks: {
               color: '#aaa',
@@ -182,7 +210,11 @@ export class RangeChartComponent implements AfterViewInit, OnChanges, OnDestroy 
           },
           y: {
             grid: { display: false },
-            ticks: { color: '#aaa', font: { size: 11 } },
+            ticks: {
+              display: this.showLabels(),
+              color: '#aaa',
+              font: { size: 11 },
+            },
           },
         },
         plugins: {
@@ -195,10 +227,10 @@ export class RangeChartComponent implements AfterViewInit, OnChanges, OnDestroy 
               afterBody: (items) => {
                 if (!items.length) return [];
                 const r = rows[items[0].dataIndex];
-                return [
-                  `You: ${this.fmt(r.playerPct)}`,
-                  `Top avg: ${this.fmt(r.topAvg)} (${this.fmt(r.topMin)}–${this.fmt(r.topMax)})`,
-                ];
+                const top = r.topAvg != null
+                  ? `Top avg: ${this.fmt(r.topAvg)} (${this.fmt(r.topMin)}–${this.fmt(r.topMax)})`
+                  : 'Top avg: —';
+                return [`You: ${this.fmt(r.playerPct)}`, top];
               },
             },
           },

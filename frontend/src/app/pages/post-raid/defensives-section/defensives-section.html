@@ -74,30 +74,21 @@
         </div>
 
         <div class="bw-cmp-wrap" [class.bw-future-wrap]="card.notReached">
+          <wl-range-chart
+            [rows]="card.rangeRows"
+            unit="pct"
+            [higherIsBetter]="false"
+            [maxVal]="maxDwVal()"
+            [showLegend]="false"
+            [showLabels]="false"
+            [rowHeight]="34">
+          </wl-range-chart>
           @if (!card.notReached) {
-            <div class="cmp-subrow">
-              <span class="cmp-leg player"></span>
-              <div class="cmp-track">
-                <div class="cmp-fill player" [style.width.%]="card.pBar"></div>
-              </div>
-              <span class="cmp-val">{{ card.playerPct != null ? (card.playerPct * 100 | number:'1.1-1') + '%' : '-' }}</span>
+            <div class="bw-cmp-caption">
+              <span class="bw-cmp-you">You {{ card.playerPct != null ? (card.playerPct * 100 | number:'1.1-1') + '%' : '—' }}</span>
+              <span class="bw-cmp-top">Top {{ (card.topPct * 100 | number:'1.1-1') }}% ({{ (card.minPct * 100 | number:'1.1-1') }}–{{ (card.maxPct * 100 | number:'1.1-1') }}%)</span>
             </div>
           }
-          <div class="cmp-subrow">
-            <span class="cmp-leg top"></span>
-            <div class="cmp-track">
-              @if (card.rW > 0.5) {
-                <div class="cmp-candle" [style.left.%]="card.tMinP" [style.width.%]="card.rW">
-                  <div class="cmp-candle-tick" [style.left.%]="card.avgOff"></div>
-                </div>
-              }
-              <div class="cmp-fill top" [style.width.%]="card.tBar"></div>
-            </div>
-            <span class="cmp-val top">
-              {{ (card.topPct * 100 | number:'1.1-1') }}%
-              <span class="cmp-range">{{ (card.minPct * 100 | number:'1.1-1') }}%–{{ (card.maxPct * 100 | number:'1.1-1') }}%</span>
-            </span>
-          </div>
         </div>
 
         <!-- Ability breakdown chart -->
