@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Warcraft Learner — Standalone Guide Scraper CLI
+ * warcraft-learner — Standalone Guide Scraper CLI
  *
  * Manages guides for specs: add URLs, scrape content, view, delete.
  * Writes directly to data/specs/{spec}/guides.json
@@ -287,7 +287,7 @@ async function pickSpec() {
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
-  console.log('Warcraft Learner — Guide Scraper CLI');
+  console.log('warcraft-learner — Guide Scraper CLI');
 
   // ── CLI mode (non-interactive) ──────────────────────────────────────────────
   const argv = process.argv.slice(2);

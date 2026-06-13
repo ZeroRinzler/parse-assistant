@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Warcraft Learner — Rulebook Admin CLI
+ * warcraft-learner — Rulebook Admin CLI
  *
  * Manages AI-generated rulebooks for specs.
  * Reads scraped guides from frontend/public/data/specs/{spec}/guides.json,
@@ -243,7 +243,7 @@ async function pickSpec() {
 
 async function main() {
   const arg = process.argv[2];
-  console.log('Warcraft Learner — Rulebook Admin');
+  console.log('warcraft-learner — Rulebook Admin');
   console.log('For guides: npm run scrape');
   console.log('For parses: npm run ingest\n');
 

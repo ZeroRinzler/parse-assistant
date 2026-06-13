@@ -9,6 +9,39 @@
   gap: 4px;
 }
 
+.nav-brand {
+  position: absolute;
+  left: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  color: var(--text);
+
+  &__mark {
+    width: 24px;
+    height: 24px;
+    display: block;
+  }
+
+  &__shield { fill: var(--gold); }
+  &__bars { fill: var(--surface); }
+
+  &__name {
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+    color: var(--gold);
+  }
+
+  &:hover &__name { color: var(--text); }
+
+  // Wordmark would crowd the centered links on narrow viewports.
+  @media (max-width: 600px) {
+    &__name { display: none; }
+  }
+}
+
 .nav-links {
   display: flex;
   gap: 2px;

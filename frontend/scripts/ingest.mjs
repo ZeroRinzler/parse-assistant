@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Warcraft Learner — Standalone Parse Ingestion CLI
+ * warcraft-learner — Standalone Parse Ingestion CLI
  *
  * Fetches top WCL parses for a spec+encounter and writes:
  *   data/specs/{spec}/parse_samples/{enc_id}.json  — raw samples
@@ -1548,7 +1548,7 @@ async function ingestSpec(wcl, spec, encounters) {
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
-  console.log('Warcraft Learner — Parse Ingestion CLI');
+  console.log('warcraft-learner — Parse Ingestion CLI');
 
   // ── CLI mode (non-interactive) ──────────────────────────────────────────────
   const argv = process.argv.slice(2);
