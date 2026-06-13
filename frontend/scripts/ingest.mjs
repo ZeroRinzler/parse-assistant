@@ -298,12 +298,10 @@ async function getEncounters(wcl) {
 
 const TRINKET_INDICES = new Set([12, 13]);
 
-function extractCombatantInfo(rankingEntry) {
-  if (!rankingEntry) return { talent_key: '', trinkets: [], enchants: [] };
-
+// Trinkets (gear slots 12/13) and permanent enchants. Gear shape is identical
+// across both ranking APIs, so this is shared.
+function extractGear(rankingEntry) {
   const gear = rankingEntry.gear || [];
-  const talentsRaw = rankingEntry.talents;
-
   const trinkets = [];
   const enchants = [];
   for (let idx = 0; idx < gear.length; idx++) {
@@ -322,38 +320,36 @@ function extractCombatantInfo(rankingEntry) {
       enchants.push({ slot: idx, id: encId, name: item.permanentEnchantName || '' });
     }
   }
+  return { trinkets, enchants };
+}
 
-  let talentKey = '';
-  if (typeof talentsRaw === 'string') {
-    talentKey = talentsRaw;
-  } else if (Array.isArray(talentsRaw) && talentsRaw.length > 0) {
-    // Old WCL format: [{talentID: N, points: P}]
-    const ids = talentsRaw
-      .filter(t => t)
-      .map(t => String(t.talentID || t.id || ''))
-      .filter(x => x)
-      .sort();
-    talentKey = 'v1:' + ids.join(',');
-  } else if (talentsRaw && typeof talentsRaw === 'object') {
-    // Midnight format: {class: {row: [{node: {nodeId: N}}]}, spec: {...}}
-    const nodeIds = [];
-    for (const sectionKey of ['class', 'spec']) {
-      const section = talentsRaw[sectionKey] || {};
-      if (typeof section === 'object') {
-        for (const rowNodes of Object.values(section)) {
-          if (Array.isArray(rowNodes)) {
-            for (const entry of rowNodes) {
-              const nid = (entry.node || {}).nodeId;
-              if (nid) nodeIds.push(String(nid));
-            }
-          }
-        }
+// `characterRankings` talents — old WCL format: [{talentID: N, points: P}].
+function talentKeyV1(talents) {
+  if (!Array.isArray(talents) || !talents.length) return '';
+  const ids = talents
+    .filter(t => t)
+    .map(t => String(t.talentID || t.id || ''))
+    .filter(x => x)
+    .sort();
+  return ids.length ? 'v1:' + ids.join(',') : '';
+}
+
+// `encounterRankings` talents — Midnight format: {class:{row:[{node:{nodeId}}]}, spec:{...}}.
+function talentKeyV2(talents) {
+  if (!talents || typeof talents !== 'object') return '';
+  const nodeIds = [];
+  for (const sectionKey of ['class', 'spec']) {
+    const section = talents[sectionKey] || {};
+    if (typeof section !== 'object') continue;
+    for (const rowNodes of Object.values(section)) {
+      if (!Array.isArray(rowNodes)) continue;
+      for (const entry of rowNodes) {
+        const nid = (entry.node || {}).nodeId;
+        if (nid) nodeIds.push(String(nid));
       }
     }
-    talentKey = 'v2:' + nodeIds.sort().join(',');
   }
-
-  return { talent_key: talentKey, trinkets, enchants };
+  return nodeIds.length ? 'v2:' + nodeIds.sort().join(',') : '';
 }
 
 async function fetchV2Talent(wcl, name, serverSlug, serverRegion, encounterId) {
@@ -368,7 +364,7 @@ async function fetchV2Talent(wcl, name, serverSlug, serverRegion, encounterId) {
     const ranks = (rankingsData.ranks || []);
     if (!ranks.length) return '';
     const mostRecent = ranks.reduce((a, b) => (a.startTime || 0) > (b.startTime || 0) ? a : b);
-    return extractCombatantInfo(mostRecent).talent_key || '';
+    return talentKeyV2(mostRecent.talents);
   } catch {
     return '';
   }
@@ -406,9 +402,10 @@ async function fetchTopRankings(wcl, spec, encounterId, count = 10) {
   );
 
   return rankings.map((r, i) => {
-    const ci = { ...r };
-    if (talentKeys[i]) ci.talents = talentKeys[i];
     const [serverSlug, serverRegion] = slugsFor(r);
+    // Prefer the Midnight `v2:` key from encounterRankings; fall back to the
+    // characterRankings `v1:` key only if the per-player v2 query came up empty.
+    const talent_key = talentKeys[i] || talentKeyV1(r.talents);
     return {
       rank: i + 1,
       player: r.name,
@@ -419,58 +416,12 @@ async function fetchTopRankings(wcl, spec, encounterId, count = 10) {
       server: (r.server || {}).name,
       server_slug: serverSlug,
       server_region: serverRegion,
-      combatant_info: ci,
+      combatant_info: { talent_key, ...extractGear(r) },
     };
   });
 }
 
 // ── Burst window analysis ─────────────────────────────────────────────────────
-
-function findSignificantWindows(hitsTs, hitsDmg, hitsAids, fightStartMs, total, windowMs, minPctThreshold) {
-  const n = hitsTs.length;
-  let j = 0;
-  let windowSum = 0;
-  const candidates = [];
-
-  for (let i = 0; i < n; i++) {
-    while (j < n && hitsTs[j] <= hitsTs[i] + windowMs) {
-      windowSum += hitsDmg[j];
-      j++;
-    }
-    candidates.push([hitsTs[i], windowSum]);
-    windowSum -= hitsDmg[i];
-  }
-
-  const minDmg = total * minPctThreshold;
-  candidates.sort((a, b) => b[1] - a[1]);
-
-  const selected = [];
-  for (const [ts, dmg] of candidates) {
-    if (dmg < minDmg) break;
-    if (selected.some(s => Math.abs(ts - (fightStartMs + s.time_s * 1000)) < windowMs)) continue;
-    const tEnd = ts + windowMs;
-    const abilityDmg = new Map();
-    for (let k = 0; k < n; k++) {
-      if (hitsTs[k] < ts || hitsTs[k] > tEnd) continue;
-      if (hitsAids[k]) {
-        abilityDmg.set(hitsAids[k], (abilityDmg.get(hitsAids[k]) || 0) + hitsDmg[k]);
-      }
-    }
-    const topAbilities = [...abilityDmg.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 6)
-      .map(([sid, d]) => ({ spell_id: sid, damage: d, pct: dmg ? Math.round(d / dmg * 1000) / 1000 : 0 }));
-
-    selected.push({
-      time_s: Math.round((ts - fightStartMs) / 100) / 10,
-      pct_of_total: Math.round(dmg / total * 1000) / 1000,
-      window_damage: dmg,
-      total_damage: total,
-      ability_breakdown: topAbilities,
-    });
-  }
-  return selected.sort((a, b) => a.time_s - b.time_s);
-}
 
 function findBurstWindows(damageEvents, fightStartMs, cdSummary, specCds, minPctThreshold = 0.03) {
   const hits = damageEvents
@@ -492,16 +443,7 @@ function findBurstWindows(damageEvents, fightStartMs, cdSummary, specCds, minPct
       rawWins.push({ startS: castS, endS: castS + dur, cdNames: [cdEntry.name] });
     }
   }
-
-  // Fall back to 8s sliding window when no CD duration info is available
-  if (!rawWins.length) {
-    const fallback = findSignificantWindows(
-      hits.map(h => h[0]), hits.map(h => h[1]), hits.map(h => h[3]),
-      fightStartMs, total, 8000, minPctThreshold,
-    );
-    for (const w of fallback) { w.active_cds = []; w.target_count = 1; w.window_length_s = 8; }
-    return fallback;
-  }
+  if (!rawWins.length) return [];
 
   // Merge overlapping or near-adjacent windows (≤3s gap)
   rawWins.sort((a, b) => a.startS - b.startS);
@@ -621,7 +563,7 @@ function clusterDefensiveWindows(windows, totalSamples, mergeS = 20.0) {
       const base = clusterBaseStats(cl, totalSamples);
       result.push({
         ...base,
-        window_length_s: round(mean(cl.map(c => c.window_length_s || 5))),
+        window_length_s: round(mean(cl.map(c => c.window_length_s))),
         defensive_name: defensiveName,
         spell_id: cl[0].spell_id,
         common_defensives: [defensiveName],
@@ -675,9 +617,8 @@ async function analyzeParse(wcl, spec, reportCode, fightId, playerName, combatan
   if (!fight) return null;
 
   const actors = report.masterData.actors;
-  let player = playerName ? actors.find(a => a.name === playerName) : null;
-  if (!player) player = actors.find(a => a.subType === spec);
-  if (!player) return null;
+  const player = actors.find(a => a.name === playerName);
+  if (!player) throw new Error(`Player "${playerName}" not found in report ${reportCode} (fight ${fightId}).`);
 
   const start = fight.startTime;
   const end = fight.endTime;
@@ -780,7 +721,8 @@ async function analyzeParse(wcl, spec, reportCode, fightId, playerName, combatan
   const burstWindows = findBurstWindows(damageEvents, start, cdSummary, specCds);
 
   // Gear data from combatant info
-  const gearData = combatantInfo ? extractCombatantInfo(combatantInfo) : {};
+  // combatant_info already carries parsed { talent_key, trinkets, enchants } from fetchTopRankings.
+  const gearData = combatantInfo || {};
 
   // Defensive tracking
   // Build buff window lookup: Map<spell_id, [[start_s, end_s|null], ...]>
@@ -1014,7 +956,7 @@ function clusterBurstWindows(windows, totalSamples, mergeS = 15.0) {
       .sort((a, b) => b[1] - a[1])
       .filter(([, cnt]) => cnt >= cl.length * 0.5)
       .map(([name]) => name);
-    const window_length_s = round(mean(cl.map(c => c.window_length_s || 8)));
+    const window_length_s = round(mean(cl.map(c => c.window_length_s)));
     result.push({ ...base, common_cds, avg_targets: round(mean(cl.map(c => c.target_count || 1))), window_length_s });
   }
   return result.sort((a, b) => a.time_s - b.time_s);
@@ -1184,7 +1126,7 @@ function syncEncounterFile(spec, encounterId) {
     }
   }
   const topAvgEfficiency = effVals.length ? round(mean(effVals)) : null;
-  const topEfficiencyStddev = effVals.length > 1 ? round(stdev(effVals)) : null;
+  const topEfficiencyStddev = effVals.length ? round(stdev(effVals)) : null;
 
   // Per-CD benchmarks
   const agg = new Map();
@@ -1219,7 +1161,7 @@ function syncEncounterFile(spec, encounterId) {
       if (times.length >= Math.max(2, entries.length * 0.4)) {
         holdTargets[String(castIdx)] = {
           target_s: round(median(times)),
-          stddev_s: round(times.length > 1 ? stdev(times) : 20.0),
+          stddev_s: round(stdev(times)),
           count: times.length,
           total_samples: entries.length,
         };
@@ -1234,11 +1176,11 @@ function syncEncounterFile(spec, encounterId) {
     perCdBenchmarks[cdName] = {
       sample_count: entries.length,
       avg_first_cast_s: topFirstCasts.length ? round(mean(topFirstCasts)) : null,
-      stddev_first_cast_s: topFirstCasts.length > 1 ? round(stdev(topFirstCasts)) : null,
+      stddev_first_cast_s: topFirstCasts.length ? round(stdev(topFirstCasts)) : null,
       avg_gap_s: allCdGaps.length ? round(mean(allCdGaps)) : null,
-      stddev_gap_s: allCdGaps.length > 1 ? round(stdev(allCdGaps)) : null,
+      stddev_gap_s: allCdGaps.length ? round(stdev(allCdGaps)) : null,
       avg_bl_offset_s: blOffsets.length ? round(mean(blOffsets)) : null,
-      stddev_bl_offset_s: blOffsets.length > 1 ? round(stdev(blOffsets)) : null,
+      stddev_bl_offset_s: blOffsets.length ? round(stdev(blOffsets)) : null,
       hold_targets: holdTargets,
       uses_per_min: benchUsesPerMin(entries),
       avg_uses: entries.length ? round(mean(entries.map(e => e.total_uses || 0))) : 0,
@@ -1317,7 +1259,7 @@ function syncEncounterFile(spec, encounterId) {
       if (times.length >= Math.max(2, entries.length * 0.4)) {
         holdTargets[String(castIdx)] = {
           target_s: round(median(times)),
-          stddev_s: round(times.length > 1 ? stdev(times) : 20.0),
+          stddev_s: round(stdev(times)),
           count: times.length,
           total_samples: entries.length,
         };
@@ -1332,9 +1274,9 @@ function syncEncounterFile(spec, encounterId) {
     perDefensiveBenchmarks[defName] = {
       sample_count: entries.length,
       avg_first_cast_s: topFirstCasts.length ? round(mean(topFirstCasts)) : null,
-      stddev_first_cast_s: topFirstCasts.length > 1 ? round(stdev(topFirstCasts)) : null,
+      stddev_first_cast_s: topFirstCasts.length ? round(stdev(topFirstCasts)) : null,
       avg_gap_s: allDefGaps.length ? round(mean(allDefGaps)) : null,
-      stddev_gap_s: allDefGaps.length > 1 ? round(stdev(allDefGaps)) : null,
+      stddev_gap_s: allDefGaps.length ? round(stdev(allDefGaps)) : null,
       hold_targets: holdTargets,
       avg_uses: avgUsesList.length ? round(mean(avgUsesList)) : 0,
       avg_uses_per_min: upmList.length ? round(mean(upmList), 2) : null,

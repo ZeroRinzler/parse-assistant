@@ -56,7 +56,7 @@ export class BurstWindowsComponent {
       return {
         bw, idx, notReached, playerPct, topPct, minPct, maxPct,
         cls, badge, playerAbMap, rangeRows,
-        windowLength: bw.window_length_s ?? 8,
+        windowLength: bw.window_length_s,
       };
     });
   });

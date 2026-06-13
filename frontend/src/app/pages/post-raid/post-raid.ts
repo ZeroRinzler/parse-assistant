@@ -11,7 +11,7 @@ import { WclAuthService } from '../../core/services/wcl-auth';
 import { WclApiService } from '../../core/services/wcl-api';
 import { AnalysisService } from '../../core/services/analysis';
 import { IconCacheService } from '../../core/services/icon-cache';
-import { WclFight, WclPlayer } from '../../core/models/wcl.models';
+import { WclFight, WclPlayer, WclUserCharacter } from '../../core/models/wcl.models';
 import { AnalysisResult } from '../../core/models/analysis.models';
 import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner/loading-spinner';
 import { AnalysisResultComponent } from './analysis-result/analysis-result';
@@ -60,6 +60,7 @@ export class PostRaidComponent implements OnInit {
 
   private _reportCode = '';
   private _masterAbilities: { gameID: number; name: string; icon: string }[] = [];
+  private _userChars: WclUserCharacter[] = [];
 
   protected readonly visiblePlayers = computed(() => {
     const fightId = this.selectedFightId();
@@ -98,10 +99,11 @@ export class PostRaidComponent implements OnInit {
         throw new Error('Sign in with WCL to load reports.');
       }
       this.loadingMsg.set('Fetching report from WCL…');
-      const [report] = await Promise.all([
+      const [report, userChars] = await Promise.all([
         this.wclApi.getReport(this._reportCode),
-        this.wclApi.fetchUserCharacters().catch(() => {}),
+        this.wclApi.fetchUserCharacters().catch(() => [] as WclUserCharacter[]),
       ]);
+      this._userChars = userChars;
       const bossAttempt: Record<number, number> = {};
       this.fights.set(
         (report.fights || []).filter(f => (f.encounterID || 0) > 0).sort((a, b) => a.startTime - b.startTime).map(f => {
@@ -162,7 +164,7 @@ export class PostRaidComponent implements OnInit {
 
   private _applyAutoPlayer(autoPlayer: number | null): void {
     // Always prefer the logged-in user's character over URL params
-    const chars = this.wclApi.getCachedUserChars();
+    const chars = this._userChars;
     if (chars.length) {
       const names = new Set(chars.map(c => c.name.toLowerCase()));
       const match = this.visiblePlayers().find(p => names.has(p.name.toLowerCase()));

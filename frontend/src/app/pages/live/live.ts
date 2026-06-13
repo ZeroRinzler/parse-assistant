@@ -9,7 +9,7 @@ import { WclAuthService } from '../../core/services/wcl-auth';
 import { WclApiService } from '../../core/services/wcl-api';
 import { AnalysisService } from '../../core/services/analysis';
 import { AnalysisResult } from '../../core/models/analysis.models';
-import { WclFight } from '../../core/models/wcl.models';
+import { WclFight, WclUserCharacter } from '../../core/models/wcl.models';
 import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner/loading-spinner';
 import { AnalysisResultComponent } from '../post-raid/analysis-result/analysis-result';
 
@@ -48,11 +48,12 @@ export class LiveComponent implements OnInit, OnDestroy {
   private _pollTimer: ReturnType<typeof setInterval> | null = null;
   private _fights: WclFight[] = [];
   private _players: { id: number; name: string; spec: string; server: string }[] = [];
+  private _userChars: WclUserCharacter[] = [];
 
   async ngOnInit(): Promise<void> {
     if (!this.auth.isLoggedIn()) return;
-    const chars = this.wclApi.getCachedUserChars();
-    if (chars.length) await this._autoStart();
+    this._userChars = await this.wclApi.fetchUserCharacters().catch(() => []);
+    if (this._userChars.length) await this._autoStart();
   }
 
   ngOnDestroy(): void {
@@ -60,7 +61,7 @@ export class LiveComponent implements OnInit, OnDestroy {
   }
 
   private async _autoStart(): Promise<void> {
-    const chars = this.wclApi.getCachedUserChars();
+    const chars = this._userChars;
     if (!chars.length) return;
     try {
       const char = chars[0];
@@ -113,8 +114,7 @@ export class LiveComponent implements OnInit, OnDestroy {
       this.loading.set(true);
       this.status.set(`Analyzing ${latestFight.name}…`);
 
-      const chars = this.wclApi.getCachedUserChars();
-      const names = new Set(chars.map(c => c.name.toLowerCase()));
+      const names = new Set(this._userChars.map(c => c.name.toLowerCase()));
       const playerMatch = this._players.find(p => names.has(p.name.toLowerCase())) ?? this._players[0];
       if (!playerMatch) { this.loading.set(false); this.status.set('No player found.'); return; }
 

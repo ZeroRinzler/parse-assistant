@@ -38,7 +38,7 @@ export interface BurstWindowBench {
   pct_stddev?: number;
   common_cds: string[];
   avg_targets: number;
-  window_length_s?: number;
+  window_length_s: number;
   ability_breakdown?: Array<{ spell_id: number; avg_pct: number; min_pct?: number; max_pct?: number; count?: number }>;
 }
 
@@ -65,7 +65,7 @@ export interface EncounterBench {
 export interface DefensiveWindowBench {
   time_s: number;
   stddev_s: number;
-  window_length_s?: number;
+  window_length_s: number;
   count: number;
   total_samples: number;
   pct_avg: number;

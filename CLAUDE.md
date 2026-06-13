@@ -87,9 +87,9 @@ warcraft-learner/
 5. `analysis-engine.ts` checks per offensive cooldown:
    - **Lost casts** — `expected = 1 + floor(fight_duration / cd_cooldown)` vs actual.
    - **Bloodlust alignment** — flags major CDs whose BL-window cast timing is >2σ from top-parse average. Falls back to binary in/out-of-window check.
-   - **First-cast delay** — flags opener CDs whose first cast is >2σ later than `avg_first_cast_s`. Falls back to 30s.
-   - **Held past reset** — gap between casts >2σ above `avg_gap_s`. Falls back to `cooldown × 1.2`.
-   - **Hold suggestions** — cast index where ≥40% of top parsers delay >8s past on-cooldown time; fires if player casts >max(σ, 15s) before median hold time.
+   - **First-cast delay** — flags opener CDs whose first cast is >2σ later than `avg_first_cast_s`. Skipped when no bench.
+   - **Held past reset** — gap between casts >2σ above `avg_gap_s`. Skipped when no bench.
+   - **Hold suggestions** — cast index where ≥40% of top parsers delay >8s past on-cooldown time; fires if player casts >σ before median hold time.
    - **Cast efficiency** — player downtime (gaps above p90 of top-parse inter-cast gaps) vs top-parse average.
    - **Success** — emitted when a CD has zero issues.
 6. **Rule engine** — evaluates `rules[]` entries with a machine-readable `condition`. Two kinds:
@@ -263,12 +263,14 @@ Non-obvious things that have caused bugs — read before touching gear extractio
 
 | Threshold | Derived from | Fallback |
 |---|---|---|
-| First-cast delay | `avg_first_cast_s + 2σ` across top parses | 30s |
-| Gap between CD uses | `avg_gap_s + 2σ` across top parses | `cooldown × 1.2` |
-| Hold suggestion trigger | Cast index where ≥40% of samples have `hold_amount_s > 8s`; fires if player casts >max(σ, 15s) before median | None emitted |
-| Downtime gap floor | p90 of pooled `cast_gap_list_ms` | 1500ms |
-| Efficiency warning band | 1σ below avg → warning; 2σ → critical | flat −7% |
+| First-cast delay | `avg_first_cast_s + 2σ` across top parses | None — finding skipped without bench |
+| Gap between CD uses | `avg_gap_s + 2σ` across top parses | None — finding skipped without bench |
+| Hold suggestion trigger | Cast index where ≥40% of samples have `hold_amount_s > 8s`; fires if player casts >σ before median | None emitted |
+| Downtime gap floor | p90 of pooled `cast_gap_list_ms` | None — finding skipped without bench (ingest writes 1500ms only if zero gaps) |
+| Efficiency warning band | <1σ below top avg → warning; deeper → critical | None — finding skipped without bench |
 | BL timing | `avg_bl_offset_s ± 2σ` | binary in/out-of-window |
+
+> **Stddev is always emitted by ingestion alongside its mean** (`stdev()` returns 0 for a single sample), so the per-CD/defensive `stddev_*` fields are non-null whenever the matching mean is. The analysis engine relies on the bench value directly — there is no hardcoded-σ secondary fallback. By design, once every spec/encounter has bench data, the "skipped without bench" cases never occur in practice.
 | Burst window clustering | windows within 15s merged; ≥35% of samples required | n/a |
 | Defensive window clustering | per-defensive grouping, within 20s merged; ≥35% of samples required | n/a |
 | Comparison table (uses/min) | `top_stddev_uses_per_min` per CD | ±0.05 |

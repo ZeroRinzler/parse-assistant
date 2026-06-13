@@ -29,7 +29,7 @@ export interface BurstWindow {
   common_defensives?: string[];
   avg_targets?: number;
   ability_breakdown?: AbilityBreakdown[];
-  window_length_s?: number;
+  window_length_s: number;
   defensive_name?: string;
   spell_id?: number;
 }

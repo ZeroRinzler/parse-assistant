@@ -118,7 +118,7 @@ function _analyzeCore(
     }
   }
 
-  const downtimeThreshMs = bench?.downtime_threshold_ms ?? 1500;
+  const downtimeThreshMs = bench?.downtime_threshold_ms;
   const perCdBench = bench?.per_cd_benchmarks ?? {};
 
   if (!specCds) {
@@ -143,15 +143,11 @@ function _analyzeCore(
       const b = perCdBench[cdName];
       if (cdCasts.length) {
         const firstS = rel(cdCasts[0].timestamp) / 1000;
-        if (b?.avg_first_cast_s != null) {
-          const sdF = b.stddev_first_cast_s ?? 10;
+        if (b?.avg_first_cast_s != null && b.stddev_first_cast_s != null) {
+          const sdF = b.stddev_first_cast_s;
           if (firstS > b.avg_first_cast_s + 2 * sdF) cdIssues.push({ severity: 'warning', category: 'cooldown_delay', cd_name: cdName,
             timestamp_ms: rel(cdCasts[0].timestamp),
             message: `${cdName} opener at ${_fmt(firstS)} — ${(firstS - b.avg_first_cast_s).toFixed(0)}s later than top parsers (${_fmt(b.avg_first_cast_s)} avg ±${sdF.toFixed(0)}s).` });
-        } else if (firstS > 30) {
-          cdIssues.push({ severity: 'warning', category: 'cooldown_delay', cd_name: cdName,
-            timestamp_ms: rel(cdCasts[0].timestamp),
-            message: `${cdName} first cast at ${_fmt(firstS)} (${firstS.toFixed(0)}s into the fight). Late opener risks losing a full use.` });
         }
       }
 
@@ -163,10 +159,10 @@ function _analyzeCore(
           cdIssues.push({ severity: 'critical', category: 'cooldown_alignment', cd_name: cdName,
             timestamp_ms: rel(cdCasts[0].timestamp),
             message: `${cdName} missed Bloodlust (BL at ${_fmt(blTimeS)}, first cast at ${_fmt(rel(cdCasts[0].timestamp) / 1000)}).` });
-        } else if (blAligned && b?.avg_bl_offset_s != null) {
+        } else if (blAligned && b?.avg_bl_offset_s != null && b.stddev_bl_offset_s != null) {
           const offsets = blWin.map(c => rel(c.timestamp) / 1000 - blTimeS!);
           const po = offsets.reduce((best, x) => Math.abs(x) < Math.abs(best) ? x : best);
-          const sd = b.stddev_bl_offset_s ?? 5;
+          const sd = b.stddev_bl_offset_s;
           if (Math.abs(po - b.avg_bl_offset_s) > 2 * sd) {
             const dir = po > b.avg_bl_offset_s ? 'late' : 'early';
             cdIssues.push({ severity: 'warning', category: 'cooldown_alignment', cd_name: cdName,
@@ -178,15 +174,11 @@ function _analyzeCore(
 
       for (let i = 1; i < cdCasts.length; i++) {
         const gap = (rel(cdCasts[i].timestamp) - rel(cdCasts[i - 1].timestamp)) / 1000;
-        if (b?.avg_gap_s != null) {
-          const sdG = b.stddev_gap_s ?? cooldownS * 0.2;
+        if (b?.avg_gap_s != null && b.stddev_gap_s != null) {
+          const sdG = b.stddev_gap_s;
           if (gap > b.avg_gap_s + 2 * sdG) cdIssues.push({ severity: 'warning', category: 'cooldown_delay', cd_name: cdName,
             timestamp_ms: rel(cdCasts[i].timestamp),
             message: `${cdName} at ${_fmt(rel(cdCasts[i].timestamp) / 1000)}: ${gap.toFixed(0)}s gap vs top-parse avg ${b.avg_gap_s.toFixed(0)}s ±${sdG.toFixed(0)}s.` });
-        } else if (gap > cooldownS * 1.2) {
-          cdIssues.push({ severity: 'warning', category: 'cooldown_delay', cd_name: cdName,
-            timestamp_ms: rel(cdCasts[i].timestamp),
-            message: `${cdName} held ${(gap - cooldownS).toFixed(0)}s past reset at ${_fmt(rel(cdCasts[i].timestamp) / 1000)}.` });
         }
       }
 
@@ -195,7 +187,7 @@ function _analyzeCore(
         for (const [idxStr, target] of Object.entries(b.hold_targets)) {
           const k = parseInt(idxStr, 10) - 1;
           if (k >= times.length) continue;
-          const playerT = times[k], tol = Math.max(target.stddev_s ?? 20, 15);
+          const playerT = times[k], tol = target.stddev_s;
           if (playerT < target.target_s - tol) cdSugg.push({ severity: 'info', category: 'hold_suggestion',
             timestamp_ms: rel(cdCasts[k].timestamp),
             message: `${cdName} cast ${idxStr} at ${_fmt(playerT)} — ${target.count}/${target.total_samples} top parsers hold until ~${_fmt(target.target_s)}.`,
@@ -212,22 +204,20 @@ function _analyzeCore(
 
   if (rules.length) findings.push(..._evaluateRules(rules, casts, fStart));
 
-  if (casts.length >= 2) {
+  if (casts.length >= 2 && downtimeThreshMs != null) {
     const gaps: { start_ms: number; duration_ms: number }[] = [];
     for (let i = 1; i < casts.length; i++) {
       const gMs = rel(casts[i].timestamp) - rel(casts[i - 1].timestamp);
       if (gMs > downtimeThreshMs) gaps.push({ start_ms: rel(casts[i - 1].timestamp), duration_ms: gMs });
     }
     const totalDtS = gaps.reduce((s, g) => s + g.duration_ms, 0) / 1000;
-    if (totalDtS > 5) {
-      const topE = bench?.top_avg_efficiency ?? null;
-      const topSD = bench?.top_efficiency_stddev ?? null;
+    if (totalDtS > 5 && bench?.top_avg_efficiency != null && bench.top_efficiency_stddev != null) {
+      const topE = bench.top_avg_efficiency;
+      const topSD = bench.top_efficiency_stddev;
       const effPct = Math.max(0, (1 - totalDtS / fightDurS) * 100);
-      const delta = topE != null ? effPct - topE : null;
-      let severity: Severity = 'warning';
-      if (delta != null && topSD != null && delta < -topSD) severity = 'critical';
+      const severity: Severity = effPct - topE < -topSD ? 'critical' : 'warning';
       findings.push({ severity, category: 'cast_efficiency',
-        message: `Cast efficiency: ${effPct.toFixed(1)}% (${topE != null ? `top avg ${topE.toFixed(0)}%` : 'no benchmark'}) — ${totalDtS.toFixed(1)}s in gaps.` });
+        message: `Cast efficiency: ${effPct.toFixed(1)}% (top avg ${topE.toFixed(0)}%) — ${totalDtS.toFixed(1)}s in gaps.` });
     }
   }
 
@@ -304,7 +294,7 @@ function _findPlayerBurstWindows(
   const totalDmg = sorted.reduce((s, e) => s + (e.amount || 0) + (e.absorbed || 0), 0) || 1;
 
   return topBurstWindows.map(bw => {
-    const winLenS = bw.window_length_s ?? 8;
+    const winLenS = bw.window_length_s;
     const winEvents = sorted.filter(e => {
       const tS = (e.timestamp - fStart) / 1000;
       return tS >= bw.time_s && tS < bw.time_s + winLenS;
@@ -344,32 +334,24 @@ function _analyzeDefensiveFindings(
 
     if (cast_times_s?.length) {
       const firstS = cast_times_s[0];
-      if (b?.avg_first_cast_s != null) {
-        const sdF = b.stddev_first_cast_s ?? 15;
+      if (b?.avg_first_cast_s != null && b.stddev_first_cast_s != null) {
+        const sdF = b.stddev_first_cast_s;
         if (firstS > b.avg_first_cast_s + 2 * sdF) {
           issues.push({ severity: 'warning', category: 'cooldown_delay', cd_name: name,
             timestamp_ms: Math.round(firstS * 1000),
             message: `${name} first use at ${_fmt(firstS)} — ${(firstS - b.avg_first_cast_s).toFixed(0)}s later than top parsers (${_fmt(b.avg_first_cast_s)} avg).` });
         }
-      } else if (firstS > 90) {
-        issues.push({ severity: 'warning', category: 'cooldown_delay', cd_name: name,
-          timestamp_ms: Math.round(firstS * 1000),
-          message: `${name} first use at ${_fmt(firstS)} — unusually late.` });
       }
 
       for (let i = 1; i < cast_times_s.length; i++) {
         const gap = cast_times_s[i] - cast_times_s[i - 1];
-        if (b?.avg_gap_s != null) {
-          const sdG = b.stddev_gap_s ?? cooldownS * 0.2;
+        if (b?.avg_gap_s != null && b.stddev_gap_s != null) {
+          const sdG = b.stddev_gap_s;
           if (gap > b.avg_gap_s + 2 * sdG) {
             issues.push({ severity: 'warning', category: 'cooldown_delay', cd_name: name,
               timestamp_ms: Math.round(cast_times_s[i] * 1000),
-              message: `${name} at ${_fmt(cast_times_s[i])}: ${gap.toFixed(0)}s gap vs top-parse avg ${b.avg_gap_s.toFixed(0)}s ±${(b.stddev_gap_s ?? cooldownS * 0.2).toFixed(0)}s.` });
+              message: `${name} at ${_fmt(cast_times_s[i])}: ${gap.toFixed(0)}s gap vs top-parse avg ${b.avg_gap_s.toFixed(0)}s ±${sdG.toFixed(0)}s.` });
           }
-        } else if (gap > cooldownS * 1.2) {
-          issues.push({ severity: 'warning', category: 'cooldown_delay', cd_name: name,
-            timestamp_ms: Math.round(cast_times_s[i] * 1000),
-            message: `${name} held ${(gap - cooldownS).toFixed(0)}s past reset at ${_fmt(cast_times_s[i])}.` });
         }
       }
 
@@ -378,7 +360,7 @@ function _analyzeDefensiveFindings(
           const k = parseInt(idxStr, 10) - 1;
           if (k >= cast_times_s.length) continue;
           const playerT = cast_times_s[k];
-          const tol = Math.max(target.stddev_s ?? 20, 15);
+          const tol = target.stddev_s;
           if (playerT < target.target_s - tol) {
             suggestions.push({ severity: 'info', category: 'hold_suggestion',
               timestamp_ms: Math.round(playerT * 1000),
@@ -408,7 +390,7 @@ function _computePlayerDefensiveWindows(
   const totalDmg = sorted.reduce((s, e) => s + (e.amount || 0) + (e.absorbed || 0), 0) || 1;
 
   return topDefWindows.map(dw => {
-    const winLenS = dw.window_length_s ?? 8;
+    const winLenS = dw.window_length_s;
     const winEvents = sorted.filter(e => {
       const tS = (e.timestamp - fStart) / 1000;
       return tS >= dw.time_s && tS < dw.time_s + winLenS;

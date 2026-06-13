@@ -40,12 +40,13 @@ export class AnalysisEngineService {
     ]);
 
     const specMap = await this.wclApi.getPlayerDetails(reportCode, fightId);
-    const spec = specMap[playerId] || 'Unknown';
-    const playerName = specMap[`name_${playerId}`] || `Player ${playerId}`;
+    const spec = specMap[playerId];
+    if (!spec) throw new Error(`Could not resolve spec for player ${playerId} in report ${reportCode}.`);
+    const playerName = specMap[`name_${playerId}`] ?? `Player ${playerId}`;
 
     const [rulebook, bench] = await Promise.all([
-      spec !== 'Unknown' ? this.encounterSvc.getRulebook(spec) : Promise.resolve(null),
-      (encounterID && spec !== 'Unknown') ? this.encounterSvc.getBench(spec, encounterID) : Promise.resolve(null),
+      this.encounterSvc.getRulebook(spec),
+      encounterID ? this.encounterSvc.getBench(spec, encounterID) : Promise.resolve(null),
     ]);
 
     const [castEvents, buffEvents, dmgEvents, dtEvents] = await eventsP;

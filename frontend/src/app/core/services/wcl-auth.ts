@@ -70,7 +70,6 @@ export class WclAuthService {
   logout(): void {
     localStorage.removeItem('wcl_token');
     localStorage.removeItem('wcl_token_expiry');
-    localStorage.removeItem('wcl_user_chars');
     this._token.set(null);
   }
 

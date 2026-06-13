@@ -99,7 +99,7 @@ export class DefensivesSectionComponent {
       const playerPct = playerDw?.pct_of_total ?? null;
       const minPct = dw.pct_min ?? topPct * 0.7;
       const maxPct = dw.pct_max ?? topPct * 1.3;
-      const winLenS = dw.window_length_s ?? 8;
+      const winLenS = dw.window_length_s;
       const spellId = dw.spell_id ?? null;
       const defensiveName = dw.defensive_name ?? dw.common_defensives?.[0] ?? '';
 
