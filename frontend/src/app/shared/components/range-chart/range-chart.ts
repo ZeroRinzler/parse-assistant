@@ -90,7 +90,16 @@ export class RangeChartComponent implements AfterViewInit, OnChanges, OnDestroy 
 
   private fmt(v: number | null): string {
     if (v == null) return '-';
-    return this.unit() === 'pct' ? (v * 100).toFixed(1) + '%' : String(v);
+    return this.unit() === 'pct' ? (v * 100).toFixed(1) + '%' : RangeChartComponent.compact(v);
+  }
+
+  // Abbreviate large raw damage values (e.g. 6_837_621 → "6.84M").
+  private static compact(v: number): string {
+    const a = Math.abs(v);
+    if (a >= 1e9) return (v / 1e9).toFixed(2) + 'B';
+    if (a >= 1e6) return (v / 1e6).toFixed(2) + 'M';
+    if (a >= 1e3) return (v / 1e3).toFixed(1) + 'K';
+    return v.toFixed(0);
   }
 
   private label(row: RangeRow): string {
@@ -205,7 +214,7 @@ export class RangeChartComponent implements AfterViewInit, OnChanges, OnDestroy 
               font: { size: 11 },
               callback: (val) => this.unit() === 'pct'
                 ? (Number(val) * 100).toFixed(0) + '%'
-                : String(val),
+                : RangeChartComponent.compact(Number(val)),
             },
           },
           y: {
@@ -228,7 +237,7 @@ export class RangeChartComponent implements AfterViewInit, OnChanges, OnDestroy 
                 if (!items.length) return [];
                 const r = rows[items[0].dataIndex];
                 const top = r.topAvg != null
-                  ? `Top average: ${this.fmt(r.topAvg)} (${this.fmt(r.topMin)}–${this.fmt(r.topMax)})`
+                  ? `Top average: ${this.fmt(r.topAvg)} (${this.fmt(r.topMin)}-${this.fmt(r.topMax)})`
                   : 'Top average: -';
                 return [`You: ${this.fmt(r.playerPct)}`, top];
               },

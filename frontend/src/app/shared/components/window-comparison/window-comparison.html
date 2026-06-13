@@ -28,7 +28,7 @@
       <div>
         <wl-range-chart
           [rows]="[w.overview]"
-          unit="pct"
+          unit="raw"
           [higherIsBetter]="higherIsBetter()"
           [maxVal]="overviewMax()"
           [showLegend]="true"
@@ -54,7 +54,7 @@
           <div class="flex-1 min-w-0">
             <wl-range-chart
               [rows]="w.detailRows"
-              unit="pct"
+              unit="raw"
               [higherIsBetter]="higherIsBetter()"
               [maxVal]="detailMax(i)"
               [showLabels]="false"

@@ -289,7 +289,6 @@ function _findPlayerBurstWindows(
   const sorted = dmgEvents
     .filter(e => e.timestamp >= fStart && ((e.amount || 0) + (e.absorbed || 0)) > 0)
     .sort((a, b) => a.timestamp - b.timestamp);
-  const totalDmg = sorted.reduce((s, e) => s + (e.amount || 0) + (e.absorbed || 0), 0) || 1;
 
   return topBurstWindows.map(bw => {
     const winLenS = bw.window_length_s;
@@ -303,8 +302,8 @@ function _findPlayerBurstWindows(
       if (e.abilityGameID) byAb[e.abilityGameID] = (byAb[e.abilityGameID] || 0) + (e.amount || 0) + (e.absorbed || 0);
     }
     const ability_breakdown = Object.entries(byAb).sort((a, b) => b[1] - a[1]).slice(0, 10)
-      .map(([sid, dmg]) => ({ spell_id: parseInt(sid, 10), pct: Math.round(dmg / (winTotal || 1) * 1000) / 1000 }));
-    return { time_s: bw.time_s, pct_of_total: Math.round(winTotal / totalDmg * 1000) / 1000, ability_breakdown };
+      .map(([sid, dmg]) => ({ spell_id: parseInt(sid, 10), damage: Math.round(dmg) }));
+    return { time_s: bw.time_s, window_damage: Math.round(winTotal), ability_breakdown };
   });
 }
 
@@ -385,7 +384,6 @@ function _computePlayerDefensiveWindows(
   const sorted = dtEvents
     .filter(e => e.timestamp >= fStart && ((e.amount || 0) + (e.absorbed || 0)) > 0)
     .sort((a, b) => a.timestamp - b.timestamp);
-  const totalDmg = sorted.reduce((s, e) => s + (e.amount || 0) + (e.absorbed || 0), 0) || 1;
 
   return topDefWindows.map(dw => {
     const winLenS = dw.window_length_s;
@@ -399,8 +397,8 @@ function _computePlayerDefensiveWindows(
       if (e.abilityGameID) byAb[e.abilityGameID] = (byAb[e.abilityGameID] || 0) + (e.amount || 0) + (e.absorbed || 0);
     }
     const ability_breakdown = Object.entries(byAb).sort((a, b) => b[1] - a[1]).slice(0, 6)
-      .map(([sid, dmg]) => ({ spell_id: parseInt(sid, 10), pct: Math.round(dmg / (winTotal || 1) * 1000) / 1000 }));
-    return { time_s: dw.time_s, pct_of_total: Math.round(winTotal / totalDmg * 1000) / 1000, ability_breakdown };
+      .map(([sid, dmg]) => ({ spell_id: parseInt(sid, 10), damage: Math.round(dmg) }));
+    return { time_s: dw.time_s, window_damage: Math.round(winTotal), ability_breakdown };
   });
 }
 

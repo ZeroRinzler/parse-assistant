@@ -32,7 +32,7 @@ The Angular app is fully static and communicates directly with the WCL API via O
 4. **Generate rulebook**: in `npm run admin`, select a spec → "Print AI prompt" → paste into any LLM (Claude, ChatGPT, etc.) → paste the JSON output back to save the rulebook.
 5. **Player page**: sign in with WCL, paste a report URL - fight and player selectors appear automatically.
 
-Steps 1–4 are per-spec and only need to be done once (or to refresh data).
+Steps 1-4 are per-spec and only need to be done once (or to refresh data).
 
 ## Scripts
 

@@ -29,18 +29,19 @@ export class BurstWindowsComponent {
     return this.topWindows().map((bw, idx) => {
       const notReached = bw.time_s > fightDur;
       const playerBw = notReached ? null : (players[idx] ?? null);
-      const topPct = bw.pct_avg ?? 0;
-      const playerPct = playerBw?.pct_of_total ?? null;
-      const minPct = bw.pct_min ?? topPct * 0.7;
-      const maxPct = bw.pct_max ?? topPct * 1.3;
+      const topDmg = bw.dmg_avg ?? 0;
+      const playerDmg = playerBw?.window_damage ?? null;
+      const minDmg = bw.dmg_min ?? topDmg * 0.7;
+      const maxDmg = bw.dmg_max ?? topDmg * 1.3;
+      const sd = bw.dmg_stddev ?? 0;
 
-      // Burst: higher damage share is better, so falling short is the problem.
+      // Burst: higher damage is better, so falling short is the problem.
       let status: WindowStatus = 'good';
       let statusIcon = 'check_circle';
       if (notReached) { status = 'muted'; statusIcon = 'schedule'; }
-      else if (playerPct === null) { status = 'muted'; statusIcon = 'help_outline'; }
-      else if (playerPct < minPct - (bw.pct_stddev ?? 0.01)) { status = 'bad'; statusIcon = 'error'; }
-      else if (topPct > 0 && playerPct < topPct - (bw.pct_stddev ?? 0.005)) { status = 'warn'; statusIcon = 'warning_amber'; }
+      else if (playerDmg === null) { status = 'muted'; statusIcon = 'help_outline'; }
+      else if (playerDmg < minDmg - sd) { status = 'bad'; statusIcon = 'error'; }
+      else if (topDmg > 0 && playerDmg < topDmg - sd) { status = 'warn'; statusIcon = 'warning_amber'; }
 
       const spellIds: number[] = [];
       const labels: string[] = [];
@@ -49,16 +50,16 @@ export class BurstWindowsComponent {
         sid ? spellIds.push(sid) : labels.push(name);
       }
 
-      const playerAbMap: Record<number, { pct: number }> = {};
+      const playerAbMap: Record<number, { damage: number }> = {};
       for (const a of playerBw?.ability_breakdown ?? []) playerAbMap[a.spell_id] = a;
 
       const detailRows = (bw.ability_breakdown ?? []).map(ab => ({
         spellId: ab.spell_id,
         label: this.icons.get(ab.spell_id)?.name || `Spell ${ab.spell_id}`,
-        playerPct: playerAbMap[ab.spell_id]?.pct ?? null,
-        topAvg: ab.avg_pct,
-        topMin: ab.min_pct ?? ab.avg_pct * 0.7,
-        topMax: ab.max_pct ?? ab.avg_pct * 1.3,
+        playerPct: playerAbMap[ab.spell_id]?.damage ?? null,
+        topAvg: ab.avg_damage,
+        topMin: ab.min_damage ?? ab.avg_damage * 0.7,
+        topMax: ab.max_damage ?? ab.avg_damage * 1.3,
       }));
 
       return {
@@ -68,7 +69,7 @@ export class BurstWindowsComponent {
         labels,
         status,
         statusIcon,
-        overview: { label: '', playerPct, topAvg: topPct, topMin: minPct, topMax: maxPct },
+        overview: { label: '', playerPct: playerDmg, topAvg: topDmg, topMin: minDmg, topMax: maxDmg },
         detailRows,
       };
     });

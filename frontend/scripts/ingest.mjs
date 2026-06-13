@@ -896,29 +896,32 @@ function groupByTime(windows, mergeS) {
   return clusters;
 }
 
-// Common statistics for a cluster of windows (time, pct, ability breakdown).
+// Common statistics for a cluster of windows (time, absolute damage, ability breakdown).
+// Windows are compared by absolute damage rather than share-of-fight-total: on
+// progression (wipes) the fight-total denominator is unstable, so a share would
+// inflate against full-kill top parses. Absolute damage stays comparable.
 function clusterBaseStats(cl, totalSamples) {
   const times = cl.map(c => c.time_s);
-  const pcts  = cl.map(c => c.pct_of_total);
-  const sorted = [...pcts].sort((a, b) => a - b);
+  const dmgs  = cl.map(c => c.window_damage || 0);
+  const sorted = [...dmgs].sort((a, b) => a - b);
 
   const abilityTotals = new Map();
   for (const c of cl) {
     for (const ab of (c.ability_breakdown || [])) {
       if (!abilityTotals.has(ab.spell_id)) abilityTotals.set(ab.spell_id, []);
-      abilityTotals.get(ab.spell_id).push(ab.pct);
+      abilityTotals.get(ab.spell_id).push(ab.damage || 0);
     }
   }
   const ability_breakdown = [...abilityTotals.entries()]
-    .filter(([, ps]) => ps.length >= cl.length * 0.5)
-    .map(([sid, ps]) => ({
+    .filter(([, ds]) => ds.length >= cl.length * 0.5)
+    .map(([sid, ds]) => ({
       spell_id: sid,
-      avg_pct: round(mean(ps), 3),
-      min_pct: round(Math.min(...ps), 3),
-      max_pct: round(Math.max(...ps), 3),
-      count: ps.length,
+      avg_damage: Math.round(mean(ds)),
+      min_damage: Math.round(Math.min(...ds)),
+      max_damage: Math.round(Math.max(...ds)),
+      count: ds.length,
     }))
-    .sort((a, b) => b.avg_pct - a.avg_pct)
+    .sort((a, b) => b.avg_damage - a.avg_damage)
     .slice(0, 6);
 
   return {
@@ -926,10 +929,10 @@ function clusterBaseStats(cl, totalSamples) {
     stddev_s: round(stdev(times)),
     count: cl.length,
     total_samples: totalSamples,
-    pct_avg: round(mean(pcts), 3),
-    pct_stddev: round(stdev(pcts), 3),
-    pct_min: round(sorted[0], 3),
-    pct_max: round(sorted[sorted.length - 1], 3),
+    dmg_avg: Math.round(mean(dmgs)),
+    dmg_stddev: Math.round(stdev(dmgs)),
+    dmg_min: Math.round(sorted[0]),
+    dmg_max: Math.round(sorted[sorted.length - 1]),
     ability_breakdown,
   };
 }

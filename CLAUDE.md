@@ -14,6 +14,10 @@ The app is a **fully static Angular SPA** deployed on GitHub Pages. There is no 
   - The nav-bar logo (`shared/components/page-nav`) is the **same artwork inlined as SVG** in the template, so it themes with CSS vars. Set its fills via SCSS classes (`fill: var(--gold)` / `var(--surface)`) - **not** `fill="var(--…)"` presentation attributes, which browsers don't reliably honor.
   - Brand gold is `--gold` (`#e5cc80`) - the Warcraft Logs 100-parse ("Astounding") gold, chosen deliberately since the tool benchmarks against top parses. The favicon's literal hex colors must track the design tokens in `styles.scss`.
 
+## Writing style
+
+- **Never use em-dashes (U+2014) or en-dashes (U+2013)** anywhere - not in docs, code comments, commit messages, UI copy, or generated output. Also avoid the Unicode minus (U+2212). Use a plain ASCII hyphen (`-`) for ranges and parenthetical asides, or rephrase. This applies to every file in the repo and any text the tooling emits.
+
 ## URL routing
 
 All state is persisted in URL query parameters. Every navigable state must be linkable and bookmarkable.
@@ -168,7 +172,7 @@ List of raw parse samples. Source of truth for bench files.
 | `cooldowns[].hold_windows` | per-CD | `{cast_index, expected_s, actual_s, hold_amount_s}` for casts delayed >8s |
 | `cooldowns[].cast_pattern` | per-CD | `"hold"` or `"on_cooldown"` |
 | `burst_windows` | top-level | Variable-count, variable-length windows anchored to CD cast times |
-| `defensive_windows` | top-level | Per-defensive buff windows with damage-taken fraction |
+| `defensive_windows` | top-level | Per-defensive buff windows with absolute `window_damage` (taken) + `pct_of_total` |
 | `talent_key` | top-level | `v2:`-prefixed sorted talent node IDs (Midnight format) |
 | `trinkets` | top-level | `{slot, id, name}` for slots 12 and 13 |
 | `enchants` | top-level | `{slot, id, name}` for all enchanted slots |
@@ -246,7 +250,7 @@ Non-obvious things that have caused bugs - read before touching gear extraction 
 |---|---|
 | **`actor.subType` changed in Midnight** | Now returns class-only (`Rogue`). Use `playerDetails(fightIDs:[...])` to get full spec info. `_build_spec_map()` in `analysis-engine.ts` handles the conversion. |
 | **Gear array is positionally indexed** | WCL returns gear as a bare array; the array index (0-based) IS the slot number. No `slot` field. |
-| **Weapon slots shifted in Midnight** | Gear array has 17 entries (0–16). Weapons at index 15 (MH) and 16 (OH). Index 14 is Back/Cloak. |
+| **Weapon slots shifted in Midnight** | Gear array has 17 entries (0-16). Weapons at index 15 (MH) and 16 (OH). Index 14 is Back/Cloak. |
 | **Trinket slots are 12 and 13** | Confirmed from `encounterRankings` responses. |
 | **`permanentEnchant` is a string** | Numeric ID returned as string. `permanentEnchantName` is never populated. Enchant names resolved via `gameData.enchant(id)` in `ingest.mjs`. |
 | **Two incompatible talent formats** | `characterRankings` → old format (`{talentID, points}` list) → `v1:` key. `encounterRankings` → Midnight format (nested `nodeId` dict) → `v2:` key. ID spaces are incompatible; cannot compare directly. |
@@ -283,29 +287,30 @@ Non-obvious things that have caused bugs - read before touching gear extraction 
 **Per-parse**:
 1. Build candidate windows from CD cast times × CD durations (from rulebook `duration`).
 2. Merge overlapping or near-adjacent windows (≤3s gap) into one.
-3. Compute `pct_of_total` = window damage / total fight damage.
+3. Compute `window_damage` (absolute) plus `pct_of_total` = window damage / total fight damage (kept for the ≥3% significance gate).
 4. Discard windows below ≥3% significance threshold.
-5. Each window: `time_s`, `window_length_s` (variable), `pct_of_total`, `active_cds`, ability breakdown (top 6).
+5. Each window: `time_s`, `window_length_s` (variable), `window_damage`, `pct_of_total`, `active_cds`, ability breakdown (top 6, each with absolute `damage`).
 6. Falls back to 8s sliding window if no CD duration data.
 
-**Across parses** (`clusterBurstWindows`):
+**Across parses** (`clusterBurstWindows` → `clusterBaseStats`):
 1. `groupByTime(windows, 15s)` - greedy: windows within 15s of cluster median go in same group.
 2. Discard clusters in fewer than max(2, 35% of samples).
 3. Surface CDs and abilities in ≥50% of member parses.
 4. `window_length_s` = mean of member window lengths.
+5. Emits **absolute damage** stats (`dmg_avg`/`dmg_min`/`dmg_max`/`dmg_stddev`, per-ability `avg_damage`/`min_damage`/`max_damage`) - **not** percentages. The player vs top-parse comparison and the Burst/Defensive Windows cards compare raw damage so the numbers stay meaningful on progression (a wipe's short fight-total would otherwise inflate every window's share). `top_dtk_comparison` (the separate Damage Taken card) still uses percentages.
 
 ### Defensive window definition (`ingest.mjs` → `findDefensiveWindows` / `clusterDefensiveWindows`)
 
 **Per-parse**:
 1. For each defensive in rulebook, find buff apply/remove pairs matching its `spell_id`.
-2. Each apply→remove pair = window: `time_s` = apply, `window_length_s` = remove − apply.
-3. `pct_of_total` = damage taken during window / total fight damage taken.
+2. Each apply→remove pair = window: `time_s` = apply, `window_length_s` = remove - apply.
+3. `window_damage` = damage taken during window (absolute); `pct_of_total` = that / total fight damage taken (kept on the sample).
 
-**Across parses** (`clusterDefensiveWindows`):
+**Across parses** (`clusterDefensiveWindows` → `clusterBaseStats`):
 1. Group by defensive name first.
 2. `groupByTime(group, 20s)` per defensive.
 3. Discard clusters in fewer than max(2, 35% of samples).
-4. Each cluster: `defensive_name`, `spell_id`, `window_length_s`, ability breakdown of damage sources.
+4. Each cluster: `defensive_name`, `spell_id`, `window_length_s`, absolute damage stats (`dmg_avg`/`dmg_min`/`dmg_max`/`dmg_stddev`), ability breakdown of damage sources (absolute `avg_damage`).
 
 Both cluster functions share `groupByTime()` and `clusterBaseStats()` helpers.
 

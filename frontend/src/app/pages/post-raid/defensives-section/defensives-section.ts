@@ -82,34 +82,35 @@ export class DefensivesSectionComponent {
     return this.topDefensiveWindows().map((dw, idx) => {
       const notReached = dw.time_s > fightDur;
       const playerDw = notReached ? null : (players[idx] ?? null);
-      const topPct = dw.pct_avg ?? 0;
-      const playerPct = playerDw?.pct_of_total ?? null;
-      const minPct = dw.pct_min ?? topPct * 0.7;
-      const maxPct = dw.pct_max ?? topPct * 1.3;
+      const topDmg = dw.dmg_avg ?? 0;
+      const playerDmg = playerDw?.window_damage ?? null;
+      const minDmg = dw.dmg_min ?? topDmg * 0.7;
+      const maxDmg = dw.dmg_max ?? topDmg * 1.3;
+      const sd = dw.dmg_stddev ?? 0;
       const spellId = dw.spell_id ?? null;
       const defensiveName = dw.defensive_name ?? dw.common_defensives?.[0] ?? '';
 
-      // Defensive: a lower damage-taken share is better, so taking more is bad.
+      // Defensive: less damage taken in the window is better, so taking more is bad.
       let status: WindowStatus = 'good';
       let statusIcon = 'check_circle';
       if (notReached) { status = 'muted'; statusIcon = 'schedule'; }
-      else if (playerPct === null) { status = 'muted'; statusIcon = 'help_outline'; }
-      else if (playerPct > maxPct + (dw.pct_stddev ?? 0.01)) { status = 'bad'; statusIcon = 'error'; }
-      else if (topPct > 0 && playerPct > topPct + (dw.pct_stddev ?? 0.005)) { status = 'warn'; statusIcon = 'warning_amber'; }
+      else if (playerDmg === null) { status = 'muted'; statusIcon = 'help_outline'; }
+      else if (playerDmg > maxDmg + sd) { status = 'bad'; statusIcon = 'error'; }
+      else if (topDmg > 0 && playerDmg > topDmg + sd) { status = 'warn'; statusIcon = 'warning_amber'; }
 
       const spellIds = spellId != null ? [spellId] : [];
       const labels = spellId == null && defensiveName ? [defensiveName] : [];
 
-      const playerAbMap: Record<number, { pct: number }> = {};
+      const playerAbMap: Record<number, { damage: number }> = {};
       for (const a of playerDw?.ability_breakdown ?? []) playerAbMap[a.spell_id] = a;
 
       const detailRows = (dw.ability_breakdown ?? []).map(ab => ({
         spellId: ab.spell_id,
         label: this.icons.get(ab.spell_id)?.name || `Spell ${ab.spell_id}`,
-        playerPct: playerAbMap[ab.spell_id]?.pct ?? null,
-        topAvg: ab.avg_pct,
-        topMin: ab.min_pct ?? ab.avg_pct * 0.7,
-        topMax: ab.max_pct ?? ab.avg_pct * 1.3,
+        playerPct: playerAbMap[ab.spell_id]?.damage ?? null,
+        topAvg: ab.avg_damage,
+        topMin: ab.min_damage ?? ab.avg_damage * 0.7,
+        topMax: ab.max_damage ?? ab.avg_damage * 1.3,
       }));
 
       return {
@@ -119,7 +120,7 @@ export class DefensivesSectionComponent {
         labels,
         status,
         statusIcon,
-        overview: { label: '', playerPct, topAvg: topPct, topMin: minPct, topMax: maxPct },
+        overview: { label: '', playerPct: playerDmg, topAvg: topDmg, topMin: minDmg, topMax: maxDmg },
         detailRows,
       };
     });

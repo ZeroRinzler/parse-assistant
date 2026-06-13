@@ -32,14 +32,14 @@ export interface PerCdBenchmark {
 
 export interface BurstWindowBench {
   time_s: number;
-  pct_avg: number;
-  pct_min?: number;
-  pct_max?: number;
-  pct_stddev?: number;
+  dmg_avg: number;
+  dmg_min?: number;
+  dmg_max?: number;
+  dmg_stddev?: number;
   common_cds: string[];
   avg_targets: number;
   window_length_s: number;
-  ability_breakdown?: Array<{ spell_id: number; avg_pct: number; min_pct?: number; max_pct?: number; count?: number }>;
+  ability_breakdown?: Array<{ spell_id: number; avg_damage: number; min_damage?: number; max_damage?: number; count?: number }>;
 }
 
 export interface EncounterBench {
@@ -67,15 +67,15 @@ export interface DefensiveWindowBench {
   window_length_s: number;
   count: number;
   total_samples: number;
-  pct_avg: number;
-  pct_min?: number;
-  pct_max?: number;
-  pct_stddev?: number;
+  dmg_avg: number;
+  dmg_min?: number;
+  dmg_max?: number;
+  dmg_stddev?: number;
   common_defensives: string[];
   defensive_name?: string;
   spell_id?: number;
   avg_targets?: number;
-  ability_breakdown?: Array<{ spell_id: number; avg_pct: number; min_pct?: number; max_pct?: number; count?: number }>;
+  ability_breakdown?: Array<{ spell_id: number; avg_damage: number; min_damage?: number; max_damage?: number; count?: number }>;
 }
 
 export interface PerDefensiveBenchmark {
