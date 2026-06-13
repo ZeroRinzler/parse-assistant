@@ -4,6 +4,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { AnalysisResult as IAnalysisResult, AnalysisFinding } from '../../../core/models/analysis.models';
 import { IconCacheService } from '../../../core/services/icon-cache';
 import { FindingEntry, FindingListComponent } from '../../../shared/components/finding-list/finding-list';
+import { CalloutComponent } from '../../../shared/components/callout/callout';
 import { BurstWindowsComponent } from '../burst-windows/burst-windows';
 import { DefensivesSectionComponent } from '../defensives-section/defensives-section';
 import { DamageTakenComponent } from '../damage-taken/damage-taken';
@@ -22,7 +23,7 @@ const CAT_LABEL: Record<string, string> = {
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-analysis-result',
   imports: [
-    MatCardModule, MatIconModule, FindingListComponent,
+    MatCardModule, MatIconModule, FindingListComponent, CalloutComponent,
     BurstWindowsComponent, DefensivesSectionComponent, DamageTakenComponent,
   ],
   templateUrl: './analysis-result.html',

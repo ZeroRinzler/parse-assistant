@@ -2,7 +2,7 @@
 <p class="text-sm text-[var(--muted)]">Charts show each source as a share of your total damage taken this fight - not raw damage - so they line up with the top-10 parse range.</p>
 <div class="pb-2">
   @if (outlierCount()) {
-    <div class="mb-2.5 text-xs text-[var(--warning)]">{{ outlierCount() }} {{ outlierCount() === 1 ? 'source' : 'sources' }} above top-10 avg</div>
+    <wl-callout class="mb-2.5">{{ outlierCount() }} {{ outlierCount() === 1 ? 'source' : 'sources' }} above top-10 avg</wl-callout>
   }
 
   @if (abilityRows().length) {

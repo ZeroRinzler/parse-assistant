@@ -4,6 +4,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { AnalysisFinding } from '../../../core/models/analysis.models';
 import { SpellIconComponent } from '../spell-icon/spell-icon';
+import { CalloutComponent } from '../callout/callout';
 import { FormatDurationPipe } from '../../pipes/format-duration-pipe';
 
 /** One collapsible spell row: a cooldown / defensive and its findings. */
@@ -20,7 +21,7 @@ export interface FindingEntry {
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-finding-list',
-  imports: [MatCardModule, MatIconModule, MatButtonModule, SpellIconComponent, FormatDurationPipe],
+  imports: [MatCardModule, MatIconModule, MatButtonModule, SpellIconComponent, CalloutComponent, FormatDurationPipe],
   templateUrl: './finding-list.html',
 })
 export class FindingListComponent {

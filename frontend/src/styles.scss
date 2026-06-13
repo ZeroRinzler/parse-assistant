@@ -53,6 +53,23 @@ body {
   border-radius: 10px !important;
 }
 
+// Compact "row" cards (finding-list, window-comparison, rotation-rule findings):
+// status glyph · label · spell · chevron. Material's card-header padding is
+// asymmetric (16px top, 0 bottom) and doesn't reliably center its items, which
+// left header-only rows top-heavy and the spell/label out of line with the
+// glyph and chevron. Force symmetric padding + vertical centering so every row
+// reads the same whether or not it has a content block below.
+.mat-mdc-card-header {
+  align-items: center !important;
+  padding: 10px 14px !important;
+}
+
+.mat-mdc-card-content {
+  padding: 0 14px 12px !important;
+
+  &:last-child { padding-bottom: 12px !important; }
+}
+
 .mat-mdc-form-field-subscript-wrapper { display: none; }
 
 // ── Shared comparison candle styles (legends used by burst-windows, defensives, damage-taken) ──

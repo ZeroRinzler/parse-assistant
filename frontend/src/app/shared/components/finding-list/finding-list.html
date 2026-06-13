@@ -34,9 +34,7 @@
               }
               <span>{{ f.message }}</span>
               @if (f.details?.remedy) {
-                <div class="mt-1 rounded-r border-l-2 border-[var(--accent)] bg-[rgba(88,166,255,0.07)] px-2.5 py-1.5 text-[11px] leading-relaxed text-[var(--muted)]">
-                  {{ f.details!.remedy }}
-                </div>
+                <wl-callout class="mt-1">{{ f.details!.remedy }}</wl-callout>
               }
             </div>
           }

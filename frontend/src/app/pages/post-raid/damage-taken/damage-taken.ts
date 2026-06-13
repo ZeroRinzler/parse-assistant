@@ -2,12 +2,13 @@ import { ChangeDetectionStrategy, Component, computed, inject, input } from '@an
 import { DmgTakenAbility, TopDtkComparison } from '../../../core/models/analysis.models';
 import { RangeChartComponent, RangeRow } from '../../../shared/components/range-chart/range-chart';
 import { SpellIconComponent } from '../../../shared/components/spell-icon/spell-icon';
+import { CalloutComponent } from '../../../shared/components/callout/callout';
 import { IconCacheService } from '../../../core/services/icon-cache';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-damage-taken',
-  imports: [RangeChartComponent, SpellIconComponent],
+  imports: [RangeChartComponent, SpellIconComponent, CalloutComponent],
   templateUrl: './damage-taken.html',
 })
 export class DamageTakenComponent {

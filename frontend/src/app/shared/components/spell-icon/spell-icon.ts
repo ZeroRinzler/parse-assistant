@@ -6,6 +6,7 @@ import { IconCacheService } from '../../../core/services/icon-cache';
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-spell-icon',
+  host: { class: 'inline-flex items-center' },
   imports: [NgOptimizedImage, MatTooltipModule],
   template: `
     @if (iconUrl(); as src) {
