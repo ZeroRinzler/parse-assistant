@@ -304,6 +304,7 @@ function extractGear(rankingEntry) {
   const gear = rankingEntry.gear || [];
   const trinkets = [];
   const enchants = [];
+  const gems = [];
   for (let idx = 0; idx < gear.length; idx++) {
     const item = gear[idx];
     if (!item || !item.id) continue;
@@ -319,8 +320,16 @@ function extractGear(rankingEntry) {
       const encId = parseInt(encRaw) || encRaw;
       enchants.push({ slot: idx, id: encId, name: item.permanentEnchantName || '' });
     }
+
+    // Which gems are best is a sim question, so we do not track gem ids - only
+    // how many sockets are filled, to flag empty sockets against the top-parse
+    // typical gem count.
+    for (const g of (item.gems || [])) {
+      const gid = parseInt(g && g.id) || (g && g.id);
+      if (gid) gems.push({ slot: idx, id: gid });
+    }
   }
-  return { trinkets, enchants };
+  return { trinkets, enchants, gems };
 }
 
 // `characterRankings` talents - old WCL format: [{talentID: N, points: P}].
@@ -851,6 +860,7 @@ async function analyzeParse(wcl, spec, reportCode, fightId, playerName, combatan
     talent_key: gearData.talent_key || '',
     trinkets: gearData.trinkets || [],
     enchants: gearData.enchants || [],
+    gems: gearData.gems || [],
   };
 }
 
@@ -967,6 +977,7 @@ function aggregateGear(samples) {
   const trinketNames = new Map();
   const enchantCounters = new Map();
   const enchantNames = new Map();
+  const gemCounts = [];
 
   for (const s of samples) {
     const cdData = s.cooldown_data || {};
@@ -1000,6 +1011,8 @@ function aggregateGear(samples) {
         if (!enchantNames.has(encId)) enchantNames.set(encId, e.name || '');
       }
     }
+
+    if (Array.isArray(cdData.gems)) gemCounts.push(cdData.gems.length);
   }
 
   const talentBuilds = [...talentCounter.entries()]
@@ -1028,7 +1041,13 @@ function aggregateGear(samples) {
       .map(([id, c]) => ({ id, name: enchantNames.get(id) || '', count: c, pct: total ? Math.round(c / total * 100) : 0 }));
   }
 
-  return { sample_count: total, talent_builds: talentBuilds, trinkets, enchants };
+  // Socket count: top parsers are fully gemmed, so the max observed gem count is
+  // the "all sockets filled" baseline; avg flags whether that is universal.
+  const gems = gemCounts.length
+    ? { avg_count: round(mean(gemCounts), 1), max_count: Math.max(...gemCounts), sample_count: gemCounts.length }
+    : null;
+
+  return { sample_count: total, talent_builds: talentBuilds, trinkets, enchants, gems };
 }
 
 // ── File I/O ──────────────────────────────────────────────────────────────────

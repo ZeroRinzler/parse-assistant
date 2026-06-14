@@ -15,7 +15,7 @@
         }
       </span>
       @if (entry.spellId) {
-        <wl-spell-icon class="mr-2" [spellId]="entry.spellId"></wl-spell-icon>
+        <wl-game-icon class="mr-2" [id]="entry.spellId"></wl-game-icon>
       } @else {
         <span class="mr-2 font-semibold">{{ entry.name }}</span>
       }

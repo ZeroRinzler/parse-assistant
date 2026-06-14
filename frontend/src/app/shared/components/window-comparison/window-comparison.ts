@@ -4,7 +4,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatDividerModule } from '@angular/material/divider';
 import { RangeChartComponent, RangeRow } from '../range-chart/range-chart';
-import { SpellIconComponent } from '../spell-icon/spell-icon';
+import { GameIconComponent } from '../game-icon/game-icon';
 import { FormatDurationPipe } from '../../pipes/format-duration-pipe';
 
 export type WindowStatus = 'good' | 'warn' | 'bad' | 'muted';
@@ -35,7 +35,7 @@ export interface ComparisonWindow {
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-window-comparison',
-  imports: [MatIconModule, MatButtonModule, MatCardModule, MatDividerModule, RangeChartComponent, SpellIconComponent, FormatDurationPipe],
+  imports: [MatIconModule, MatButtonModule, MatCardModule, MatDividerModule, RangeChartComponent, GameIconComponent, FormatDurationPipe],
   templateUrl: './window-comparison.html',
 })
 export class WindowComparisonComponent {

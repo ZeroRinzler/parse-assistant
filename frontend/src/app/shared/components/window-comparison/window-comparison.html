@@ -11,7 +11,7 @@
       </mat-icon>
       <span class="mr-auto tabular-nums">{{ w.timeStartS | formatDuration }} - {{ w.timeEndS | formatDuration }}</span>
       @for (sid of w.spellIds; track sid) {
-        <wl-spell-icon class="mr-2" [spellId]="sid"></wl-spell-icon>
+        <wl-game-icon class="mr-2" [id]="sid"></wl-game-icon>
       }
       @for (lbl of w.labels; track lbl) {
         <span class="mr-2 text-[var(--muted)]">{{ lbl }}</span>
@@ -45,7 +45,7 @@
             @for (row of w.detailRows; track row.spellId) {
               <div class="h-[52px] flex items-center">
                 @if (row.spellId) {
-                  <wl-spell-icon [spellId]="row.spellId"></wl-spell-icon>
+                  <wl-game-icon [id]="row.spellId"></wl-game-icon>
                 }
               </div>
             }

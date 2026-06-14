@@ -1,12 +1,12 @@
-<div class="container">
+<div class="mx-auto flex max-w-[860px] flex-col gap-4 px-4 pt-6 pb-12">
     @if (error()) {
-      <div class="error-msg">⚠ {{ error() }}</div>
+      <div class="rounded-lg border border-[rgba(224,82,82,0.3)] bg-[rgba(224,82,82,0.1)] px-4 py-3.5 text-[13px] text-[var(--critical)]">⚠ {{ error() }}</div>
     }
 
-    <mat-card class="char-card">
+    <mat-card class="p-4">
       <!-- Linked character selector -->
       @if (linkedChars().length > 0) {
-        <mat-form-field appearance="outline" class="full-width">
+        <mat-form-field appearance="outline" class="w-full">
           <mat-label>Your Characters</mat-label>
           <mat-select [formControl]="linkedCharControl" (selectionChange)="onLinkedCharChange($event.value)">
             @for (c of linkedChars(); track c.id) {
@@ -21,18 +21,18 @@
       }
 
       @if (charInfo() && !loading()) {
-        <div class="char-badge">
-          <mat-icon class="badge-icon">check_circle</mat-icon>
-          <span class="char-name">{{ charInfo()!.name }}</span>
+        <div class="flex items-center gap-2.5 py-2.5">
+          <mat-icon class="badge-success">check_circle</mat-icon>
+          <span class="text-[15px] font-bold text-[var(--text)]">{{ charInfo()!.name }}</span>
           @if (charInfo()!.spec) {
-            <span class="char-spec">{{ charInfo()!.spec | formatSpec }} - {{ charInfo()!.server }}</span>
+            <span class="text-[13px] text-[var(--muted)]">{{ charInfo()!.spec | formatSpec }} - {{ charInfo()!.server }}</span>
           } @else {
-            <span class="char-spec">{{ charInfo()!.server }}</span>
+            <span class="text-[13px] text-[var(--muted)]">{{ charInfo()!.server }}</span>
           }
         </div>
 
         @if (!charInfo()!.spec) {
-          <div class="manual-spec-row">
+          <div class="mt-2.5 flex items-center gap-2.5">
             <mat-form-field appearance="outline" class="flex-1">
               <mat-label>Spec (e.g. SubtletyRogue)</mat-label>
               <input matInput [formControl]="manualSpecControl"
@@ -43,8 +43,8 @@
         }
 
         @if (charInfo()!.spec) {
-          <div class="enc-row">
-            <mat-form-field appearance="outline" class="full-width">
+          <div class="mt-2.5">
+            <mat-form-field appearance="outline" class="w-full">
               <mat-label>Encounter</mat-label>
               <mat-select [formControl]="encControl" (selectionChange)="onEncChange()">
                 <mat-option [value]="0">- select encounter -</mat-option>
@@ -56,7 +56,6 @@
           </div>
         }
       }
-
     </mat-card>
 
     @if (loadingBrief()) {
@@ -64,88 +63,209 @@
     }
 
     @if (selectedEncId() && !loadingBrief()) {
-      <!-- Gear / Talent / Trinket / Enchant cards -->
+      <!-- Gear: Talents + Trinkets + Sockets stacked beside the taller Enchants card -->
       @if (gearStats() || charGear()) {
-        <div class="gear-grid">
-          <!-- Talents -->
-          <mat-card class="gear-card">
-            <div class="gear-card-head">
+        <div class="flex flex-col gap-3 md:flex-row md:items-start">
+          <div class="flex flex-1 flex-col gap-3">
+            <!-- Talents -->
+            <mat-card class="p-4">
               @let ts = talentStatus(gearStats());
-              <span class="gear-dot" [class]="ts.status"></span>
-              <span class="gear-title">Talents</span>
-            </div>
-            <p>{{ talentStatus(gearStats()).note }}</p>
-          </mat-card>
-
-          <!-- Trinkets -->
-          <mat-card class="gear-card">
-            <div class="gear-card-head">
-              <span class="gear-dot ok"></span>
-              <span class="gear-title">Trinkets</span>
-            </div>
-            @if (charGear()) {
-              @for (slot of [12, 13]; track slot) {
-                @let playerItem = charGear()!.trinkets?.find(t => t.slot === slot);
-                @let topItems = gearStats()?.trinkets?.[slot] || [];
-                <div class="gear-row">
-                  <span class="gear-slot">{{ slotName(slot) }}</span>
-                  @if (playerItem) {
-                    <span>{{ playerItem.name || 'Item #' + playerItem.id }}</span>
-                    @if (topItems.length && !topItems.find(t => t.id === playerItem!.id)) {
-                      <span class="gear-top">Top: {{ topItems[0]?.name }} ({{ topItems[0]?.pct }}%)</span>
+              <div class="mb-2 flex items-center gap-2">
+                <mat-icon [class]="statusClass(ts.status)">{{ statusIcon(ts.status) }}</mat-icon>
+                <span class="font-medium">Talents</span>
+              </div>
+              @if (talentBuilds().length) {
+                @for (b of talentBuilds(); track b.label) {
+                  <div class="flex items-center justify-between gap-2 py-1">
+                    <div class="min-w-0">
+                      <div class="flex items-center gap-2">
+                        <span class="text-[13px]">{{ b.label }}</span>
+                        @if (b.isPlayer) {
+                          <mat-chip-set><mat-chip highlighted>yours</mat-chip></mat-chip-set>
+                        }
+                      </div>
+                      <div class="text-[12px] text-[var(--muted)]">{{ b.pct }}% of top parsers</div>
+                    </div>
+                    @if (b.link) {
+                      <a mat-button [href]="b.link" target="_blank" rel="noopener">View parse</a>
                     }
-                  } @else {
-                    <span class="missing">missing</span>
-                  }
-                </div>
+                  </div>
+                }
+              } @else {
+                <p class="text-[13px] text-[var(--muted)]">{{ ts.note }}</p>
               }
+            </mat-card>
+
+            <!-- Trinkets -->
+            <mat-card class="p-4">
+              <div class="mb-2 flex items-center gap-2">
+                <mat-icon class="badge-success">check_circle</mat-icon>
+                <span class="font-medium">Trinkets</span>
+              </div>
+              @if (charGear()) {
+                @for (slot of [12, 13]; track slot) {
+                  @let playerItem = charGear()!.trinkets?.find(t => t.slot === slot);
+                  @let topItems = gearStats()?.trinkets?.[slot] || [];
+                  <div class="flex items-start gap-3 py-1">
+                    <span class="w-16 shrink-0 text-[12px] text-[var(--muted)]">{{ slotName(slot) }}</span>
+                    <div class="min-w-0 text-[13px]">
+                      @if (playerItem) {
+                        <wl-game-icon kind="item" [id]="playerItem.id" [name]="playerItem.name" [icon]="playerItem.icon || ''"></wl-game-icon>
+                        @if (topItems.length && !topItems.find(t => t.id === playerItem!.id)) {
+                          <div class="text-[12px] text-[var(--muted)]">Top: {{ topItems[0]?.name }} ({{ topItems[0]?.pct }}%)</div>
+                        }
+                      } @else {
+                        <span class="badge-critical">missing</span>
+                      }
+                    </div>
+                  </div>
+                }
+              }
+            </mat-card>
+
+            <!-- Sockets -->
+            @if (gemCheck(); as gem) {
+              <mat-card class="p-4">
+                <div class="mb-2 flex items-center gap-2">
+                  <mat-icon [class]="statusClass(gem.status)">{{ statusIcon(gem.status) }}</mat-icon>
+                  <span class="font-medium">Sockets</span>
+                </div>
+                <div class="flex items-baseline gap-2">
+                  <span class="text-xl font-semibold tabular-nums" [class]="statusClass(gem.status)">{{ gem.count }} / {{ gem.expected }}</span>
+                  <span class="text-[12px] text-[var(--muted)]">sockets filled</span>
+                </div>
+                @if (gem.status === 'warn') {
+                  <p class="mt-1 text-[12px] text-[var(--muted)]">Top parsers fill {{ gem.expected }} - check for empty sockets.</p>
+                }
+              </mat-card>
             }
-          </mat-card>
+          </div>
 
           <!-- Enchants -->
-          <mat-card class="gear-card">
-            <div class="gear-card-head">
-              <span class="gear-dot ok"></span>
-              <span class="gear-title">Enchants</span>
+          <mat-card class="flex-1 p-4">
+            <div class="mb-2 flex items-center gap-2">
+              <mat-icon [class]="statusClass(enchantStatus())">{{ statusIcon(enchantStatus()) }}</mat-icon>
+              <span class="font-medium">Enchants</span>
             </div>
-            @if (charGear()) {
-              @for (enc of charGear()!.enchants || []; track enc.slot) {
-                <div class="gear-row">
-                  <span class="gear-slot">{{ slotName(enc.slot) }}</span>
-                  <span>{{ enc.name || 'Enchant #' + enc.id }}</span>
+            @if (enchantRows().length) {
+              @for (row of enchantRows(); track row.slotName) {
+                <div class="flex items-start gap-3 py-1">
+                  <span class="w-16 shrink-0 text-[12px] text-[var(--muted)]">{{ row.slotName }}</span>
+                  <div class="min-w-0 text-[13px]">
+                    <div [class]="statusClass(row.status)">{{ row.name }}</div>
+                    @if (row.note) {
+                      <div class="text-[12px] text-[var(--muted)]">{{ row.note }}</div>
+                    }
+                  </div>
                 </div>
               }
+            } @else {
+              <p class="text-[13px] text-[var(--muted)]">No enchant data yet.</p>
             }
           </mat-card>
         </div>
       }
 
-      <!-- Brief: burst windows + CD guide -->
+      <!-- Cooldown plan -->
+      @if (cdPlan().length) {
+        <mat-card class="p-4">
+          <p class="mb-1 font-medium">Cooldown plan</p>
+          @for (cd of cdPlan(); track cd.name; let last = $last) {
+            <div class="py-2">
+              <div class="text-[13px] font-medium">
+                @if (cd.spellId) {
+                  <wl-game-icon [id]="cd.spellId" [name]="cd.name"></wl-game-icon>
+                } @else {
+                  {{ cd.name }}
+                }
+              </div>
+              <mat-chip-set class="mt-1">
+                @if (cd.firstCastS != null) { <mat-chip>First cast {{ cd.firstCastS | formatDuration }}</mat-chip> }
+                @if (cd.uses != null) { <mat-chip>{{ cd.uses | number:'1.0-1' }} uses</mat-chip> }
+                @if (cd.usesPerMin != null) { <mat-chip>{{ cd.usesPerMin | number:'1.1-1' }}/min</mat-chip> }
+                @if (cd.bloodlust) { <mat-chip highlighted>Bloodlust@if (cd.bloodlustPct != null) { ({{ cd.bloodlustPct }}%)}</mat-chip> }
+                @for (h of cd.holds; track h.castIndex) { <mat-chip>Hold #{{ h.castIndex + 1 }} {{ h.targetS | formatDuration }}</mat-chip> }
+              </mat-chip-set>
+              @if (cd.rule) { <wl-callout class="mt-2">{{ cd.rule }}</wl-callout> }
+            </div>
+            @if (!last) { <mat-divider></mat-divider> }
+          }
+        </mat-card>
+      }
+
+      <!-- Defensive plan -->
+      @if (defensivePlan().length) {
+        <mat-card class="p-4">
+          <p class="mb-1 font-medium">Defensive plan</p>
+          @for (def of defensivePlan(); track def.name; let last = $last) {
+            <div class="py-2">
+              <div class="text-[13px] font-medium">
+                @if (def.spellId) {
+                  <wl-game-icon [id]="def.spellId" [name]="def.name"></wl-game-icon>
+                } @else {
+                  {{ def.name }}
+                }
+              </div>
+              <mat-chip-set class="mt-1">
+                @if (def.uses != null) { <mat-chip>{{ def.uses | number:'1.0-1' }} uses</mat-chip> }
+                @if (def.firstCastS != null) { <mat-chip>First use {{ def.firstCastS | formatDuration }}</mat-chip> }
+              </mat-chip-set>
+              @if (def.windowsS.length) {
+                <div class="mt-1 flex flex-wrap items-center gap-2">
+                  <span class="text-[12px] text-[var(--muted)]">Top windows</span>
+                  <mat-chip-set>
+                    @for (w of def.windowsS; track $index) { <mat-chip>{{ w | formatDuration }}</mat-chip> }
+                  </mat-chip-set>
+                </div>
+              }
+              @if (def.rule) { <wl-callout class="mt-2">{{ def.rule }}</wl-callout> }
+            </div>
+            @if (!last) { <mat-divider></mat-divider> }
+          }
+        </mat-card>
+      }
+
+      <!-- Burst windows -->
       @if (bench()) {
-        <mat-card class="brief-card">
-          <div class="stats-bar">
+        <mat-card class="p-4">
+          <div class="flex gap-6">
             @if (bench()!.avg_duration_s) {
-              <div class="stat">
-                <div class="stat-val">{{ bench()!.avg_duration_s | formatDuration }}</div>
-                <div class="stat-lbl">Avg Kill Time</div>
+              <div>
+                <div class="text-xl font-semibold">{{ bench()!.avg_duration_s | formatDuration }}</div>
+                <div class="text-[11px] text-[var(--muted)]">Avg kill time</div>
               </div>
             }
-            @if (bench()!.burst_windows?.length) {
-              <div class="stat">
-                <div class="stat-val">{{ bench()!.burst_windows!.length }}</div>
-                <div class="stat-lbl">Burst Windows</div>
+            @if (burstWindows().length) {
+              <div>
+                <div class="text-xl font-semibold">{{ burstWindows().length }}</div>
+                <div class="text-[11px] text-[var(--muted)]">Burst windows</div>
               </div>
             }
           </div>
 
-          @if (bench()!.burst_windows?.length) {
-            <p class="card-title" style="margin-top:16px">Burst Windows</p>
-            @for (bw of bench()!.burst_windows!; track bw.time_s) {
-              <div class="bw-row">
-                <span class="bw-time">{{ bw.time_s | formatDuration }}</span>
-                <span class="bw-cds">{{ bw.common_cds?.join(', ') || 'no tracked CD' }}</span>
-                @if ((bw.avg_targets ?? 1) >= 2) {
-                  <span class="bw-aoe">AoE</span>
+          @if (burstWindows().length) {
+            <mat-divider class="my-3"></mat-divider>
+            <p class="mb-1 font-medium">Burst windows</p>
+            @for (bw of burstWindows(); track bw.startS) {
+              <div class="flex items-center gap-3 py-1 text-[13px]">
+                <span class="shrink-0 font-semibold tabular-nums">{{ bw.startS | formatDuration }} - {{ bw.endS | formatDuration }}</span>
+                <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
+                  @for (cd of bw.cds; track cd.name) {
+                    @if (cd.spellId) {
+                      <wl-game-icon [id]="cd.spellId" [name]="cd.name"></wl-game-icon>
+                    } @else {
+                      <span>{{ cd.name }}</span>
+                    }
+                  }
+                  @if (!bw.cds.length) {
+                    <span class="text-[var(--muted)]">no tracked CD</span>
+                  }
+                </div>
+                @if (bw.aoe) {
+                  <mat-chip-set><mat-chip highlighted>AoE</mat-chip></mat-chip-set>
+                }
+                @if (bw.dmg) {
+                  <span class="shrink-0 tabular-nums text-[var(--muted)]">{{ bw.dmg | formatDamage }}</span>
                 }
               </div>
             }

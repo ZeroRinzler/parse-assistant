@@ -3,7 +3,7 @@ import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { AnalysisFinding } from '../../../core/models/analysis.models';
-import { SpellIconComponent } from '../spell-icon/spell-icon';
+import { GameIconComponent } from '../game-icon/game-icon';
 import { CalloutComponent } from '../callout/callout';
 import { FormatDurationPipe } from '../../pipes/format-duration-pipe';
 
@@ -21,7 +21,7 @@ export interface FindingEntry {
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-finding-list',
-  imports: [MatCardModule, MatIconModule, MatButtonModule, SpellIconComponent, CalloutComponent, FormatDurationPipe],
+  imports: [MatCardModule, MatIconModule, MatButtonModule, GameIconComponent, CalloutComponent, FormatDurationPipe],
   templateUrl: './finding-list.html',
 })
 export class FindingListComponent {

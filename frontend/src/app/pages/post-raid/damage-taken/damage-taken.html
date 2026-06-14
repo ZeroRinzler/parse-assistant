@@ -11,7 +11,7 @@
         @for (row of abilityRows(); track row.spellId) {
           <div class="flex h-[52px] items-center">
             @if (row.spellId) {
-              <wl-spell-icon [spellId]="row.spellId"></wl-spell-icon>
+              <wl-game-icon [id]="row.spellId"></wl-game-icon>
             }
           </div>
         }

@@ -1,14 +1,14 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { DmgTakenAbility, TopDtkComparison } from '../../../core/models/analysis.models';
 import { RangeChartComponent, RangeRow } from '../../../shared/components/range-chart/range-chart';
-import { SpellIconComponent } from '../../../shared/components/spell-icon/spell-icon';
+import { GameIconComponent } from '../../../shared/components/game-icon/game-icon';
 import { CalloutComponent } from '../../../shared/components/callout/callout';
 import { IconCacheService } from '../../../core/services/icon-cache';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-damage-taken',
-  imports: [RangeChartComponent, SpellIconComponent, CalloutComponent],
+  imports: [RangeChartComponent, GameIconComponent, CalloutComponent],
   templateUrl: './damage-taken.html',
 })
 export class DamageTakenComponent {
