@@ -36,7 +36,7 @@ export class AnalysisEngineService {
       this.wclApi.getAllEvents(reportCode, fightId, 'Casts', fStart, fEnd, playerId),
       this.wclApi.getAllEvents(reportCode, fightId, 'Buffs', fStart, fEnd),
       this.wclApi.getAllEvents(reportCode, fightId, 'DamageDone', fStart, fEnd, playerId),
-      this.wclApi.getAllEvents(reportCode, fightId, 'DamageTaken', fStart, fEnd),
+      this.wclApi.getAllEvents(reportCode, fightId, 'DamageTaken', fStart, fEnd, playerId),
     ]);
 
     const specMap = await this.wclApi.getPlayerDetails(reportCode, fightId);
