@@ -4,7 +4,6 @@ export interface EncounterEntry {
   id: number;
   name: string;
   sample_count: number;
-  last_ingested?: string;
 }
 
 export interface UsesPerMin {
@@ -48,7 +47,6 @@ export interface EncounterBench {
   encounter_name: string;
   sample_count: number;
   avg_duration_s: number;
-  last_ingested?: string;
   downtime_threshold_ms?: number;
   top_avg_efficiency?: number;
   top_efficiency_stddev?: number;

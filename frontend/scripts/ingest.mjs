@@ -13,6 +13,7 @@
  * Requires: WCL_CLIENT_ID and WCL_CLIENT_SECRET in .env at the repo root.
  */
 
+import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import readline from 'readline';
@@ -25,6 +26,13 @@ const __dirname = path.dirname(__filename);
 const FRONTEND_ROOT = path.resolve(__dirname, '..');
 // WL_DATA_DIR lets a test/dry run write elsewhere instead of the committed data dir.
 const DATA_DIR = process.env.WL_DATA_DIR || path.join(FRONTEND_ROOT, 'public', 'data', 'specs');
+
+// Hash of this script file - used as a cache key so any change to ingestion logic
+// automatically invalidates existing parse samples and forces re-analysis.
+const INGEST_HASH = crypto.createHash('sha256')
+  .update(fs.readFileSync(__filename, 'utf8'))
+  .digest('hex')
+  .slice(0, 12);
 
 // ── Env loading ───────────────────────────────────────────────────────────────
 
@@ -1232,6 +1240,10 @@ function getSamplesPath(spec, encounterId) {
   return path.join(DATA_DIR, spec, 'parse_samples', `${encounterId}.json`);
 }
 
+function parseKey(reportCode, fightId, hash = INGEST_HASH) {
+  return `${reportCode}:${fightId}:${hash}`;
+}
+
 function getEncounterPath(spec, encounterId) {
   return path.join(DATA_DIR, spec, 'encounters', `${encounterId}.json`);
 }
@@ -1262,7 +1274,7 @@ function saveParseSample(spec, encounterId, encounterName, reportCode, fightId, 
   samples.push({
     spec, encounter_id: encounterId, encounter_name: encounterName,
     report_code: reportCode, fight_id: fightId, player_name: playerName,
-    sampled_at: nowUtc(), cooldown_data: cooldownData,
+    sampled_at: nowUtc(), ingest_hash: INGEST_HASH, cooldown_data: cooldownData,
   });
   writeJson(samplesPath, samples);
 }
@@ -1518,7 +1530,6 @@ function syncEncounterFile(spec, encounterId) {
     spec, encounter_id: encounterId, encounter_name: encName,
     sample_count: samples.length,
     avg_duration_s: avgDurationS,
-    last_ingested: nowUtc(),
     downtime_threshold_ms: Math.round(downtimeThresholdMs),
     top_avg_efficiency: topAvgEfficiency,
     top_efficiency_stddev: topEfficiencyStddev,
@@ -1626,12 +1637,36 @@ async function ingestSpec(wcl, spec, encounters) {
     }
     console.log(` ${rankings.length} rankings found`);
 
-    // Clear existing samples for this encounter
     const samplesPath = getSamplesPath(spec, enc.id);
-    if (fs.existsSync(samplesPath)) fs.unlinkSync(samplesPath);
+    const currentTopKeys = new Set(rankings.map(r => parseKey(r.report_code, r.fight_id)));
 
-    let done = 0;
+    // Keep cached samples still in the current top 10 AND produced by this script version
+    const existingSamples = readJson(samplesPath) || [];
+    const keptSamples = existingSamples.filter(s =>
+      currentTopKeys.has(parseKey(s.report_code, s.fight_id, s.ingest_hash))
+    );
+    const cachedKeys = new Set(keptSamples.map(s => parseKey(s.report_code, s.fight_id)));
+    writeJson(samplesPath, keptSamples);
+
+    // Keep positions only for samples that are still valid (same top-N + same script version)
+    const posFile = getPositionsPath(spec, enc.id);
+    const existingPosData = readJson(posFile) || {};
+    const existingPosParses = Array.isArray(existingPosData.parses) ? existingPosData.parses : [];
+    const keptPositions = existingPosParses.filter(p => cachedKeys.has(parseKey(p.report_code, p.fight_id)));
+    if (keptPositions.length > 0) {
+      writeJson(posFile, { ...existingPosData, parses: keptPositions, sample_count: keptPositions.length }, true);
+    } else if (fs.existsSync(posFile)) {
+      fs.unlinkSync(posFile);
+    }
+
+    let done = 0, cached = 0;
     for (const ranking of rankings) {
+      const key = parseKey(ranking.report_code, ranking.fight_id);
+      if (cachedKeys.has(key)) {
+        cached++;
+        done++;
+        continue;
+      }
       process.stdout.write(`\r  [${enc.name}] Analyzing ${done + 1}/${rankings.length}: ${ranking.player}...    `);
       try {
         const res = await analyzeParse(
@@ -1649,7 +1684,7 @@ async function ingestSpec(wcl, spec, encounters) {
       }
       done++;
     }
-    process.stdout.write(`\r  [${enc.name}] ${done}/${rankings.length} parses analyzed.          \n`);
+    process.stdout.write(`\r  [${enc.name}] ${rankings.length - cached} analyzed, ${cached} cached.          \n`);
 
     // Compute bench data
     process.stdout.write(`  [${enc.name}] Computing bench data...`);
@@ -1731,10 +1766,35 @@ async function ingestSpecNonInteractive(wcl, spec, encounters, topN = 10) {
     console.log(` ${rankings.length} rankings found`);
 
     const samplesPath = getSamplesPath(spec, enc.id);
-    if (fs.existsSync(samplesPath)) fs.unlinkSync(samplesPath);
+    const currentTopKeys = new Set(rankings.map(r => parseKey(r.report_code, r.fight_id)));
 
-    let done = 0;
+    // Keep cached samples still in the current top N AND produced by this script version
+    const existingSamples = readJson(samplesPath) || [];
+    const keptSamples = existingSamples.filter(s =>
+      currentTopKeys.has(parseKey(s.report_code, s.fight_id, s.ingest_hash))
+    );
+    const cachedKeys = new Set(keptSamples.map(s => parseKey(s.report_code, s.fight_id)));
+    writeJson(samplesPath, keptSamples);
+
+    // Keep positions only for samples that are still valid (same top-N + same script version)
+    const posFile = getPositionsPath(spec, enc.id);
+    const existingPosData = readJson(posFile) || {};
+    const existingPosParses = Array.isArray(existingPosData.parses) ? existingPosData.parses : [];
+    const keptPositions = existingPosParses.filter(p => cachedKeys.has(parseKey(p.report_code, p.fight_id)));
+    if (keptPositions.length > 0) {
+      writeJson(posFile, { ...existingPosData, parses: keptPositions, sample_count: keptPositions.length }, true);
+    } else if (fs.existsSync(posFile)) {
+      fs.unlinkSync(posFile);
+    }
+
+    let done = 0, cached = 0;
     for (const ranking of rankings) {
+      const key = parseKey(ranking.report_code, ranking.fight_id);
+      if (cachedKeys.has(key)) {
+        cached++;
+        done++;
+        continue;
+      }
       process.stdout.write(`\r  [${enc.name}] Analyzing ${done + 1}/${rankings.length}: ${ranking.player}...    `);
       try {
         const res = await analyzeParse(
@@ -1749,7 +1809,7 @@ async function ingestSpecNonInteractive(wcl, spec, encounters, topN = 10) {
       }
       done++;
     }
-    process.stdout.write(`\r  [${enc.name}] ${done}/${rankings.length} parses analyzed.          \n`);
+    process.stdout.write(`\r  [${enc.name}] ${rankings.length - cached} analyzed, ${cached} cached.          \n`);
 
     process.stdout.write(`  [${enc.name}] Computing bench data...`);
     syncEncounterFile(spec, enc.id);
