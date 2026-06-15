@@ -273,7 +273,8 @@ export class PreFightComponent implements OnInit {
 
   protected openMap(bw: BurstWindowVm): void {
     const label = bw.cds.map(c => c.name).join(', ') || 'Burst window';
-    this.panel.openAt(bw.startS, { kind: 'boss' }, label);
+    const spellIds = bw.cds.map(c => c.spellId).filter((id): id is number => id != null);
+    this.panel.openAt(bw.startS, { kind: 'boss' }, label, spellIds);
   }
 
   async ngOnInit(): Promise<void> {

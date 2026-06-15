@@ -30,8 +30,9 @@ export class BurstWindowsComponent {
     const bw = this.topWindows()[i];
     if (!bw) return;
     const label = (bw.common_cds ?? []).join(', ') || 'Burst window';
-    // Burst windows are positioned relative to the boss.
-    this.panel.openAt(bw.time_s, { kind: 'boss' }, label);
+    const cdIds = this.cdSpellIds();
+    const spellIds = (bw.common_cds ?? []).map(n => cdIds[n]).filter((id): id is number => !!id);
+    this.panel.openAt(bw.time_s, { kind: 'boss' }, label, spellIds);
   }
 
   protected readonly windows = computed<ComparisonWindow[]>(() => {

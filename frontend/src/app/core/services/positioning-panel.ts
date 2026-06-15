@@ -16,6 +16,7 @@ export class PositioningPanelService {
   readonly anchorTime = signal(0);
   readonly reference = signal<ReferenceSelector>({ kind: 'boss' });
   readonly contextLabel = signal('');
+  readonly contextSpellIds = signal<number[]>([]);
 
   /** Called by a page after analysis. `live` is null on pages with no pull (e.g. /pre). */
   setContext(positions: EncounterPositions | null, live: LiveOverlay | null): void {
@@ -23,10 +24,11 @@ export class PositioningPanelService {
     this.live.set(live);
   }
 
-  openAt(anchorTime: number, reference: ReferenceSelector, contextLabel = ''): void {
+  openAt(anchorTime: number, reference: ReferenceSelector, contextLabel = '', spellIds: number[] = []): void {
     this.anchorTime.set(anchorTime);
     this.reference.set(reference);
     this.contextLabel.set(contextLabel);
+    this.contextSpellIds.set(spellIds);
     this.open.set(true);
   }
 

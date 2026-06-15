@@ -40,9 +40,9 @@ export class DefensivesSectionComponent {
   protected onOpenMap(i: number): void {
     const dw = this.topDefensiveWindows()[i];
     if (!dw) return;
-    // Defensive windows are positioned relative to the enemy dealing the main damage.
     const ref = dw.ref_game_id != null ? { kind: 'enemy' as const, gameId: dw.ref_game_id } : { kind: 'boss' as const };
-    this.panel.openAt(dw.time_s, ref, dw.defensive_name ?? 'Defensive');
+    const spellIds = dw.spell_id != null ? [dw.spell_id] : [];
+    this.panel.openAt(dw.time_s, ref, dw.defensive_name ?? 'Defensive', spellIds);
   }
 
   protected readonly defEntries = computed<FindingEntry[]>(() => {

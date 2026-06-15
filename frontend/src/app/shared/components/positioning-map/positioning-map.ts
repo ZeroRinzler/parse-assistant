@@ -13,6 +13,7 @@ import {
   toReferenceLocal, topParsePoints, topParseTrails,
 } from '../../../core/services/positioning-core';
 import { FormatDurationPipe } from '../../pipes/format-duration-pipe';
+import { GameIconComponent } from '../game-icon/game-icon';
 
 const STEP_S = 0.5;
 /** Playback timer cadence and how much window-time advances per tick (roughly real time). */
@@ -38,7 +39,7 @@ export interface LiveOverlay {
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-positioning-map',
-  imports: [MatButtonModule, MatIconModule, MatFormFieldModule, MatSelectModule, DecimalPipe, FormatDurationPipe],
+  imports: [MatButtonModule, MatIconModule, MatFormFieldModule, MatSelectModule, DecimalPipe, FormatDurationPipe, GameIconComponent],
   templateUrl: './positioning-map.html',
 })
 export class PositioningMapComponent {
@@ -47,6 +48,7 @@ export class PositioningMapComponent {
   readonly pre = input(6);
   readonly post = input(3);
   readonly contextLabel = input('');
+  readonly contextSpellIds = input<number[]>([]);
   readonly live = input<LiveOverlay | null>(null);
   /** Initial reference: boss (default) or a specific enemy gameID. */
   readonly defaultReference = input<ReferenceSelector>({ kind: 'boss' });
@@ -235,8 +237,9 @@ export class PositioningMapComponent {
     // ability, and we only sample facing at casts, so it is uninformative.)
     if (read?.player) {
       const [x, y] = toScreen(read.player);
+      const r = 5;
       ctx.fillStyle = gold;
-      ctx.beginPath(); ctx.arc(x, y, 5, 0, 2 * Math.PI); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath(); ctx.fill();
       ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.stroke();
     }
   }
