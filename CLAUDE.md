@@ -84,8 +84,6 @@ warcraft-learner/
 ├── .github/workflows/
 │   ├── deploy-pages.yml   # Build Angular --base-href /warcraft-learner/ → GitHub Pages
 │   └── ingest-parses.yml  # Daily + manual: runs ingest.mjs, commits data/specs/**
-├── .env                   # WCL_CLIENT_ID + WCL_CLIENT_SECRET (gitignored)
-└── .env.example
 ```
 
 **Data location**: `frontend/public/data/specs/` - Angular's `public/` directory serves these at `/data/specs/` in both the dev server and the built app. The dev server also has a `proxy.conf.json` wired in (stale - points to a `localhost:8000` that no longer exists; can be removed).
@@ -119,7 +117,7 @@ warcraft-learner/
 ### Ingestion (`npm run ingest`)
 Runs `frontend/scripts/ingest.mjs`. Also runs as `ingest-parses.yml` GHA daily + manually.
 
-1. Authenticates to WCL with client credentials (from `.env` - server-side secret, only used in CLI/GHA, never in the browser).
+1. Authenticates to WCL with client credentials (from `WCL_CLIENT_ID`/`WCL_CLIENT_SECRET` environment variables - server-side secret, only used in GHA, never in the browser).
 2. Queries `characterRankings` for each boss to find top 10 parses.
 3. Fetches `Casts`, `Buffs`, `DamageDone`, `DamageTaken` per parse.
 4. Computes per-parse: CD timing summaries, `burst_windows` (CD-cast-centric), `defensive_windows` (buff-window-centric), talent key, trinkets, enchants.

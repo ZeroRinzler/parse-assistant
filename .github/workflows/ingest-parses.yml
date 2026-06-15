@@ -10,23 +10,23 @@ on:
         description: 'Spec to ingest (leave empty to ingest all specs with existing data)'
         required: false
         default: ''
-      top_n:
-        description: 'Number of top parses per boss'
-        required: false
-        default: '10'
 
 jobs:
   ingest:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
@@ -38,14 +38,20 @@ jobs:
         env:
           WCL_CLIENT_ID: ${{ secrets.WCL_CLIENT_ID }}
           WCL_CLIENT_SECRET: ${{ secrets.WCL_CLIENT_SECRET }}
+          # Bind the dispatch input to an env var rather than interpolating it
+          # directly into the script - prevents shell injection via the input.
+          SPEC: ${{ github.event.inputs.spec }}
         run: |
-          SPEC="${{ github.event.inputs.spec }}"
-          TOP_N="${{ github.event.inputs.top_n || '10' }}"
           if [ -n "$SPEC" ]; then
-            node frontend/scripts/ingest.mjs --spec "$SPEC" --top-n "$TOP_N"
+            node frontend/scripts/ingest.mjs --spec "$SPEC"
           else
-            node frontend/scripts/ingest.mjs --all --top-n "$TOP_N"
+            node frontend/scripts/ingest.mjs --all
           fi
+
+      - name: Pull latest before committing
+        env:
+          BRANCH: ${{ github.ref_name }}
+        run: git pull --rebase origin "$BRANCH"
 
       - name: Commit updated spec files
         uses: stefanzweifel/git-auto-commit-action@v5

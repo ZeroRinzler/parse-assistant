@@ -17,9 +17,8 @@ A web-based diagnostic tool for Mythic WoW raiders. It fetches combat data from 
 
 ```bash
 cd frontend
-cp ../.env.example ../.env   # fill in WCL OAuth credentials
 npm install
-npm start                    # Angular dev server on http://localhost:4200
+npm start   # Angular dev server on http://localhost:4200
 ```
 
 The Angular app is fully static and communicates directly with the WCL API via OAuth2 PKCE.
@@ -55,7 +54,21 @@ Two workflows keep spec data up to date automatically:
 | `ingest-parses.yml` | Daily at 06:00 UTC (or manual) | `node frontend/scripts/ingest.mjs` |
 | `scrape-guides.yml` | Manual (`workflow_dispatch`) | `node frontend/scripts/scrape.mjs` |
 
-Set `WCL_CLIENT_ID` and `WCL_CLIENT_SECRET` as repository secrets. The workflows commit updated `frontend/public/data/specs/**` files back to the repo after each run.
+Set `WCL_CLIENT_ID` and `WCL_CLIENT_SECRET` as repository secrets at `https://github.com/gpolcode/warcraft-learner/settings/secrets/actions`. The workflows commit updated `frontend/public/data/specs/**` files back to the repo after each run.
+
+### Ingesting spec data from a branch
+
+The ingest workflow can run on any branch via manual trigger - the preferred approach for devs and Claude since no local WCL credentials are needed.
+
+1. Push your branch to GitHub (rulebook changes, new spec dirs, etc.)
+2. Go to **Actions -> Ingest Parse Samples -> Run workflow**
+3. Select your branch from the dropdown
+4. Optionally set a specific spec name or leave blank to ingest all specs that have a `rulebook.json`
+5. Click **Run workflow**
+
+The workflow commits updated `frontend/public/data/specs/**` files directly to your branch. Pull them down with `git pull` when done.
+
+For Claude: trigger via the `mcp__github__actions_run_trigger` tool on the current feature branch, wait for the run to complete, then `git pull` to get the committed data files.
 
 ## Credentials needed
 

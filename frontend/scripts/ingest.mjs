@@ -10,7 +10,8 @@
  * Usage:
  *   npm run ingest
  *
- * Requires: WCL_CLIENT_ID and WCL_CLIENT_SECRET in .env at the repo root.
+ * Requires: WCL_CLIENT_ID and WCL_CLIENT_SECRET environment variables.
+ * Use the GitHub Actions workflow to run this - it reads from repository secrets.
  */
 
 import crypto from 'crypto';
@@ -34,29 +35,11 @@ const INGEST_HASH = crypto.createHash('sha256')
   .digest('hex')
   .slice(0, 12);
 
-// ── Env loading ───────────────────────────────────────────────────────────────
-
-function loadEnv() {
-  const envPath = path.join(FRONTEND_ROOT, '..', '.env');
-  if (!fs.existsSync(envPath)) return;
-  const lines = fs.readFileSync(envPath, 'utf8').split('\n');
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const eq = trimmed.indexOf('=');
-    if (eq === -1) continue;
-    const key = trimmed.slice(0, eq).trim();
-    const val = trimmed.slice(eq + 1).trim().replace(/^["']|["']$/g, '');
-    if (!process.env[key]) process.env[key] = val;
-  }
-}
-
-loadEnv();
-
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const WCL_TOKEN_URL = 'https://www.warcraftlogs.com/oauth/token';
 const WCL_API_URL = 'https://www.warcraftlogs.com/api/v2/client';
+const TOP_N = 10;
 
 const BLOODLUST_SPELL_IDS = new Set([2825, 32182, 80353, 90355, 264667, 390386]);
 
@@ -129,7 +112,7 @@ class WCLClient {
     this.clientId = process.env.WCL_CLIENT_ID || '';
     this.clientSecret = process.env.WCL_CLIENT_SECRET || '';
     if (!this.clientId || !this.clientSecret) {
-      throw new Error('WCL_CLIENT_ID and WCL_CLIENT_SECRET must be set in .env');
+      throw new Error('WCL_CLIENT_ID and WCL_CLIENT_SECRET environment variables must be set');
     }
     this._token = null;
     this._tokenExpiry = 0;
@@ -1570,7 +1553,10 @@ function syncEncountersIndex(spec) {
 function getKnownSpecs() {
   if (!fs.existsSync(DATA_DIR)) return [];
   return fs.readdirSync(DATA_DIR).filter(d => {
-    try { return fs.statSync(path.join(DATA_DIR, d)).isDirectory(); } catch { return false; }
+    try {
+      if (!fs.statSync(path.join(DATA_DIR, d)).isDirectory()) return false;
+      return fs.existsSync(path.join(DATA_DIR, d, 'rulebook.json'));
+    } catch { return false; }
   }).sort();
 }
 
@@ -1703,7 +1689,6 @@ async function main() {
   const argv = process.argv.slice(2);
   const cliSpec = argv.find((_, i) => argv[i - 1] === '--spec');
   const cliAll = argv.includes('--all');
-  const cliTopN = parseInt(argv.find((_, i) => argv[i - 1] === '--top-n') || '10', 10) || 10;
   const cliLimitEnc = parseInt(argv.find((_, i) => argv[i - 1] === '--limit-enc') || '0', 10) || 0;
 
   let wcl;
@@ -1732,7 +1717,7 @@ async function main() {
     }
     const encs = cliLimitEnc > 0 ? encounters.slice(0, cliLimitEnc) : encounters;
     for (const spec of specs) {
-      await ingestSpecNonInteractive(wcl, spec, encs, cliTopN);
+      await ingestSpecNonInteractive(wcl, spec, encs);
     }
     rl.close();
     return;
@@ -1752,13 +1737,13 @@ async function main() {
   rl.close();
 }
 
-async function ingestSpecNonInteractive(wcl, spec, encounters, topN = 10) {
-  console.log(`\nIngesting ${spec} - all ${encounters.length} encounters (top ${topN})`);
+async function ingestSpecNonInteractive(wcl, spec, encounters) {
+  console.log(`\nIngesting ${spec} - all ${encounters.length} encounters (top ${TOP_N})`);
   for (const enc of encounters) {
-    process.stdout.write(`\n[${enc.name}] Fetching top ${topN} rankings...`);
+    process.stdout.write(`\n[${enc.name}] Fetching top ${TOP_N} rankings...`);
     let rankings;
     try {
-      rankings = await fetchTopRankings(wcl, spec, enc.id, topN);
+      rankings = await fetchTopRankings(wcl, spec, enc.id, TOP_N);
     } catch (err) {
       console.log(` FAILED: ${err.message}`);
       continue;
