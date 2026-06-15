@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { EncounterEntry, EncounterBench } from '../models/encounter.models';
+import { EncounterPositions } from '../models/positioning.models';
 import { Rulebook } from '../models/rulebook.models';
 
 const DATA_BASE = new URL('data/specs/', document.baseURI).href;
@@ -22,6 +23,14 @@ export class EncounterService {
     try {
       return await firstValueFrom(this.http.get<EncounterBench>(`${DATA_BASE}${spec}/encounters/${encounterId}.json`));
     } catch { /* ignore */ }
+    return null;
+  }
+
+  /** Ingested top-parse position timelines for the map. Null until re-ingested. */
+  async getPositions(spec: string, encounterId: number): Promise<EncounterPositions | null> {
+    try {
+      return await firstValueFrom(this.http.get<EncounterPositions>(`${DATA_BASE}${spec}/positions/${encounterId}.json`));
+    } catch { /* not ingested yet */ }
     return null;
   }
 

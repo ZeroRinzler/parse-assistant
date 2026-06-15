@@ -11,6 +11,8 @@ import { WclAuthService } from '../../core/services/wcl-auth';
 import { WclApiService } from '../../core/services/wcl-api';
 import { AnalysisService } from '../../core/services/analysis';
 import { IconCacheService } from '../../core/services/icon-cache';
+import { PositioningPanelService } from '../../core/services/positioning-panel';
+import { MapContextService } from '../../core/services/map-context';
 import { WclFight, WclPlayer, WclUserCharacter } from '../../core/models/wcl.models';
 import { AnalysisResult } from '../../core/models/analysis.models';
 import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner/loading-spinner';
@@ -39,6 +41,8 @@ export class PostRaidComponent implements OnInit {
   private readonly wclApi = inject(WclApiService);
   private readonly analysisSvc = inject(AnalysisService);
   private readonly icons = inject(IconCacheService);
+  private readonly panel = inject(PositioningPanelService);
+  private readonly mapCtx = inject(MapContextService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
 
@@ -59,6 +63,7 @@ export class PostRaidComponent implements OnInit {
 
   private _reportCode = '';
   private _masterAbilities: { gameID: number; name: string; icon: string }[] = [];
+  private _enemies: { id: number; name: string; gameID: number }[] = [];
   private _userChars: WclUserCharacter[] = [];
 
   protected readonly visiblePlayers = computed(() => {
@@ -92,6 +97,7 @@ export class PostRaidComponent implements OnInit {
     this.fights.set([]);
     this.players.set([]);
     this.result.set(null);
+    this.panel.clear();
 
     try {
       if (!this.auth.isLoggedIn()) {
@@ -117,6 +123,7 @@ export class PostRaidComponent implements OnInit {
           .sort((a, b) => a.name.localeCompare(b.name))
       );
       this._masterAbilities = report.masterData?.abilities || [];
+      this._enemies = report.masterData?.enemies || [];
       if (report.masterData?.abilities) this.icons.seed(report.masterData.abilities);
 
       const lastFight = this.fights()[this.fights().length - 1];
@@ -150,10 +157,13 @@ export class PostRaidComponent implements OnInit {
 
     this.loadingAnalysis.set(true);
     this.result.set(null);
+    this.panel.clear();
     this.loadingMsg.set('Fetching events…');
     try {
       const data = await this.analysisSvc.analyze(this._reportCode, fightId, playerId, this.fights(), this._masterAbilities);
       this.result.set(data);
+      const fight = this.fights().find(f => f.id === fightId);
+      if (fight) void this.mapCtx.prepare(this._reportCode, fight, playerId, data.spec, this._enemies);
     } catch (err) {
       this.error.set(err instanceof Error ? err.message : 'Analysis failed.');
     } finally {

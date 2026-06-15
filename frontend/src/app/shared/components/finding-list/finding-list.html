@@ -31,6 +31,12 @@
             <div class="text-xs leading-relaxed">
               @if (f.timestamp_ms != null) {
                 <span class="mr-1.5 text-[11px] tabular-nums text-[var(--accent)]">{{ f.timestamp_ms / 1000 | formatDuration }}</span>
+                @if (showMap()) {
+                  <button class="align-middle" mat-icon-button aria-label="Open positioning map"
+                    (click)="openMap(entry, f)">
+                    <mat-icon class="text-[16px]">my_location</mat-icon>
+                  </button>
+                }
               }
               <span>{{ f.message }}</span>
               @if (f.details?.remedy) {

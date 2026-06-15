@@ -1,8 +1,9 @@
-import { ChangeDetectionStrategy, Component, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { AnalysisFinding } from '../../../core/models/analysis.models';
+import { PositioningPanelService } from '../../../core/services/positioning-panel';
 import { GameIconComponent } from '../game-icon/game-icon';
 import { CalloutComponent } from '../callout/callout';
 import { FormatDurationPipe } from '../../pipes/format-duration-pipe';
@@ -26,6 +27,16 @@ export interface FindingEntry {
 })
 export class FindingListComponent {
   readonly entries = input.required<FindingEntry[]>();
+
+  private readonly panel = inject(PositioningPanelService);
+  /** Timed suggestions can open the positioning map once positions are loaded. */
+  protected readonly showMap = computed(() => !!this.panel.positions());
+
+  protected openMap(entry: FindingEntry, f: AnalysisFinding): void {
+    if (f.timestamp_ms == null) return;
+    // Offensive/defensive suggestions are positioned relative to the boss.
+    this.panel.openAt(f.timestamp_ms / 1000, { kind: 'boss' }, entry.name);
+  }
 
   // Per-row open/closed override; entries with issues start expanded.
   private readonly overrides = signal(new Map<number, boolean>());

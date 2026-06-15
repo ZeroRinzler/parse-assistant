@@ -13,6 +13,8 @@ import { MatChipsModule } from '@angular/material/chips';
 import { WclAuthService } from '../../core/services/wcl-auth';
 import { WclApiService } from '../../core/services/wcl-api';
 import { AnalysisService } from '../../core/services/analysis';
+import { PositioningPanelService } from '../../core/services/positioning-panel';
+import { MapContextService } from '../../core/services/map-context';
 import { AnalysisResult } from '../../core/models/analysis.models';
 import { WclFight, WclUserCharacter } from '../../core/models/wcl.models';
 import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner/loading-spinner';
@@ -40,6 +42,8 @@ export class LiveComponent implements OnInit {
   private readonly auth = inject(WclAuthService);
   private readonly wclApi = inject(WclApiService);
   private readonly analysisSvc = inject(AnalysisService);
+  private readonly panel = inject(PositioningPanelService);
+  private readonly mapCtx = inject(MapContextService);
   private readonly router = inject(Router);
   private readonly document = inject(DOCUMENT);
   private readonly destroyRef = inject(DestroyRef);
@@ -53,6 +57,7 @@ export class LiveComponent implements OnInit {
 
   private _reportCode = '';
   private _masterAbilities: { gameID: number; name: string; icon: string }[] = [];
+  private _enemies: { id: number; name: string; gameID: number }[] = [];
   private _pollSub: Subscription | null = null;
   private _fights: WclFight[] = [];
   private _players: { id: number; name: string; spec: string; server: string }[] = [];
@@ -86,6 +91,7 @@ export class LiveComponent implements OnInit {
     const url = this.reportControl.value.trim();
     if (!url) return;
     this._reportCode = extractCode(url);
+    this.panel.clear();
 
     const isVisible = () => this.document.visibilityState === 'visible';
     let lastPollAt = 0;
@@ -133,6 +139,7 @@ export class LiveComponent implements OnInit {
         .map(f => { const eid = f.encounterID || 0; bossAttempt[eid] = (bossAttempt[eid] || 0) + 1; return { ...f, duration_s: Math.round((f.endTime - f.startTime) / 100) / 10, attempt: bossAttempt[eid] }; });
       this._players = (report.masterData?.actors || []).map(a => ({ id: a.id, name: a.name, spec: a.subType || 'Unknown', server: a.server || '' }));
       this._masterAbilities = report.masterData?.abilities || [];
+      this._enemies = report.masterData?.enemies || [];
 
       const latestFight = this._fights[this._fights.length - 1];
       if (!latestFight) { this.status.set('No boss pulls found.'); return; }
@@ -149,6 +156,7 @@ export class LiveComponent implements OnInit {
       this._syncUrl(latestFight.id, playerMatch.id);
       const data = await this.analysisSvc.analyze(this._reportCode, latestFight.id, playerMatch.id, this._fights, this._masterAbilities);
       this.result.set(data);
+      void this.mapCtx.prepare(this._reportCode, latestFight, playerMatch.id, data.spec, this._enemies);
       this.status.set(`Updated at ${new Date().toLocaleTimeString()} - ${latestFight.name}`);
     } catch (err) {
       this.error.set(err instanceof Error ? err.message : 'Poll failed.');

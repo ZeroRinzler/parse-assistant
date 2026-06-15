@@ -14,6 +14,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { WclAuthService } from '../../core/services/wcl-auth';
 import { WclApiService } from '../../core/services/wcl-api';
 import { EncounterService } from '../../core/services/encounter';
+import { PositioningPanelService } from '../../core/services/positioning-panel';
 import { CharacterInfo, CharacterGear, WclUserCharacter } from '../../core/models/wcl.models';
 import { EncounterEntry, EncounterBench, EncounterGearStats } from '../../core/models/encounter.models';
 import { Rulebook } from '../../core/models/rulebook.models';
@@ -107,6 +108,7 @@ export class PreFightComponent implements OnInit {
   private readonly wclApi = inject(WclApiService);
   private readonly icons = inject(IconCacheService);
   private readonly encounterSvc = inject(EncounterService);
+  private readonly panel = inject(PositioningPanelService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
 
@@ -267,6 +269,13 @@ export class PreFightComponent implements OnInit {
     }));
   });
 
+  protected readonly showMap = computed(() => !!this.panel.positions());
+
+  protected openMap(bw: BurstWindowVm): void {
+    const label = bw.cds.map(c => c.name).join(', ') || 'Burst window';
+    this.panel.openAt(bw.startS, { kind: 'boss' }, label);
+  }
+
   async ngOnInit(): Promise<void> {
     if (!this.auth.isLoggedIn()) return;
     await this._init();
@@ -341,20 +350,24 @@ export class PreFightComponent implements OnInit {
     this.bench.set(null);
     this.charGear.set(null);
     this.rulebook.set(null);
+    this.panel.clear();
     if (!this.selectedEncId()) return;
     const info = this.charInfo();
     if (!info?.spec) return;
 
     this.loadingBrief.set(true);
     try {
-      const [gearData, benchData, rulebookData] = await Promise.all([
+      const [gearData, benchData, rulebookData, positions] = await Promise.all([
         info.name ? this.wclApi.getCharGear(info.name, info.server, info.region, this.selectedEncId()) : Promise.resolve({ found: false }),
         this.encounterSvc.getBench(info.spec, this.selectedEncId()),
         this.encounterSvc.getRulebook(info.spec),
+        this.encounterSvc.getPositions(info.spec, this.selectedEncId()),
       ]);
       if ((gearData as CharacterGear).found) this.charGear.set(gearData as CharacterGear);
       this.bench.set(benchData);
       this.rulebook.set(rulebookData);
+      // Pre-fight has no live pull, so the map shows the top-parse benchmark only.
+      this.panel.setContext(positions, null);
       await this._seedSpellIcons();
     } catch (err) {
       this.error.set(err instanceof Error ? err.message : 'Failed to load encounter data.');

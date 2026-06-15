@@ -10,5 +10,6 @@
 @if (defWindows().length > 0) {
   <p class="mt-6 text-xl font-medium">Defensive Windows</p>
   <p class="text-sm text-[var(--muted)]">Each bar is the damage taken while the defensive was active, as a share of your total damage taken this fight - lower is better.</p>
-  <wl-window-comparison [windows]="defWindows()" [higherIsBetter]="false"></wl-window-comparison>
+  <wl-window-comparison [windows]="defWindows()" [higherIsBetter]="false"
+    [showMap]="showMap()" (openMap)="onOpenMap($event)"></wl-window-comparison>
 }

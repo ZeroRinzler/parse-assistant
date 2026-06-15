@@ -1,0 +1,61 @@
+@if (!positions()) {
+  <p class="text-[13px] text-[var(--muted)]">
+    No top-parse position data for this encounter yet. Re-run ingestion to populate the map.
+  </p>
+} @else {
+  <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+    @if (contextLabel()) {
+      <span class="text-[12px] text-[var(--muted)]">{{ contextLabel() }}</span>
+    }
+    <mat-form-field appearance="outline" class="w-[200px]">
+      <mat-label>Relative to</mat-label>
+      <mat-select [value]="refValue()" (selectionChange)="onRefChange($event.value)">
+        <mat-option value="boss">Boss</mat-option>
+        @for (e of refEnemies(); track e.gameId) {
+          @if (!e.isBoss) { <mat-option [value]="e.gameId">{{ e.name }}</mat-option> }
+        }
+      </mat-select>
+    </mat-form-field>
+  </div>
+
+  <div class="rounded-lg border border-[var(--border)] bg-[var(--surface-alt)]">
+    <canvas #canvas class="block h-[420px] w-full"></canvas>
+  </div>
+
+  <div class="mt-2 flex items-center gap-2">
+    <button mat-icon-button [attr.aria-label]="playing() ? 'Pause' : 'Play'" (click)="togglePlay()">
+      <mat-icon>{{ playing() ? 'pause' : 'play_arrow' }}</mat-icon>
+    </button>
+    <div class="min-w-0 flex-1">
+      <input type="range" class="block w-full accent-[var(--gold)]"
+        [min]="windowStart()" [max]="windowEnd()" step="0.25"
+        [value]="scrubT()" (input)="onScrub($any($event.target).valueAsNumber)" />
+      <div class="mt-1 flex justify-between text-[10px] text-[var(--muted)]">
+        <span>{{ windowStart() | formatDuration }}</span>
+        <span>anchor {{ anchorTime() | formatDuration }}</span>
+        <span>{{ windowEnd() | formatDuration }}</span>
+      </div>
+    </div>
+  </div>
+
+  @if (readout(); as r) {
+    <div class="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-[12px]">
+      <span><span class="text-[var(--muted)]">Top parses:</span> {{ r.topCount }}</span>
+      @if (r.player) {
+        <span><span class="text-[var(--muted)]">Your distance:</span> {{ r.player.dist | number:'1.0-1' }}y</span>
+      }
+      @if (r.deviation !== null) {
+        <span><span class="text-[var(--muted)]">Off top-parse centre:</span>
+          <span [style.color]="r.deviation > 6 ? 'var(--critical)' : null">{{ r.deviation | number:'1.0-1' }}y</span>
+        </span>
+      }
+    </div>
+  }
+
+  <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-[var(--muted)]">
+    <span>▲ reference (facing up)</span>
+    <span>● top parses</span>
+    <span class="text-[#5b9bd5]">◯ top-parse centre</span>
+    @if (live()) { <span class="text-[var(--gold)]">◆ you</span> }
+  </div>
+}

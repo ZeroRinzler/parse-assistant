@@ -16,6 +16,11 @@
       @for (lbl of w.labels; track lbl) {
         <span class="mr-2 text-[var(--muted)]">{{ lbl }}</span>
       }
+      @if (showMap()) {
+        <button class="mr-1" mat-icon-button aria-label="Open positioning map" (click)="openMap.emit(i)">
+          <mat-icon>my_location</mat-icon>
+        </button>
+      }
       @if (w.detailRows.length) {
         <button class="mr-2" mat-icon-button (click)="toggle(i)">
           <mat-icon>{{ isOpen(i) ? 'expand_less' : 'expand_more' }}</mat-icon>

@@ -4,3 +4,6 @@
   }
   <router-outlet />
 </wl-page-nav>
+@defer (when panel.open()) {
+  <wl-positioning-panel />
+}

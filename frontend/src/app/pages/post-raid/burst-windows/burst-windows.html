@@ -1,4 +1,5 @@
 <p class="mt-6 text-xl font-medium">Burst Windows</p>
 <p class="text-sm text-[var(--muted)]">Each bar shows damage dealt during that window as a share of total fight damage - higher is better.</p>
 
-<wl-window-comparison [windows]="windows()" [higherIsBetter]="true"></wl-window-comparison>
+<wl-window-comparison [windows]="windows()" [higherIsBetter]="true"
+  [showMap]="showMap()" (openMap)="onOpenMap($event)"></wl-window-comparison>

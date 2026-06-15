@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -42,6 +42,10 @@ export class WindowComparisonComponent {
   readonly windows = input.required<ComparisonWindow[]>();
   /** Whether a higher bar is better (burst = true, damage taken = false). */
   readonly higherIsBetter = input<boolean>(true);
+  /** Show the "open positioning map" button (only when position data exists). */
+  readonly showMap = input<boolean>(false);
+  /** Emits the window index whose map should open. */
+  readonly openMap = output<number>();
 
   private readonly expanded = signal(new Set<number>());
 

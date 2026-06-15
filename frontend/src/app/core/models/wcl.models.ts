@@ -30,6 +30,17 @@ export interface WclEvent {
   abilityGameID: number;
   amount?: number;
   absorbed?: number;
+  sourceID?: number;
+  targetID?: number;
+  // Position is present only when the events query is made with
+  // `includeResources: true`. WCL flattens one actor's resource snapshot onto
+  // the event; `resourceActor` says whose it is (1 = source, 2 = target).
+  // Coordinates are in hundredths of a yard, facing in milliradians.
+  resourceActor?: number;
+  x?: number;
+  y?: number;
+  facing?: number;
+  mapID?: number;
 }
 
 export interface WclReport {
@@ -37,6 +48,7 @@ export interface WclReport {
   fights: WclFight[];
   masterData: {
     actors: Array<{ id: number; name: string; subType: string; server: string }>;
+    enemies?: Array<{ id: number; name: string; gameID: number }>;
     abilities: WclAbility[];
   };
 }

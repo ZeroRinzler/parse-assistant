@@ -71,8 +71,10 @@ warcraft-learner/
 │   │           ├── encounters.json     # Index: [{id, name, sample_count}]
 │   │           ├── encounters/
 │   │           │   └── {enc_id}.json  # Pre-computed bench data
-│   │           └── parse_samples/
-│   │               └── {enc_id}.json  # Raw parse samples
+│   │           ├── parse_samples/
+│   │           │   └── {enc_id}.json  # Raw parse samples
+│   │           └── positions/
+│   │               └── {enc_id}.json  # Top-parse position timelines (map feature)
 │   └── scripts/                # Node.js CLI tools (no server needed)
 │       ├── ingest.mjs   # Fetch top WCL parses → write bench + sample files
 │       ├── admin.mjs    # Rulebook management (build prompt, save AI output)
@@ -123,6 +125,7 @@ Runs `frontend/scripts/ingest.mjs`. Also runs as `ingest-parses.yml` GHA daily +
 4. Computes per-parse: CD timing summaries, `burst_windows` (CD-cast-centric), `defensive_windows` (buff-window-centric), talent key, trinkets, enchants.
 5. Writes raw samples → `parse_samples/{enc_id}.json`.
 6. Aggregates across parses → `encounters/{enc_id}.json` (bench file: per-CD thresholds, clustered burst/defensive windows, gear aggregates).
+7. Writes per-parse position timelines (ranked player + notable enemies, resampled) → `positions/{enc_id}.json` for the positioning map. Requires `includeResources`/`hostilityType` event fetches (see WCL API quirks).
 7. Updates `encounters.json` index.
 
 GHA commits `frontend/public/data/specs/**`, which triggers `deploy-pages.yml` to rebuild and redeploy.
@@ -166,6 +169,9 @@ Encounters loaded from `/data/specs/{spec}/encounters.json` (static file). Filte
 
 ### `rulebook.json` (`frontend/public/data/specs/{spec}/rulebook.json`)
 AI-generated rulebook. Extra top-level fields added on save: `guide_count`, `saved_at`.
+
+### `positions/{enc_id}.json`
+Per-parse position timelines for the positioning map (written by `ingest.mjs` `buildParsePositions`/`savePositions`; consumed by `core/services/positioning-core.ts` + `core/models/positioning.models.ts`). Top-level: `{spec, encounter_id, encounter_name, interval_s, sample_count, parses[]}`. Each parse: `{report_code, fight_id, player_name, duration_s, interval_s, player: PosRow[], enemies: [{game_id, name, is_boss, samples: PosRow[]}]}`. A `PosRow` is `[t_s, x, y, facing|null, mapID|null]` with **raw** WCL units (x/y in hundredths of a yard, facing in milliradians) - the frontend scales them. Enemies are keyed by `game_id` so the same boss/add matches across parses; `is_boss` = the enemy with the highest `maxHitPoints`.
 
 ### `parse_samples/{enc_id}.json`
 List of raw parse samples. Source of truth for bench files.
@@ -267,6 +273,11 @@ Non-obvious things that have caused bugs - read before touching gear extraction 
 | **Solving the talent format problem** | `ingest.mjs` fires a parallel `encounterRankings` query per ranked player to get the `v2:` talent key, overwriting the `v1:` key from `characterRankings`. |
 | **`server.region` may be a string** | In `characterRankings` JSON blob, `server.region` is sometimes `"EU"` (string) rather than `{slug: "eu"}`. Handle both forms. |
 | **`gameData.spell()` was removed** | Spell icons and names must come from `masterData.abilities` in the report response. |
+| **Event positions need `includeResources: true`** | The default `events` response carries no coordinates. Passing `includeResources: true` attaches the actor's resource snapshot, which includes position. Adds bandwidth, so it is off by default and only requested by the positioning feature. |
+| **Position is flattened onto the event, not nested** | With resources on, `x`, `y`, `facing`, `mapID` (plus `hitPoints`, etc.) appear at the **top level** of the event - there is no `sourceResources`/`targetResources` object. Each event describes **one** actor; `resourceActor` says which (`1` = source, `2` = target). Attribute the coords to `resourceActor === 2 ? targetID : sourceID`. |
+| **Events default to friendly only** | The `events` query defaults to `hostilityType: Friendlies`, so an all-source `Casts` fetch returns only the raid. Boss/add casts (and their positions) require a separate fetch with `hostilityType: Enemies`. |
+| **Position/facing units** | `x`/`y` are in hundredths of a yard (`÷100` → yards). `facing` is in milliradians (`÷1000` → radians) and its zero-point does not match a screen "up" axis - apply a `-π/2` offset so "behind the boss" renders behind (see `FACING_OFFSET_RAD` in `positioning-core.ts`). |
+| **`mapID` marks the phase/sub-map** | Coordinates are only comparable between actors sharing a `mapID`; it changes across phases that swap maps. Filter to a common `mapID` before computing relative positions. |
 
 ## External APIs
 
@@ -320,7 +331,7 @@ Non-obvious things that have caused bugs - read before touching gear extraction 
 1. Group by defensive name first.
 2. `groupByTime(group, 20s)` per defensive.
 3. Discard clusters in fewer than max(2, 35% of samples).
-4. Each cluster: `defensive_name`, `spell_id`, `window_length_s`, absolute damage stats (`dmg_avg`/`dmg_min`/`dmg_max`/`dmg_stddev`), ability breakdown of damage sources (absolute `avg_damage`).
+4. Each cluster: `defensive_name`, `spell_id`, `window_length_s`, absolute damage stats (`dmg_avg`/`dmg_min`/`dmg_max`/`dmg_stddev`), ability breakdown of damage sources (absolute `avg_damage`), and `ref_game_id` (the gameID of the enemy dealing the window's main damage - the positioning map's default reference for defensive windows). `ref_game_id` is null for burst clusters.
 
 Both cluster functions share `groupByTime()` and `clusterBaseStats()` helpers.
 

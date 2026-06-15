@@ -32,6 +32,8 @@ export interface BurstWindow {
   window_length_s: number;
   defensive_name?: string;
   spell_id?: number;
+  /** Map reference for defensive windows: gameID of the enemy dealing the window's main damage. */
+  ref_game_id?: number | null;
 }
 
 export interface PlayerBurstWindow {

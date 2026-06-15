@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { AnalysisFinding, PlayerDefensive, BurstWindow, PlayerBurstWindow } from '../../../core/models/analysis.models';
 import { IconCacheService } from '../../../core/services/icon-cache';
+import { PositioningPanelService } from '../../../core/services/positioning-panel';
 import { FindingEntry, FindingListComponent } from '../../../shared/components/finding-list/finding-list';
 import {
   ComparisonWindow,
@@ -26,12 +27,23 @@ interface CdBucket { issues: AnalysisFinding[]; holds: AnalysisFinding[]; succes
 })
 export class DefensivesSectionComponent {
   private readonly icons = inject(IconCacheService);
+  private readonly panel = inject(PositioningPanelService);
 
   readonly defensives = input.required<PlayerDefensive[]>();
   readonly defensiveFindings = input<AnalysisFinding[]>([]);
   readonly topDefensiveWindows = input<BurstWindow[]>([]);
   readonly playerDefensiveWindows = input<PlayerBurstWindow[]>([]);
   readonly fightDuration = input<number>(0);
+
+  protected readonly showMap = computed(() => !!this.panel.positions());
+
+  protected onOpenMap(i: number): void {
+    const dw = this.topDefensiveWindows()[i];
+    if (!dw) return;
+    // Defensive windows are positioned relative to the enemy dealing the main damage.
+    const ref = dw.ref_game_id != null ? { kind: 'enemy' as const, gameId: dw.ref_game_id } : { kind: 'boss' as const };
+    this.panel.openAt(dw.time_s, ref, dw.defensive_name ?? 'Defensive');
+  }
 
   protected readonly defEntries = computed<FindingEntry[]>(() => {
     const findings = this.defensiveFindings();

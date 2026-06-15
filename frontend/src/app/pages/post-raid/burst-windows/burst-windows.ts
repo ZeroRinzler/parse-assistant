@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { BurstWindow, PlayerBurstWindow } from '../../../core/models/analysis.models';
 import { IconCacheService } from '../../../core/services/icon-cache';
+import { PositioningPanelService } from '../../../core/services/positioning-panel';
 import {
   ComparisonWindow,
   WindowComparisonComponent,
@@ -15,11 +16,23 @@ import {
 })
 export class BurstWindowsComponent {
   private readonly icons = inject(IconCacheService);
+  private readonly panel = inject(PositioningPanelService);
 
   readonly topWindows = input.required<BurstWindow[]>();
   readonly playerWindows = input<PlayerBurstWindow[]>([]);
   readonly fightDuration = input<number>(0);
   readonly cdSpellIds = input<Record<string, number>>({});
+
+  /** Map is available once the page has loaded top-parse positions. */
+  protected readonly showMap = computed(() => !!this.panel.positions());
+
+  protected onOpenMap(i: number): void {
+    const bw = this.topWindows()[i];
+    if (!bw) return;
+    const label = (bw.common_cds ?? []).join(', ') || 'Burst window';
+    // Burst windows are positioned relative to the boss.
+    this.panel.openAt(bw.time_s, { kind: 'boss' }, label);
+  }
 
   protected readonly windows = computed<ComparisonWindow[]>(() => {
     const fightDur = this.fightDuration();
