@@ -221,6 +221,7 @@ query {
       id name
       zones {
         id name
+        partitions { id name }
         encounters { id name }
       }
     }
@@ -228,11 +229,11 @@ query {
 }`;
 
 const RANKINGS_QUERY = `
-query($encounterID: Int!, $className: String!, $specName: String!) {
+query($encounterID: Int!, $className: String!, $specName: String!, $partition: Int) {
   worldData {
     encounter(id: $encounterID) {
       name
-      characterRankings(className: $className specName: $specName metric: dps includeCombatantInfo: true)
+      characterRankings(className: $className specName: $specName metric: dps includeCombatantInfo: true partition: $partition)
     }
   }
 }`;
@@ -283,8 +284,14 @@ async function getEncounters(wcl) {
   for (const zone of (firstExp.zones || [])) {
     const lname = zone.name.toLowerCase();
     if (EXCLUDE_ZONE_PATTERNS.some(p => lname.includes(p))) continue;
+    // Sort partition IDs descending (highest = newest first) so we try the
+    // most recent patch partition first and fall back to older ones when the
+    // new partition is empty (e.g. right after a patch drops).
+    const partitionIds = (zone.partitions || [])
+      .map(p => p.id)
+      .sort((a, b) => b - a);
     for (const enc of (zone.encounters || [])) {
-      result.push({ id: enc.id, name: enc.name, zone: zone.name, expansion: firstExp.name });
+      result.push({ id: enc.id, name: enc.name, zone: zone.name, expansion: firstExp.name, partitionIds });
     }
   }
   return result;
@@ -377,16 +384,24 @@ async function fetchV2Talent(wcl, name, serverSlug, serverRegion, encounterId) {
 
 // ── Rankings fetching ─────────────────────────────────────────────────────────
 
-async function fetchTopRankings(wcl, spec, encounterId, count = 10) {
+async function fetchTopRankings(wcl, spec, encounterId, count = 10, partitionIds = []) {
   const mapping = SPEC_TO_WCL[spec];
   if (!mapping) throw new Error(`Unknown spec: ${spec}`);
   const [className, specName] = mapping;
 
-  const data = await wcl.query(RANKINGS_QUERY, { encounterID: encounterId, className, specName });
-  const enc = data.worldData.encounter;
-  let raw = enc.characterRankings;
-  const rankingsData = typeof raw === 'string' ? JSON.parse(raw) : raw;
-  const rankings = (rankingsData.rankings || []).slice(0, count);
+  // Try partitions newest-first; if the zone has no partition list fall back to
+  // the API default (null = current partition). This handles the common case
+  // where a patch just dropped and the newest partition is still empty.
+  const attempts = partitionIds.length > 0 ? partitionIds : [null];
+  let rankings = [];
+  for (const partition of attempts) {
+    const data = await wcl.query(RANKINGS_QUERY, { encounterID: encounterId, className, specName, partition });
+    const enc = data.worldData.encounter;
+    let raw = enc.characterRankings;
+    const rankingsData = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    rankings = (rankingsData.rankings || []).slice(0, count);
+    if (rankings.length > 0) break;
+  }
 
   // Resolve server slugs for all unique server IDs
   const uniqueSids = [...new Set(rankings.map(r => (r.server || {}).id).filter(Boolean))];
@@ -1616,7 +1631,7 @@ async function ingestSpec(wcl, spec, encounters) {
     process.stdout.write(`\n[${enc.name}] Fetching top 10 rankings...`);
     let rankings;
     try {
-      rankings = await fetchTopRankings(wcl, spec, enc.id, 10);
+      rankings = await fetchTopRankings(wcl, spec, enc.id, 10, enc.partitionIds || []);
     } catch (err) {
       console.log(` FAILED: ${err.message}`);
       continue;
@@ -1743,7 +1758,7 @@ async function ingestSpecNonInteractive(wcl, spec, encounters) {
     process.stdout.write(`\n[${enc.name}] Fetching top ${TOP_N} rankings...`);
     let rankings;
     try {
-      rankings = await fetchTopRankings(wcl, spec, enc.id, TOP_N);
+      rankings = await fetchTopRankings(wcl, spec, enc.id, TOP_N, enc.partitionIds || []);
     } catch (err) {
       console.log(` FAILED: ${err.message}`);
       continue;
