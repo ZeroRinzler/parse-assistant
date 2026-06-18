@@ -1,5 +1,5 @@
 /// <reference lib="webworker" />
-import { computeAnalysis, AnalysisInput } from './analysis-core';
+import { computeAnalysis, AnalysisInput } from '../analysis';
 
 addEventListener('message', ({ data }: MessageEvent<{ id: number; input: AnalysisInput }>) => {
   const { id, input } = data;

@@ -4,7 +4,9 @@ import { EncounterService } from './encounter';
 import { IconCacheService } from './icon-cache';
 import { AnalysisResult } from '../models/analysis.models';
 import { WclFight, WclAbility } from '../models/wcl.models';
-import { AnalysisInput } from './analysis-core';
+import { AnalysisInput } from '../analysis';
+import { AnalysisDataSource } from '../analysis/analysis-data-source';
+import { runAnalysis } from '../analysis/run-analysis';
 
 interface WorkerResponse { id: number; result?: AnalysisResult; error?: string; }
 
@@ -25,39 +27,19 @@ export class AnalysisEngineService {
     fights: WclFight[],
     masterAbilities: WclAbility[],
   ): Promise<AnalysisResult> {
-    const fight = fights.find(f => f.id === fightId);
+    const fight = fights.find((f) => f.id === fightId);
     if (!fight) throw new Error('Fight not found');
-    const { startTime: fStart, endTime: fEnd, encounterID } = fight;
 
-    // Kick off the heavy event queries immediately - they don't depend on spec -
-    // and resolve the player's spec concurrently. Only the (small, static)
-    // rulebook/bench files depend on spec, so they're fetched once it's known.
-    const eventsP = Promise.all([
-      this.wclApi.getAllEvents(reportCode, fightId, 'Casts', fStart, fEnd, playerId),
-      this.wclApi.getAllEvents(reportCode, fightId, 'Buffs', fStart, fEnd),
-      this.wclApi.getAllEvents(reportCode, fightId, 'DamageDone', fStart, fEnd, playerId),
-      this.wclApi.getAllEvents(reportCode, fightId, 'DamageTaken', fStart, fEnd, playerId),
-    ]);
-
-    const specMap = await this.wclApi.getPlayerDetails(reportCode, fightId);
-    const spec = specMap[playerId];
-    if (!spec) throw new Error(`Could not resolve spec for player ${playerId} in report ${reportCode}.`);
-    const playerName = specMap[`name_${playerId}`] ?? `Player ${playerId}`;
-
-    const [rulebook, bench] = await Promise.all([
-      this.encounterSvc.getRulebook(spec),
-      encounterID ? this.encounterSvc.getBench(spec, encounterID) : Promise.resolve(null),
-    ]);
-
-    const [castEvents, buffEvents, dmgEvents, dtEvents] = await eventsP;
-
-    const input: AnalysisInput = {
-      playerName, spec, fStart, fEnd,
-      castEvents, buffEvents, dmgEvents, dtEvents,
-      rulebook, bench, masterAbilities: masterAbilities || [],
+    // Adapt the Angular services to the framework-free data-source seam, then
+    // let the pure orchestrator sequence the fetches and the worker compute.
+    const src: AnalysisDataSource = {
+      getEvents: (rc, fid, dt, s, e, sid) => this.wclApi.getAllEvents(rc, fid, dt, s, e, sid),
+      getPlayerDetails: (rc, fid) => this.wclApi.getPlayerDetails(rc, fid),
+      getRulebook: (spec) => this.encounterSvc.getRulebook(spec),
+      getBench: (spec, enc) => this.encounterSvc.getBench(spec, enc),
     };
 
-    const result = await this._compute(input);
+    const result = await runAnalysis(src, (input) => this._compute(input), { reportCode, fight, playerId, masterAbilities });
 
     // Icon cache touches an Angular signal, so seed it on the main thread.
     this.icons.seedFromMap(result.ability_icons);

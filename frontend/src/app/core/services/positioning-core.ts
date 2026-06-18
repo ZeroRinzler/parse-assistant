@@ -10,7 +10,7 @@
  * that swap maps never mix coordinate spaces.
  *
  * No Angular dependencies - kept pure so it stays easy to test and could move
- * into a Web Worker later, mirroring `analysis-core.ts`.
+ * into a Web Worker later, mirroring `core/analysis/compute-analysis.ts`.
  */
 import { WclEvent } from '../models/wcl.models';
 import { EncounterPositions, ParsePositions, PosRow, ReferenceSelector } from '../models/positioning.models';
