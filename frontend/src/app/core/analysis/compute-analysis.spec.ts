@@ -28,6 +28,7 @@ describe('computeAnalysis (end to end)', () => {
     const result = computeAnalysis(
       input({
         rulebook: rulebook({ cooldowns: [{ name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 180 }] }),
+        bench: bench({ perCd: { 'Shadow Blades': { uses_per_min: { avg: 0.4, stddev: 0, min: 0.4, max: 0.4 }, avg_uses_per_min: 0.4 } } }),
         castEvents: Events.cast(SHADOW_BLADES, '0:05').cast(SHADOW_BLADES, '3:05').build(),
       }),
     );
@@ -63,6 +64,7 @@ describe('computeAnalysis (end to end)', () => {
     const result = computeAnalysis(
       input({
         rulebook: rulebook({ defensives: [{ name: 'Feint', spell_id: FEINT, cooldown: 30, duration: 6 }] }),
+        bench: bench({ perDefensive: { 'Feint': { uses_per_min: { avg: 2, stddev: 0, min: 2, max: 2 }, avg_uses_per_min: 2 } } }),
         buffEvents: Events.start().buffWindow(FEINT, '0:10', '0:16').build(),
       }),
     );

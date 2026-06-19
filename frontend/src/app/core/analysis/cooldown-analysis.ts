@@ -11,7 +11,7 @@ import { RulebookCooldown, RulebookRule } from '../models/rulebook.models';
 import { WclEvent } from '../models/wcl.models';
 import { Severity, sortBySeverity } from './findings';
 import { BLOODLUST_IDS, BLOODLUST_DURATION_S, fmtClock } from './format';
-import { isOutlierAbove, isOutlierBeyond, isCriticallyBelow, expectedUses, castEfficiencyPct, closestToZero } from './bench-stats';
+import { isOutlierAbove, isOutlierBeyond, isCriticallyBelow, benchExpectedUses, castEfficiencyPct, closestToZero } from './bench-stats';
 import { evaluateRules } from './rule-engine';
 
 export function analyzeCooldowns(
@@ -52,21 +52,22 @@ export function analyzeCooldowns(
       const wantsBL = cd.align_with_bloodlust !== false;
       const cdCasts = casts.filter((c) => c.abilityGameID === sid);
       const actual = cdCasts.length;
-      const expected = expectedUses(fightDurS, cooldownS);
       const cdIssues: AnalysisFinding[] = [];
       const cdSugg: AnalysisFinding[] = [];
 
+      const b = perCdBench[cdName];
+
       if (cd.talent_gated && actual === 0) continue;
 
-      if (actual === 0) {
-        cdIssues.push({ severity: 'critical', category: 'lost_cooldown', cd_name: cdName, timestamp_ms: undefined,
-          message: `${cdName} was never used. In a ${fmtClock(fightDurS)} fight with a ${cooldownS}s cooldown you should have ~${expected} cast(s).` });
-      } else if (actual < expected) {
-        cdIssues.push({ severity: 'critical', category: 'lost_cooldown', cd_name: cdName, timestamp_ms: undefined,
-          message: `${cdName} - ${actual} of ${expected} expected casts. Lost ${expected - actual} use(s) in a ${fmtClock(fightDurS)} fight.` });
-      }
+      const { expected, floor } = benchExpectedUses(fightDurS, b?.uses_per_min, b?.avg_uses_per_min ?? null)!;
 
-      const b = perCdBench[cdName];
+      if (actual === 0 && expected >= 1) {
+        cdIssues.push({ severity: 'critical', category: 'lost_cooldown', cd_name: cdName, timestamp_ms: undefined,
+          message: `${cdName} was never used. Top parsers average ~${expected} cast(s) on a ${fmtClock(fightDurS)} fight.` });
+      } else if (actual > 0 && actual < floor) {
+        cdIssues.push({ severity: 'critical', category: 'lost_cooldown', cd_name: cdName, timestamp_ms: undefined,
+          message: `${cdName} - ${actual} casts; top parsers average ~${expected} on a fight this length. Lost ${floor - actual} use(s).` });
+      }
       if (cdCasts.length) {
         const firstS = rel(cdCasts[0].timestamp) / 1000;
         if (b?.avg_first_cast_s != null && b.stddev_first_cast_s != null) {

@@ -10,6 +10,7 @@
  * Boundary convention: comparisons are STRICT. A value exactly at
  * `mean + sigmas*stddev` is NOT an outlier; it must exceed it.
  */
+import { UsesPerMin } from '../models/encounter.models';
 
 /** True when `value` sits more than `sigmas` standard deviations ABOVE the mean. */
 export function isOutlierAbove(value: number, mean: number, stddev: number, sigmas = 2): boolean {
@@ -39,4 +40,29 @@ export function castEfficiencyPct(totalDowntimeS: number, fightDurS: number): nu
 /** The value closest to zero (smallest absolute value) - the "primary" BL offset. */
 export function closestToZero(values: number[]): number {
   return values.reduce((best, x) => (Math.abs(x) < Math.abs(best) ? x : best));
+}
+
+/**
+ * Data-driven expected cooldown uses for a fight, derived from the top-parse
+ * per-minute usage rate scaled to the player's actual fight length.
+ *
+ * `floor` is the cohort - 1 sigma threshold (rounded, >=0) below which the
+ * player is genuinely under-using. Both `expected` and `floor` are rounded
+ * integers so they can be compared directly against a cast count.
+ *
+ * Returns null when no usage-rate bench data is available (fall back to the
+ * static `expectedUses` formula instead).
+ */
+export function benchExpectedUses(
+  fightDurS: number,
+  upm: UsesPerMin | undefined,
+  avgUsesPerMin: number | null,
+): { expected: number; floor: number } | null {
+  const rate = upm?.avg ?? avgUsesPerMin;
+  if (rate == null) return null;
+  const fightMin = fightDurS / 60;
+  const expected = Math.round(rate * fightMin);
+  const sd = (upm?.stddev ?? 0) * fightMin;
+  const floor = Math.max(0, Math.round(expected - sd));
+  return { expected, floor };
 }

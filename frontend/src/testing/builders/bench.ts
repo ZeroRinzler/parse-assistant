@@ -29,6 +29,7 @@ export function perCd(partial: Partial<PerCdBenchmark> = {}): PerCdBenchmark {
     stddev_bl_offset_s: null,
     avg_uses: null,
     avg_uses_per_min: null,
+    uses_per_min: { avg: 0, stddev: 0, min: 0, max: 0 },
     bl_pct: 0,
     majority_hold: false,
     hold_targets: {},
@@ -48,6 +49,7 @@ export function perDefensive(partial: Partial<PerDefensiveBenchmark> = {}): PerD
     hold_targets: {},
     avg_uses: 0,
     avg_uses_per_min: null,
+    uses_per_min: { avg: 0, stddev: 0, min: 0, max: 0 },
     majority_hold: false,
     ...partial,
   };

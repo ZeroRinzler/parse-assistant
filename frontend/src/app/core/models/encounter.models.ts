@@ -22,7 +22,7 @@ export interface PerCdBenchmark {
   stddev_bl_offset_s: number | null;
   avg_uses: number | null;
   avg_uses_per_min: number | null;
-  uses_per_min?: UsesPerMin;
+  uses_per_min: UsesPerMin;
   bl_pct: number;
   majority_hold: boolean;
   hold_targets: Record<string, { target_s: number; stddev_s: number; count: number; total_samples: number }>;
@@ -85,6 +85,7 @@ export interface PerDefensiveBenchmark {
   hold_targets: Record<string, { target_s: number; stddev_s: number; count: number; total_samples: number }>;
   avg_uses: number;
   avg_uses_per_min: number | null;
+  uses_per_min: UsesPerMin;
   majority_hold: boolean;
 }
 

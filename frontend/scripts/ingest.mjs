@@ -1502,6 +1502,7 @@ function syncEncounterFile(spec, encounterId) {
       hold_targets: holdTargets,
       avg_uses: avgUsesList.length ? round(mean(avgUsesList)) : 0,
       avg_uses_per_min: upmList.length ? round(mean(upmList), 2) : null,
+      uses_per_min: benchUsesPerMin(entries),
       majority_hold: entries.filter(e => e.cast_pattern === 'hold').length > entries.length * 0.5,
     };
   }

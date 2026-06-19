@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isOutlierAbove, isOutlierBeyond, isCriticallyBelow, expectedUses, castEfficiencyPct, closestToZero } from './bench-stats';
+import { isOutlierAbove, isOutlierBeyond, isCriticallyBelow, expectedUses, benchExpectedUses, castEfficiencyPct, closestToZero } from './bench-stats';
 
 describe('isOutlierAbove', () => {
   // mean 10, stddev 2, 2 sigma -> threshold is 14. Strictly greater than 14 is an outlier.
@@ -65,5 +65,42 @@ describe('closestToZero', () => {
   it('returns the value with the smallest absolute magnitude', () => {
     expect(closestToZero([5, -2, 8])).toBe(-2);
     expect(closestToZero([-1, 1])).toBe(-1); // ties keep the first-seen best
+  });
+});
+
+describe('benchExpectedUses', () => {
+  it('returns null when neither uses_per_min nor avg_uses_per_min is set', () => {
+    expect(benchExpectedUses(300, undefined, null)).toBeNull();
+  });
+
+  it('uses uses_per_min.avg when provided', () => {
+    // 0.5 uses/min * 5 min = 2.5 -> rounds to 3; stddev 0 -> floor 3
+    const upm = { avg: 0.5, stddev: 0, min: 0.5, max: 0.5 };
+    expect(benchExpectedUses(300, upm, null)).toEqual({ expected: 3, floor: 3 });
+  });
+
+  it('falls back to avg_uses_per_min when uses_per_min is absent', () => {
+    // 0.4/min * 5 min = 2.0 -> rounds to 2; floor 2
+    expect(benchExpectedUses(300, undefined, 0.4)).toEqual({ expected: 2, floor: 2 });
+  });
+
+  it('sets floor as expected minus scaled stddev (cohort - 1 sigma)', () => {
+    // rate=0.5/min, stddev=0.2/min, fight=5min
+    // expected = round(0.5*5) = round(2.5) = 3
+    // sd = 0.2*5 = 1.0
+    // floor = max(0, round(3 - 1)) = 2
+    const upm = { avg: 0.5, stddev: 0.2, min: 0.3, max: 0.7 };
+    expect(benchExpectedUses(300, upm, null)).toEqual({ expected: 3, floor: 2 });
+  });
+
+  it('clamps floor to zero when stddev is very large', () => {
+    const upm = { avg: 0.5, stddev: 2, min: 0, max: 1 };
+    expect(benchExpectedUses(300, upm, null)?.floor).toBe(0);
+  });
+
+  it('returns expected=0 for a very short fight at a low usage rate', () => {
+    // 0.2/min * 1 min = 0.2 -> rounds to 0; allows zero-cast suppression
+    const upm = { avg: 0.2, stddev: 0, min: 0.2, max: 0.2 };
+    expect(benchExpectedUses(60, upm, null)).toEqual({ expected: 0, floor: 0 });
   });
 });

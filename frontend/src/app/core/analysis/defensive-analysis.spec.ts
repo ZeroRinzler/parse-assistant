@@ -5,6 +5,8 @@ import { perDefensive } from '../../../testing/builders/bench';
 import { parseClock, FIGHT_START } from '../../../testing/time';
 import { FEINT, EVASION } from '../../../testing/spell-ids';
 
+const ONE_MIN = FIGHT_START + 60_000;
+
 const FIVE_MIN = parseClock('5:00');
 const feint = { name: 'Feint', spell_id: FEINT, cooldown: 30, duration: 6 };
 
@@ -36,13 +38,14 @@ describe('analyzeDefensives', () => {
 });
 
 describe('analyzeDefensiveFindings', () => {
-  it('flags a defensive that was never used', () => {
+  it('flags a defensive that was never used when bench expects at least one use', () => {
+    const bk = perDefensive({ uses_per_min: { avg: 0.4, stddev: 0, min: 0.4, max: 0.4 }, avg_uses_per_min: 0.4 });
     const players = analyzeDefensives([feint], [], [], [], FIGHT_START, FIVE_MIN);
 
-    const findings = analyzeDefensiveFindings(players, {}, 300);
+    const findings = analyzeDefensiveFindings(players, { Feint: bk }, 300);
 
     expect(findings[0]).toMatchObject({ severity: 'critical', category: 'lost_cooldown' });
-    expect(findings[0].message).toContain('was never used');
+    expect(findings[0].message).toContain('Top parsers average');
   });
 
   it('warns when the first use is later than the top-parse mean + 2 sigma', () => {
@@ -51,25 +54,90 @@ describe('analyzeDefensiveFindings', () => {
     const buffs = Events.start().buffWindow(EVASION, '1:00', '1:10').build();
     const players = analyzeDefensives([evasion], [], buffs, [], FIGHT_START, FIVE_MIN);
 
-    const findings = analyzeDefensiveFindings(players, { Evasion: perDefensive({ avg_first_cast_s: 20, stddev_first_cast_s: 2 }) }, 300);
+    const findings = analyzeDefensiveFindings(players, { Evasion: perDefensive({
+      uses_per_min: { avg: 0.2, stddev: 0, min: 0.2, max: 0.2 }, avg_uses_per_min: 0.2,
+      avg_first_cast_s: 20, stddev_first_cast_s: 2 }) }, 300);
 
     expect(findings.some((f) => f.category === 'cooldown_delay')).toBe(true);
   });
 
   it('does not flag a talent-gated defensive with zero uses as lost', () => {
     const gated = { name: 'Feint', spell_id: FEINT, cooldown: 30, talent_gated: true };
+    const bk = perDefensive({ uses_per_min: { avg: 0.4, stddev: 0, min: 0.4, max: 0.4 }, avg_uses_per_min: 0.4 });
     const players = analyzeDefensives([gated], [], [], [], FIGHT_START, FIVE_MIN);
 
-    const findings = analyzeDefensiveFindings(players, {}, 300);
+    const findings = analyzeDefensiveFindings(players, { Feint: bk }, 300);
 
     expect(findings.find((f) => f.category === 'lost_cooldown')).toBeUndefined();
   });
 
   it('still flags a non-talent-gated defensive with zero uses as lost', () => {
+    const bk = perDefensive({ uses_per_min: { avg: 0.4, stddev: 0, min: 0.4, max: 0.4 }, avg_uses_per_min: 0.4 });
     const players = analyzeDefensives([feint], [], [], [], FIGHT_START, FIVE_MIN);
 
-    const findings = analyzeDefensiveFindings(players, {}, 300);
+    const findings = analyzeDefensiveFindings(players, { Feint: bk }, 300);
 
     expect(findings[0]).toMatchObject({ severity: 'critical', category: 'lost_cooldown' });
+  });
+});
+
+describe('analyzeDefensiveFindings / bench-driven lost uses', () => {
+  const cloak = { name: 'Cloak', spell_id: EVASION, cooldown: 120, duration: 5 };
+
+  it('does not flag when player matches the cohort usage rate (hold scenario)', () => {
+    // Top parsers average 1 use per 5 min fight; player uses it once - no flag.
+    const bk = perDefensive({ uses_per_min: { avg: 0.2, stddev: 0, min: 0.2, max: 0.2 }, avg_uses_per_min: 0.2 });
+    const buffs = Events.start().buffWindow(EVASION, '1:00', '1:05').build();
+    const players = analyzeDefensives([cloak], [], buffs, [], FIGHT_START, FIVE_MIN);
+
+    const findings = analyzeDefensiveFindings(players, { Cloak: bk }, 300);
+
+    expect(findings.find((f) => f.category === 'lost_cooldown')).toBeUndefined();
+  });
+
+  it('does not flag when player is at the cohort - 1 sigma floor', () => {
+    // rate=0.6/min, stddev=0.2/min, fight=5min -> expected=3, floor=2
+    // Player uses it twice (= floor) -> no flag (must be strictly below floor).
+    const bk = perDefensive({ uses_per_min: { avg: 0.6, stddev: 0.2, min: 0.4, max: 0.8 }, avg_uses_per_min: 0.6 });
+    const buffs = Events.start().buffWindow(EVASION, '1:00', '1:05').buffWindow(EVASION, '3:00', '3:05').build();
+    const players = analyzeDefensives([cloak], [], buffs, [], FIGHT_START, FIVE_MIN);
+
+    const findings = analyzeDefensiveFindings(players, { Cloak: bk }, 300);
+
+    expect(findings.find((f) => f.category === 'lost_cooldown')).toBeUndefined();
+  });
+
+  it('flags when player is below the cohort floor', () => {
+    // rate=0.6/min, stddev=0.2/min, fight=5min -> expected=3, floor=2
+    // Player uses it once (below floor) -> critical.
+    const bk = perDefensive({ uses_per_min: { avg: 0.6, stddev: 0.2, min: 0.4, max: 0.8 }, avg_uses_per_min: 0.6 });
+    const buffs = Events.start().buffWindow(EVASION, '1:00', '1:05').build();
+    const players = analyzeDefensives([cloak], [], buffs, [], FIGHT_START, FIVE_MIN);
+
+    const findings = analyzeDefensiveFindings(players, { Cloak: bk }, 300);
+
+    const lost = findings.find((f) => f.category === 'lost_cooldown');
+    expect(lost?.severity).toBe('critical');
+    expect(lost?.message).toContain('top parsers average');
+  });
+
+  it('flags zero uses as critical when cohort expects at least 1', () => {
+    const bk = perDefensive({ uses_per_min: { avg: 0.4, stddev: 0, min: 0.4, max: 0.4 }, avg_uses_per_min: 0.4 });
+    const players = analyzeDefensives([cloak], [], [], [], FIGHT_START, FIVE_MIN);
+
+    const findings = analyzeDefensiveFindings(players, { Cloak: bk }, 300);
+
+    expect(findings.find((f) => f.category === 'lost_cooldown')?.severity).toBe('critical');
+    expect(findings.find((f) => f.category === 'lost_cooldown')?.message).toContain('Top parsers average');
+  });
+
+  it('suppresses zero-use critical on a short fight where expected rounds to 0', () => {
+    // 0.15 uses/min * 1 min = 0.15 -> rounds to 0 -> no flag
+    const bk = perDefensive({ uses_per_min: { avg: 0.15, stddev: 0, min: 0.15, max: 0.15 }, avg_uses_per_min: 0.15 });
+    const players = analyzeDefensives([cloak], [], [], [], FIGHT_START, ONE_MIN);
+
+    const findings = analyzeDefensiveFindings(players, { Cloak: bk }, 60);
+
+    expect(findings.find((f) => f.category === 'lost_cooldown')).toBeUndefined();
   });
 });
