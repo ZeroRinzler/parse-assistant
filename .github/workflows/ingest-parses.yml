@@ -2,10 +2,10 @@ name: Ingest Parse Samples
 
 on:
   schedule:
-    # Runs every hour. Each run ingests only the 1-2 specs assigned to that UTC
-    # hour (static shard), so the ~38-spec roster refreshes once every 24h while
-    # staying well within the WCL free-tier 3,600 points/hour budget.
-    - cron: '0 * * * *'
+    # Runs hourly at :23 (off the :00 stampede to reduce GitHub's drop rate).
+    # Each run picks the stalest known specs first, bounded by the WCL hourly
+    # point budget, so no spec starves when a run is delayed or skipped.
+    - cron: '23 * * * *'
   workflow_dispatch:
 
 jobs:

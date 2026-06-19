@@ -94,9 +94,9 @@ const POINTS_MARGIN = 500;
 // ── WCL OAuth2 client ─────────────────────────────────────────────────────────
 
 // Thrown when the WCL hourly point budget is (about to be) exhausted. The ingest
-// loops catch this to stop cleanly and commit partial progress; the remaining work
-// is picked up on the next scheduled shard. We do NOT retry: the limit resets on
-// an hourly boundary and an hourly task must not stall waiting for it.
+// loop catches this to stop cleanly and commit partial progress; the remaining work
+// is picked up on the next run. We do NOT retry: the limit resets on an hourly
+// boundary and an hourly task must not stall waiting for it.
 class BudgetExceededError extends Error {
   constructor(msg) { super(msg); this.name = 'BudgetExceededError'; }
 }
@@ -425,7 +425,11 @@ async function fetchRankingsLite(wcl, spec, encounterId, count = 10, partitionId
     const enc = data.worldData.encounter;
     const raw = enc.characterRankings;
     const rankingsData = typeof raw === 'string' ? JSON.parse(raw) : raw;
-    rawRankings = (rankingsData.rankings || []).slice(0, count);
+    // Filter anonymous parses (report: null) before slicing - the full page is
+    // already in the response, so this costs zero extra queries and ensures we
+    // always get TOP_N public (fetchable) parses rather than wasting a slot on
+    // a parse we can never access.
+    rawRankings = (rankingsData.rankings || []).filter(r => (r.report || {}).code).slice(0, count);
     if (rawRankings.length > 0) break;
   }
 
@@ -1582,17 +1586,29 @@ function syncEncountersIndex(spec) {
 
 // ── Spec selection ────────────────────────────────────────────────────────────
 
-// Canonical ordering of all specs (index stable as new specs are added to
-// SPEC_TO_WCL). Used to assign each spec a deterministic UTC shard hour:
-//   shard_hour = SPEC_ORDER.indexOf(spec) % 24
-// With 39 specs: hours 0-14 own 2 specs, 15-23 own 1. Total: <=2 specs/hour.
-const SPEC_ORDER = Object.keys(SPEC_TO_WCL);
-
-// Returns the subset of known specs (those with a rulebook.json) whose shard
-// hour matches H. Unknown specs (no rulebook yet) are excluded from scheduling.
-function specsForHour(h) {
+// Returns known specs (those with a rulebook.json) sorted most-stale-first.
+// Staleness = age of the most-overdue encounter for that spec:
+//   - No samples at all  -> Infinity (never ingested, always picked first)
+//   - At least one sample -> now - newest sampled_at across that encounter's samples
+// Using age rather than sample count means anonymous parses (which can never
+// fill a full TOP_N slot) and low-population bosses don't cause a spec to
+// appear perpetually overdue.
+function specsByStaleness(encounters) {
+  const now = Date.now();
   const known = getKnownSpecs();
-  return known.filter(s => SPEC_ORDER.indexOf(s) % 24 === h);
+  return known.slice().sort((a, b) => staleness(a, encounters, now) - staleness(b, encounters, now));
+}
+
+function staleness(spec, encounters, now) {
+  let worst = 0;
+  for (const enc of encounters) {
+    const samples = readJson(getSamplesPath(spec, enc.id)) || [];
+    if (!samples.length) return Infinity; // never ingested
+    const newestMs = Math.max(...samples.map(s => new Date(s.sampled_at || 0).getTime()));
+    const ageMs = now - newestMs;
+    if (ageMs > worst) worst = ageMs;
+  }
+  return worst;
 }
 
 function getKnownSpecs() {
@@ -1628,15 +1644,31 @@ async function main() {
     process.exit(1);
   }
 
-  const hour = new Date().getUTCHours();
-  const specs = specsForHour(hour);
-  if (!specs.length) {
-    console.log(`No known specs assigned to UTC hour ${hour}. Nothing to do.`);
-    return;
+  const specArg = (() => {
+    const idx = process.argv.indexOf('--spec');
+    return idx !== -1 ? process.argv[idx + 1] : null;
+  })();
+
+  let specs;
+  if (specArg) {
+    if (!SPEC_TO_WCL[specArg]) {
+      console.error(`Unknown spec "${specArg}". Known specs: ${Object.keys(SPEC_TO_WCL).join(', ')}`);
+      process.exit(1);
+    }
+    specs = [specArg];
+    console.log(`Targeting spec: ${specArg}`);
+  } else {
+    specs = specsByStaleness(encounters);
+    if (!specs.length) {
+      console.log('No known specs (no rulebook.json found). Nothing to do.');
+      return;
+    }
+    console.log(`Stalest-first: ${specs.join(', ')}`);
   }
-  console.log(`Shard hour ${hour}: ${specs.join(', ')}`);
+
   for (const spec of specs) {
-    await ingestSpecNonInteractive(wcl, spec, encounters);
+    const budgetExhausted = await ingestSpecNonInteractive(wcl, spec, encounters);
+    if (budgetExhausted) break;
   }
 }
 
@@ -1644,17 +1676,19 @@ async function ingestSpecNonInteractive(wcl, spec, encounters) {
   console.log(`\nIngesting ${spec} - ${encounters.length} encounters (top ${TOP_N})`);
   try {
     for (const enc of encounters) {
-      // Freshness short-circuit: skip this encounter entirely (0 queries) when all
-      // existing samples are current-hash and were collected within freshHours.
+      // Freshness short-circuit: skip this encounter entirely (0 queries) when we
+      // have at least one current-hash sample collected within freshHours. Gating
+      // on count > 0 (not >= TOP_N) handles anonymous parses and low-population
+      // bosses that can never fill a full TOP_N slot.
       const samplesPath = getSamplesPath(spec, enc.id);
       const existingSamples = readJson(samplesPath) || [];
-      if (existingSamples.length >= TOP_N) {
+      if (existingSamples.length > 0) {
         const allFresh = existingSamples.every(s => s.ingest_hash === INGEST_HASH);
         if (allFresh) {
           const newestMs = Math.max(...existingSamples.map(s => new Date(s.sampled_at || 0).getTime()));
           const ageH = (Date.now() - newestMs) / 3_600_000;
           if (ageH < FRESH_HOURS) {
-            console.log(`\n[${enc.name}] Skipped (all ${TOP_N} samples fresh, ${Math.round(ageH * 10) / 10}h old)`);
+            console.log(`\n[${enc.name}] Skipped (${existingSamples.length} samples fresh, ${Math.round(ageH * 10) / 10}h old)`);
             continue;
           }
         }
@@ -1729,12 +1763,13 @@ async function ingestSpecNonInteractive(wcl, spec, encounters) {
   } catch (err) {
     if (err instanceof BudgetExceededError) {
       console.log(`\n[budget] Stopping cleanly: ${err.message}`);
-      console.log('[budget] Partial progress committed; remaining encounters picked up next shard.');
-      return;
+      console.log('[budget] Partial progress committed; remaining work picked up next run.');
+      return true;
     }
     throw err;
   }
   console.log(`\nIngestion complete for ${spec}.`);
+  return false;
 }
 
 main().catch(err => {
