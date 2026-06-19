@@ -2,14 +2,11 @@ name: Ingest Parse Samples
 
 on:
   schedule:
-    # Runs daily at 06:00 UTC - after EU/US raid nights have concluded
-    - cron: '0 6 * * *'
+    # Runs every hour. Each run ingests only the 1-2 specs assigned to that UTC
+    # hour (static shard), so the ~38-spec roster refreshes once every 24h while
+    # staying well within the WCL free-tier 3,600 points/hour budget.
+    - cron: '0 * * * *'
   workflow_dispatch:
-    inputs:
-      spec:
-        description: 'Spec to ingest (leave empty to ingest all specs with existing data)'
-        required: false
-        default: ''
 
 jobs:
   ingest:
@@ -38,15 +35,7 @@ jobs:
         env:
           WCL_CLIENT_ID: ${{ secrets.WCL_CLIENT_ID }}
           WCL_CLIENT_SECRET: ${{ secrets.WCL_CLIENT_SECRET }}
-          # Bind the dispatch input to an env var rather than interpolating it
-          # directly into the script - prevents shell injection via the input.
-          SPEC: ${{ github.event.inputs.spec }}
-        run: |
-          if [ -n "$SPEC" ]; then
-            node frontend/scripts/ingest.mjs --spec "$SPEC"
-          else
-            node frontend/scripts/ingest.mjs --all
-          fi
+        run: node frontend/scripts/ingest.mjs
 
       - name: Pull latest before committing
         env:
@@ -59,7 +48,10 @@ jobs:
       - name: Commit updated spec files
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: 'chore: refresh parse samples [skip ci]'
+          # No [skip ci] - data commits should trigger deploy-pages so the live
+          # site reflects fresh parse data. git-auto-commit-action only pushes
+          # when files actually changed, so quiet hours produce no commit.
+          commit_message: 'chore: refresh parse samples'
           file_pattern: 'frontend/public/data/specs/**'
           commit_user_name: 'github-actions[bot]'
           commit_user_email: 'github-actions[bot]@users.noreply.github.com'
