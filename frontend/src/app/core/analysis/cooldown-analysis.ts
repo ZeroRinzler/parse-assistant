@@ -56,6 +56,8 @@ export function analyzeCooldowns(
       const cdIssues: AnalysisFinding[] = [];
       const cdSugg: AnalysisFinding[] = [];
 
+      if (cd.talent_gated && actual === 0) continue;
+
       if (actual === 0) {
         cdIssues.push({ severity: 'critical', category: 'lost_cooldown', cd_name: cdName, timestamp_ms: undefined,
           message: `${cdName} was never used. In a ${fmtClock(fightDurS)} fight with a ${cooldownS}s cooldown you should have ~${expected} cast(s).` });

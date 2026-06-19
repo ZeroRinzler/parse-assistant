@@ -56,7 +56,9 @@ export function analyzeDefensives(
         });
     }
     const cast_times_s = windows.map((w) => w.start_s).sort((a, b) => a - b);
-    return { name: def.name, spell_id: sid, cooldown: def.cooldown, uses: windows.length, cast_times_s, windows };
+    const entry: PlayerDefensive = { name: def.name, spell_id: sid, cooldown: def.cooldown, uses: windows.length, cast_times_s, windows };
+    if (def.talent_gated) entry.talent_gated = true;
+    return entry;
   });
 }
 
@@ -74,6 +76,8 @@ export function analyzeDefensiveFindings(
     const b = perDefBench[name];
     const issues: AnalysisFinding[] = [];
     const suggestions: AnalysisFinding[] = [];
+
+    if (def.talent_gated && uses === 0) continue;
 
     if (uses === 0) {
       issues.push({ severity: 'critical', category: 'lost_cooldown', cd_name: name, timestamp_ms: undefined,

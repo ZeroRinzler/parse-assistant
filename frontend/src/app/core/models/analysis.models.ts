@@ -56,6 +56,7 @@ export interface PlayerDefensive {
   cast_times_s?: number[];
   first_cast_s?: number;
   windows: DefensiveWindow[];
+  talent_gated?: boolean;
 }
 
 export interface TopDefensiveSummary {

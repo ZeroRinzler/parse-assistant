@@ -55,4 +55,21 @@ describe('analyzeDefensiveFindings', () => {
 
     expect(findings.some((f) => f.category === 'cooldown_delay')).toBe(true);
   });
+
+  it('does not flag a talent-gated defensive with zero uses as lost', () => {
+    const gated = { name: 'Feint', spell_id: FEINT, cooldown: 30, talent_gated: true };
+    const players = analyzeDefensives([gated], [], [], [], FIGHT_START, FIVE_MIN);
+
+    const findings = analyzeDefensiveFindings(players, {}, 300);
+
+    expect(findings.find((f) => f.category === 'lost_cooldown')).toBeUndefined();
+  });
+
+  it('still flags a non-talent-gated defensive with zero uses as lost', () => {
+    const players = analyzeDefensives([feint], [], [], [], FIGHT_START, FIVE_MIN);
+
+    const findings = analyzeDefensiveFindings(players, {}, 300);
+
+    expect(findings[0]).toMatchObject({ severity: 'critical', category: 'lost_cooldown' });
+  });
 });

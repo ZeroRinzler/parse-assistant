@@ -125,3 +125,21 @@ describe('analyzeCooldowns / unsupported spec', () => {
     expect(find(result.findings, 'unsupported_spec')?.message).toContain('MysterySpec is not yet in the rulebook');
   });
 });
+
+describe('analyzeCooldowns / talent_gated', () => {
+  it('does not flag a talent-gated cooldown with zero casts as lost', () => {
+    const cds = rulebook({ cooldowns: [{ name: 'Avatar', spell_id: SHADOW_BLADES, cooldown: 90, talent_gated: true }] }).major_cooldowns!;
+
+    const result = analyzeCooldowns('Warrior', 'Fury', FIGHT_START, FIVE_MIN, [], [], cds, [], null);
+
+    expect(find(result.findings, 'lost_cooldown')).toBeUndefined();
+  });
+
+  it('still flags a non-talent-gated cooldown with zero casts as lost', () => {
+    const cds = rulebook({ cooldowns: [{ name: 'Recklessness', spell_id: SHADOW_BLADES, cooldown: 90 }] }).major_cooldowns!;
+
+    const result = analyzeCooldowns('Warrior', 'Fury', FIGHT_START, FIVE_MIN, [], [], cds, [], null);
+
+    expect(find(result.findings, 'lost_cooldown')?.severity).toBe('critical');
+  });
+});

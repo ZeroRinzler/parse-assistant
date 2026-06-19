@@ -76,6 +76,10 @@
         "usage_rule": {
           "type": "string",
           "description": "One sentence: when and how to use this cooldown."
+        },
+        "talent_gated": {
+          "type": "boolean",
+          "description": "Optional. Set to true when this ability requires a specific talent that not all builds take. When true, having zero casts is treated as normal rather than a 'never used' error."
         }
       }
     },
@@ -105,6 +109,10 @@
         "usage_rule": {
           "type": "string",
           "description": "One sentence: when/why to press this button."
+        },
+        "talent_gated": {
+          "type": "boolean",
+          "description": "Optional. Set to true when this ability requires a specific talent that not all builds take."
         }
       }
     },

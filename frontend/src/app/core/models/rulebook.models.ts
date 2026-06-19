@@ -6,6 +6,7 @@ export interface RulebookCooldown {
   align_with_bloodlust?: boolean;
   opener_priority?: number;
   usage_rule?: string;
+  talent_gated?: boolean;
 }
 
 export interface RulebookDefensive {
@@ -14,6 +15,7 @@ export interface RulebookDefensive {
   cooldown: number;
   duration?: number;
   usage_rule?: string;
+  talent_gated?: boolean;
 }
 
 export interface CastWithoutPriorCondition {
