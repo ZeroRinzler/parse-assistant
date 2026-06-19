@@ -5,7 +5,7 @@ import { Events } from '../../../testing/builders/events';
 import { FIGHT_START } from '../../../testing/time';
 import { EVISCERATE, BLACK_POWDER } from '../../../testing/spell-ids';
 
-const window: BurstWindow = { time_s: 10, window_length_s: 20 }; // covers [10, 30)
+const window: BurstWindow = { time_s: 10, window_length_s: 20, dmg_avg: 0, dmg_min: 0, dmg_max: 0, dmg_stddev: 0, ability_breakdown: [] }; // covers [10, 30)
 
 describe('findPlayerBurstWindows', () => {
   it('sums amount + absorbed for events inside the half-open window', () => {

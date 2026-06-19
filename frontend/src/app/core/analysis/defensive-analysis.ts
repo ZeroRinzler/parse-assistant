@@ -78,7 +78,7 @@ export function analyzeDefensiveFindings(
 
     if (def.talent_gated && uses === 0) continue;
 
-    const { expected, floor } = benchExpectedUses(fightDurS, b?.uses_per_min, b?.avg_uses_per_min ?? null)!;
+    const { expected, floor } = benchExpectedUses(fightDurS, b.uses_per_min);
 
     if (uses === 0 && expected >= 1) {
       issues.push({ severity: 'critical', category: 'lost_cooldown', cd_name: name, timestamp_ms: undefined,
@@ -90,13 +90,10 @@ export function analyzeDefensiveFindings(
 
     if (cast_times_s?.length) {
       const firstS = cast_times_s[0];
-      if (b?.avg_first_cast_s != null && b.stddev_first_cast_s != null) {
-        const sdF = b.stddev_first_cast_s;
-        if (isOutlierAbove(firstS, b.avg_first_cast_s, sdF)) {
-          issues.push({ severity: 'warning', category: 'cooldown_delay', cd_name: name,
-            timestamp_ms: Math.round(firstS * 1000),
-            message: `${name} first use at ${fmtClock(firstS)} - ${(firstS - b.avg_first_cast_s).toFixed(0)}s later than top parsers (${fmtClock(b.avg_first_cast_s)} avg).` });
-        }
+      if (isOutlierAbove(firstS, b.avg_first_cast_s, b.stddev_first_cast_s)) {
+        issues.push({ severity: 'warning', category: 'cooldown_delay', cd_name: name,
+          timestamp_ms: Math.round(firstS * 1000),
+          message: `${name} first use at ${fmtClock(firstS)} - ${(firstS - b.avg_first_cast_s).toFixed(0)}s later than top parsers (${fmtClock(b.avg_first_cast_s)} avg).` });
       }
 
       for (let i = 1; i < cast_times_s.length; i++) {
@@ -111,18 +108,16 @@ export function analyzeDefensiveFindings(
         }
       }
 
-      if (b?.hold_targets) {
-        for (const [idxStr, target] of Object.entries(b.hold_targets)) {
-          const k = parseInt(idxStr, 10) - 1;
-          if (k >= cast_times_s.length) continue;
-          const playerT = cast_times_s[k];
-          const tol = target.stddev_s;
-          if (playerT < target.target_s - tol) {
-            suggestions.push({ severity: 'info', category: 'hold_suggestion',
-              timestamp_ms: Math.round(playerT * 1000),
-              message: `${name} use ${idxStr} at ${fmtClock(playerT)} - ${target.count}/${target.total_samples} top parsers hold until ~${fmtClock(target.target_s)}.`,
-              details: { remedy: `Consider holding ${name} until ~${fmtClock(target.target_s)}.`, cd_name: name } });
-          }
+      for (const [idxStr, target] of Object.entries(b.hold_targets)) {
+        const k = parseInt(idxStr, 10) - 1;
+        if (k >= cast_times_s.length) continue;
+        const playerT = cast_times_s[k];
+        const tol = target.stddev_s;
+        if (playerT < target.target_s - tol) {
+          suggestions.push({ severity: 'info', category: 'hold_suggestion',
+            timestamp_ms: Math.round(playerT * 1000),
+            message: `${name} use ${idxStr} at ${fmtClock(playerT)} - ${target.count}/${target.total_samples} top parsers hold until ~${fmtClock(target.target_s)}.`,
+            details: { remedy: `Consider holding ${name} until ~${fmtClock(target.target_s)}.`, cd_name: name } });
         }
       }
     }

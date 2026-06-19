@@ -43,11 +43,11 @@ export class BurstWindowsComponent {
     return this.topWindows().map((bw, idx) => {
       const notReached = bw.time_s > fightDur;
       const playerBw = notReached ? null : (players[idx] ?? null);
-      const topDmg = bw.dmg_avg ?? 0;
+      const topDmg = bw.dmg_avg;
       const playerDmg = playerBw?.window_damage ?? null;
-      const minDmg = bw.dmg_min ?? topDmg * 0.7;
-      const maxDmg = bw.dmg_max ?? topDmg * 1.3;
-      const sd = bw.dmg_stddev ?? 0;
+      const minDmg = bw.dmg_min;
+      const maxDmg = bw.dmg_max;
+      const sd = bw.dmg_stddev;
 
       // Burst: higher damage is better, so falling short is the problem.
       let status: WindowStatus = 'good';
@@ -67,13 +67,13 @@ export class BurstWindowsComponent {
       const playerAbMap: Record<number, { damage: number }> = {};
       for (const a of playerBw?.ability_breakdown ?? []) playerAbMap[a.spell_id] = a;
 
-      const detailRows = (bw.ability_breakdown ?? []).map(ab => ({
+      const detailRows = bw.ability_breakdown.map(ab => ({
         spellId: ab.spell_id,
         label: this.icons.get(ab.spell_id)?.name || `Spell ${ab.spell_id}`,
         playerPct: playerAbMap[ab.spell_id]?.damage ?? null,
         topAvg: ab.avg_damage,
-        topMin: ab.min_damage ?? ab.avg_damage * 0.7,
-        topMax: ab.max_damage ?? ab.avg_damage * 1.3,
+        topMin: ab.min_damage,
+        topMax: ab.max_damage,
       }));
 
       return {

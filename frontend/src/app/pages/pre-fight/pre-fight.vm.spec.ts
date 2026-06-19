@@ -67,8 +67,8 @@ describe('buildDefensivePlan', () => {
     const bk = bench({
       perDefensive: { Cloak: { avg_uses: 2, avg_first_cast_s: 18 } },
       defensiveWindows: [
-        { time_s: 90, stddev_s: 2, window_length_s: 5, count: 6, total_samples: 10, dmg_avg: 100, common_defensives: ['Cloak'], defensive_name: 'Cloak' },
-        { time_s: 30, stddev_s: 2, window_length_s: 5, count: 7, total_samples: 10, dmg_avg: 100, common_defensives: ['Cloak'], defensive_name: 'Cloak' },
+        { time_s: 90, stddev_s: 2, window_length_s: 5, count: 6, total_samples: 10, dmg_avg: 100, dmg_min: 80, dmg_max: 120, dmg_stddev: 10, common_defensives: ['Cloak'], defensive_name: 'Cloak', spell_id: CLOAK_OF_SHADOWS, ability_breakdown: [] },
+        { time_s: 30, stddev_s: 2, window_length_s: 5, count: 7, total_samples: 10, dmg_avg: 100, dmg_min: 80, dmg_max: 120, dmg_stddev: 10, common_defensives: ['Cloak'], defensive_name: 'Cloak', spell_id: CLOAK_OF_SHADOWS, ability_breakdown: [] },
       ],
     });
     const plan = buildDefensivePlan(rb, bk);
@@ -163,7 +163,7 @@ describe('buildBurstWindows', () => {
       defensives: [{ name: 'Cloak', spell_id: CLOAK_OF_SHADOWS, cooldown: 120 }],
     });
     const bk = bench({ burstWindows: [
-      { time_s: 10, window_length_s: 20, dmg_avg: 500, common_cds: ['Shadow Blades', 'Mystery'], avg_targets: 3 },
+      { time_s: 10, window_length_s: 20, dmg_avg: 500, dmg_min: 400, dmg_max: 600, dmg_stddev: 50, common_cds: ['Shadow Blades', 'Mystery'], avg_targets: 3, ability_breakdown: [] },
     ] });
     const [w] = buildBurstWindows(rb, bk);
     expect(w.startS).toBe(10);
@@ -176,7 +176,7 @@ describe('buildBurstWindows', () => {
   });
 
   it('treats a single-target window as non-AoE', () => {
-    const bk = bench({ burstWindows: [{ time_s: 0, window_length_s: 8, dmg_avg: 1, common_cds: [], avg_targets: 1 }] });
+    const bk = bench({ burstWindows: [{ time_s: 0, window_length_s: 8, dmg_avg: 1, dmg_min: 0, dmg_max: 2, dmg_stddev: 0, common_cds: [], avg_targets: 1, ability_breakdown: [] }] });
     expect(buildBurstWindows(rulebook(), bk)[0].aoe).toBe(false);
   });
 });

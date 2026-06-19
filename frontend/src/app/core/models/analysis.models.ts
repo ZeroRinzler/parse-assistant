@@ -13,22 +13,22 @@ export interface AnalysisFinding {
 export interface AbilityBreakdown {
   spell_id: number;
   avg_damage: number;
-  min_damage?: number;
-  max_damage?: number;
+  min_damage: number;
+  max_damage: number;
   damage?: number;
-  count?: number;
+  count: number;
 }
 
 export interface BurstWindow {
   time_s: number;
-  dmg_avg?: number;
-  dmg_min?: number;
-  dmg_max?: number;
-  dmg_stddev?: number;
+  dmg_avg: number;
+  dmg_min: number;
+  dmg_max: number;
+  dmg_stddev: number;
   common_cds?: string[];
   common_defensives?: string[];
   avg_targets?: number;
-  ability_breakdown?: AbilityBreakdown[];
+  ability_breakdown: AbilityBreakdown[];
   window_length_s: number;
   defensive_name?: string;
   spell_id?: number;

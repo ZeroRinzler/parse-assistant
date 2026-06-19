@@ -59,7 +59,7 @@ export function analyzeCooldowns(
 
       if (cd.talent_gated && actual === 0) continue;
 
-      const { expected, floor } = benchExpectedUses(fightDurS, b?.uses_per_min, b?.avg_uses_per_min ?? null)!;
+      const { expected, floor } = benchExpectedUses(fightDurS, b.uses_per_min);
 
       if (actual === 0 && expected >= 1) {
         cdIssues.push({ severity: 'critical', category: 'lost_cooldown', cd_name: cdName, timestamp_ms: undefined,
@@ -70,12 +70,9 @@ export function analyzeCooldowns(
       }
       if (cdCasts.length) {
         const firstS = rel(cdCasts[0].timestamp) / 1000;
-        if (b?.avg_first_cast_s != null && b.stddev_first_cast_s != null) {
-          const sdF = b.stddev_first_cast_s;
-          if (isOutlierAbove(firstS, b.avg_first_cast_s, sdF)) cdIssues.push({ severity: 'warning', category: 'cooldown_delay', cd_name: cdName,
-            timestamp_ms: rel(cdCasts[0].timestamp),
-            message: `${cdName} opener at ${fmtClock(firstS)} - ${(firstS - b.avg_first_cast_s).toFixed(0)}s later than top parsers (${fmtClock(b.avg_first_cast_s)} avg ±${sdF.toFixed(0)}s).` });
-        }
+        if (isOutlierAbove(firstS, b.avg_first_cast_s, b.stddev_first_cast_s)) cdIssues.push({ severity: 'warning', category: 'cooldown_delay', cd_name: cdName,
+          timestamp_ms: rel(cdCasts[0].timestamp),
+          message: `${cdName} opener at ${fmtClock(firstS)} - ${(firstS - b.avg_first_cast_s).toFixed(0)}s later than top parsers (${fmtClock(b.avg_first_cast_s)} avg ±${b.stddev_first_cast_s.toFixed(0)}s).` });
       }
 
       let blAligned = false;
@@ -109,7 +106,7 @@ export function analyzeCooldowns(
         }
       }
 
-      if (b?.hold_targets && cdCasts.length) {
+      if (cdCasts.length) {
         const times = cdCasts.map((c) => rel(c.timestamp) / 1000);
         for (const [idxStr, target] of Object.entries(b.hold_targets)) {
           const k = parseInt(idxStr, 10) - 1;
@@ -139,7 +136,7 @@ export function analyzeCooldowns(
       if (gMs > downtimeThreshMs) gaps.push({ start_ms: rel(casts[i - 1].timestamp), duration_ms: gMs });
     }
     const totalDtS = gaps.reduce((s, g) => s + g.duration_ms, 0) / 1000;
-    if (totalDtS > 5 && bench?.top_avg_efficiency != null && bench.top_efficiency_stddev != null) {
+    if (totalDtS > 5 && bench) {
       const topE = bench.top_avg_efficiency;
       const topSD = bench.top_efficiency_stddev;
       const effPct = castEfficiencyPct(totalDtS, fightDurS);

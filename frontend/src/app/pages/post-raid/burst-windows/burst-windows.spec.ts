@@ -12,6 +12,7 @@ const topWindow: BurstWindow = {
   dmg_max: 1300,
   dmg_stddev: 50,
   common_cds: [],
+  ability_breakdown: [],
 };
 
 function windowsFor(opts: { player?: PlayerBurstWindow | null; fightDuration?: number; top?: BurstWindow }): ComparisonWindow[] {

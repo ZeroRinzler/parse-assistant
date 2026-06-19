@@ -58,9 +58,13 @@ export function computeAnalysis(input: AnalysisInput): AnalysisResult {
   result.ability_icons = ability_icons;
 
   if (bench) {
-    if (bench.burst_windows?.length) result.burst_windows = bench.burst_windows;
-    if (bench.top_defensives_summary?.length) result.top_defensives_summary = bench.top_defensives_summary;
-    if (bench.top_dtk_comparison?.length) result.top_dtk_comparison = bench.top_dtk_comparison;
+    if (bench.burst_windows.length) result.burst_windows = bench.burst_windows;
+    if (bench.top_defensives_summary.length) result.top_defensives_summary = bench.top_defensives_summary;
+    if (bench.top_dtk_comparison.length) result.top_dtk_comparison = bench.top_dtk_comparison;
+    if (bench.defensive_windows.length) {
+      result.top_defensive_windows = bench.defensive_windows;
+      result.player_defensive_windows = computePlayerDefensiveWindows(bench.defensive_windows, dtEvents, fStart);
+    }
   }
 
   if (result.burst_windows?.length) {
@@ -68,18 +72,12 @@ export function computeAnalysis(input: AnalysisInput): AnalysisResult {
   }
   result.player_defensives = analyzeDefensives(defensives, castEvents, buffEvents, dtEvents, fStart, fEnd);
 
-  if (defensives.length && result.player_defensives.length) {
+  if (bench && defensives.length && result.player_defensives.length) {
     result.defensive_findings = analyzeDefensiveFindings(
       result.player_defensives,
-      bench?.per_defensive_benchmarks ?? {},
+      bench.per_defensive_benchmarks,
       (fEnd - fStart) / 1000,
     );
-  }
-
-  const topDefWindows = bench?.defensive_windows;
-  if (topDefWindows?.length) {
-    result.top_defensive_windows = topDefWindows;
-    result.player_defensive_windows = computePlayerDefensiveWindows(topDefWindows, dtEvents, fStart);
   }
 
   const dtk = analyzeDamageTaken(dtEvents, abilityMap);

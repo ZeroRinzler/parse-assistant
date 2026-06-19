@@ -94,11 +94,11 @@ export class DefensivesSectionComponent {
     return this.topDefensiveWindows().map((dw, idx) => {
       const notReached = dw.time_s > fightDur;
       const playerDw = notReached ? null : (players[idx] ?? null);
-      const topDmg = dw.dmg_avg ?? 0;
+      const topDmg = dw.dmg_avg;
       const playerDmg = playerDw?.window_damage ?? null;
-      const minDmg = dw.dmg_min ?? topDmg * 0.7;
-      const maxDmg = dw.dmg_max ?? topDmg * 1.3;
-      const sd = dw.dmg_stddev ?? 0;
+      const minDmg = dw.dmg_min;
+      const maxDmg = dw.dmg_max;
+      const sd = dw.dmg_stddev;
       const spellId = dw.spell_id ?? null;
       const defensiveName = dw.defensive_name ?? dw.common_defensives?.[0] ?? '';
 
@@ -116,13 +116,13 @@ export class DefensivesSectionComponent {
       const playerAbMap: Record<number, { damage: number }> = {};
       for (const a of playerDw?.ability_breakdown ?? []) playerAbMap[a.spell_id] = a;
 
-      const detailRows = (dw.ability_breakdown ?? []).map(ab => ({
+      const detailRows = dw.ability_breakdown.map(ab => ({
         spellId: ab.spell_id,
         label: this.icons.get(ab.spell_id)?.name || `Spell ${ab.spell_id}`,
         playerPct: playerAbMap[ab.spell_id]?.damage ?? null,
         topAvg: ab.avg_damage,
-        topMin: ab.min_damage ?? ab.avg_damage * 0.7,
-        topMax: ab.max_damage ?? ab.avg_damage * 1.3,
+        topMin: ab.min_damage,
+        topMax: ab.max_damage,
       }));
 
       return {

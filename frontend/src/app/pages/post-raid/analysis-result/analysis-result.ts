@@ -83,7 +83,7 @@ export class AnalysisResultComponent implements OnChanges {
     if (d.ability_icons) this.icons.seedFromMap(d.ability_icons);
     const allIds = [
       ...Object.values(d.cd_spell_ids || {}),
-      ...(d.burst_windows || []).flatMap(bw => (bw.ability_breakdown || []).map(a => a.spell_id)),
+      ...(d.burst_windows || []).flatMap(bw => bw.ability_breakdown.map(a => a.spell_id)),
       ...(d.player_defensives || []).map(def => def.spell_id),
       ...(d.player_dmg_taken_by_ability || []).map(a => a.spell_id),
       ...(d.top_dtk_comparison || []).map(t => t.spell_id),

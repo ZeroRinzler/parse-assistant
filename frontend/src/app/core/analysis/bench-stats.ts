@@ -50,19 +50,16 @@ export function closestToZero(values: number[]): number {
  * player is genuinely under-using. Both `expected` and `floor` are rounded
  * integers so they can be compared directly against a cast count.
  *
- * Returns null when no usage-rate bench data is available (fall back to the
- * static `expectedUses` formula instead).
+ * Bench data is always assumed complete: `upm` must be the non-null
+ * `uses_per_min` object from the per-CD/per-defensive benchmark row.
  */
 export function benchExpectedUses(
   fightDurS: number,
-  upm: UsesPerMin | undefined,
-  avgUsesPerMin: number | null,
-): { expected: number; floor: number } | null {
-  const rate = upm?.avg ?? avgUsesPerMin;
-  if (rate == null) return null;
+  upm: UsesPerMin,
+): { expected: number; floor: number } {
   const fightMin = fightDurS / 60;
-  const expected = Math.round(rate * fightMin);
-  const sd = (upm?.stddev ?? 0) * fightMin;
+  const expected = Math.round(upm.avg * fightMin);
+  const sd = upm.stddev * fightMin;
   const floor = Math.max(0, Math.round(expected - sd));
   return { expected, floor };
 }

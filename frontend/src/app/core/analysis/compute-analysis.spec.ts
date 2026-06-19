@@ -52,7 +52,7 @@ describe('computeAnalysis (end to end)', () => {
   it('produces player burst windows against the bench burst windows', () => {
     const result = computeAnalysis(
       input({
-        bench: bench({ burstWindows: [{ time_s: 10, window_length_s: 20, dmg_avg: 0, common_cds: [], avg_targets: 1 }] }),
+        bench: bench({ burstWindows: [{ time_s: 10, window_length_s: 20, dmg_avg: 0, dmg_min: 0, dmg_max: 0, dmg_stddev: 0, common_cds: [], avg_targets: 1, ability_breakdown: [] }] }),
         dmgEvents: Events.start().damage(EVISCERATE, '0:15', 5000).build(),
       }),
     );

@@ -1347,8 +1347,8 @@ function syncEncounterFile(spec, encounterId) {
       if (v != null) effVals.push(v);
     }
   }
-  const topAvgEfficiency = effVals.length ? round(mean(effVals)) : null;
-  const topEfficiencyStddev = effVals.length ? round(stdev(effVals)) : null;
+  const topAvgEfficiency = effVals.length ? round(mean(effVals)) : 0;
+  const topEfficiencyStddev = effVals.length ? round(stdev(effVals)) : 0;
 
   // Per-CD benchmarks
   const agg = new Map();
@@ -1397,8 +1397,8 @@ function syncEncounterFile(spec, encounterId) {
 
     perCdBenchmarks[cdName] = {
       sample_count: entries.length,
-      avg_first_cast_s: topFirstCasts.length ? round(mean(topFirstCasts)) : null,
-      stddev_first_cast_s: topFirstCasts.length ? round(stdev(topFirstCasts)) : null,
+      avg_first_cast_s: topFirstCasts.length ? round(mean(topFirstCasts)) : 0,
+      stddev_first_cast_s: topFirstCasts.length ? round(stdev(topFirstCasts)) : 0,
       avg_gap_s: allCdGaps.length ? round(mean(allCdGaps)) : null,
       stddev_gap_s: allCdGaps.length ? round(stdev(allCdGaps)) : null,
       avg_bl_offset_s: blOffsets.length ? round(mean(blOffsets)) : null,
@@ -1406,7 +1406,7 @@ function syncEncounterFile(spec, encounterId) {
       hold_targets: holdTargets,
       uses_per_min: benchUsesPerMin(entries),
       avg_uses: entries.length ? round(mean(entries.map(e => e.total_uses || 0))) : 0,
-      avg_uses_per_min: upmList.length ? round(mean(upmList), 2) : null,
+      avg_uses_per_min: upmList.length ? round(mean(upmList), 2) : 0,
       bl_pct: entries.length ? Math.round(blCount / entries.length * 100) : 0,
       majority_hold: entries.filter(e => e.cast_pattern === 'hold').length > entries.length * 0.5,
     };
@@ -1414,7 +1414,7 @@ function syncEncounterFile(spec, encounterId) {
 
   // Duration
   const durations = samples.map(s => (s.cooldown_data || {}).fight_duration_s).filter(Boolean);
-  const avgDurationS = durations.length ? round(mean(durations)) : null;
+  const avgDurationS = durations.length ? round(mean(durations)) : 0;
 
   // Burst windows
   const allBw = [];
@@ -1495,13 +1495,13 @@ function syncEncounterFile(spec, encounterId) {
 
     perDefensiveBenchmarks[defName] = {
       sample_count: entries.length,
-      avg_first_cast_s: topFirstCasts.length ? round(mean(topFirstCasts)) : null,
-      stddev_first_cast_s: topFirstCasts.length ? round(stdev(topFirstCasts)) : null,
+      avg_first_cast_s: topFirstCasts.length ? round(mean(topFirstCasts)) : 0,
+      stddev_first_cast_s: topFirstCasts.length ? round(stdev(topFirstCasts)) : 0,
       avg_gap_s: allDefGaps.length ? round(mean(allDefGaps)) : null,
       stddev_gap_s: allDefGaps.length ? round(stdev(allDefGaps)) : null,
       hold_targets: holdTargets,
       avg_uses: avgUsesList.length ? round(mean(avgUsesList)) : 0,
-      avg_uses_per_min: upmList.length ? round(mean(upmList), 2) : null,
+      avg_uses_per_min: upmList.length ? round(mean(upmList), 2) : 0,
       uses_per_min: benchUsesPerMin(entries),
       majority_hold: entries.filter(e => e.cast_pattern === 'hold').length > entries.length * 0.5,
     };

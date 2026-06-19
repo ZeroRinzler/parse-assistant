@@ -69,19 +69,10 @@ describe('closestToZero', () => {
 });
 
 describe('benchExpectedUses', () => {
-  it('returns null when neither uses_per_min nor avg_uses_per_min is set', () => {
-    expect(benchExpectedUses(300, undefined, null)).toBeNull();
-  });
-
-  it('uses uses_per_min.avg when provided', () => {
+  it('derives expected from uses_per_min.avg scaled to fight length', () => {
     // 0.5 uses/min * 5 min = 2.5 -> rounds to 3; stddev 0 -> floor 3
     const upm = { avg: 0.5, stddev: 0, min: 0.5, max: 0.5 };
-    expect(benchExpectedUses(300, upm, null)).toEqual({ expected: 3, floor: 3 });
-  });
-
-  it('falls back to avg_uses_per_min when uses_per_min is absent', () => {
-    // 0.4/min * 5 min = 2.0 -> rounds to 2; floor 2
-    expect(benchExpectedUses(300, undefined, 0.4)).toEqual({ expected: 2, floor: 2 });
+    expect(benchExpectedUses(300, upm)).toEqual({ expected: 3, floor: 3 });
   });
 
   it('sets floor as expected minus scaled stddev (cohort - 1 sigma)', () => {
@@ -90,17 +81,17 @@ describe('benchExpectedUses', () => {
     // sd = 0.2*5 = 1.0
     // floor = max(0, round(3 - 1)) = 2
     const upm = { avg: 0.5, stddev: 0.2, min: 0.3, max: 0.7 };
-    expect(benchExpectedUses(300, upm, null)).toEqual({ expected: 3, floor: 2 });
+    expect(benchExpectedUses(300, upm)).toEqual({ expected: 3, floor: 2 });
   });
 
   it('clamps floor to zero when stddev is very large', () => {
     const upm = { avg: 0.5, stddev: 2, min: 0, max: 1 };
-    expect(benchExpectedUses(300, upm, null)?.floor).toBe(0);
+    expect(benchExpectedUses(300, upm).floor).toBe(0);
   });
 
   it('returns expected=0 for a very short fight at a low usage rate', () => {
     // 0.2/min * 1 min = 0.2 -> rounds to 0; allows zero-cast suppression
     const upm = { avg: 0.2, stddev: 0, min: 0.2, max: 0.2 };
-    expect(benchExpectedUses(60, upm, null)).toEqual({ expected: 0, floor: 0 });
+    expect(benchExpectedUses(60, upm)).toEqual({ expected: 0, floor: 0 });
   });
 });

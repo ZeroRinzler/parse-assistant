@@ -106,7 +106,7 @@ export function buildCdPlan(rulebook: Rulebook | null, bench: EncounterBench | n
       spellId: cd.spell_id ?? null,
       firstCastS: b?.avg_first_cast_s ?? null,
       uses: b?.avg_uses ?? null,
-      usesPerMin: b?.uses_per_min?.avg ?? b?.avg_uses_per_min ?? null,
+      usesPerMin: b?.uses_per_min.avg ?? null,
       bloodlust: !!cd.align_with_bloodlust,
       bloodlustPct: cd.align_with_bloodlust && b && b.bl_pct >= 40 ? b.bl_pct : null,
       holds,
@@ -123,7 +123,7 @@ export function buildDefensivePlan(rulebook: Rulebook | null, bench: EncounterBe
   return rulebook.defensives.map(def => {
     const b = benchmarks[def.name];
     const windowsS = windows
-      .filter(w => (w.defensive_name ?? w.common_defensives?.[0]) === def.name)
+      .filter(w => w.defensive_name === def.name)
       .map(w => w.time_s)
       .sort((a, c) => a - c);
     return {
@@ -216,8 +216,8 @@ export function buildBurstWindows(rulebook: Rulebook | null, bench: EncounterBen
     startS: bw.time_s,
     endS: bw.time_s + bw.window_length_s,
     cds: (bw.common_cds ?? []).map(n => ({ name: n, spellId: map[n] ?? null })),
-    aoe: (bw.avg_targets ?? 1) >= 2,
-    dmg: bw.dmg_avg ?? null,
+    aoe: bw.avg_targets >= 2,
+    dmg: bw.dmg_avg,
   }));
 }
 

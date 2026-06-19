@@ -104,8 +104,8 @@ warcraft-learner/
 5. `analysis-engine.ts` checks per offensive cooldown:
    - **Lost casts** - `expected = 1 + floor(fight_duration / cd_cooldown)` vs actual.
    - **Bloodlust alignment** - flags major CDs whose BL-window cast timing is >2σ from top-parse average. Falls back to binary in/out-of-window check.
-   - **First-cast delay** - flags opener CDs whose first cast is >2σ later than `avg_first_cast_s`. Skipped when no bench.
-   - **Held past reset** - gap between casts >2σ above `avg_gap_s`. Skipped when no bench.
+   - **First-cast delay** - flags opener CDs whose first cast is >2σ later than `avg_first_cast_s`. Always runs when a bench entry exists.
+   - **Held past reset** - gap between casts >2σ above `avg_gap_s`. Skipped when `avg_gap_s` is null (CD legitimately single-cast across all top parses).
    - **Hold suggestions** - cast index where ≥40% of top parsers delay >8s past on-cooldown time; fires if player casts >σ before median hold time.
    - **Cast efficiency** - player downtime (gaps above p90 of top-parse inter-cast gaps) vs top-parse average.
    - **Success** - emitted when a CD has zero issues.
@@ -290,16 +290,16 @@ Non-obvious things that have caused bugs - read before touching gear extraction 
 
 ## Analysis thresholds
 
-| Threshold | Derived from | Fallback |
+| Threshold | Derived from | Condition |
 |---|---|---|
-| First-cast delay | `avg_first_cast_s + 2σ` across top parses | None - finding skipped without bench |
-| Gap between CD uses | `avg_gap_s + 2σ` across top parses | None - finding skipped without bench |
-| Hold suggestion trigger | Cast index where ≥40% of samples have `hold_amount_s > 8s`; fires if player casts >σ before median | None emitted |
-| Downtime gap floor | p90 of pooled `cast_gap_list_ms` | None - finding skipped without bench (ingest writes 1500ms only if zero gaps) |
-| Efficiency warning band | <1σ below Top average → warning; deeper → critical | None - finding skipped without bench |
-| BL timing | `avg_bl_offset_s ± 2σ` | binary in/out-of-window |
+| First-cast delay | `avg_first_cast_s + 2σ` across top parses | Always runs when a bench entry exists (field is required, never null) |
+| Gap between CD uses | `avg_gap_s + 2σ` across top parses | Skipped when null - legitimately absent for single-cast CDs (cooldown > fight length) |
+| Hold suggestion trigger | Cast index where ≥40% of samples have `hold_amount_s > 8s`; fires if player casts >σ before median | None emitted when `hold_targets` is empty (no parsers held at that index) |
+| Downtime gap floor | p90 of pooled `cast_gap_list_ms` | Always runs when bench exists (`downtime_threshold_ms` is required, defaults to 1500ms) |
+| Efficiency warning band | <1σ below Top average → warning; deeper → critical | Always runs when bench exists (`top_avg_efficiency` / `top_efficiency_stddev` are required) |
+| BL timing | `avg_bl_offset_s ± 2σ` | Skipped when null - legitimately absent when a CD is never BL-aligned |
 
-> **Stddev is always emitted by ingestion alongside its mean** (`stdev()` returns 0 for a single sample), so the per-CD/defensive `stddev_*` fields are non-null whenever the matching mean is. The analysis engine relies on the bench value directly - there is no hardcoded-σ secondary fallback. By design, once every spec/encounter has bench data, the "skipped without bench" cases never occur in practice.
+> **Stddev is always emitted by ingestion alongside its mean** (`stdev()` returns 0 for a single sample), so all required `stddev_*` fields are always a number when the bench entry exists. The gap and BL-offset fields (`avg_gap_s`, `stddev_gap_s`, `avg_bl_offset_s`, `stddev_bl_offset_s`) are the only nullable bench fields - they are legitimately null when the statistic does not apply (single-cast CD or CD never aligned with BL). All other bench fields are required; if they are absent that is an ingestion problem, not an analysis problem.
 | Burst window clustering | windows within 15s merged; ≥35% of samples required | n/a |
 | Defensive window clustering | per-defensive grouping, within 20s merged; ≥35% of samples required | n/a |
 | Comparison table (uses/min) | `top_stddev_uses_per_min` per CD | ±0.05 |
