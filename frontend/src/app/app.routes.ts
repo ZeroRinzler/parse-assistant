@@ -13,11 +13,6 @@ export const routes: Routes = [
     loadComponent: () => import('./pages/pre-fight/pre-fight').then(m => m.PreFightComponent),
   },
   {
-    path: 'live',
-    canActivate: [authGuard],
-    loadComponent: () => import('./pages/live/live').then(m => m.LiveComponent),
-  },
-  {
     path: 'callback',
     loadComponent: () => import('./pages/callback/callback').then(m => m.CallbackComponent),
   },

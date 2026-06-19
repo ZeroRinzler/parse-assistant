@@ -71,3 +71,25 @@ export function pickPlayerId(
   if (autoPlayer) return autoPlayer;
   return visiblePlayers[0]?.id ?? null;
 }
+
+/**
+ * Choose which player to track across live-sync pulls.
+ *
+ * If the currently selected player is visible in the new pull (matched by name,
+ * case-insensitively), keep them - this lets you watch a raidmate and have the
+ * selection persist pull-to-pull. If they are absent, fall back to the logged-in
+ * user character, then the first visible player.
+ */
+export function pickLivePlayerId(
+  visiblePlayers: WclPlayer[],
+  currentPlayerName: string | null,
+  userChars: WclUserCharacter[],
+): number | null {
+  if (currentPlayerName) {
+    const sticky = visiblePlayers.find(
+      p => p.name.toLowerCase() === currentPlayerName.toLowerCase(),
+    );
+    if (sticky) return sticky.id;
+  }
+  return pickPlayerId(visiblePlayers, userChars, null);
+}

@@ -6,10 +6,16 @@
                (input)="onReportChange()" (keydown.enter)="loadReport()" />
       </mat-form-field>
 
+      <mat-slide-toggle [formControl]="liveControl" (change)="onLiveToggle()" class="mt-2">
+        Live sync (auto-follow latest pull)
+      </mat-slide-toggle>
+
       @if (fights().length) {
-        <div class="mt-2 border-t border-[var(--border)] pt-4">
+        <div class="mt-4 border-t border-[var(--border)] pt-4">
           <div class="flex flex-wrap gap-[14px]">
-            <mat-form-field appearance="outline" class="flex-[1_1_200px]">
+            <mat-form-field appearance="outline" class="flex-[1_1_200px]"
+                            [class.opacity-50]="liveSync()"
+                            [class.pointer-events-none]="liveSync()">
               <mat-label>Fight</mat-label>
               <mat-select [formControl]="fightControl" (selectionChange)="onFightChange()">
                 @for (f of fights(); track f.id) {
@@ -32,6 +38,12 @@
         </div>
       }
     </mat-card>
+
+    @if (liveSync() && status()) {
+      <div class="mb-4 rounded-lg border-l-[3px] border-[var(--accent)] px-3 py-2 text-[13px] text-[var(--muted)]">
+        {{ status() }}
+      </div>
+    }
 
     @if (error()) {
       <div class="mb-4 rounded-lg border border-[rgba(224,82,82,0.3)] bg-[rgba(224,82,82,0.1)] px-4 py-3.5 text-[13px] text-[var(--critical)]">⚠ {{ error() }}</div>

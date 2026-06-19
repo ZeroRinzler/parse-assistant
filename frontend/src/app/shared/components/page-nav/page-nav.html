@@ -49,15 +49,10 @@
         <mat-icon matListItemIcon>lightbulb</mat-icon>
         <span matListItemTitle>Pre-Fight</span>
       </a>
-      <a mat-list-item routerLink="/live" routerLinkActive #live="routerLinkActive"
-         [activated]="live.isActive" (click)="onNavigate()">
-        <mat-icon matListItemIcon>bolt_boost</mat-icon>
-        <span matListItemTitle>Live</span>
-      </a>
       <a mat-list-item routerLink="/" routerLinkActive #post="routerLinkActive"
          [routerLinkActiveOptions]="{exact:true}" [activated]="post.isActive" (click)="onNavigate()">
         <mat-icon matListItemIcon>analytics</mat-icon>
-        <span matListItemTitle>Post-Raid</span>
+        <span matListItemTitle>Analyze</span>
       </a>
     </mat-nav-list>
   </mat-sidenav>
