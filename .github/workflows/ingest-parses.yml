@@ -17,9 +17,17 @@ jobs:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
+      - name: Mint GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.INGEST_APP_ID }}
+          private-key: ${{ secrets.INGEST_APP_PRIVATE_KEY }}
+
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.ref }}
+          token: ${{ steps.app-token.outputs.token }}
 
       - uses: actions/setup-node@v4
         with:
@@ -53,5 +61,5 @@ jobs:
           # when files actually changed, so quiet hours produce no commit.
           commit_message: 'chore: refresh parse samples'
           file_pattern: 'frontend/public/data/specs/**'
-          commit_user_name: 'github-actions[bot]'
-          commit_user_email: 'github-actions[bot]@users.noreply.github.com'
+          commit_user_name: 'warcraft-learner-ingest[bot]'
+          commit_user_email: 'warcraft-learner-ingest[bot]@users.noreply.github.com'

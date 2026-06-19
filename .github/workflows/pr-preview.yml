@@ -12,7 +12,16 @@ jobs:
   deploy-preview:
     runs-on: ubuntu-latest
     steps:
+      - name: Mint GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.INGEST_APP_ID }}
+          private-key: ${{ secrets.INGEST_APP_PRIVATE_KEY }}
+
       - uses: actions/checkout@v4
+        with:
+          token: ${{ steps.app-token.outputs.token }}
 
       - uses: actions/setup-node@v4
         with:
@@ -34,6 +43,7 @@ jobs:
       - name: Deploy preview to gh-pages branch
         uses: JamesIves/github-pages-deploy-action@v4
         with:
+          token: ${{ steps.app-token.outputs.token }}
           branch: gh-pages
           folder: static/angular/browser
           target-folder: pr-${{ github.event.pull_request.number }}
