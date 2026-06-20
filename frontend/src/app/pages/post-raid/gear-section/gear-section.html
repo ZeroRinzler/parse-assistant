@@ -1,0 +1,143 @@
+<!-- Gear comparison: player vs top-parse bench -->
+<p class="mt-6 text-xl font-medium">Gear</p>
+<p class="text-sm text-[var(--muted)]">Your gear for this encounter compared to top-parse players.</p>
+
+<div class="mt-3 flex flex-col gap-3 md:flex-row md:items-start">
+  <div class="flex flex-1 flex-col gap-3">
+    <!-- Talents -->
+    @let ts = talentStatus();
+    <mat-card class="p-4">
+      <div class="mb-2 flex items-center gap-2">
+        <mat-icon [class]="statusClass(ts.status)">{{ statusIcon(ts.status) }}</mat-icon>
+        <span class="font-medium">Talents</span>
+      </div>
+      @if (talentBuilds().length) {
+        @for (b of talentBuilds(); track b.label) {
+          <div class="flex items-center justify-between gap-2 py-1">
+            <div class="min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="text-[13px]">{{ b.label }}</span>
+                @if (b.isPlayer) {
+                  <mat-chip-set><mat-chip highlighted>yours</mat-chip></mat-chip-set>
+                }
+              </div>
+              <div class="text-[12px] text-[var(--muted)]">{{ b.pct }}% of top parsers</div>
+            </div>
+            @if (b.link) {
+              <a class="text-[13px] text-[var(--gold)] no-underline hover:brightness-125" [href]="b.link" target="_blank" rel="noopener">View parse</a>
+            }
+          </div>
+        }
+      } @else {
+        <p class="text-[13px] text-[var(--muted)]">{{ ts.note }}</p>
+      }
+    </mat-card>
+
+    <!-- Trinkets -->
+    @let playerGearVal = playerGear();
+    <mat-card class="p-4">
+      <div class="mb-2 flex items-center gap-2">
+        <mat-icon class="badge-info">swap_horiz</mat-icon>
+        <span class="font-medium">Trinkets</span>
+      </div>
+      @if (playerGearVal) {
+        <!-- Comparison mode: player trinket vs bench -->
+        @for (slot of [12, 13]; track slot) {
+          @let playerItem = playerGearVal.trinkets?.find(t => t.slot === slot);
+          @let topItems = topGear()?.trinkets?.[slot] || [];
+          <div class="flex items-start gap-3 py-1">
+            <span class="w-16 shrink-0 text-[12px] text-[var(--muted)]">{{ slotName(slot) }}</span>
+            <div class="min-w-0 text-[13px]">
+              @if (playerItem) {
+                <wl-game-icon kind="item" [id]="playerItem.id" [name]="playerItem.name" [icon]="playerItem.icon || ''"></wl-game-icon>
+                @if (topItems.length && !topItems.find(t => t.id === playerItem!.id)) {
+                  <div class="text-[12px] text-[var(--muted)]">Top: {{ topItems[0]?.name }} ({{ topItems[0]?.pct }}%)</div>
+                }
+              } @else if (topItems.length) {
+                <span class="text-[var(--muted)]">Not tracked</span>
+                <div class="text-[12px] text-[var(--muted)]">Top: {{ topItems[0]?.name }} ({{ topItems[0]?.pct }}%)</div>
+              }
+            </div>
+          </div>
+        }
+      } @else {
+        <!-- Bench-only mode: playerGear not yet loaded -->
+        @if (benchTrinketRows().length) {
+          @for (row of benchTrinketRows(); track row.slotLabel) {
+            <div class="flex items-start gap-3 py-1">
+              <span class="w-16 shrink-0 text-[12px] text-[var(--muted)]">{{ row.slotLabel }}</span>
+              <div class="min-w-0 text-[13px]">
+                <wl-game-icon kind="item" [id]="row.id" [name]="row.name" icon=""></wl-game-icon>
+                <div class="text-[12px] text-[var(--muted)]">{{ row.pct }}% of top parsers</div>
+              </div>
+            </div>
+          }
+        } @else {
+          <p class="text-[13px] text-[var(--muted)]">No trinket data yet.</p>
+        }
+      }
+    </mat-card>
+
+    <!-- Sockets -->
+    @if (gemCheck(); as gem) {
+      <mat-card class="p-4">
+        <div class="mb-2 flex items-center gap-2">
+          <mat-icon [class]="statusClass(gem.status)">{{ statusIcon(gem.status) }}</mat-icon>
+          <span class="font-medium">Sockets</span>
+        </div>
+        <div class="flex items-baseline gap-2">
+          <span class="text-xl font-semibold tabular-nums" [class]="statusClass(gem.status)">{{ gem.count }} / {{ gem.expected }}</span>
+          <span class="text-[12px] text-[var(--muted)]">sockets filled</span>
+        </div>
+        @if (gem.status === 'warn') {
+          <p class="mt-1 text-[12px] text-[var(--muted)]">Top parsers fill {{ gem.expected }} - check for empty sockets.</p>
+        }
+      </mat-card>
+    }
+  </div>
+
+  <!-- Enchants -->
+  <mat-card class="flex-1 p-4">
+    @if (playerGear()) {
+      <!-- Comparison mode: player enchants vs bench -->
+      <div class="mb-2 flex items-center gap-2">
+        <mat-icon [class]="statusClass(enchantStatus())">{{ statusIcon(enchantStatus()) }}</mat-icon>
+        <span class="font-medium">Enchants</span>
+      </div>
+      @if (enchantRows().length) {
+        @for (row of enchantRows(); track row.slotName) {
+          <div class="flex items-start gap-3 py-1">
+            <span class="w-16 shrink-0 text-[12px] text-[var(--muted)]">{{ row.slotName }}</span>
+            <div class="min-w-0 text-[13px]">
+              <div [class]="statusClass(row.status)">{{ row.name }}</div>
+              @if (row.note) {
+                <div class="text-[12px] text-[var(--muted)]">{{ row.note }}</div>
+              }
+            </div>
+          </div>
+        }
+      } @else {
+        <p class="text-[13px] text-[var(--muted)]">No enchant data yet.</p>
+      }
+    } @else {
+      <!-- Bench-only mode: playerGear not yet loaded -->
+      <div class="mb-2 flex items-center gap-2">
+        <mat-icon class="badge-info">people</mat-icon>
+        <span class="font-medium">Enchants</span>
+      </div>
+      @if (benchEnchantRows().length) {
+        @for (row of benchEnchantRows(); track row.slotName) {
+          <div class="flex items-start gap-3 py-1">
+            <span class="w-16 shrink-0 text-[12px] text-[var(--muted)]">{{ row.slotName }}</span>
+            <div class="min-w-0 text-[13px]">
+              <div>{{ row.name }}</div>
+              <div class="text-[12px] text-[var(--muted)]">{{ row.pct }}% of top parsers</div>
+            </div>
+          </div>
+        }
+      } @else {
+        <p class="text-[13px] text-[var(--muted)]">No enchant data yet.</p>
+      }
+    }
+  </mat-card>
+</div>

@@ -55,7 +55,7 @@
 
     @if (result() && !loadingAnalysis()) {
       <mat-card class="p-4">
-        <wl-analysis-result [data]="result()!"></wl-analysis-result>
+        <wl-analysis-result [data]="result()!" [topGear]="topGear()"></wl-analysis-result>
       </mat-card>
     }
 </div>

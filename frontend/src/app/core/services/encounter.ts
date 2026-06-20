@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
-import { EncounterEntry, EncounterBench } from '../models/encounter.models';
+import { EncounterEntry, EncounterBench, SpecEntry } from '../models/encounter.models';
 import { EncounterPositions } from '../models/positioning.models';
 import { Rulebook } from '../models/rulebook.models';
 
@@ -10,6 +10,14 @@ const DATA_BASE = new URL('data/specs/', document.baseURI).href;
 @Injectable({ providedIn: 'root' })
 export class EncounterService {
   private readonly http = inject(HttpClient);
+
+  async getSpecs(): Promise<SpecEntry[]> {
+    try {
+      const data = await firstValueFrom(this.http.get<SpecEntry[]>(`${DATA_BASE}index.json`));
+      return data || [];
+    } catch { /* not yet generated */ }
+    return [];
+  }
 
   async getEncounters(spec: string): Promise<EncounterEntry[]> {
     try {

@@ -57,3 +57,11 @@
     [topComparison]="data().top_dtk_comparison || []">
   </wl-damage-taken>
 }
+
+<!-- Gear comparison (shown once bench gear for this encounter has loaded) -->
+@if (topGear()) {
+  <wl-gear-section
+    [playerGear]="data().player_gear ?? null"
+    [topGear]="topGear()!">
+  </wl-gear-section>
+}

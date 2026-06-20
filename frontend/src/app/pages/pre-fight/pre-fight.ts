@@ -4,7 +4,6 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -15,8 +14,7 @@ import { WclAuthService } from '../../core/services/wcl-auth';
 import { WclApiService } from '../../core/services/wcl-api';
 import { EncounterService } from '../../core/services/encounter';
 import { PositioningPanelService } from '../../core/services/positioning-panel';
-import { CharacterInfo, CharacterGear, WclUserCharacter } from '../../core/models/wcl.models';
-import { EncounterEntry, EncounterBench, EncounterGearStats } from '../../core/models/encounter.models';
+import { SpecEntry, EncounterEntry, EncounterBench, EncounterGearStats } from '../../core/models/encounter.models';
 import { Rulebook } from '../../core/models/rulebook.models';
 import { IconCacheService } from '../../core/services/icon-cache';
 import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner/loading-spinner';
@@ -26,17 +24,21 @@ import { FormatDurationPipe } from '../../shared/pipes/format-duration-pipe';
 import { FormatDamagePipe } from '../../shared/pipes/format-damage-pipe';
 import { FormatSpecPipe } from '../../shared/pipes/format-spec-pipe';
 import {
-  GearStatus, BurstWindowVm,
-  slotName, statusIcon, statusClass,
-  buildCdPlan, buildDefensivePlan, buildEnchantRows, enchantStatusOf,
-  buildTalentBuilds, buildGemCheck, buildBurstWindows, talentStatusOf,
+  GearStatus, slotName, statusIcon, statusClass,
+  buildTalentBuilds, TalentBuildRow,
+  buildBenchEnchantRows, BenchEnchantRow,
+  buildBenchTrinketRows, BenchTrinketRow,
+} from '../../shared/gear/gear-comparison';
+import {
+  BurstWindowVm,
+  buildCdPlan, buildDefensivePlan, buildBurstWindows,
 } from './pre-fight.vm';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-pre-fight',
   imports: [
-    ReactiveFormsModule, MatFormFieldModule, MatInputModule, MatSelectModule,
+    ReactiveFormsModule, MatFormFieldModule, MatSelectModule,
     MatButtonModule, MatCardModule, MatChipsModule, MatDividerModule, MatIconModule,
     LoadingSpinnerComponent, CalloutComponent, GameIconComponent,
     DecimalPipe, FormatDurationPipe, FormatDamagePipe, FormatSpecPipe,
@@ -52,14 +54,12 @@ export class PreFightComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
 
-  protected readonly linkedCharControl = new FormControl<WclUserCharacter | null>(null);
-  protected readonly manualSpecControl = new FormControl('', { nonNullable: true });
+  protected readonly specControl = new FormControl('', { nonNullable: true });
   protected readonly encControl = new FormControl<number>({ value: 0, disabled: true }, { nonNullable: true });
 
-  protected readonly linkedChars = signal<WclUserCharacter[]>([]);
-  protected readonly charInfo = signal<CharacterInfo | null>(null);
-  protected readonly charGear = signal<CharacterGear | null>(null);
+  protected readonly specs = signal<SpecEntry[]>([]);
   protected readonly encounters = signal<EncounterEntry[]>([]);
+  protected readonly selectedSpec = toSignal(this.specControl.valueChanges, { initialValue: this.specControl.value });
   protected readonly selectedEncId = toSignal(this.encControl.valueChanges, { initialValue: this.encControl.value });
   protected readonly bench = signal<EncounterBench | null>(null);
   protected readonly rulebook = signal<Rulebook | null>(null);
@@ -70,11 +70,10 @@ export class PreFightComponent implements OnInit {
 
   protected readonly cdPlan = computed(() => buildCdPlan(this.rulebook(), this.bench()));
   protected readonly defensivePlan = computed(() => buildDefensivePlan(this.rulebook(), this.bench()));
-  protected readonly enchantRows = computed(() => buildEnchantRows(this.charGear(), this.gearStats()));
-  protected readonly enchantStatus = computed<GearStatus>(() => enchantStatusOf(this.enchantRows()));
-  protected readonly talentBuilds = computed(() => buildTalentBuilds(this.gearStats(), this.charGear()?.talent_key ?? ''));
-  protected readonly gemCheck = computed(() => buildGemCheck(this.gearStats(), this.charGear()?.gem_count));
-  protected readonly burstWindows = computed(() => buildBurstWindows(this.rulebook(), this.bench()));
+  protected readonly talentBuilds = computed<TalentBuildRow[]>(() => buildTalentBuilds(this.gearStats(), ''));
+  protected readonly benchEnchantRows = computed<BenchEnchantRow[]>(() => buildBenchEnchantRows(this.gearStats()));
+  protected readonly benchTrinketRows = computed<BenchTrinketRow[]>(() => buildBenchTrinketRows(this.gearStats()));
+  protected readonly burstWindows = computed<BurstWindowVm[]>(() => buildBurstWindows(this.rulebook(), this.bench()));
 
   protected readonly showMap = computed(() => !!this.panel.positions());
 
@@ -85,98 +84,77 @@ export class PreFightComponent implements OnInit {
   }
 
   async ngOnInit(): Promise<void> {
-    if (!this.auth.isLoggedIn()) return;
-    await this._init();
-    const autoEnc = parseInt(this.route.snapshot.queryParamMap.get('encounter') || '0', 10);
-    if (autoEnc && this.charInfo()?.spec) {
-      this.encControl.setValue(autoEnc);
-      await this.onEncChange();
-    }
-  }
-
-  private async _init(): Promise<void> {
-    let chars: WclUserCharacter[] = [];
-    try {
-      chars = await this.wclApi.fetchUserCharacters();
-    } catch (err) {
-      this.error.set(`Could not load your WCL characters: ${err instanceof Error ? err.message : String(err)}`);
-    }
-    this.linkedChars.set(chars);
-    if (chars.length) {
-      this.linkedCharControl.setValue(chars[0]);
-      await this._loadLinkedChar(chars[0]);
-    }
-  }
-
-  protected async onLinkedCharChange(char: WclUserCharacter): Promise<void> {
-    await this._loadLinkedChar(char);
-  }
-
-  private async _loadLinkedChar(char: WclUserCharacter): Promise<void> {
-    this.error.set('');
     this.loading.set(true);
-    this.charInfo.set(null);
-    this.encounters.set([]);
     try {
-      const info = await this.wclApi.charLookup(char.name, char.serverSlug, char.serverRegion);
-      this.charInfo.set(info);
-      if (info.spec) {
-        await this._loadEncountersForSpec(info.spec);
-      } else {
-        this.error.set('Could not auto-detect spec. Enter it manually below.');
-      }
-    } catch (err) {
-      this.error.set(err instanceof Error ? err.message : 'Failed to load character.');
+      const specs = await this.encounterSvc.getSpecs();
+      this.specs.set(specs);
+      if (specs.length) this.specControl.enable({ emitEvent: false });
     } finally {
       this.loading.set(false);
     }
+
+    const params = this.route.snapshot.queryParamMap;
+    const autoSpec = params.get('spec') || '';
+    const autoEnc = parseInt(params.get('encounter') || '0', 10);
+
+    if (autoSpec && this.specs().some(s => s.spec === autoSpec)) {
+      this.specControl.setValue(autoSpec);
+      await this._onSpecSelected(autoSpec);
+      if (autoEnc) {
+        this.encControl.setValue(autoEnc);
+        await this.onEncChange();
+      }
+    }
+
+    // Opportunistically seed spell icons from the user's most recent report so
+    // CD/burst cards show artwork. Best-effort - no login required for the page.
+    if (this.auth.isLoggedIn()) {
+      void this._tryIconSeed();
+    }
   }
 
-  protected async applyManualSpec(): Promise<void> {
-    const spec = this.manualSpecControl.value.trim();
+  protected async onSpecChange(): Promise<void> {
+    const spec = this.specControl.value;
+    this.router.navigate([], { queryParams: { spec: spec || null, encounter: null }, replaceUrl: true });
+    this.bench.set(null);
+    this.rulebook.set(null);
+    this.panel.clear();
+    this.encControl.setValue(0, { emitEvent: false });
+    this.encControl.disable({ emitEvent: false });
+    this.encounters.set([]);
     if (!spec) return;
-    const info = this.charInfo();
-    if (!info) return;
-    this.charInfo.set({ ...info, spec });
-    this.error.set('');
-    await this._loadEncountersForSpec(spec);
+    await this._onSpecSelected(spec);
   }
 
-  private async _loadEncountersForSpec(spec: string): Promise<void> {
+  private async _onSpecSelected(spec: string): Promise<void> {
     const enc = await this.encounterSvc.getEncounters(spec);
     this.encounters.set(enc);
     if (enc.length) {
       this.encControl.enable({ emitEvent: false });
     } else {
       this.encControl.disable({ emitEvent: false });
-      this.error.set(`No parse data ingested yet for ${spec}. Run "npm run ingest" to populate encounter data.`);
     }
   }
 
   protected async onEncChange(): Promise<void> {
-    this.router.navigate([], { queryParams: { encounter: this.selectedEncId() || null }, replaceUrl: true });
+    const encId = this.encControl.value;
+    const spec = this.specControl.value;
+    this.router.navigate([], { queryParams: { spec: spec || null, encounter: encId || null }, replaceUrl: true });
     this.bench.set(null);
-    this.charGear.set(null);
     this.rulebook.set(null);
     this.panel.clear();
-    if (!this.selectedEncId()) return;
-    const info = this.charInfo();
-    if (!info?.spec) return;
+    if (!encId || !spec) return;
 
     this.loadingBrief.set(true);
     try {
-      const [gearData, benchData, rulebookData, positions] = await Promise.all([
-        info.name ? this.wclApi.getCharGear(info.name, info.server, info.region, this.selectedEncId()) : Promise.resolve({ found: false }),
-        this.encounterSvc.getBench(info.spec, this.selectedEncId()),
-        this.encounterSvc.getRulebook(info.spec),
-        this.encounterSvc.getPositions(info.spec, this.selectedEncId()),
+      const [benchData, rulebookData, positions] = await Promise.all([
+        this.encounterSvc.getBench(spec, encId),
+        this.encounterSvc.getRulebook(spec),
+        this.encounterSvc.getPositions(spec, encId),
       ]);
-      if ((gearData as CharacterGear).found) this.charGear.set(gearData as CharacterGear);
       this.bench.set(benchData);
       this.rulebook.set(rulebookData);
-      // Pre-fight has no live pull, so the map shows the top-parse benchmark only.
       this.panel.setContext(positions, null);
-      await this._seedSpellIcons();
     } catch (err) {
       this.error.set(err instanceof Error ? err.message : 'Failed to load encounter data.');
     } finally {
@@ -184,13 +162,16 @@ export class PreFightComponent implements OnInit {
     }
   }
 
-  // Spell icon art only comes from a report's masterData, so seed the cache from
-  // the character's most recent report to give the plan/burst cards spell icons.
-  private async _seedSpellIcons(): Promise<void> {
-    const report = this.charGear()?.source_report || this.charInfo()?.source_report;
-    if (!report) return;
+  /** Seed spell icons from the logged-in user's most recent report. Best-effort. */
+  private async _tryIconSeed(): Promise<void> {
     try {
-      this.icons.seed(await this.wclApi.getReportAbilities(report));
+      const chars = await this.wclApi.fetchUserCharacters();
+      if (!chars.length) return;
+      const info = await this.wclApi.charLookup(chars[0].name, chars[0].serverSlug, chars[0].serverRegion);
+      if (info.source_report) {
+        const abilities = await this.wclApi.getReportAbilities(info.source_report);
+        this.icons.seed(abilities);
+      }
     } catch { /* icons are best-effort; names still render without art */ }
   }
 
@@ -199,7 +180,8 @@ export class PreFightComponent implements OnInit {
   protected readonly statusClass = statusClass;
 
   protected talentStatus(topStats: EncounterGearStats | null): { status: GearStatus; note: string } {
-    return talentStatusOf(topStats, this.charGear()?.talent_key ?? '');
+    const builds = topStats?.talent_builds ?? [];
+    if (!builds.length) return { status: 'unknown', note: 'No talent data yet.' };
+    return { status: 'ok', note: `Most common build used by ${builds[0]?.pct ?? 0}% of top parsers` };
   }
-
 }

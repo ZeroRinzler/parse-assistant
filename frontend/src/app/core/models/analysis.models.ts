@@ -1,3 +1,5 @@
+import { CharacterGear } from './wcl.models';
+
 export interface AnalysisFinding {
   severity: 'critical' | 'warning' | 'info' | 'hold_suggestion' | 'success';
   category: string;
@@ -100,6 +102,8 @@ export interface AnalysisResult {
   player_total_dmg_taken?: number;
   top_dtk_comparison?: TopDtkComparison[];
   comparison_table?: ComparisonEntry[];
+  /** Player's own gear from their most recent ranked kill of this encounter. */
+  player_gear?: CharacterGear;
 }
 
 export interface ComparisonEntry {

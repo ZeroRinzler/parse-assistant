@@ -2,12 +2,14 @@ import { ChangeDetectionStrategy, Component, computed, inject, input, OnChanges 
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { AnalysisResult as IAnalysisResult, AnalysisFinding } from '../../../core/models/analysis.models';
+import { EncounterGearStats } from '../../../core/models/encounter.models';
 import { IconCacheService } from '../../../core/services/icon-cache';
 import { FindingEntry, FindingListComponent } from '../../../shared/components/finding-list/finding-list';
 import { CalloutComponent } from '../../../shared/components/callout/callout';
 import { BurstWindowsComponent } from '../burst-windows/burst-windows';
 import { DefensivesSectionComponent } from '../defensives-section/defensives-section';
 import { DamageTakenComponent } from '../damage-taken/damage-taken';
+import { GearSectionComponent } from '../gear-section/gear-section';
 
 interface CdBucket { issues: AnalysisFinding[]; holds: AnalysisFinding[]; success?: AnalysisFinding; }
 
@@ -24,7 +26,7 @@ const CAT_LABEL: Record<string, string> = {
   selector: 'wl-analysis-result',
   imports: [
     MatCardModule, MatIconModule, FindingListComponent, CalloutComponent,
-    BurstWindowsComponent, DefensivesSectionComponent, DamageTakenComponent,
+    BurstWindowsComponent, DefensivesSectionComponent, DamageTakenComponent, GearSectionComponent,
   ],
   templateUrl: './analysis-result.html',
 })
@@ -32,6 +34,7 @@ export class AnalysisResultComponent implements OnChanges {
   private readonly icons = inject(IconCacheService);
 
   readonly data = input.required<IAnalysisResult>();
+  readonly topGear = input<EncounterGearStats | null>(null);
 
   protected readonly cdBuckets = computed(() => {
     const byCD: Record<string, CdBucket> = {};

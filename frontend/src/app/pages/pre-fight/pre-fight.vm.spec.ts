@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
+import { buildCdPlan, buildDefensivePlan, buildBurstWindows } from './pre-fight.vm';
 import {
-  buildCdPlan, buildDefensivePlan, buildEnchantRows, enchantStatusOf,
-  buildTalentBuilds, buildGemCheck, buildBurstWindows, talentStatusOf,
-} from './pre-fight.vm';
+  buildEnchantRows, enchantStatusOf, buildTalentBuilds, buildGemCheck, talentStatusOf,
+} from '../../shared/gear/gear-comparison';
 import { CharacterGear } from '../../core/models/wcl.models';
 import { EncounterGearStats } from '../../core/models/encounter.models';
 import { bench } from '../../../testing/builders/bench';
@@ -55,6 +55,21 @@ describe('buildCdPlan', () => {
   it('returns an empty plan when the rulebook has no cooldowns', () => {
     expect(buildCdPlan(rulebook(), bench())).toEqual([]);
     expect(buildCdPlan(null, null)).toEqual([]);
+  });
+
+  it('surfaces all hold targets ordered by cast index when the majority holds', () => {
+    const rb = rulebook({ cooldowns: [{ name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 90 }] });
+    const targets = {
+      '2': { target_s: 121.2, stddev_s: 0.8, count: 8, total_samples: 10 },
+      '4': { target_s: 393.4, stddev_s: 35.0, count: 10, total_samples: 10 },
+      '3': { target_s: 257.5, stddev_s: 20.7, count: 10, total_samples: 10 },
+    };
+    const [item] = buildCdPlan(rb, bench({ perCd: { 'Shadow Blades': { majority_hold: true, hold_targets: targets } } }));
+    expect(item.holds).toHaveLength(3);
+    // Must be sorted by cast index regardless of key insertion order
+    expect(item.holds.map(h => h.castIndex)).toEqual([2, 3, 4]);
+    expect(item.holds[0].targetS).toBeCloseTo(121.2);
+    expect(item.holds[2].targetS).toBeCloseTo(393.4);
   });
 });
 

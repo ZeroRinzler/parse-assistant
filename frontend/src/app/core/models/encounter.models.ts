@@ -1,5 +1,10 @@
 import { TopDefensiveSummary, TopDtkComparison } from './analysis.models';
 
+export interface SpecEntry {
+  spec: string;
+  encounter_count: number;
+}
+
 export interface EncounterEntry {
   id: number;
   name: string;
