@@ -1,10 +1,12 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, inject, signal, computed } from '@angular/core';
-import { DOCUMENT } from '@angular/common';
-import { toSignal, takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import {
+  ChangeDetectionStrategy, Component, OnInit,
+  inject, signal, computed,
+} from '@angular/core';
+import { toObservable, toSignal, takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
-import { Subscription, from, fromEvent, interval, merge, of } from 'rxjs';
-import { exhaustMap, filter } from 'rxjs/operators';
+import { EMPTY, combineLatest, from, merge, of } from 'rxjs';
+import { distinctUntilChanged, exhaustMap, map, switchMap, tap } from 'rxjs/operators';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
@@ -18,6 +20,7 @@ import { EncounterService } from '../../core/services/encounter';
 import { IconCacheService } from '../../core/services/icon-cache';
 import { PositioningPanelService } from '../../core/services/positioning-panel';
 import { MapContextService } from '../../core/services/map-context';
+import { LiveReportSyncService, POLL_INTERVAL_MS } from '../../core/services/live-report-sync';
 import { WclFight, WclPlayer, WclUserCharacter } from '../../core/models/wcl.models';
 import { EncounterGearStats } from '../../core/models/encounter.models';
 import { AnalysisResult } from '../../core/models/analysis.models';
@@ -25,9 +28,8 @@ import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner
 import { AnalysisResultComponent } from './analysis-result/analysis-result';
 import { FormatDurationPipe } from '../../shared/pipes/format-duration-pipe';
 import { FormatSpecPipe } from '../../shared/pipes/format-spec-pipe';
+import { logWarn } from '../../core/log';
 import { extractCode, buildFights, buildPlayers, visiblePlayersOf, pickPlayerId, pickLivePlayerId } from './post-raid.vm';
-
-const POLL_MS = 12_000;
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -48,10 +50,9 @@ export class PostRaidComponent implements OnInit {
   private readonly icons = inject(IconCacheService);
   private readonly panel = inject(PositioningPanelService);
   private readonly mapCtx = inject(MapContextService);
+  private readonly liveSync = inject(LiveReportSyncService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
-  private readonly document = inject(DOCUMENT);
-  private readonly destroyRef = inject(DestroyRef);
 
   protected readonly reportControl = new FormControl('', { nonNullable: true });
   protected readonly fightControl = new FormControl<number | null>(null);
@@ -68,28 +69,52 @@ export class PostRaidComponent implements OnInit {
   protected readonly players = signal<WclPlayer[]>([]);
   protected readonly selectedFightId = toSignal(this.fightControl.valueChanges, { initialValue: this.fightControl.value });
   protected readonly selectedPlayerId = toSignal(this.playerControl.valueChanges, { initialValue: this.playerControl.value });
-  protected readonly liveSync = toSignal(this.liveControl.valueChanges, { initialValue: this.liveControl.value });
+  protected readonly liveSyncEnabled = toSignal(this.liveControl.valueChanges, { initialValue: this.liveControl.value });
   protected readonly result = signal<AnalysisResult | null>(null);
   protected readonly topGear = signal<EncounterGearStats | null>(null);
 
-  private _reportCode = '';
+  /** Current report code, driven by loadReport(). Used by the polling pipeline. */
+  protected readonly reportCode = signal('');
+
   private _masterAbilities: { gameID: number; name: string; icon: string }[] = [];
   private _enemies: { id: number; name: string; gameID: number }[] = [];
   private _userChars: WclUserCharacter[] = [];
-  private _pollSub: Subscription | null = null;
   /** Incremented on each analyzePlayer() call to cancel stale gear fetches. */
   private _gearFetchNonce = 0;
 
   protected readonly visiblePlayers = computed(() =>
     visiblePlayersOf(this.fights(), this.players(), this.selectedFightId()));
 
-  async ngOnInit(): Promise<void> {
+  // Declarative polling pipeline. Must live in a field initializer so that
+  // toObservable() and takeUntilDestroyed() run inside the injection context.
+  // switchMap tears down the previous poll stream whenever live/reportCode changes.
+  // exhaustMap drops concurrent poll attempts while one is in flight.
+  private readonly _pollingSub = combineLatest([
+    toObservable(this.liveSyncEnabled),
+    toObservable(this.reportCode),
+  ]).pipe(
+    tap(([live, code]) => {
+      if (live && !code) this.status.set('Load a report to start live sync.');
+      else if (!live) this.status.set('');
+    }),
+    map(([live, code]) => live && !!code),
+    distinctUntilChanged(),
+    switchMap(active =>
+      active
+        ? merge(of(undefined as void), this.liveSync.pollTriggers())
+        : EMPTY,
+    ),
+    exhaustMap(() => from(this._pollOnce())),
+    takeUntilDestroyed(),
+  ).subscribe();
+
+  ngOnInit(): void {
     const params = this.route.snapshot.queryParamMap;
     if (params.get('live') === '1') this.liveControl.setValue(true);
-    const r = params.get('report');
-    if (r) {
-      this.reportControl.setValue(r);
-      await this.loadReport(
+    const reportParam = params.get('report');
+    if (reportParam) {
+      this.reportControl.setValue(reportParam);
+      void this.loadReport(
         params.get('fight')  ? parseInt(params.get('fight')!,  10) : null,
         params.get('player') ? parseInt(params.get('player')!, 10) : null,
       );
@@ -104,9 +129,9 @@ export class PostRaidComponent implements OnInit {
     this.error.set('');
     const url = this.reportControl.value.trim();
     if (!url) return;
-    this._reportCode = extractCode(url);
+    // Setting reportCode to '' stops any active poll before the fetch completes.
+    this.reportCode.set('');
 
-    this._stopPolling();
     this.loadingReport.set(true);
     this.fights.set([]);
     this.players.set([]);
@@ -119,22 +144,26 @@ export class PostRaidComponent implements OnInit {
       }
       this.loadingMsg.set('Fetching report from WCL…');
       const [report, userChars] = await Promise.all([
-        this.wclApi.getReport(this._reportCode),
-        this.wclApi.fetchUserCharacters().catch(() => [] as WclUserCharacter[]),
+        this.wclApi.getReport(extractCode(url)),
+        this.wclApi.getUserCharacters().catch(err => {
+          logWarn('loadReport: fetch user characters', err);
+          return [] as WclUserCharacter[];
+        }),
       ]);
       this._userChars = userChars;
       this.fights.set(buildFights(report.fights));
       this.players.set(buildPlayers(report.masterData?.actors));
-      this._masterAbilities = report.masterData?.abilities || [];
-      this._enemies = report.masterData?.enemies || [];
+      this._masterAbilities = report.masterData?.abilities ?? [];
+      this._enemies = report.masterData?.enemies ?? [];
       if (report.masterData?.abilities) this.icons.seed(report.masterData.abilities);
 
       const lastFight = this.fights()[this.fights().length - 1];
       this.fightControl.setValue(autoFight ?? lastFight?.id ?? null);
       this._applyAutoPlayer(autoPlayer);
+      // Set reportCode last - this activates the polling pipeline if liveSync is on.
+      this.reportCode.set(extractCode(url));
       this._syncUrl();
       await this.analyzePlayer();
-      if (this.liveSync()) this._startPolling();
     } catch (err) {
       this.error.set(err instanceof Error ? err.message : 'Failed to load report.');
     } finally {
@@ -143,54 +172,20 @@ export class PostRaidComponent implements OnInit {
   }
 
   protected onLiveToggle(): void {
-    if (this.liveSync()) {
-      this._startPolling();
-    } else {
-      this._stopPolling();
-    }
+    // liveControl change propagates to liveSyncEnabled signal, which the
+    // polling pipeline reacts to automatically via combineLatest.
     this._syncUrl();
-  }
-
-  private _startPolling(): void {
-    this._pollSub?.unsubscribe();
-    if (!this._reportCode) {
-      this.status.set('Load a report to start live sync.');
-      return;
-    }
-    const isVisible = () => this.document.visibilityState === 'visible';
-    let lastPollAt = 0;
-
-    // Regular tick: fires every POLL_MS but is filtered out while hidden,
-    // so no network requests happen when the tab is not visible.
-    const tick$ = interval(POLL_MS).pipe(filter(isVisible));
-
-    // Refocus: when the tab becomes visible, poll immediately if POLL_MS has
-    // elapsed since the last poll (12s cooldown prevents accidental spam).
-    const refocus$ = fromEvent(this.document, 'visibilitychange').pipe(
-      filter(() => isVisible() && Date.now() - lastPollAt >= POLL_MS),
-    );
-
-    this._pollSub = merge(of(0), tick$, refocus$).pipe(
-      exhaustMap(() => { lastPollAt = Date.now(); return from(this._pollOnce()); }),
-      takeUntilDestroyed(this.destroyRef),
-    ).subscribe();
-  }
-
-  private _stopPolling(): void {
-    this._pollSub?.unsubscribe();
-    this._pollSub = null;
-    this.status.set('');
   }
 
   private async _pollOnce(): Promise<void> {
     this.error.set('');
     this.status.set('Checking for new pulls…');
     try {
-      const report = await this.wclApi.getReport(this._reportCode);
+      const report = await this.wclApi.getReport(this.reportCode());
       this.fights.set(buildFights(report.fights));
       this.players.set(buildPlayers(report.masterData?.actors));
-      this._masterAbilities = report.masterData?.abilities || [];
-      this._enemies = report.masterData?.enemies || [];
+      this._masterAbilities = report.masterData?.abilities ?? [];
+      this._enemies = report.masterData?.enemies ?? [];
       if (report.masterData?.abilities) this.icons.seed(report.masterData.abilities);
 
       const latest = this.fights()[this.fights().length - 1];
@@ -198,14 +193,14 @@ export class PostRaidComponent implements OnInit {
 
       // Cheap-diff: latest pull unchanged and already analyzed - skip re-analysis.
       if (this.selectedFightId() === latest.id && this.result()) {
-        this.status.set(`Last updated ${new Date().toLocaleTimeString()} · Polling every ${POLL_MS / 1000}s`);
+        this.status.set(`Last updated ${new Date().toLocaleTimeString()} · Polling every ${POLL_INTERVAL_MS / 1000}s`);
         return;
       }
 
-      const currentName = this.players().find(p => p.id === this.selectedPlayerId())?.name ?? null;
+      const currentName = this.players().find(player => player.id === this.selectedPlayerId())?.name ?? null;
       const visible = visiblePlayersOf(this.fights(), this.players(), latest.id);
       // emitEvent:true keeps selectedFightId/selectedPlayerId signals in sync;
-      // change handlers guard themselves with liveSync() and won't fire from (selectionChange)
+      // change handlers guard themselves with liveSyncEnabled() and won't fire from (selectionChange)
       // since that only triggers from user interaction, not programmatic setValue.
       this.fightControl.setValue(latest.id);
       this.playerControl.setValue(pickLivePlayerId(visible, currentName, this._userChars));
@@ -218,14 +213,14 @@ export class PostRaidComponent implements OnInit {
   }
 
   protected async onFightChange(): Promise<void> {
-    if (this.liveSync()) return;
+    if (this.liveSyncEnabled()) return;
     this._applyAutoPlayer(null);
     this._syncUrl();
     await this.analyzePlayer();
   }
 
   protected async onPlayerChange(): Promise<void> {
-    if (this.liveSync()) return;
+    if (this.liveSyncEnabled()) return;
     this._syncUrl();
     await this.analyzePlayer();
   }
@@ -243,10 +238,10 @@ export class PostRaidComponent implements OnInit {
     this.panel.clear();
     this.loadingMsg.set('Fetching events…');
     try {
-      const data = await this.analysisSvc.analyze(this._reportCode, fightId, playerId, this.fights(), this._masterAbilities);
+      const data = await this.analysisSvc.analyze(this.reportCode(), fightId, playerId, this.fights(), this._masterAbilities);
       this.result.set(data);
       const fight = this.fights().find(f => f.id === fightId);
-      if (fight) void this.mapCtx.prepare(this._reportCode, fight, playerId, data.spec, this._enemies);
+      if (fight) void this.mapCtx.prepare(this.reportCode(), fight, playerId, data.spec, this._enemies);
 
       if (fight?.encounterID) {
         // Bench gear is static JSON already fetched by the analysis pipeline,
@@ -257,9 +252,9 @@ export class PostRaidComponent implements OnInit {
 
         // Fetch player gear in background; matches the logged-in account's characters.
         const player = this.players().find(p => p.id === playerId);
-        const userChar = this._userChars.find(c =>
-          c.name.toLowerCase() === (player?.name ?? '').toLowerCase() &&
-          c.serverSlug.toLowerCase() === (player?.server ?? '').toLowerCase()
+        const userChar = this._userChars.find(character =>
+          character.name.toLowerCase() === (player?.name ?? '').toLowerCase() &&
+          character.serverSlug.toLowerCase() === (player?.server ?? '').toLowerCase(),
         );
         if (userChar) {
           this.wclApi.getCharGear(userChar.name, userChar.serverSlug, userChar.serverRegion, fight.encounterID)
@@ -268,7 +263,7 @@ export class PostRaidComponent implements OnInit {
                 this.result.update(r => r ? { ...r, player_gear: gearData } : r);
               }
             })
-            .catch(() => { /* gear is best-effort */ });
+            .catch(err => logWarn('analyzePlayer: fetch player gear', err));
         }
       }
     } catch (err) {
@@ -283,11 +278,11 @@ export class PostRaidComponent implements OnInit {
   }
 
   private _syncUrl(): void {
-    const p: Record<string, string> = {};
-    if (this._reportCode) p['report'] = this._reportCode;
-    if (this.selectedFightId()) p['fight'] = String(this.selectedFightId());
-    if (this.selectedPlayerId()) p['player'] = String(this.selectedPlayerId());
-    if (this.liveSync()) p['live'] = '1';
-    this.router.navigate([], { queryParams: p, replaceUrl: true });
+    const queryParams: Record<string, string> = {};
+    if (this.reportCode()) queryParams['report'] = this.reportCode();
+    if (this.selectedFightId()) queryParams['fight'] = String(this.selectedFightId());
+    if (this.selectedPlayerId()) queryParams['player'] = String(this.selectedPlayerId());
+    if (this.liveSyncEnabled()) queryParams['live'] = '1';
+    this.router.navigate([], { queryParams, replaceUrl: true });
   }
 }

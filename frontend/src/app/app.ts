@@ -7,6 +7,7 @@ import { AuthBannerComponent } from './shared/components/auth-banner/auth-banner
 import { PositioningPanelComponent } from './shared/components/positioning-panel/positioning-panel';
 import { WclAuthService } from './core/services/wcl-auth';
 import { WclApiService } from './core/services/wcl-api';
+import { logWarn } from './core/log';
 import { PositioningPanelService } from './core/services/positioning-panel';
 
 @Component({
@@ -33,7 +34,7 @@ export class App implements OnInit {
 
   ngOnInit(): void {
     if (this.auth.isLoggedIn()) {
-      this.wclApi.fetchUserCharacters().catch(() => {});
+      this.wclApi.getUserCharacters().catch(err => logWarn('app init: prefetch user characters', err));
     }
   }
 }

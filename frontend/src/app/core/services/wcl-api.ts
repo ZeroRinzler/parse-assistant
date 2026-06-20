@@ -3,271 +3,182 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { WclAuthService } from './wcl-auth';
 import { WclReport, WclAbility, CharacterInfo, CharacterGear, WclUserCharacter, WclEvent } from '../models/wcl.models';
-
-interface PlayerDetailEntry { id: number; type: string; name: string; specs?: Array<{ spec: string }>; }
-type PlayerDetailGroups = Record<string, PlayerDetailEntry[]>;
-
-interface WclGearItem { id?: number | string; name?: string; icon?: string; permanentEnchant?: number | string; permanentEnchantName?: string; gems?: Array<{ id?: number | string }>; }
-interface WclTalentNode { node?: { nodeId?: number }; nodeId?: number; }
-interface WclTalentTree { class?: Record<string, WclTalentNode[]>; spec?: Record<string, WclTalentNode[]>; }
-interface WclRankEntry {
-  startTime?: number;
-  spec?: string;
-  class?: number;
-  report?: { code?: string };
-  gear?: WclGearItem[];
-  talents?: WclTalentTree;
-}
+import { logWarn } from '../log';
+import {
+  REPORT_Q, REPORT_ABILITIES_Q, PLAYER_DETAILS_Q, FIGHTS_Q, EVENTS_Q,
+  USER_CHARS_Q, CHAR_Q, CHAR_ENC_Q, buildEnchantNamesQuery,
+  ReportQueryVars, ReportAbilitiesQueryVars, PlayerDetailsQueryVars,
+  FightsQueryVars, EventsQueryVars, CharQueryVars, CharEncQueryVars,
+} from './wcl-queries';
+import {
+  buildSpecMap, mapUserCharacters, extractGear, talentKeyV2,
+  CLASS_NAMES, WclRankEntry, PlayerDetailGroups,
+} from './wcl-mappers';
 
 const API_URL = 'https://www.warcraftlogs.com/api/v2/user';
-
-const CLASS_NAMES: Record<number, string> = {
-  1:'DeathKnight',2:'Druid',3:'Hunter',4:'Mage',5:'Monk',
-  6:'Paladin',7:'Priest',8:'Rogue',9:'Shaman',10:'Warlock',
-  11:'Warrior',12:'DemonHunter',13:'Evoker',
-};
-
-const REPORT_Q = `
-query($code:String!){reportData{report(code:$code){
-  title
-  fights(killType:All){id name startTime endTime kill encounterID difficulty friendlyPlayers}
-  masterData{
-    actors(type:"Player"){id name subType server}
-    enemies:actors(type:"NPC"){id name gameID}
-    abilities{gameID name icon}
-  }
-}}}`;
-
-const PD_Q = `
-query($code:String!,$fightIDs:[Int]!){
-  reportData{report(code:$code){playerDetails(fightIDs:$fightIDs)}}
-}`;
-
-const FIGHTS_Q = `
-query($code:String!){reportData{report(code:$code){fights(killType:All){id}}}}`;
-
-const EVENTS_Q = `
-query($code:String!,$fightIDs:[Int]!,$dataType:EventDataType,$sourceID:Int,$startTime:Float,$endTime:Float,$includeResources:Boolean,$hostilityType:HostilityType){
-  reportData{report(code:$code){
-    events(fightIDs:$fightIDs,dataType:$dataType,sourceID:$sourceID,
-           startTime:$startTime,endTime:$endTime,includeResources:$includeResources,hostilityType:$hostilityType,limit:10000){data nextPageTimestamp}
-  }}
-}`;
-
-const USER_CHARS_Q = `{userData{currentUser{characters{id name server{slug region{slug}}}}}}`;
-
-const CHAR_Q = `
-query($name:String!,$serverSlug:String!,$serverRegion:String!){
-  characterData{character(name:$name,serverSlug:$serverSlug,serverRegion:$serverRegion){
-    name classID
-    recentReports(limit:5){data{code startTime}}
-  }}
-}`;
-
-const CHAR_ENC_Q = `
-query($name:String!,$serverSlug:String!,$serverRegion:String!,$encID:Int!){
-  characterData{character(name:$name,serverSlug:$serverSlug,serverRegion:$serverRegion){
-    encounterRankings(encounterID:$encID,includeCombatantInfo:true)
-  }}
-}`;
 
 @Injectable({ providedIn: 'root' })
 export class WclApiService {
   private readonly auth = inject(WclAuthService);
   private readonly http = inject(HttpClient);
 
-  async query<T = unknown>(gql: string, variables: Record<string, unknown> = {}): Promise<T> {
+  async query<TData = unknown>(gql: string, variables: object = {}): Promise<TData> {
     const token = this.auth.getToken();
     if (!token) {
       this.auth.logout();
       throw new Error('Not logged in to WCL - click "Sign In" to authorize.');
     }
-    let body: { data?: T; errors?: { message?: string }[] };
+    let body: { data?: TData; errors?: { message?: string }[] };
     try {
-      body = await firstValueFrom(this.http.post<{ data?: T; errors?: { message?: string }[] }>(
+      body = await firstValueFrom(this.http.post<{ data?: TData; errors?: { message?: string }[] }>(
         API_URL,
         { query: gql, variables },
         { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } },
       ));
-    } catch (e) {
-      if (e instanceof HttpErrorResponse) {
-        if (e.status === 401) {
+    } catch (error) {
+      if (error instanceof HttpErrorResponse) {
+        if (error.status === 401) {
           this.auth.logout();
           throw new Error('WCL session expired - sign in again.');
         }
-        throw new Error(`WCL API error (${e.status})`);
+        throw new Error(`WCL API error (${error.status})`);
       }
-      throw e;
+      throw error;
     }
     if (body.errors?.length) throw new Error(body.errors[0].message || 'WCL GraphQL error');
-    return body.data as T;
+    return body.data as TData;
   }
 
   async getReport(code: string): Promise<WclReport> {
-    const d = await this.query<{ reportData: { report: WclReport } }>(REPORT_Q, { code });
-    return d.reportData.report;
+    const vars: ReportQueryVars = { code };
+    const result = await this.query<{ reportData: { report: WclReport } }>(REPORT_Q, vars);
+    return result.reportData.report;
   }
 
   /** Lightweight fetch of just a report's ability icons, for seeding the icon cache. */
   async getReportAbilities(code: string): Promise<WclAbility[]> {
-    const Q = `query($code:String!){reportData{report(code:$code){masterData{abilities{gameID name icon}}}}}`;
-    const d = await this.query<{ reportData: { report: { masterData: { abilities: WclAbility[] } } } }>(Q, { code });
-    return d?.reportData?.report?.masterData?.abilities ?? [];
-  }
-
-  /** Normalize a WCL gear icon ("inv_x.jpg") to the bare filename used by zamimg. */
-  private _iconFile(icon?: string): string {
-    return (icon || '').replace(/\.jpg$/i, '');
+    const vars: ReportAbilitiesQueryVars = { code };
+    const result = await this.query<{ reportData: { report: { masterData: { abilities: WclAbility[] } } } }>(
+      REPORT_ABILITIES_Q, vars,
+    );
+    return result?.reportData?.report?.masterData?.abilities ?? [];
   }
 
   async getPlayerDetails(code: string, fightId: number): Promise<Record<number | string, string>> {
-    const d = await this.query<{ reportData: { report: { playerDetails: { data: { playerDetails: PlayerDetailGroups } } } } }>(PD_Q, { code, fightIDs: [fightId] });
-    const details = d.reportData.report.playerDetails.data.playerDetails;
-    const map: Record<number | string, string> = {};
-    for (const role of ['dps', 'healers', 'tanks', 'unknown']) {
-      for (const p of (details[role] || [])) {
-        const cls = (p.type || '').replace(/ /g, '');
-        const spec = ((p.specs || [])[0]?.spec || '').replace(/ /g, '');
-        if (spec && cls) map[p.id] = spec + cls;
-        if (p.name) map[`name_${p.id}`] = p.name;
-      }
-    }
-    return map;
+    const vars: PlayerDetailsQueryVars = { code, fightIDs: [fightId] };
+    const result = await this.query<{ reportData: { report: { playerDetails: { data: { playerDetails: PlayerDetailGroups } } } } }>(
+      PLAYER_DETAILS_Q, vars,
+    );
+    return buildSpecMap(result.reportData.report.playerDetails.data.playerDetails);
   }
 
   async getAllEvents(
     code: string, fightId: number, dataType: string,
     startTime: number, endTime: number, sourceId?: number,
-    includeResources = false, hostilityType?: 'Friendlies' | 'Enemies'
+    includeResources = false, hostilityType?: 'Friendlies' | 'Enemies',
   ): Promise<WclEvent[]> {
     const events: WclEvent[] = [];
-    let ts = startTime;
+    let currentStart = startTime;
     for (;;) {
-      const vars: Record<string, unknown> = { code, fightIDs: [fightId], dataType, startTime: ts, endTime };
-      if (sourceId != null) vars['sourceID'] = sourceId;
-      if (includeResources) vars['includeResources'] = true;
-      if (hostilityType) vars['hostilityType'] = hostilityType;
-      const d = await this.query<{ reportData: { report: { events: { data: WclEvent[]; nextPageTimestamp?: number } } } }>(EVENTS_Q, vars);
-      const page = d.reportData.report.events;
-      events.push(...(page.data || []));
+      const vars: EventsQueryVars = { code, fightIDs: [fightId], dataType, startTime: currentStart, endTime };
+      if (sourceId != null) vars.sourceID = sourceId;
+      if (includeResources) vars.includeResources = true;
+      if (hostilityType) vars.hostilityType = hostilityType;
+      const result = await this.query<{ reportData: { report: { events: { data: WclEvent[]; nextPageTimestamp?: number } } } }>(
+        EVENTS_Q, vars,
+      );
+      const page = result.reportData.report.events;
+      events.push(...(page.data ?? []));
       if (!page.nextPageTimestamp) break;
-      ts = page.nextPageTimestamp;
+      currentStart = page.nextPageTimestamp;
     }
     return events;
   }
 
-  async fetchUserCharacters(): Promise<WclUserCharacter[]> {
-    const d = await this.query<{ userData: { currentUser: { characters: Array<{ id: number; name: string; server: { slug: string; region: { slug: string } } }> } } }>(USER_CHARS_Q);
-    const raw = d?.userData?.currentUser?.characters || [];
-    return raw.map(c => ({
-      id: c.id,
-      name: c.name,
-      serverSlug: c.server?.slug || '',
-      serverRegion: c.server?.region?.slug || '',
-    }));
+  async getUserCharacters(): Promise<WclUserCharacter[]> {
+    const result = await this.query<{ userData: { currentUser: { characters: Array<{ id: number; name: string; server: { slug: string; region: { slug: string } } }> } } }>(
+      USER_CHARS_Q,
+    );
+    return mapUserCharacters(result?.userData?.currentUser?.characters ?? []);
   }
 
-  async charLookup(name: string, serverSlug: string, serverRegion: string): Promise<CharacterInfo> {
-    const d = await this.query<{ characterData: { character: { name: string; classID: number; recentReports: { data: Array<{ code: string }> } } } }>(
-      CHAR_Q, { name, serverSlug, serverRegion }
+  async getCharacter(name: string, serverSlug: string, serverRegion: string): Promise<CharacterInfo> {
+    const vars: CharQueryVars = { name, serverSlug, serverRegion };
+    const result = await this.query<{ characterData: { character: { name: string; classID: number; recentReports: { data: Array<{ code: string }> } } } }>(
+      CHAR_Q, vars,
     );
-    const char = d?.characterData?.character;
-    if (!char) throw new Error(`Character not found: ${name}-${serverSlug} (${serverRegion})`);
+    const character = result?.characterData?.character;
+    if (!character) throw new Error(`Character not found: ${name}-${serverSlug} (${serverRegion})`);
 
     let spec: string | null = null;
     let sourceReport: string | null = null;
-    const reports = char.recentReports?.data || [];
+    const reports = character.recentReports?.data ?? [];
     if (!reports.length) throw new Error('No recent WCL reports found for this character.');
     sourceReport = reports[0].code;
 
-    const target = char.name.toLowerCase();
-    for (const rep of reports.slice(0, 3)) {
+    const characterNameLower = character.name.toLowerCase();
+    for (const report of reports.slice(0, 3)) {
       try {
-        const fd = await this.query<{ reportData: { report: { fights: Array<{ id: number }> } } }>(FIGHTS_Q, { code: rep.code });
-        const fights = fd.reportData.report.fights || [];
+        const fightsVars: FightsQueryVars = { code: report.code };
+        const fightsData = await this.query<{ reportData: { report: { fights: Array<{ id: number }> } } }>(
+          FIGHTS_Q, fightsVars,
+        );
+        const fights = fightsData.reportData.report.fights ?? [];
         if (!fights.length) continue;
-        const specMap = await this.getPlayerDetails(rep.code, fights[0].id);
+        const specMap = await this.getPlayerDetails(report.code, fights[0].id);
         // playerDetails carries both `id -> spec` and `name_${id} -> name`; match by name.
-        const nameKey = Object.keys(specMap).find(k => k.startsWith('name_') && specMap[k].toLowerCase() === target);
-        const id = nameKey?.slice('name_'.length);
-        if (id && specMap[id]) { spec = specMap[id]; sourceReport = rep.code; break; }
-      } catch { /* try next report */ }
+        const nameKey = Object.keys(specMap).find(
+          key => key.startsWith('name_') && specMap[key].toLowerCase() === characterNameLower,
+        );
+        const playerId = nameKey?.slice('name_'.length);
+        if (playerId && specMap[playerId]) { spec = specMap[playerId]; sourceReport = report.code; break; }
+      } catch (err) {
+        logWarn('getCharacter: spec resolution failed for report ' + report.code, err);
+      }
     }
-    return { name: char.name, spec, server: serverSlug, region: serverRegion, source_report: sourceReport };
+    return { name: character.name, spec, server: serverSlug, region: serverRegion, source_report: sourceReport };
   }
 
   async getCharGear(name: string, server: string, region: string, encounterId: number): Promise<CharacterGear> {
-    const d = await this.query<{ characterData: { character: { encounterRankings: string | { ranks?: WclRankEntry[] } } } }>(
-      CHAR_ENC_Q, { name, serverSlug: server, serverRegion: region, encID: encounterId }
+    const vars: CharEncQueryVars = { name, serverSlug: server, serverRegion: region, encID: encounterId };
+    const result = await this.query<{ characterData: { character: { encounterRankings: string | { ranks?: WclRankEntry[] } } } }>(
+      CHAR_ENC_Q, vars,
     );
-    const raw = d?.characterData?.character?.encounterRankings;
-    if (raw == null) throw new Error(`Character not found: ${name}-${server} (${region})`);
-    const rankData = typeof raw === 'string' ? JSON.parse(raw) as { ranks?: WclRankEntry[] } : raw;
-    const ranks = rankData?.ranks || [];
+    const rawRankings = result?.characterData?.character?.encounterRankings;
+    if (rawRankings == null) throw new Error(`Character not found: ${name}-${server} (${region})`);
+    const rankData = typeof rawRankings === 'string'
+      ? JSON.parse(rawRankings) as { ranks?: WclRankEntry[] }
+      : rawRankings;
+    const ranks = rankData?.ranks ?? [];
     if (!ranks.length) return { found: false, message: 'No ranked kills found for this encounter.' };
 
-    const mostRecent = ranks.reduce((best, r) =>
-      (r.startTime || 0) > (best.startTime || 0) ? r : best
+    const mostRecent = ranks.reduce((best, rank) =>
+      (rank.startTime ?? 0) > (best.startTime ?? 0) ? rank : best,
     );
 
-    const { trinkets, enchants, gem_count } = this._extractGear(mostRecent);
-    const talent_key = this._talentKeyV2(mostRecent.talents);
-    const specPart = mostRecent.spec || '';
-    const className = CLASS_NAMES[mostRecent.class ?? -1] || '';
+    const { trinkets, enchants, gem_count } = extractGear(mostRecent);
+    const talent_key = talentKeyV2(mostRecent.talents);
+    const specPart = mostRecent.spec ?? '';
+    const className = CLASS_NAMES[mostRecent.class ?? -1] ?? '';
     const fullSpec = specPart && className ? specPart + className : specPart;
 
     const enchantIds = [...new Set(enchants.filter(e => e.id).map(e => e.id))];
     if (enchantIds.length) {
-      let gd: Record<string, { id: number; name: string }> = {};
+      let enchantNames: Record<string, { id: number; name: string }> = {};
       try {
-        const parts = enchantIds.map(id => `e${id}: enchant(id:${id}){id name}`).join(' ');
-        const encD = await this.query<{ gameData: Record<string, { id: number; name: string }> }>(`query{gameData{${parts}}}`);
-        gd = encD?.gameData || {};
-      } catch { /* leave gd empty - any unresolved name surfaces as a visible marker below */ }
-      for (const e of enchants) {
-        if (!e.name && e.id) e.name = gd[`e${e.id}`]?.name || 'Unknown enchant';
+        const enchantData = await this.query<{ gameData: Record<string, { id: number; name: string }> }>(
+          buildEnchantNamesQuery(enchantIds),
+        );
+        enchantNames = enchantData?.gameData ?? {};
+      } catch (err) {
+        logWarn('getCharGear: enchant name resolution failed', err);
+        // Unresolved names surface as a visible 'Unknown enchant' marker below.
+      }
+      for (const enchant of enchants) {
+        if (!enchant.name && enchant.id) enchant.name = enchantNames[`e${enchant.id}`]?.name ?? 'Unknown enchant';
       }
     }
 
-    return { found: true, spec: fullSpec, source_report: mostRecent.report?.code || null, talent_key, trinkets, enchants, gem_count };
-  }
-
-  /** Trinkets (slots 12/13), permanent enchants and filled-socket count from a ranking's combatant info. */
-  private _extractGear(entry: WclRankEntry): { trinkets: NonNullable<CharacterGear['trinkets']>; enchants: NonNullable<CharacterGear['enchants']>; gem_count: number } {
-    const trinkets: NonNullable<CharacterGear['trinkets']> = [];
-    const enchants: NonNullable<CharacterGear['enchants']> = [];
-    let gem_count = 0;
-    (entry.gear || []).forEach((item, idx) => {
-      if (item?.id == null) return;
-      const id = typeof item.id === 'string' ? parseInt(item.id, 10) : item.id;
-      if (idx === 12 || idx === 13) {
-        trinkets.push({ slot: idx, id, name: item.name || '', icon: this._iconFile(item.icon) });
-      }
-      const enc = item.permanentEnchant;
-      if (enc) {
-        const eid = typeof enc === 'string' ? parseInt(enc, 10) : enc;
-        enchants.push({ slot: idx, id: eid, name: item.permanentEnchantName || '' });
-      }
-      for (const g of (item.gems || [])) {
-        if (g?.id != null) gem_count++;
-      }
-    });
-    return { trinkets, enchants, gem_count };
-  }
-
-  /** Midnight talent tree (from `encounterRankings`) → sorted `v2:` node-id key. */
-  private _talentKeyV2(talents: WclTalentTree | undefined): string {
-    if (!talents) return '';
-    const ids: number[] = [];
-    for (const section of [talents.class, talents.spec]) {
-      if (!section) continue;
-      for (const rowArr of Object.values(section)) {
-        for (const e of (rowArr || [])) {
-          const nid = e?.node?.nodeId ?? e?.nodeId;
-          if (nid != null) ids.push(nid);
-        }
-      }
-    }
-    return ids.length ? 'v2:' + [...new Set(ids)].sort((a, b) => a - b).join(',') : '';
+    return { found: true, spec: fullSpec, source_report: mostRecent.report?.code ?? null, talent_key, trinkets, enchants, gem_count };
   }
 }

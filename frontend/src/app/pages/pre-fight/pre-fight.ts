@@ -12,6 +12,7 @@ import { MatDividerModule } from '@angular/material/divider';
 import { MatIconModule } from '@angular/material/icon';
 import { WclAuthService } from '../../core/services/wcl-auth';
 import { WclApiService } from '../../core/services/wcl-api';
+import { logWarn } from '../../core/log';
 import { EncounterService } from '../../core/services/encounter';
 import { PositioningPanelService } from '../../core/services/positioning-panel';
 import { SpecEntry, EncounterEntry, EncounterBench, EncounterGearStats } from '../../core/models/encounter.models';
@@ -165,14 +166,14 @@ export class PreFightComponent implements OnInit {
   /** Seed spell icons from the logged-in user's most recent report. Best-effort. */
   private async _tryIconSeed(): Promise<void> {
     try {
-      const chars = await this.wclApi.fetchUserCharacters();
+      const chars = await this.wclApi.getUserCharacters();
       if (!chars.length) return;
-      const info = await this.wclApi.charLookup(chars[0].name, chars[0].serverSlug, chars[0].serverRegion);
+      const info = await this.wclApi.getCharacter(chars[0].name, chars[0].serverSlug, chars[0].serverRegion);
       if (info.source_report) {
         const abilities = await this.wclApi.getReportAbilities(info.source_report);
         this.icons.seed(abilities);
       }
-    } catch { /* icons are best-effort; names still render without art */ }
+    } catch (err) { logWarn('pre-fight: icon seed from recent report', err); }
   }
 
   protected readonly slotName = slotName;

@@ -67,6 +67,32 @@ export function evaluateCastWithoutPrior(
   };
 }
 
+interface HoldViolation {
+  spellName: string;
+  /** Cast time in seconds, fight-relative. */
+  castTime: number;
+  /** Anchor-spell cast time in seconds, fight-relative. */
+  anchorTime: number;
+}
+
+/**
+ * Find all casts of `spellId` that fall within `holdWindowS` seconds before
+ * any of the given anchor times.
+ */
+function findCastsInHoldWindow(
+  spellId: number,
+  spellName: string,
+  anchorTimes: number[],
+  castTimes: CastTimes,
+  holdWindowS: number,
+): HoldViolation[] {
+  return anchorTimes.flatMap(anchorTime =>
+    (castTimes[spellId] ?? [])
+      .filter(castTime => castTime >= anchorTime - holdWindowS && castTime < anchorTime)
+      .map(castTime => ({ spellName, castTime, anchorTime })),
+  );
+}
+
 /** Evaluate one `hold_cooldown_for_anchor` condition. Returns a finding or null. */
 export function evaluateHoldForAnchor(
   cond: HoldCooldownForAnchorCondition,
@@ -74,26 +100,27 @@ export function evaluateHoldForAnchor(
   severity: Severity,
   remedy?: string,
 ): AnalysisFinding | null {
-  const hw = cond.hold_window_s ?? 15;
-  const anchorTimes = [...(castTimes[cond.anchor_spell_id] ?? [])].sort((a, b) => a - b);
-  const violations: [string, string, string][] = [];
-  let firstT: number | null = null;
-  for (const at of anchorTimes.slice(1)) {
-    for (let i = 0; i < cond.spell_ids.length; i++) {
-      for (const ct of castTimes[cond.spell_ids[i]] ?? []) {
-        if (ct >= at - hw && ct < at) {
-          violations.push([cond.spell_names?.[i] ?? String(cond.spell_ids[i]), fmtClock(ct), fmtClock(at)]);
-          firstT ??= ct;
-        }
-      }
-    }
-  }
+  const holdWindowS = cond.hold_window_s ?? 15;
+  const anchorTimes = [...(castTimes[cond.anchor_spell_id] ?? [])].sort((a, b) => a - b).slice(1);
+
+  const violations = cond.spell_ids.flatMap((spellId, i) =>
+    findCastsInHoldWindow(
+      spellId,
+      cond.spell_names?.[i] ?? String(spellId),
+      anchorTimes,
+      castTimes,
+      holdWindowS,
+    ),
+  );
+
   if (!violations.length) return null;
+  const firstCastS = violations.reduce((min, v) => Math.min(min, v.castTime), Infinity);
+  const spellNames = [...new Set(violations.map(v => v.spellName))].join('/');
   return {
     severity,
     category: 'rule_violation',
-    timestamp_ms: firstT != null ? Math.round(firstT * 1000) : undefined,
-    message: `${[...new Set(violations.map((v) => v[0]))].join('/')} used in the ${hw}s hold window before ${cond.anchor_spell_name}: ${violations.length} charge(s).`,
+    timestamp_ms: Math.round(firstCastS * 1000),
+    message: `${spellNames} used in the ${holdWindowS}s hold window before ${cond.anchor_spell_name}: ${violations.length} charge(s).`,
     details: remedy ? { remedy } : undefined,
   };
 }
