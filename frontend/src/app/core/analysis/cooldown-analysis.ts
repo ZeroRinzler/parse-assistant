@@ -55,11 +55,17 @@ export function analyzeCooldowns(
       const cdIssues: AnalysisFinding[] = [];
       const cdSugg: AnalysisFinding[] = [];
 
-      const b = perCdBench[cdName];
+      const cdBench = perCdBench[cdName];
 
       if (cd.talent_gated && actual === 0) continue;
 
-      const { expected, floor } = benchExpectedUses(fightDurS, b.uses_per_min);
+      if (!cdBench) {
+        if (actual > 0) findings.push({ severity: 'success', category: 'cooldown_usage', cd_name: cdName,
+          message: `${cdName} - ${actual} cast(s) (no bench data for this encounter).` });
+        continue;
+      }
+
+      const { expected, floor } = benchExpectedUses(fightDurS, cdBench.uses_per_min);
 
       if (actual === 0 && expected >= 1) {
         cdIssues.push({ severity: 'critical', category: 'lost_cooldown', cd_name: cdName, timestamp_ms: undefined,
@@ -70,9 +76,9 @@ export function analyzeCooldowns(
       }
       if (cdCasts.length) {
         const firstS = rel(cdCasts[0].timestamp) / 1000;
-        if (isOutlierAbove(firstS, b.avg_first_cast_s, b.stddev_first_cast_s)) cdIssues.push({ severity: 'warning', category: 'cooldown_delay', cd_name: cdName,
+        if (isOutlierAbove(firstS, cdBench.avg_first_cast_s, cdBench.stddev_first_cast_s)) cdIssues.push({ severity: 'warning', category: 'cooldown_delay', cd_name: cdName,
           timestamp_ms: rel(cdCasts[0].timestamp),
-          message: `${cdName} opener at ${fmtClock(firstS)} - ${(firstS - b.avg_first_cast_s).toFixed(0)}s later than top parsers (${fmtClock(b.avg_first_cast_s)} avg ±${b.stddev_first_cast_s.toFixed(0)}s).` });
+          message: `${cdName} opener at ${fmtClock(firstS)} - ${(firstS - cdBench.avg_first_cast_s).toFixed(0)}s later than top parsers (${fmtClock(cdBench.avg_first_cast_s)} avg ±${cdBench.stddev_first_cast_s.toFixed(0)}s).` });
       }
 
       let blAligned = false;
@@ -83,12 +89,12 @@ export function analyzeCooldowns(
           cdIssues.push({ severity: 'critical', category: 'cooldown_alignment', cd_name: cdName,
             timestamp_ms: rel(cdCasts[0].timestamp),
             message: `${cdName} missed Bloodlust (BL at ${fmtClock(blTimeS)}, first cast at ${fmtClock(rel(cdCasts[0].timestamp) / 1000)}).` });
-        } else if (blAligned && b?.avg_bl_offset_s != null && b.stddev_bl_offset_s != null) {
+        } else if (blAligned && cdBench?.avg_bl_offset_s != null && cdBench.stddev_bl_offset_s != null) {
           const offsets = blWin.map((c) => rel(c.timestamp) / 1000 - blTimeS!);
           const po = closestToZero(offsets);
-          const sd = b.stddev_bl_offset_s;
-          if (isOutlierBeyond(po, b.avg_bl_offset_s, sd)) {
-            const dir = po > b.avg_bl_offset_s ? 'late' : 'early';
+          const sd = cdBench.stddev_bl_offset_s;
+          if (isOutlierBeyond(po, cdBench.avg_bl_offset_s, sd)) {
+            const dir = po > cdBench.avg_bl_offset_s ? 'late' : 'early';
             cdIssues.push({ severity: 'warning', category: 'cooldown_alignment', cd_name: cdName,
               timestamp_ms: rel(blWin[0].timestamp),
               message: `${cdName} used ${dir} in the BL window vs top parsers.` });
@@ -98,17 +104,17 @@ export function analyzeCooldowns(
 
       for (let i = 1; i < cdCasts.length; i++) {
         const gap = (rel(cdCasts[i].timestamp) - rel(cdCasts[i - 1].timestamp)) / 1000;
-        if (b?.avg_gap_s != null && b.stddev_gap_s != null) {
-          const sdG = b.stddev_gap_s;
-          if (isOutlierAbove(gap, b.avg_gap_s, sdG)) cdIssues.push({ severity: 'warning', category: 'cooldown_delay', cd_name: cdName,
+        if (cdBench?.avg_gap_s != null && cdBench.stddev_gap_s != null) {
+          const sdG = cdBench.stddev_gap_s;
+          if (isOutlierAbove(gap, cdBench.avg_gap_s, sdG)) cdIssues.push({ severity: 'warning', category: 'cooldown_delay', cd_name: cdName,
             timestamp_ms: rel(cdCasts[i].timestamp),
-            message: `${cdName} at ${fmtClock(rel(cdCasts[i].timestamp) / 1000)}: ${gap.toFixed(0)}s gap vs top-parse avg ${b.avg_gap_s.toFixed(0)}s ±${sdG.toFixed(0)}s.` });
+            message: `${cdName} at ${fmtClock(rel(cdCasts[i].timestamp) / 1000)}: ${gap.toFixed(0)}s gap vs top-parse avg ${cdBench.avg_gap_s.toFixed(0)}s ±${sdG.toFixed(0)}s.` });
         }
       }
 
       if (cdCasts.length) {
         const times = cdCasts.map((c) => rel(c.timestamp) / 1000);
-        for (const [idxStr, target] of Object.entries(b.hold_targets)) {
+        for (const [idxStr, target] of Object.entries(cdBench.hold_targets)) {
           const k = parseInt(idxStr, 10) - 1;
           if (k >= times.length) continue;
           const playerT = times[k];

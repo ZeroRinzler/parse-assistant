@@ -72,13 +72,19 @@ export function analyzeDefensiveFindings(
 
   for (const def of playerDefensives) {
     const { name, cooldown: cooldownS, uses, cast_times_s } = def;
-    const b = perDefBench[name];
+    const defBench = perDefBench[name];
     const issues: AnalysisFinding[] = [];
     const suggestions: AnalysisFinding[] = [];
 
     if (def.talent_gated && uses === 0) continue;
 
-    const { expected, floor } = benchExpectedUses(fightDurS, b.uses_per_min);
+    if (!defBench) {
+      if (uses > 0) findings.push({ severity: 'success', category: 'cooldown_usage', cd_name: name,
+        message: `${name} - ${uses} use(s) (no bench data for this encounter).` });
+      continue;
+    }
+
+    const { expected, floor } = benchExpectedUses(fightDurS, defBench.uses_per_min);
 
     if (uses === 0 && expected >= 1) {
       issues.push({ severity: 'critical', category: 'lost_cooldown', cd_name: name, timestamp_ms: undefined,
@@ -90,25 +96,25 @@ export function analyzeDefensiveFindings(
 
     if (cast_times_s?.length) {
       const firstS = cast_times_s[0];
-      if (isOutlierAbove(firstS, b.avg_first_cast_s, b.stddev_first_cast_s)) {
+      if (isOutlierAbove(firstS, defBench.avg_first_cast_s, defBench.stddev_first_cast_s)) {
         issues.push({ severity: 'warning', category: 'cooldown_delay', cd_name: name,
           timestamp_ms: Math.round(firstS * 1000),
-          message: `${name} first use at ${fmtClock(firstS)} - ${(firstS - b.avg_first_cast_s).toFixed(0)}s later than top parsers (${fmtClock(b.avg_first_cast_s)} avg).` });
+          message: `${name} first use at ${fmtClock(firstS)} - ${(firstS - defBench.avg_first_cast_s).toFixed(0)}s later than top parsers (${fmtClock(defBench.avg_first_cast_s)} avg).` });
       }
 
       for (let i = 1; i < cast_times_s.length; i++) {
         const gap = cast_times_s[i] - cast_times_s[i - 1];
-        if (b?.avg_gap_s != null && b.stddev_gap_s != null) {
-          const sdG = b.stddev_gap_s;
-          if (isOutlierAbove(gap, b.avg_gap_s, sdG)) {
+        if (defBench?.avg_gap_s != null && defBench.stddev_gap_s != null) {
+          const sdG = defBench.stddev_gap_s;
+          if (isOutlierAbove(gap, defBench.avg_gap_s, sdG)) {
             issues.push({ severity: 'warning', category: 'cooldown_delay', cd_name: name,
               timestamp_ms: Math.round(cast_times_s[i] * 1000),
-              message: `${name} at ${fmtClock(cast_times_s[i])}: ${gap.toFixed(0)}s gap vs top-parse avg ${b.avg_gap_s.toFixed(0)}s ±${sdG.toFixed(0)}s.` });
+              message: `${name} at ${fmtClock(cast_times_s[i])}: ${gap.toFixed(0)}s gap vs top-parse avg ${defBench.avg_gap_s.toFixed(0)}s ±${sdG.toFixed(0)}s.` });
           }
         }
       }
 
-      for (const [idxStr, target] of Object.entries(b.hold_targets)) {
+      for (const [idxStr, target] of Object.entries(defBench.hold_targets)) {
         const k = parseInt(idxStr, 10) - 1;
         if (k >= cast_times_s.length) continue;
         const playerT = cast_times_s[k];
