@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { AnalysisResultComponent } from './analysis-result';
 import { AnalysisResult, AnalysisFinding } from '../../../core/models/analysis.models';
-import { FindingEntry } from '../../../shared/components/finding-list/finding-list';
+import { FindingEntry } from '../../../shared/components/finding-table/finding-table';
 import { mountVm } from '../../../../testing/component-harness';
 
 function result(findings: AnalysisFinding[], cdSpellIds: Record<string, number> = {}): AnalysisResult {

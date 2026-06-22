@@ -1,11 +1,14 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, OnChanges } from '@angular/core';
-import { MatCardModule } from '@angular/material/card';
-import { MatIconModule } from '@angular/material/icon';
 import { AnalysisResult as IAnalysisResult, AnalysisFinding } from '../../../core/models/analysis.models';
 import { EncounterGearStats } from '../../../core/models/encounter.models';
 import { IconCacheService } from '../../../core/services/icon-cache';
-import { FindingEntry, FindingListComponent } from '../../../shared/components/finding-list/finding-list';
-import { CalloutComponent } from '../../../shared/components/callout/callout';
+import {
+  FindingEntry,
+  FindingRow,
+  FindingTableComponent,
+  onPlanFromEntries,
+  rowsFromEntries,
+} from '../../../shared/components/finding-table/finding-table';
 import { BurstWindowsComponent } from '../burst-windows/burst-windows';
 import { DefensivesSectionComponent } from '../defensives-section/defensives-section';
 import { DamageTakenComponent } from '../damage-taken/damage-taken';
@@ -25,7 +28,7 @@ const CAT_LABEL: Record<string, string> = {
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-analysis-result',
   imports: [
-    MatCardModule, MatIconModule, FindingListComponent, CalloutComponent,
+    FindingTableComponent,
     BurstWindowsComponent, DefensivesSectionComponent, DamageTakenComponent, GearSectionComponent,
   ],
   templateUrl: './analysis-result.html',
@@ -63,7 +66,7 @@ export class AnalysisResultComponent implements OnChanges {
     return { byCD, ruleFindings };
   });
 
-  protected readonly cdEntries = computed<FindingEntry[]>(() =>
+  private readonly cdEntries = computed<FindingEntry[]>(() =>
     Object.entries(this.cdBuckets().byCD).map(([name, bucket]) => {
       const hasCritical = bucket.issues.some(f => f.severity === 'critical');
       const hasIssue = bucket.issues.length > 0 || bucket.holds.length > 0;
@@ -80,6 +83,21 @@ export class AnalysisResultComponent implements OnChanges {
       };
     })
   );
+
+  /** Rotation-rule findings as flat table rows. */
+  protected readonly ruleRows = computed<FindingRow[]>(() =>
+    this.cdBuckets().ruleFindings.map(f => ({
+      severity: f.severity === 'critical' ? 'critical' : 'warning',
+      what: f.label,
+      measured: f.measured!,
+      fix: f.details?.remedy,
+    }))
+  );
+
+  /** Offensive cooldowns with issues, one row per finding. */
+  protected readonly offensiveRows = computed<FindingRow[]>(() => rowsFromEntries(this.cdEntries(), CAT_LABEL));
+  /** Offensive cooldowns used on plan, shown as success chips. */
+  protected readonly offensiveOnPlan = computed(() => onPlanFromEntries(this.cdEntries()));
 
   ngOnChanges(): void {
     const d = this.data();

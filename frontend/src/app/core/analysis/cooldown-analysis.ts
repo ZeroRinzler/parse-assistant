@@ -69,16 +69,22 @@ export function analyzeCooldowns(
 
       if (actual === 0 && expected >= 1) {
         cdIssues.push({ severity: 'critical', category: 'lost_cooldown', cd_name: cdName, timestamp_ms: undefined,
-          message: `${cdName} was never used. Top parsers average ~${expected} cast(s) on a ${fmtClock(fightDurS)} fight.` });
+          measured: { value: `0 / ${expected}`, unit: 'cast(s)' },
+          message: `${cdName} was never used. Top parsers average ~${expected} cast(s) on a ${fmtClock(fightDurS)} fight.`,
+          details: { remedy: `Use ${cdName} - top parsers average ~${expected} cast(s) on a fight this length.` } });
       } else if (actual > 0 && actual < floor) {
         cdIssues.push({ severity: 'critical', category: 'lost_cooldown', cd_name: cdName, timestamp_ms: undefined,
-          message: `${cdName} - ${actual} casts; top parsers average ~${expected} on a fight this length. Lost ${floor - actual} use(s).` });
+          measured: { value: `${actual} / ${expected}`, unit: 'cast(s)' },
+          message: `${cdName} - ${actual} casts; top parsers average ~${expected} on a fight this length. Lost ${floor - actual} use(s).`,
+          details: { remedy: `Fit ${floor - actual} more use(s) of ${cdName} by pressing it sooner after each reset.` } });
       }
       if (cdCasts.length) {
         const firstS = rel(cdCasts[0].timestamp) / 1000;
         if (isOutlierAbove(firstS, cdBench.avg_first_cast_s, cdBench.stddev_first_cast_s)) cdIssues.push({ severity: 'warning', category: 'cooldown_delay', cd_name: cdName,
           timestamp_ms: rel(cdCasts[0].timestamp),
-          message: `${cdName} opener at ${fmtClock(firstS)} - ${(firstS - cdBench.avg_first_cast_s).toFixed(0)}s later than top parsers (${fmtClock(cdBench.avg_first_cast_s)} avg ±${cdBench.stddev_first_cast_s.toFixed(0)}s).` });
+          measured: { value: `+${(firstS - cdBench.avg_first_cast_s).toFixed(0)}s`, unit: `top ${fmtClock(cdBench.avg_first_cast_s)}` },
+          message: `${cdName} opener at ${fmtClock(firstS)} - ${(firstS - cdBench.avg_first_cast_s).toFixed(0)}s later than top parsers (${fmtClock(cdBench.avg_first_cast_s)} avg ±${cdBench.stddev_first_cast_s.toFixed(0)}s).`,
+          details: { remedy: `Use ${cdName} earlier in the opener.` } });
       }
 
       let blAligned = false;
@@ -88,7 +94,9 @@ export function analyzeCooldowns(
         if (!blAligned && wantsBL) {
           cdIssues.push({ severity: 'critical', category: 'cooldown_alignment', cd_name: cdName,
             timestamp_ms: rel(cdCasts[0].timestamp),
-            message: `${cdName} missed Bloodlust (BL at ${fmtClock(blTimeS)}, first cast at ${fmtClock(rel(cdCasts[0].timestamp) / 1000)}).` });
+            measured: { value: 'missed', unit: 'BL' },
+            message: `${cdName} missed Bloodlust (BL at ${fmtClock(blTimeS)}, first cast at ${fmtClock(rel(cdCasts[0].timestamp) / 1000)}).`,
+            details: { remedy: `Align ${cdName} with Bloodlust.` } });
         } else if (blAligned && cdBench?.avg_bl_offset_s != null && cdBench.stddev_bl_offset_s != null) {
           const offsets = blWin.map((c) => rel(c.timestamp) / 1000 - blTimeS!);
           const po = closestToZero(offsets);
@@ -97,7 +105,9 @@ export function analyzeCooldowns(
             const dir = po > cdBench.avg_bl_offset_s ? 'late' : 'early';
             cdIssues.push({ severity: 'warning', category: 'cooldown_alignment', cd_name: cdName,
               timestamp_ms: rel(blWin[0].timestamp),
-              message: `${cdName} used ${dir} in the BL window vs top parsers.` });
+              measured: { value: dir, unit: 'in BL' },
+              message: `${cdName} used ${dir} in the BL window vs top parsers.`,
+              details: { remedy: `Adjust ${cdName} timing within the Bloodlust window to match top parsers.` } });
           }
         }
       }
@@ -108,7 +118,9 @@ export function analyzeCooldowns(
           const sdG = cdBench.stddev_gap_s;
           if (isOutlierAbove(gap, cdBench.avg_gap_s, sdG)) cdIssues.push({ severity: 'warning', category: 'cooldown_delay', cd_name: cdName,
             timestamp_ms: rel(cdCasts[i].timestamp),
-            message: `${cdName} at ${fmtClock(rel(cdCasts[i].timestamp) / 1000)}: ${gap.toFixed(0)}s gap vs top-parse avg ${cdBench.avg_gap_s.toFixed(0)}s ±${sdG.toFixed(0)}s.` });
+            measured: { value: `${gap.toFixed(0)}s`, unit: `avg ${cdBench.avg_gap_s.toFixed(0)}s` },
+            message: `${cdName} at ${fmtClock(rel(cdCasts[i].timestamp) / 1000)}: ${gap.toFixed(0)}s gap vs top-parse avg ${cdBench.avg_gap_s.toFixed(0)}s ±${sdG.toFixed(0)}s.`,
+            details: { remedy: `Press ${cdName} sooner - top parsers average ${cdBench.avg_gap_s.toFixed(0)}s between uses.` } });
         }
       }
 
@@ -121,6 +133,7 @@ export function analyzeCooldowns(
           const tol = target.stddev_s;
           if (playerT < target.target_s - tol) cdSugg.push({ severity: 'info', category: 'hold_suggestion',
             timestamp_ms: rel(cdCasts[k].timestamp),
+            measured: { value: fmtClock(playerT), unit: `top ~${fmtClock(target.target_s)}` },
             message: `${cdName} cast ${idxStr} at ${fmtClock(playerT)} - ${target.count}/${target.total_samples} top parsers hold until ~${fmtClock(target.target_s)}.`,
             details: { remedy: `Consider holding ${cdName} until ~${fmtClock(target.target_s)}.`, cd_name: cdName } });
         }
@@ -148,6 +161,7 @@ export function analyzeCooldowns(
       const effPct = castEfficiencyPct(totalDtS, fightDurS);
       const severity: Severity = isCriticallyBelow(effPct, topE, topSD) ? 'critical' : 'warning';
       findings.push({ severity, category: 'cast_efficiency',
+        measured: { value: `${effPct.toFixed(1)}%`, unit: `top ${topE.toFixed(0)}%` },
         message: `Cast efficiency: ${effPct.toFixed(1)}% (Top average ${topE.toFixed(0)}%) - ${totalDtS.toFixed(1)}s in gaps.` });
     }
   }

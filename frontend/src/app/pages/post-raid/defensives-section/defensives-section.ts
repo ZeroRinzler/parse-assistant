@@ -2,7 +2,13 @@ import { ChangeDetectionStrategy, Component, computed, inject, input } from '@an
 import { AnalysisFinding, PlayerDefensive, BurstWindow, PlayerBurstWindow } from '../../../core/models/analysis.models';
 import { IconCacheService } from '../../../core/services/icon-cache';
 import { PositioningPanelService } from '../../../core/services/positioning-panel';
-import { FindingEntry, FindingListComponent } from '../../../shared/components/finding-list/finding-list';
+import {
+  FindingEntry,
+  FindingRow,
+  FindingTableComponent,
+  onPlanFromEntries,
+  rowsFromEntries,
+} from '../../../shared/components/finding-table/finding-table';
 import {
   ComparisonWindow,
   WindowComparisonComponent,
@@ -22,7 +28,7 @@ interface CdBucket { issues: AnalysisFinding[]; holds: AnalysisFinding[]; succes
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-defensives-section',
-  imports: [FindingListComponent, WindowComparisonComponent],
+  imports: [FindingTableComponent, WindowComparisonComponent],
   templateUrl: './defensives-section.html',
 })
 export class DefensivesSectionComponent {
@@ -45,7 +51,12 @@ export class DefensivesSectionComponent {
     this.panel.openAt(dw.time_s, ref, dw.defensive_name ?? 'Defensive', spellIds);
   }
 
-  protected readonly defEntries = computed<FindingEntry[]>(() => {
+  /** Defensive cooldowns with issues, one flat table row per finding. */
+  protected readonly defRows = computed<FindingRow[]>(() => rowsFromEntries(this.defEntries(), CAT_LABEL));
+  /** Defensives used on plan, shown as success chips. */
+  protected readonly defOnPlan = computed(() => onPlanFromEntries(this.defEntries()));
+
+  private readonly defEntries = computed<FindingEntry[]>(() => {
     const findings = this.defensiveFindings();
     const defensives = this.defensives();
     const byName: Record<string, CdBucket> = {};

@@ -5,6 +5,15 @@ export interface AnalysisFinding {
   category: string;
   cd_name?: string;
   message: string;
+  /**
+   * The prominent metric for this finding, rendered as value-over-unit in the
+   * "Measured" column of the finding table (e.g. { value: '1 / 15', unit:
+   * 'cast(s)' }). Populated by the analysis engine so the UI never has to parse
+   * the templated `message`. Findings without a meaningful metric omit it.
+   */
+  measured?: { value: string; unit?: string };
+  /** Short display label for the "What" column (rule violations only). */
+  label?: string;
   timestamp_ms?: number;
   details?: {
     cd_name?: string;

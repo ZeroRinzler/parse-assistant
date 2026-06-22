@@ -1,9 +1,11 @@
-<p class="mt-6 text-xl font-medium">Defensives</p>
-<p class="text-sm text-[var(--muted)]">How your defensive cooldowns compare to top parses - expand a row for details.</p>
-
 <!-- Per-defensive findings -->
-@if (defEntries().length > 0) {
-  <wl-finding-list [entries]="defEntries()"></wl-finding-list>
+@if (defRows().length || defOnPlan().length) {
+  <wl-finding-table class="mt-6 block"
+    title="Defensives"
+    subtitle="How your defensive cooldowns compare to top parses."
+    [rows]="defRows()"
+    [onPlan]="defOnPlan()">
+  </wl-finding-table>
 }
 
 <!-- Defensive windows: when top parsers use each defensive and how much damage they absorbed -->

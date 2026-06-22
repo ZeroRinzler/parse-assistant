@@ -1,33 +1,19 @@
-<!-- Rule violations -->
-@if (cdBuckets().ruleFindings.length) {
-  <p class="text-xl font-medium">Rotation Rules</p>
-  <p class="text-sm text-[var(--muted)]">Spec rotation rules you broke during the fight.</p>
-  @for (f of cdBuckets().ruleFindings; track f.message) {
-    <mat-card class="mt-2">
-      <mat-card-header class="items-center">
-        <mat-icon
-          [class.badge-critical]="f.severity === 'critical'"
-          [class.badge-warning]="f.severity !== 'critical'">
-          {{ f.severity === 'critical' ? 'error' : 'warning_amber' }}
-        </mat-icon>
-        <span class="font-medium">{{ f.message }}</span>
-      </mat-card-header>
-      @if (f.details?.remedy) {
-        <mat-card-content>
-          <wl-callout>{{ f.details!.remedy }}</wl-callout>
-        </mat-card-content>
-      }
-    </mat-card>
-  }
+<!-- Rotation rules -->
+@if (ruleRows().length) {
+  <wl-finding-table class="mt-2 block"
+    title="Rotation Rules"
+    subtitle="Spec rotation rules you broke during the fight."
+    [rows]="ruleRows()">
+  </wl-finding-table>
 }
 
 <!-- Offensive cooldowns -->
-<p class="mt-6 text-xl font-medium">Offensives</p>
-<p class="text-sm text-[var(--muted)]">How your offensive cooldowns compare to top parses - expand a row for details.</p>
-<wl-finding-list [entries]="cdEntries()"></wl-finding-list>
-@if (cdEntries().length === 0 && cdBuckets().ruleFindings.length === 0) {
-  <div class="py-2.5 text-sm text-[var(--success)]">✓ No significant cooldown issues detected.</div>
-}
+<wl-finding-table class="mt-6 block"
+  title="Offensives"
+  subtitle="How your offensive cooldowns compare to top parses."
+  [rows]="offensiveRows()"
+  [onPlan]="offensiveOnPlan()">
+</wl-finding-table>
 
 <!-- Burst windows -->
 @if (data().burst_windows?.length) {

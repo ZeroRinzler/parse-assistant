@@ -88,10 +88,14 @@ export function analyzeDefensiveFindings(
 
     if (uses === 0 && expected >= 1) {
       issues.push({ severity: 'critical', category: 'lost_cooldown', cd_name: name, timestamp_ms: undefined,
-        message: `${name} was never used. Top parsers average ~${expected} use(s) on a ${fmtClock(fightDurS)} fight.` });
+        measured: { value: `0 / ${expected}`, unit: 'use(s)' },
+        message: `${name} was never used. Top parsers average ~${expected} use(s) on a ${fmtClock(fightDurS)} fight.`,
+        details: { remedy: `Deploy ${name} - top parsers average ~${expected} use(s) on a fight this length.` } });
     } else if (uses > 0 && uses < floor) {
       issues.push({ severity: 'critical', category: 'lost_cooldown', cd_name: name, timestamp_ms: undefined,
-        message: `${name} - ${uses} uses; top parsers average ~${expected} on a fight this length. Lost ${floor - uses} use(s).` });
+        measured: { value: `${uses} / ${expected}`, unit: 'use(s)' },
+        message: `${name} - ${uses} uses; top parsers average ~${expected} on a fight this length. Lost ${floor - uses} use(s).`,
+        details: { remedy: `Fit ${floor - uses} more use(s) of ${name} by using it more aggressively.` } });
     }
 
     if (cast_times_s?.length) {
@@ -99,7 +103,9 @@ export function analyzeDefensiveFindings(
       if (isOutlierAbove(firstS, defBench.avg_first_cast_s, defBench.stddev_first_cast_s)) {
         issues.push({ severity: 'warning', category: 'cooldown_delay', cd_name: name,
           timestamp_ms: Math.round(firstS * 1000),
-          message: `${name} first use at ${fmtClock(firstS)} - ${(firstS - defBench.avg_first_cast_s).toFixed(0)}s later than top parsers (${fmtClock(defBench.avg_first_cast_s)} avg).` });
+          measured: { value: `+${(firstS - defBench.avg_first_cast_s).toFixed(0)}s`, unit: `top ${fmtClock(defBench.avg_first_cast_s)}` },
+          message: `${name} first use at ${fmtClock(firstS)} - ${(firstS - defBench.avg_first_cast_s).toFixed(0)}s later than top parsers (${fmtClock(defBench.avg_first_cast_s)} avg).`,
+          details: { remedy: `Deploy ${name} earlier.` } });
       }
 
       for (let i = 1; i < cast_times_s.length; i++) {
@@ -109,7 +115,9 @@ export function analyzeDefensiveFindings(
           if (isOutlierAbove(gap, defBench.avg_gap_s, sdG)) {
             issues.push({ severity: 'warning', category: 'cooldown_delay', cd_name: name,
               timestamp_ms: Math.round(cast_times_s[i] * 1000),
-              message: `${name} at ${fmtClock(cast_times_s[i])}: ${gap.toFixed(0)}s gap vs top-parse avg ${defBench.avg_gap_s.toFixed(0)}s ±${sdG.toFixed(0)}s.` });
+              measured: { value: `${gap.toFixed(0)}s`, unit: `avg ${defBench.avg_gap_s.toFixed(0)}s` },
+              message: `${name} at ${fmtClock(cast_times_s[i])}: ${gap.toFixed(0)}s gap vs top-parse avg ${defBench.avg_gap_s.toFixed(0)}s ±${sdG.toFixed(0)}s.`,
+              details: { remedy: `Use ${name} sooner after it resets.` } });
           }
         }
       }
@@ -122,6 +130,7 @@ export function analyzeDefensiveFindings(
         if (playerT < target.target_s - tol) {
           suggestions.push({ severity: 'info', category: 'hold_suggestion',
             timestamp_ms: Math.round(playerT * 1000),
+            measured: { value: fmtClock(playerT), unit: `top ~${fmtClock(target.target_s)}` },
             message: `${name} use ${idxStr} at ${fmtClock(playerT)} - ${target.count}/${target.total_samples} top parsers hold until ~${fmtClock(target.target_s)}.`,
             details: { remedy: `Consider holding ${name} until ~${fmtClock(target.target_s)}.`, cd_name: name } });
         }

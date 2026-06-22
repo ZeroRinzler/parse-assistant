@@ -53,7 +53,7 @@ body {
   border-radius: 10px !important;
 }
 
-// Compact "row" cards (finding-list, window-comparison, rotation-rule findings):
+// Compact "row" cards (window-comparison, burst-window headers):
 // status glyph · label · spell · chevron. Material's card-header padding is
 // asymmetric (16px top, 0 bottom) and doesn't reliably center its items, which
 // left header-only rows top-heavy and the spell/label out of line with the
@@ -381,3 +381,4 @@ body {
 .badge-warning  { color: var(--warning); }
 .badge-success  { color: var(--success); }
 .badge-info     { color: var(--info); }
+
