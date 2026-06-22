@@ -28,6 +28,8 @@ export interface AbilityBreakdown {
   max_damage: number;
   damage?: number;
   count: number;
+  /** Top-parse average cast count per window. Burst windows only; absent on defensives. */
+  avg_casts?: number;
 }
 
 export interface BurstWindow {
@@ -50,7 +52,7 @@ export interface BurstWindow {
 export interface PlayerBurstWindow {
   time_s?: number;
   window_damage: number;
-  ability_breakdown?: Array<{ spell_id: number; damage: number }>;
+  ability_breakdown?: Array<{ spell_id: number; damage: number; casts?: number }>;
 }
 
 export interface DefensiveWindow {

@@ -68,7 +68,7 @@ export function computeAnalysis(input: AnalysisInput): AnalysisResult {
   }
 
   if (result.burst_windows?.length) {
-    result.player_burst_windows = findPlayerBurstWindows(result.burst_windows, dmgEvents, fStart);
+    result.player_burst_windows = findPlayerBurstWindows(result.burst_windows, dmgEvents, castEvents, fStart);
   }
   result.player_defensives = analyzeDefensives(defensives, castEvents, buffEvents, dtEvents, fStart, fEnd);
 

@@ -14,7 +14,7 @@ describe('findPlayerBurstWindows', () => {
       .damage(EVISCERATE, '0:25', 500) // inside
       .build();
 
-    const [pw] = findPlayerBurstWindows([window], dmg, FIGHT_START);
+    const [pw] = findPlayerBurstWindows([window], dmg, [], FIGHT_START);
 
     expect(pw.window_damage).toBe(1700);
   });
@@ -22,7 +22,7 @@ describe('findPlayerBurstWindows', () => {
   it('excludes an event at exactly time_s + window_length_s (window is half-open)', () => {
     const dmg = Events.start().damage(EVISCERATE, '0:30', 9999).build(); // 30s == window end
 
-    const [pw] = findPlayerBurstWindows([window], dmg, FIGHT_START);
+    const [pw] = findPlayerBurstWindows([window], dmg, [], FIGHT_START);
 
     expect(pw.window_damage).toBe(0);
   });
@@ -34,7 +34,7 @@ describe('findPlayerBurstWindows', () => {
       .damage(EVISCERATE, '0:16', 200)
       .build();
 
-    const [pw] = findPlayerBurstWindows([window], dmg, FIGHT_START);
+    const [pw] = findPlayerBurstWindows([window], dmg, [], FIGHT_START);
 
     expect(pw.ability_breakdown).toEqual([
       { spell_id: BLACK_POWDER, damage: 800 },

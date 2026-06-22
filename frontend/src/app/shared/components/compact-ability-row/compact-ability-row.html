@@ -1,0 +1,34 @@
+<!--
+  Sorted-impact table row. Column widths (flex-1 / w-[7.5rem] / w-[9rem] / w-[9rem]) mirror the
+  header row in window-comparison.html so the two stay aligned.
+-->
+<div class="flex items-center gap-3 px-4 py-1.5 min-w-0">
+  <div class="flex-1 min-w-0 overflow-hidden">
+    @if (row().spellId) {
+      <wl-game-icon [id]="row().spellId!"></wl-game-icon>
+    } @else {
+      <span class="truncate text-sm">{{ row().label }}</span>
+    }
+  </div>
+
+  @if (showCasts() && !hidePlayer()) {
+    <span class="w-[7.5rem] shrink-0 justify-self-center text-center tabular-nums text-xs rounded px-2 py-0.5 border border-current"
+          [class]="castsClass()">
+      {{ row().playerCasts ?? 0 }}<span class="text-[var(--muted)]"> / {{ row().topCasts ?? '-' }}</span>
+    </span>
+  }
+
+  <span class="w-[9rem] shrink-0 text-right tabular-nums text-xs text-[var(--muted)]">
+    {{ row().topAvg | formatDamage }}
+  </span>
+
+  @if (!hidePlayer()) {
+    <span class="w-[9rem] shrink-0 text-right tabular-nums text-xs font-semibold" [class]="gapClass()">
+      @if (row().playerPct == null) {
+        missed
+      } @else {
+        {{ gapSign() }}{{ gapMagnitude() | formatDamage }}
+      }
+    </span>
+  }
+</div>

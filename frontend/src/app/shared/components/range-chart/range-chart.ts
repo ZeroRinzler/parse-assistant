@@ -21,6 +21,9 @@ export interface RangeRow {
   topAvg: number | null;
   topMin: number | null;
   topMax: number | null;
+  // Cast counts for the sorted-impact table (burst windows only). Null when unavailable.
+  playerCasts?: number | null;
+  topCasts?: number | null;
 }
 
 // Colors (kept from the previous ApexCharts implementation)

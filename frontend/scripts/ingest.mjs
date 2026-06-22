@@ -463,11 +463,16 @@ async function enrichRanking(wcl, ranking, encounterId) {
 
 // ── Burst window analysis ─────────────────────────────────────────────────────
 
-function findBurstWindows(damageEvents, fightStartMs, cdSummary, specCds, minPctThreshold = 0.03) {
+function findBurstWindows(damageEvents, fightStartMs, cdSummary, specCds, minPctThreshold = 0.03, castEvents = []) {
   const hits = damageEvents
     .filter(e => e.type === 'damage' && (e.amount || 0) + (e.absorbed || 0) > 0)
     .map(e => [e.timestamp, (e.amount || 0) + (e.absorbed || 0), e.targetID || 0, e.abilityGameID || 0])
     .sort((a, b) => a[0] - b[0]);
+
+  // Cast timestamps per ability - used to count player casts inside each window.
+  const casts = castEvents
+    .filter(e => e.type === 'cast' && e.abilityGameID)
+    .map(e => [e.timestamp, e.abilityGameID]);
 
   if (!hits.length) return [];
   const total = hits.reduce((s, h) => s + h[1], 0);
@@ -511,9 +516,14 @@ function findBurstWindows(damageEvents, fightStartMs, cdSummary, specCds, minPct
     for (const [, dmg, , aid] of windowHits) {
       if (aid) abilityDmg.set(aid, (abilityDmg.get(aid) || 0) + dmg);
     }
+    // Count casts per ability inside the window (boundary matches damage hits: [start, end]).
+    const abilityCasts = new Map();
+    for (const [ts, aid] of casts) {
+      if (ts >= startMs && ts <= endMs) abilityCasts.set(aid, (abilityCasts.get(aid) || 0) + 1);
+    }
     const topAbilities = [...abilityDmg.entries()]
       .sort((a, b) => b[1] - a[1]).slice(0, 6)
-      .map(([sid, d]) => ({ spell_id: sid, damage: d, pct: Math.round(d / windowDmg * 1000) / 1000 }));
+      .map(([sid, d]) => ({ spell_id: sid, damage: d, pct: Math.round(d / windowDmg * 1000) / 1000, casts: abilityCasts.get(sid) || 0 }));
 
     result.push({
       time_s: Math.round(win.startS * 10) / 10,
@@ -898,7 +908,7 @@ async function analyzeParse(wcl, spec, reportCode, fightId, playerName, combatan
   }
 
   // Burst windows - sized by CD durations, active_cds set inside
-  const burstWindows = findBurstWindows(damageEvents, start, cdSummary, specCds);
+  const burstWindows = findBurstWindows(damageEvents, start, cdSummary, specCds, 0.03, castEvents);
 
   // Gear data from combatant info
   // combatant_info already carries parsed { talent_key, trinkets, enchants } from fetchTopRankings.
@@ -1098,21 +1108,32 @@ function clusterBaseStats(cl, totalSamples) {
   const sorted = [...dmgs].sort((a, b) => a - b);
 
   const abilityTotals = new Map();
+  const abilityCasts = new Map();
   for (const c of cl) {
     for (const ab of (c.ability_breakdown || [])) {
       if (!abilityTotals.has(ab.spell_id)) abilityTotals.set(ab.spell_id, []);
       abilityTotals.get(ab.spell_id).push(ab.damage || 0);
+      // Cast counts only exist on burst windows; defensive windows omit them.
+      if (ab.casts != null) {
+        if (!abilityCasts.has(ab.spell_id)) abilityCasts.set(ab.spell_id, []);
+        abilityCasts.get(ab.spell_id).push(ab.casts);
+      }
     }
   }
   const ability_breakdown = [...abilityTotals.entries()]
     .filter(([, ds]) => ds.length >= cl.length * 0.5)
-    .map(([sid, ds]) => ({
-      spell_id: sid,
-      avg_damage: Math.round(mean(ds)),
-      min_damage: Math.round(Math.min(...ds)),
-      max_damage: Math.round(Math.max(...ds)),
-      count: ds.length,
-    }))
+    .map(([sid, ds]) => {
+      const castsArr = abilityCasts.get(sid);
+      const entry = {
+        spell_id: sid,
+        avg_damage: Math.round(mean(ds)),
+        min_damage: Math.round(Math.min(...ds)),
+        max_damage: Math.round(Math.max(...ds)),
+        count: ds.length,
+      };
+      if (castsArr && castsArr.length) entry.avg_casts = Math.round(mean(castsArr));
+      return entry;
+    })
     .sort((a, b) => b.avg_damage - a.avg_damage)
     .slice(0, 6);
 

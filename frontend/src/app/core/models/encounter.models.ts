@@ -43,7 +43,7 @@ export interface BurstWindowBench {
   common_cds: string[];
   avg_targets: number;
   window_length_s: number;
-  ability_breakdown: Array<{ spell_id: number; avg_damage: number; min_damage: number; max_damage: number; count: number }>;
+  ability_breakdown: Array<{ spell_id: number; avg_damage: number; min_damage: number; max_damage: number; count: number; avg_casts?: number }>;
 }
 
 export interface EncounterBench {

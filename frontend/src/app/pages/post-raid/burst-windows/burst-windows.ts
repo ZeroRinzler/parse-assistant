@@ -64,7 +64,7 @@ export class BurstWindowsComponent {
         sid ? spellIds.push(sid) : labels.push(name);
       }
 
-      const playerAbMap: Record<number, { damage: number }> = {};
+      const playerAbMap: Record<number, { damage: number; casts?: number }> = {};
       for (const a of playerBw?.ability_breakdown ?? []) playerAbMap[a.spell_id] = a;
 
       const detailRows = bw.ability_breakdown.map(ab => ({
@@ -74,6 +74,8 @@ export class BurstWindowsComponent {
         topAvg: ab.avg_damage,
         topMin: ab.min_damage,
         topMax: ab.max_damage,
+        playerCasts: playerAbMap[ab.spell_id]?.casts ?? null,
+        topCasts: ab.avg_casts ?? null,
       }));
 
       return {

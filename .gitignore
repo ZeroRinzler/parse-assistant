@@ -19,6 +19,7 @@ data/tmp/
 logs/
 
 static/angular/
+node_modules/
 
 # Editor / OS
 .idea/

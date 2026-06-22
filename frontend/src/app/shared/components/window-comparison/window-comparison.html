@@ -1,74 +1,113 @@
-@for (w of windows(); track $index; let i = $index) {
+<!-- Timeline track: segments float on a guide line, positioned proportionally along the fight. -->
+<mat-card class="px-4 pt-3 pb-3">
+  <div
+    class="relative mx-2 h-9"
+    role="listbox"
+    aria-label="Burst windows"
+    (keydown)="onKeydown($event)">
+    <!-- Track: rounded rail the segments sit on. -->
+    <div class="absolute left-0 right-0 top-0 h-9 rounded-lg bg-[var(--bg)] border border-[var(--border)]" aria-hidden="true"></div>
 
-  <mat-card class="mt-2">
-    <!-- Header: status glyph, time range, spell icons, detail toggle -->
-    <mat-card-header class="items-center">
-      <mat-icon
-        [class.badge-success]="w.status === 'good'"
-        [class.badge-warning]="w.status === 'warn'"
-        [class.badge-critical]="w.status === 'bad'">
-        {{ w.statusIcon }}
-      </mat-icon>
-      <span class="mr-auto tabular-nums">{{ w.timeStartS | formatDuration }} - {{ w.timeEndS | formatDuration }}</span>
+    @for (w of windows(); track $index; let i = $index) {
+      <div
+        class="absolute top-0 flex flex-col items-center -translate-x-1/2"
+        [style.left]="segmentLefts()[i]"
+        [style.z-index]="activeIndex() === i ? 2 : 1">
+        <button
+          type="button"
+          role="option"
+          class="flex items-center justify-center w-9 h-9 rounded"
+          [class]="segmentClasses()[i]"
+          [attr.aria-selected]="activeIndex() === i"
+          [attr.aria-label]="(w.timeStartS | formatDuration)"
+          (click)="select(i)">
+          <mat-icon class="text-[18px] h-[18px] w-[18px] leading-none">{{ w.statusIcon }}</mat-icon>
+        </button>
+      </div>
+    }
+  </div>
+
+  @if (timeTicks().length) {
+    <div class="flex justify-between tabular-nums text-[10px] text-[var(--muted)] mt-2">
+      @for (tick of timeTicks(); track $index) {
+        <span>{{ tick | formatDuration }}</span>
+      }
+    </div>
+  }
+</mat-card>
+
+<!-- Detail panel: driven by activeIndex(). -->
+@if (activeWindow(); as w) {
+  <div class="mt-2 rounded border border-[var(--border)]">
+
+    <!-- Header: status dot · window title · spell icons · value · delta -->
+    <div class="flex items-center gap-2 px-4 py-2.5 bg-[var(--surface)]">
+      <span class="w-2.5 h-2.5 rounded-full shrink-0" [class]="dotClass(w.status)"></span>
+      <span class="flex-1 text-sm font-medium">
+        Window {{ activeIndex() + 1 }} - {{ w.timeStartS | formatDuration }} to {{ w.timeEndS | formatDuration }}
+      </span>
       @for (sid of w.spellIds; track sid) {
-        <wl-game-icon class="mr-2" [id]="sid"></wl-game-icon>
+        <wl-game-icon [id]="sid"></wl-game-icon>
       }
       @for (lbl of w.labels; track lbl) {
-        <span class="mr-2 text-[var(--muted)]">{{ lbl }}</span>
+        <span class="text-sm text-[var(--muted)]">{{ lbl }}</span>
       }
       @if (showMap()) {
-        <button class="mr-1" mat-icon-button aria-label="Open positioning map" (click)="openMap.emit(i)">
+        <button mat-icon-button aria-label="Open positioning map" (click)="openMap.emit(activeIndex())">
           <mat-icon>my_location</mat-icon>
         </button>
       }
-      @if (w.detailRows.length) {
-        <button class="mr-2" mat-icon-button (click)="toggle(i)">
-          <mat-icon>{{ isOpen(i) ? 'expand_less' : 'expand_more' }}</mat-icon>
-        </button>
+      @if (!activeIsMuted()) {
+        <span class="tabular-nums text-xs ml-auto flex items-baseline gap-1">
+          <span class="text-[var(--muted)]">{{ w.overview.playerPct | formatDamage }}</span>
+          @if (overviewDeltaText()) {
+            <span class="text-[var(--muted)]">·</span>
+            <span [class]="overviewDeltaClass()">{{ overviewDeltaText() }}</span>
+          }
+        </span>
+      } @else {
+        <span class="text-xs text-[var(--muted)] ml-auto italic">not reached</span>
       }
-    </mat-card-header>
+    </div>
 
-    <mat-card-content>
-      <!-- Overview range chart: always visible -->
-      <div>
-        <wl-range-chart
-          [rows]="[w.overview]"
-          unit="raw"
-          [higherIsBetter]="higherIsBetter()"
-          [maxVal]="overviewMax()"
-          [showLegend]="true"
-          [showLabels]="false"
-          [rowHeight]="34">
-        </wl-range-chart>
+    <!-- Full-width overview bar: player fill + range band + avg tick. -->
+    <div class="px-4 py-2 border-t border-[var(--border)]">
+      <div class="relative h-5 rounded bg-[var(--bg)]" aria-hidden="true">
+        @if (overviewPlayerWidthPct() !== null) {
+          <div class="absolute inset-y-0 left-0 rounded opacity-[0.65]" [class]="overviewPlayerFillClass()" [style.width.%]="overviewPlayerWidthPct()"></div>
+        }
+        @if (overviewRangeLeftPct() !== null) {
+          <div class="absolute inset-y-0 rounded bg-[var(--info)]/30 border border-[var(--info)]" [style.left.%]="overviewRangeLeftPct()" [style.width.%]="overviewRangeWidthPct()"></div>
+        }
+        @if (overviewAvgLeftPct() !== null) {
+          <div class="absolute inset-y-0 w-[2px] bg-[var(--info)]" [style.left.%]="overviewAvgLeftPct()"></div>
+        }
       </div>
+    </div>
 
-      <!-- Detail: spell icon column beside the per-ability chart -->
-      @if (isOpen(i) && w.detailRows.length) {
-        <mat-divider></mat-divider>
-        <div class="flex items-start">
-          <div class="flex flex-col shrink-0">
-            @for (row of w.detailRows; track row.spellId) {
-              <div class="h-[52px] flex items-center">
-                @if (row.spellId) {
-                  <wl-game-icon [id]="row.spellId"></wl-game-icon>
-                }
-              </div>
-            }
-            <div class="h-7"></div>
-          </div>
-          <div class="flex-1 min-w-0">
-            <wl-range-chart
-              [rows]="w.detailRows"
-              unit="raw"
-              [higherIsBetter]="higherIsBetter()"
-              [maxVal]="detailMax(i)"
-              [showLabels]="false"
-              [showLegend]="false">
-            </wl-range-chart>
-          </div>
+    <!-- Per-ability breakdown: sorted-impact table (biggest gap first).
+         Column widths (flex-1 / w-[7.5rem] / w-[9rem] / w-[9rem]) mirror compact-ability-row.html. -->
+    @if (w.detailRows.length) {
+      <div class="border-t border-[var(--border)] pt-2 pb-2">
+        <div class="flex items-center gap-3 px-4 pb-1">
+          <span class="flex-1 text-[10px] text-[var(--muted)]">ability</span>
+          @if (showCasts() && !activeIsMuted()) {
+            <span class="w-[7.5rem] text-center text-[10px] text-[var(--muted)]">casts</span>
+          }
+          <span class="w-[9rem] text-right text-[10px] text-[var(--muted)]">top avg</span>
+          @if (!activeIsMuted()) {
+            <span class="w-[9rem] text-right text-[10px] text-[var(--muted)]">gap</span>
+          }
         </div>
-      }
-    </mat-card-content>
-  </mat-card>
-
+        @for (row of activeDetailRows(); track row.spellId) {
+          <wl-compact-ability-row
+            [row]="row"
+            [higherIsBetter]="higherIsBetter()"
+            [showCasts]="showCasts()"
+            [hidePlayer]="activeIsMuted()">
+          </wl-compact-ability-row>
+        }
+      </div>
+    }
+  </div>
 }
