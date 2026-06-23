@@ -13,7 +13,6 @@ import { WclEvent, WclAbility } from '../models/wcl.models';
 import { analyzeCooldowns } from './cooldown-analysis';
 import { analyzeDefensives, analyzeDefensiveFindings } from './defensive-analysis';
 import { findPlayerBurstWindows, computePlayerDefensiveWindows } from './burst-windows';
-import { analyzeDamageTaken } from './damage-taken';
 
 /** Everything the pure computation needs - all data already fetched on the main thread. */
 export interface AnalysisInput {
@@ -60,7 +59,6 @@ export function computeAnalysis(input: AnalysisInput): AnalysisResult {
   if (bench) {
     if (bench.burst_windows.length) result.burst_windows = bench.burst_windows;
     if (bench.top_defensives_summary.length) result.top_defensives_summary = bench.top_defensives_summary;
-    if (bench.top_dtk_comparison.length) result.top_dtk_comparison = bench.top_dtk_comparison;
     if (bench.defensive_windows.length) {
       result.top_defensive_windows = bench.defensive_windows;
       result.player_defensive_windows = computePlayerDefensiveWindows(bench.defensive_windows, dtEvents, fStart);
@@ -79,10 +77,6 @@ export function computeAnalysis(input: AnalysisInput): AnalysisResult {
       (fEnd - fStart) / 1000,
     );
   }
-
-  const dtk = analyzeDamageTaken(dtEvents, abilityMap);
-  result.player_dmg_taken_by_ability = dtk.top;
-  result.player_total_dmg_taken = dtk.total;
 
   return result;
 }

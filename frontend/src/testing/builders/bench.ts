@@ -93,6 +93,5 @@ export function bench(partial: {
     defensive_windows: partial.defensiveWindows ?? [],
     gear: { talent_builds: [], trinkets: {}, enchants: {} },
     top_defensives_summary: [],
-    top_dtk_comparison: [],
   };
 }

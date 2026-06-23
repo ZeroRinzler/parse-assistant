@@ -363,7 +363,7 @@ Non-obvious things that have caused bugs - read before touching gear extraction 
 2. Discard clusters in fewer than max(2, 35% of samples).
 3. Surface CDs and abilities in ≥50% of member parses.
 4. `window_length_s` = mean of member window lengths.
-5. Emits **absolute damage** stats (`dmg_avg`/`dmg_min`/`dmg_max`/`dmg_stddev`, per-ability `avg_damage`/`min_damage`/`max_damage`) - **not** percentages. The player vs top-parse comparison and the Burst/Defensive Windows cards compare raw damage so the numbers stay meaningful on progression (a wipe's short fight-total would otherwise inflate every window's share). `top_dtk_comparison` (the separate Damage Taken card) still uses percentages.
+5. Emits **absolute damage** stats (`dmg_avg`/`dmg_min`/`dmg_max`/`dmg_stddev`, per-ability `avg_damage`/`min_damage`/`max_damage`) - **not** percentages. The player vs top-parse comparison and the Burst/Defensive Windows cards compare raw damage so the numbers stay meaningful on progression (a wipe's short fight-total would otherwise inflate every window's share).
 
 ### Defensive window definition (`ingest.mjs` → `findDefensiveWindows` / `clusterDefensiveWindows`)
 

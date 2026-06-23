@@ -12,7 +12,6 @@ import {
 } from '../../../shared/components/finding-table/finding-table';
 import { BurstWindowsComponent } from '../burst-windows/burst-windows';
 import { DefensivesSectionComponent } from '../defensives-section/defensives-section';
-import { DamageTakenComponent } from '../damage-taken/damage-taken';
 import { GearSectionComponent } from '../gear-section/gear-section';
 
 @Component({
@@ -20,7 +19,7 @@ import { GearSectionComponent } from '../gear-section/gear-section';
   selector: 'wl-analysis-result',
   imports: [
     FindingTableComponent,
-    BurstWindowsComponent, DefensivesSectionComponent, DamageTakenComponent, GearSectionComponent,
+    BurstWindowsComponent, DefensivesSectionComponent, GearSectionComponent,
   ],
   templateUrl: './analysis-result.html',
 })

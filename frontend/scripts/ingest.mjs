@@ -48,7 +48,6 @@ const TOP_N = 10;
 const CLUSTER_MIN_FRAC = 0.35;      // min cluster size to surface a burst/defensive window
 const HOLD_TRIGGER_FRAC = 0.4;      // min parsers holding at a cast index to emit a hold target
 const MEMBER_MAJORITY_FRAC = 0.5;   // "more than half the member parses" (ability inclusion, majority hold)
-const DTK_MIN_FRAC = 0.4;           // min parsers for a damage-taken comparison row
 
 const BLOODLUST_SPELL_IDS = new Set([2825, 32182, 80353, 90355, 264667, 390386]);
 
@@ -1013,28 +1012,6 @@ async function analyzeParse(wcl, spec, reportCode, fightId, playerName, combatan
 
   const defensiveWindows = findDefensiveWindows(damageTakenEvents, start, buffWindows, specDefensives, npcById);
 
-  // Damage taken analysis
-  const abilityDmgTaken = new Map();
-  let totalDmgTaken = 0;
-
-  for (const e of damageTakenEvents) {
-    if (e.type !== 'damage') continue;
-    const amt = (e.amount || 0) + (e.absorbed || 0);
-    if (!amt) continue;
-    totalDmgTaken += amt;
-    const sid = e.abilityGameID;
-    if (sid) abilityDmgTaken.set(sid, (abilityDmgTaken.get(sid) || 0) + amt);
-  }
-
-  const topDmgAbilities = [...abilityDmgTaken.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 8)
-    .map(([sid, dmg]) => ({
-      spell_id: sid,
-      damage: dmg,
-      pct: totalDmgTaken ? Math.round(dmg / totalDmgTaken * 1000) / 1000 : 0,
-    }));
-
   const cooldownData = {
     player: player.name,
     spec,
@@ -1046,8 +1023,6 @@ async function analyzeParse(wcl, spec, reportCode, fightId, playerName, combatan
     burst_windows: burstWindows,
     defensives: defensiveSummary,
     defensive_windows: defensiveWindows,
-    dmg_taken_by_ability: topDmgAbilities,
-    total_dmg_taken: totalDmgTaken,
     talent_key: gearData.talent_key || '',
     trinkets: gearData.trinkets || [],
     enchants: gearData.enchants || [],
@@ -1560,33 +1535,6 @@ function syncEncounterFile(spec, encounterId) {
   }
   const defensiveWindowsClustered = allDw.length ? clusterDefensiveWindows(allDw, samples.length) : [];
 
-  // Damage taken comparison
-  const aggDtk = new Map();
-  for (const s of samples) {
-    for (const ab of ((s.cooldown_data || {}).dmg_taken_by_ability || [])) {
-      if (!aggDtk.has(ab.spell_id)) aggDtk.set(ab.spell_id, []);
-      aggDtk.get(ab.spell_id).push(ab.pct || 0);
-    }
-  }
-
-  const minParses = Math.max(2, samples.length * DTK_MIN_FRAC);
-  const topDtkComparison = [];
-  for (const [sid, pcts] of aggDtk.entries()) {
-    if (pcts.length < minParses) continue;
-    const avg = mean(pcts);
-    const sd = pcts.length > 1 ? round(stdev(pcts), 4) : 0;
-    topDtkComparison.push({
-      spell_id: sid,
-      avg_pct: round(avg, 4),
-      min_pct: round(Math.min(...pcts), 4),
-      max_pct: round(Math.max(...pcts), 4),
-      stddev_pct: sd,
-      sample_count: pcts.length,
-    });
-  }
-  topDtkComparison.sort((a, b) => b.avg_pct - a.avg_pct);
-  const topDtkComparisonTrimmed = topDtkComparison.slice(0, 12);
-
   const out = {
     spec, encounter_id: encounterId, encounter_name: encName,
     sample_count: samples.length,
@@ -1600,7 +1548,6 @@ function syncEncounterFile(spec, encounterId) {
     top_defensives_summary: topDefensivesSummary,
     per_defensive_benchmarks: perDefensiveBenchmarks,
     defensive_windows: defensiveWindowsClustered,
-    top_dtk_comparison: topDtkComparisonTrimmed,
   };
 
   const encPath = getEncounterPath(spec, encounterId);

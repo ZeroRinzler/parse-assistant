@@ -79,21 +79,6 @@ export interface TopDefensiveSummary {
   max_uses: number;
 }
 
-export interface DmgTakenAbility {
-  spell_id: number;
-  name: string;
-  damage: number;
-  pct: number;
-}
-
-export interface TopDtkComparison {
-  spell_id: number;
-  avg_pct: number;
-  min_pct: number;
-  max_pct: number;
-  stddev_pct: number;
-}
-
 export interface AnalysisResult {
   player: string;
   spec: string;
@@ -109,9 +94,6 @@ export interface AnalysisResult {
   defensive_findings?: AnalysisFinding[];
   top_defensive_windows?: BurstWindow[];
   player_defensive_windows?: PlayerBurstWindow[];
-  player_dmg_taken_by_ability?: DmgTakenAbility[];
-  player_total_dmg_taken?: number;
-  top_dtk_comparison?: TopDtkComparison[];
   comparison_table?: ComparisonEntry[];
   /** Player's own gear from their most recent ranked kill of this encounter. */
   player_gear?: CharacterGear;

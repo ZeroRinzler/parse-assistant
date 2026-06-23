@@ -1,4 +1,4 @@
-import { TopDefensiveSummary, TopDtkComparison } from './analysis.models';
+import { TopDefensiveSummary } from './analysis.models';
 
 export interface SpecEntry {
   spec: string;
@@ -61,7 +61,6 @@ export interface EncounterBench {
   per_defensive_benchmarks: Record<string, PerDefensiveBenchmark>;
   gear: EncounterGearStats;
   top_defensives_summary: TopDefensiveSummary[];
-  top_dtk_comparison: TopDtkComparison[];
 }
 
 export interface DefensiveWindowBench {

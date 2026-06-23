@@ -36,14 +36,6 @@
   </wl-defensives-section>
 }
 
-<!-- Damage taken -->
-@if (data().player_dmg_taken_by_ability?.length || data().top_dtk_comparison?.length) {
-  <wl-damage-taken
-    [byAbility]="data().player_dmg_taken_by_ability || []"
-    [topComparison]="data().top_dtk_comparison || []">
-  </wl-damage-taken>
-}
-
 <!-- Gear comparison (shown once bench gear for this encounter has loaded) -->
 @if (topGear()) {
   <wl-gear-section
