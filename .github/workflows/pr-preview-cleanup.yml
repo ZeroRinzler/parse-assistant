@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: write
+  deployments: write
 
 jobs:
   cleanup:
@@ -17,6 +18,26 @@ jobs:
         with:
           app-id: ${{ secrets.INGEST_APP_ID }}
           private-key: ${{ secrets.INGEST_APP_PRIVATE_KEY }}
+
+      - name: Deactivate GitHub deployment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request.number;
+            const environment = `pr-preview-${pr}`;
+            const { data: deployments } = await github.rest.repos.listDeployments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              environment,
+            });
+            for (const deployment of deployments) {
+              await github.rest.repos.createDeploymentStatus({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                deployment_id: deployment.id,
+                state: 'inactive',
+              });
+            }
 
       - uses: actions/checkout@v4
         with:
