@@ -12,5 +12,18 @@
             "NotebookEdit",
             "Agent"
         ]
+    },
+    "hooks": {
+        "SessionStart": [
+            {
+                "matcher": "",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": ". /opt/nvm/nvm.sh && nvm install 24 --no-progress && ln -sf \"$(nvm which 24)\" /opt/node22/bin/node"
+                    }
+                ]
+            }
+        ]
     }
 }
