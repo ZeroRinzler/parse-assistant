@@ -1,47 +1,59 @@
-<!-- Timeline track: segments float on a guide line, positioned proportionally along the fight. -->
-<mat-card class="px-4 pt-3 pb-3">
-  <div
-    class="relative mx-2 h-9"
-    role="listbox"
-    aria-label="Burst windows"
-    (keydown)="onKeydown($event)">
-    <!-- Track: rounded rail the segments sit on. -->
-    <div class="absolute left-0 right-0 top-0 h-9 rounded-lg bg-[var(--bg)] border border-[var(--border)]" aria-hidden="true"></div>
+<!-- One card: title + timeline segments + detail panel all inside a single mat-card. -->
+<mat-card class="overflow-hidden" [class.mt-6]="title()">
 
-    @for (w of windows(); track $index; let i = $index) {
-      <div
-        class="absolute top-0 flex flex-col items-center -translate-x-1/2"
-        [style.left]="segmentLefts()[i]"
-        [style.z-index]="activeIndex() === i ? 2 : 1">
-        <button
-          type="button"
-          role="option"
-          class="flex items-center justify-center w-9 h-9 rounded"
-          [class]="segmentClasses()[i]"
-          [attr.aria-selected]="activeIndex() === i"
-          [attr.aria-label]="(w.timeStartS | formatDuration)"
-          (click)="select(i)">
-          <mat-icon class="text-[18px] h-[18px] w-[18px] leading-none">{{ w.statusIcon }}</mat-icon>
-        </button>
+  <!-- Title / subtitle header (optional) -->
+  @if (title()) {
+    <div class="px-4 pt-3 mb-3">
+      <p class="text-xl font-medium">{{ title() }}</p>
+      @if (subtitle()) {
+        <p class="mt-1 text-sm text-[var(--muted)]">{{ subtitle() }}</p>
+      }
+    </div>
+  }
+
+  <!-- Timeline track: segments float on a guide line, positioned proportionally along the fight. -->
+  <div class="px-4" [class.pt-3]="!title()" [class.pb-3]="!activeWindow()">
+    <div
+      class="relative mx-2 h-9"
+      role="listbox"
+      aria-label="Burst windows"
+      (keydown)="onKeydown($event)">
+      <!-- Track: rounded rail the segments sit on. -->
+      <div class="absolute left-0 right-0 top-0 h-9 rounded-lg bg-[var(--bg)] border border-[var(--border)]" aria-hidden="true"></div>
+
+      @for (w of windows(); track $index; let i = $index) {
+        <div
+          class="absolute top-0 flex flex-col items-center -translate-x-1/2"
+          [style.left]="segmentLefts()[i]"
+          [style.z-index]="activeIndex() === i ? 2 : 1">
+          <button
+            type="button"
+            role="option"
+            class="flex items-center justify-center w-9 h-9 rounded"
+            [class]="segmentClasses()[i]"
+            [attr.aria-selected]="activeIndex() === i"
+            [attr.aria-label]="(w.timeStartS | formatDuration)"
+            (click)="select(i)">
+            <mat-icon class="text-[18px] h-[18px] w-[18px] leading-none">{{ w.statusIcon }}</mat-icon>
+          </button>
+        </div>
+      }
+    </div>
+
+    @if (timeTicks().length) {
+      <div class="flex justify-between tabular-nums text-[10px] text-[var(--muted)] mt-2">
+        @for (tick of timeTicks(); track $index) {
+          <span>{{ tick | formatDuration }}</span>
+        }
       </div>
     }
   </div>
 
-  @if (timeTicks().length) {
-    <div class="flex justify-between tabular-nums text-[10px] text-[var(--muted)] mt-2">
-      @for (tick of timeTicks(); track $index) {
-        <span>{{ tick | formatDuration }}</span>
-      }
-    </div>
-  }
-</mat-card>
-
-<!-- Detail panel: driven by activeIndex(). -->
-@if (activeWindow(); as w) {
-  <div class="mt-2 rounded border border-[var(--border)]">
+  <!-- Detail panel: driven by activeIndex(), inside the same card. -->
+  @if (activeWindow(); as w) {
 
     <!-- Header: status dot · window title · spell icons · value · delta -->
-    <div class="flex items-center gap-2 px-4 py-2.5 bg-[var(--surface)]">
+    <div class="flex items-center gap-2 px-4 py-2.5 bg-[var(--surface)] border-t border-[var(--border)]">
       <span class="w-2.5 h-2.5 rounded-full shrink-0" [class]="dotClass(w.status)"></span>
       <span class="flex-1 text-sm font-medium">
         Window {{ activeIndex() + 1 }} - {{ w.timeStartS | formatDuration }} to {{ w.timeEndS | formatDuration }}
@@ -109,5 +121,7 @@
         }
       </div>
     }
-  </div>
-}
+
+  }
+
+</mat-card>

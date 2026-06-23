@@ -50,6 +50,8 @@ export class WindowComparisonComponent {
   readonly showMap = input<boolean>(false);
   // Casts column is meaningful for burst (offensive) windows only; hidden for defensives.
   readonly showCasts = input<boolean>(true);
+  readonly title = input<string>('');
+  readonly subtitle = input<string>('');
   readonly openMap = output<number>();
 
   // Minimum center-to-center gap between adjacent segments, as a percentage of
