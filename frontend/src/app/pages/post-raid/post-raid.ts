@@ -21,7 +21,7 @@ import { IconCacheService } from '../../core/services/icon-cache';
 import { PositioningPanelService } from '../../core/services/positioning-panel';
 import { MapContextService } from '../../core/services/map-context';
 import { LiveReportSyncService, POLL_INTERVAL_MS } from '../../core/services/live-report-sync';
-import { WclFight, WclPlayer, WclUserCharacter } from '../../core/models/wcl.models';
+import { WclFight, WclPlayer, WclReport, WclUserCharacter } from '../../core/models/wcl.models';
 import { EncounterGearStats } from '../../core/models/encounter.models';
 import { AnalysisResult } from '../../core/models/analysis.models';
 import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner/loading-spinner';
@@ -151,11 +151,7 @@ export class PostRaidComponent implements OnInit {
         }),
       ]);
       this._userChars = userChars;
-      this.fights.set(buildFights(report.fights));
-      this.players.set(buildPlayers(report.masterData?.actors));
-      this._masterAbilities = report.masterData?.abilities ?? [];
-      this._enemies = report.masterData?.enemies ?? [];
-      if (report.masterData?.abilities) this.icons.seed(report.masterData.abilities);
+      this._applyReport(report);
 
       const lastFight = this.fights()[this.fights().length - 1];
       this.fightControl.setValue(autoFight ?? lastFight?.id ?? null);
@@ -171,6 +167,15 @@ export class PostRaidComponent implements OnInit {
     }
   }
 
+  /** Project a freshly fetched report into fight/player state and seed icon art. */
+  private _applyReport(report: WclReport): void {
+    this.fights.set(buildFights(report.fights));
+    this.players.set(buildPlayers(report.masterData?.actors));
+    this._masterAbilities = report.masterData?.abilities ?? [];
+    this._enemies = report.masterData?.enemies ?? [];
+    if (report.masterData?.abilities) this.icons.seed(report.masterData.abilities);
+  }
+
   protected onLiveToggle(): void {
     // liveControl change propagates to liveSyncEnabled signal, which the
     // polling pipeline reacts to automatically via combineLatest.
@@ -182,11 +187,7 @@ export class PostRaidComponent implements OnInit {
     this.status.set('Checking for new pulls…');
     try {
       const report = await this.wclApi.getReport(this.reportCode());
-      this.fights.set(buildFights(report.fights));
-      this.players.set(buildPlayers(report.masterData?.actors));
-      this._masterAbilities = report.masterData?.abilities ?? [];
-      this._enemies = report.masterData?.enemies ?? [];
-      if (report.masterData?.abilities) this.icons.seed(report.masterData.abilities);
+      this._applyReport(report);
 
       const latest = this.fights()[this.fights().length - 1];
       if (!latest) { this.status.set('No boss pulls found.'); return; }

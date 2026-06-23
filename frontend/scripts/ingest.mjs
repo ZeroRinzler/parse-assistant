@@ -18,6 +18,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { readJson, writeJson, getKnownSpecs as listSpecs } from './lib.mjs';
 
 // ── Paths ─────────────────────────────────────────────────────────────────────
 
@@ -26,6 +27,8 @@ const __dirname = path.dirname(__filename);
 const FRONTEND_ROOT = path.resolve(__dirname, '..');
 // WL_DATA_DIR lets a test/dry run write elsewhere instead of the committed data dir.
 const DATA_DIR = process.env.WL_DATA_DIR || path.join(FRONTEND_ROOT, 'public', 'data', 'specs');
+// Ingest only manages specs that already have a rulebook to drive analysis.
+const getKnownSpecs = () => listSpecs(DATA_DIR, { requireRulebook: true });
 
 // Hash of this script file - used as a cache key so any change to ingestion logic
 // automatically invalidates existing parse samples and forces re-analysis.
@@ -39,6 +42,13 @@ const INGEST_HASH = crypto.createHash('sha256')
 const WCL_TOKEN_URL = 'https://www.warcraftlogs.com/oauth/token';
 const WCL_API_URL = 'https://www.warcraftlogs.com/api/v2/client';
 const TOP_N = 10;
+
+// Aggregation thresholds (fractions of the sample/member count). Mirrored in
+// CLAUDE.md's "Analysis thresholds" section - keep the two in sync.
+const CLUSTER_MIN_FRAC = 0.35;      // min cluster size to surface a burst/defensive window
+const HOLD_TRIGGER_FRAC = 0.4;      // min parsers holding at a cast index to emit a hold target
+const MEMBER_MAJORITY_FRAC = 0.5;   // "more than half the member parses" (ability inclusion, majority hold)
+const DTK_MIN_FRAC = 0.4;           // min parsers for a damage-taken comparison row
 
 const BLOODLUST_SPELL_IDS = new Set([2825, 32182, 80353, 90355, 264667, 390386]);
 
@@ -618,7 +628,7 @@ function clusterDefensiveWindows(windows, totalSamples, mergeS = 20.0) {
   const result = [];
   for (const [defensiveName, defWindows] of byDefensive.entries()) {
     for (const cl of groupByTime(defWindows, mergeS)) {
-      if (cl.length < Math.max(2, totalSamples * 0.35)) continue;
+      if (cl.length < Math.max(2, totalSamples * CLUSTER_MIN_FRAC)) continue;
       const base = clusterBaseStats(cl, totalSamples);
       result.push({
         ...base,
@@ -1121,7 +1131,7 @@ function clusterBaseStats(cl, totalSamples) {
     }
   }
   const ability_breakdown = [...abilityTotals.entries()]
-    .filter(([, ds]) => ds.length >= cl.length * 0.5)
+    .filter(([, ds]) => ds.length >= cl.length * MEMBER_MAJORITY_FRAC)
     .map(([sid, ds]) => {
       const castsArr = abilityCasts.get(sid);
       const entry = {
@@ -1162,7 +1172,7 @@ function clusterBurstWindows(windows, totalSamples, mergeS = 15.0) {
   if (!windows.length) return [];
   const result = [];
   for (const cl of groupByTime(windows, mergeS)) {
-    if (cl.length < Math.max(2, totalSamples * 0.35)) continue;
+    if (cl.length < Math.max(2, totalSamples * CLUSTER_MIN_FRAC)) continue;
     const base = clusterBaseStats(cl, totalSamples);
     const cdCounts = new Map();
     for (const c of cl) {
@@ -1170,7 +1180,7 @@ function clusterBurstWindows(windows, totalSamples, mergeS = 15.0) {
     }
     const common_cds = [...cdCounts.entries()]
       .sort((a, b) => b[1] - a[1])
-      .filter(([, cnt]) => cnt >= cl.length * 0.5)
+      .filter(([, cnt]) => cnt >= cl.length * MEMBER_MAJORITY_FRAC)
       .map(([name]) => name);
     const window_length_s = round(mean(cl.map(c => c.window_length_s)));
     result.push({ ...base, common_cds, avg_targets: round(mean(cl.map(c => c.target_count || 1))), window_length_s });
@@ -1314,16 +1324,6 @@ function nowUtc() {
   return new Date().toISOString().replace('T', ' ').slice(0, 19);
 }
 
-function readJson(filePath) {
-  if (!fs.existsSync(filePath)) return null;
-  try { return JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch { return null; }
-}
-
-function writeJson(filePath, data, compact = false) {
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, JSON.stringify(data, null, compact ? 0 : 2), 'utf8');
-}
-
 function getSamplesPath(spec, encounterId) {
   return path.join(DATA_DIR, spec, 'parse_samples', `${encounterId}.json`);
 }
@@ -1385,6 +1385,58 @@ function benchUsesPerMin(entries) {
   };
 }
 
+// Per-cast-index hold targets: cast positions where enough top parsers delayed
+// the cast, with the median delay players should match. Shared by the cooldown
+// and defensive benchmark passes.
+function buildHoldTargets(entries) {
+  const holdByCastIdx = new Map();
+  for (const entry of entries) {
+    for (const hw of (entry.hold_windows || [])) {
+      if (!holdByCastIdx.has(hw.cast_index)) holdByCastIdx.set(hw.cast_index, []);
+      holdByCastIdx.get(hw.cast_index).push(hw.actual_s);
+    }
+  }
+  const holdTargets = {};
+  for (const [castIdx, times] of holdByCastIdx.entries()) {
+    if (times.length >= Math.max(2, entries.length * HOLD_TRIGGER_FRAC)) {
+      holdTargets[String(castIdx)] = {
+        target_s: round(median(times)),
+        stddev_s: round(stdev(times)),
+        count: times.length,
+        total_samples: entries.length,
+      };
+    }
+  }
+  return holdTargets;
+}
+
+// Benchmark fields common to cooldowns and defensives. `usesOf` reads the per-parse
+// use count (cooldowns expose `total_uses`, defensives `uses`); `requireUsesForUpm`
+// excludes zero-use parses from the uses-per-minute mean (defensive behavior).
+function buildBaseBenchmark(entries, usesOf, requireUsesForUpm) {
+  const topFirstCasts = entries.map(e => e.first_cast_s).filter(v => v != null);
+  const gaps = [];
+  for (const entry of entries) {
+    const times = entry.cast_times_s || [];
+    for (let j = 1; j < times.length; j++) gaps.push(times[j] - times[j - 1]);
+  }
+  const upmList = entries
+    .filter(e => e.fight_duration_s && (!requireUsesForUpm || usesOf(e)))
+    .map(e => usesOf(e) / (e.fight_duration_s / 60));
+  return {
+    sample_count: entries.length,
+    avg_first_cast_s: topFirstCasts.length ? round(mean(topFirstCasts)) : 0,
+    stddev_first_cast_s: topFirstCasts.length ? round(stdev(topFirstCasts)) : 0,
+    avg_gap_s: gaps.length ? round(mean(gaps)) : null,
+    stddev_gap_s: gaps.length ? round(stdev(gaps)) : null,
+    hold_targets: buildHoldTargets(entries),
+    avg_uses: entries.length ? round(mean(entries.map(e => usesOf(e) || 0))) : 0,
+    avg_uses_per_min: upmList.length ? round(mean(upmList), 2) : 0,
+    uses_per_min: benchUsesPerMin(entries),
+    majority_hold: entries.filter(e => e.cast_pattern === 'hold').length > entries.length * MEMBER_MAJORITY_FRAC,
+  };
+}
+
 function syncEncounterFile(spec, encounterId) {
   const samplesPath = getSamplesPath(spec, encounterId);
   const samples = readJson(samplesPath) || [];
@@ -1437,52 +1489,14 @@ function syncEncounterFile(spec, encounterId) {
 
   const perCdBenchmarks = {};
   for (const [cdName, entries] of agg.entries()) {
-    const topFirstCasts = entries.map(e => e.first_cast_s).filter(v => v != null);
-    const allCdGaps = [];
-    for (const e of entries) {
-      const times = e.cast_times_s || [];
-      for (let j = 1; j < times.length; j++) allCdGaps.push(times[j] - times[j - 1]);
-    }
     const blOffsets = entries.map(e => e.bl_offset_s).filter(v => v != null);
-
-    const holdByCastIdx = new Map();
-    for (const e of entries) {
-      for (const hw of (e.hold_windows || [])) {
-        if (!holdByCastIdx.has(hw.cast_index)) holdByCastIdx.set(hw.cast_index, []);
-        holdByCastIdx.get(hw.cast_index).push(hw.actual_s);
-      }
-    }
-    const holdTargets = {};
-    for (const [castIdx, times] of holdByCastIdx.entries()) {
-      if (times.length >= Math.max(2, entries.length * 0.4)) {
-        holdTargets[String(castIdx)] = {
-          target_s: round(median(times)),
-          stddev_s: round(stdev(times)),
-          count: times.length,
-          total_samples: entries.length,
-        };
-      }
-    }
-
-    const upmList = entries
-      .filter(e => e.fight_duration_s)
-      .map(e => e.total_uses / (e.fight_duration_s / 60));
     const blCount = entries.filter(e => e.bl_aligned).length;
 
     perCdBenchmarks[cdName] = {
-      sample_count: entries.length,
-      avg_first_cast_s: topFirstCasts.length ? round(mean(topFirstCasts)) : 0,
-      stddev_first_cast_s: topFirstCasts.length ? round(stdev(topFirstCasts)) : 0,
-      avg_gap_s: allCdGaps.length ? round(mean(allCdGaps)) : null,
-      stddev_gap_s: allCdGaps.length ? round(stdev(allCdGaps)) : null,
+      ...buildBaseBenchmark(entries, e => e.total_uses, false),
       avg_bl_offset_s: blOffsets.length ? round(mean(blOffsets)) : null,
       stddev_bl_offset_s: blOffsets.length ? round(stdev(blOffsets)) : null,
-      hold_targets: holdTargets,
-      uses_per_min: benchUsesPerMin(entries),
-      avg_uses: entries.length ? round(mean(entries.map(e => e.total_uses || 0))) : 0,
-      avg_uses_per_min: upmList.length ? round(mean(upmList), 2) : 0,
       bl_pct: entries.length ? Math.round(blCount / entries.length * 100) : 0,
-      majority_hold: entries.filter(e => e.cast_pattern === 'hold').length > entries.length * 0.5,
     };
   }
 
@@ -1536,49 +1550,7 @@ function syncEncounterFile(spec, encounterId) {
 
   const perDefensiveBenchmarks = {};
   for (const [defName, entries] of aggDef.entries()) {
-    const topFirstCasts = entries.map(e => e.first_cast_s).filter(v => v != null);
-    const allDefGaps = [];
-    for (const e of entries) {
-      const times = e.cast_times_s || [];
-      for (let j = 1; j < times.length; j++) allDefGaps.push(times[j] - times[j - 1]);
-    }
-
-    const holdByCastIdx = new Map();
-    for (const e of entries) {
-      for (const hw of (e.hold_windows || [])) {
-        if (!holdByCastIdx.has(hw.cast_index)) holdByCastIdx.set(hw.cast_index, []);
-        holdByCastIdx.get(hw.cast_index).push(hw.actual_s);
-      }
-    }
-    const holdTargets = {};
-    for (const [castIdx, times] of holdByCastIdx.entries()) {
-      if (times.length >= Math.max(2, entries.length * 0.4)) {
-        holdTargets[String(castIdx)] = {
-          target_s: round(median(times)),
-          stddev_s: round(stdev(times)),
-          count: times.length,
-          total_samples: entries.length,
-        };
-      }
-    }
-
-    const avgUsesList = entries.map(e => e.uses || 0);
-    const upmList = entries
-      .filter(e => e.fight_duration_s && e.uses)
-      .map(e => e.uses / (e.fight_duration_s / 60));
-
-    perDefensiveBenchmarks[defName] = {
-      sample_count: entries.length,
-      avg_first_cast_s: topFirstCasts.length ? round(mean(topFirstCasts)) : 0,
-      stddev_first_cast_s: topFirstCasts.length ? round(stdev(topFirstCasts)) : 0,
-      avg_gap_s: allDefGaps.length ? round(mean(allDefGaps)) : null,
-      stddev_gap_s: allDefGaps.length ? round(stdev(allDefGaps)) : null,
-      hold_targets: holdTargets,
-      avg_uses: avgUsesList.length ? round(mean(avgUsesList)) : 0,
-      avg_uses_per_min: upmList.length ? round(mean(upmList), 2) : 0,
-      uses_per_min: benchUsesPerMin(entries),
-      majority_hold: entries.filter(e => e.cast_pattern === 'hold').length > entries.length * 0.5,
-    };
+    perDefensiveBenchmarks[defName] = buildBaseBenchmark(entries, e => e.uses, true);
   }
 
   // Defensive windows
@@ -1597,7 +1569,7 @@ function syncEncounterFile(spec, encounterId) {
     }
   }
 
-  const minParses = Math.max(2, samples.length * 0.4);
+  const minParses = Math.max(2, samples.length * DTK_MIN_FRAC);
   const topDtkComparison = [];
   for (const [sid, pcts] of aggDtk.entries()) {
     if (pcts.length < minParses) continue;
@@ -1697,15 +1669,6 @@ function staleness(spec, encounters, now) {
   return worst;
 }
 
-function getKnownSpecs() {
-  if (!fs.existsSync(DATA_DIR)) return [];
-  return fs.readdirSync(DATA_DIR).filter(d => {
-    try {
-      if (!fs.statSync(path.join(DATA_DIR, d)).isDirectory()) return false;
-      return fs.existsSync(path.join(DATA_DIR, d, 'rulebook.json'));
-    } catch { return false; }
-  }).sort();
-}
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 

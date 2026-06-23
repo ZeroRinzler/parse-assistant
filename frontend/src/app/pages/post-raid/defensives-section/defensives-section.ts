@@ -3,7 +3,8 @@ import { AnalysisFinding, PlayerDefensive, BurstWindow, PlayerBurstWindow } from
 import { IconCacheService } from '../../../core/services/icon-cache';
 import { PositioningPanelService } from '../../../core/services/positioning-panel';
 import {
-  FindingEntry,
+  bucketFindings,
+  CAT_LABEL,
   FindingRow,
   FindingTableComponent,
   onPlanFromEntries,
@@ -14,16 +15,6 @@ import {
   WindowComparisonComponent,
   WindowStatus,
 } from '../../../shared/components/window-comparison/window-comparison';
-
-const CAT_LABEL: Record<string, string> = {
-  lost_cooldown: 'lost cast',
-  cooldown_delay: 'held',
-  cooldown_alignment: 'BL miss',
-  cast_efficiency: 'downtime',
-  hold_suggestion: 'hold tip',
-};
-
-interface CdBucket { issues: AnalysisFinding[]; holds: AnalysisFinding[]; success?: AnalysisFinding; }
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -56,46 +47,10 @@ export class DefensivesSectionComponent {
   /** Defensives used on plan, shown as success chips. */
   protected readonly defOnPlan = computed(() => onPlanFromEntries(this.defEntries()));
 
-  private readonly defEntries = computed<FindingEntry[]>(() => {
-    const findings = this.defensiveFindings();
-    const defensives = this.defensives();
-    const byName: Record<string, CdBucket> = {};
-
-    for (const f of findings) {
-      if (f.severity === 'success') continue;
-      const n = f.cd_name!;
-      if (!byName[n]) byName[n] = { issues: [], holds: [] };
-      if (f.category === 'hold_suggestion' && f.details?.cd_name) {
-        byName[n].holds.push(f);
-      } else {
-        byName[n].issues.push(f);
-      }
-    }
-    for (const f of findings) {
-      if (f.severity !== 'success') continue;
-      const n = f.cd_name!;
-      if (n && !byName[n]) byName[n] = { issues: [], holds: [] };
-      if (n) byName[n].success = f;
-    }
-
+  private readonly defEntries = computed(() => {
     const spellMap: Record<string, number> = {};
-    for (const d of defensives) spellMap[d.name] = d.spell_id;
-
-    return Object.entries(byName).map(([name, bucket]) => {
-      const hasCritical = bucket.issues.some(f => f.severity === 'critical');
-      const hasIssue = bucket.issues.length > 0 || bucket.holds.length > 0;
-      const metaItems: string[] = [];
-      for (const f of bucket.issues) {
-        const lbl = CAT_LABEL[f.category];
-        if (lbl && !metaItems.includes(lbl)) metaItems.push(lbl);
-      }
-      if (bucket.holds.length) metaItems.push(`${bucket.holds.length} hold tip${bucket.holds.length > 1 ? 's' : ''}`);
-      return {
-        name, spellId: spellMap[name] ?? null,
-        hasCritical, hasIssue, metaItems,
-        findings: [...bucket.issues, ...bucket.holds],
-      };
-    });
+    for (const def of this.defensives()) spellMap[def.name] = def.spell_id;
+    return bucketFindings(this.defensiveFindings(), { spellId: name => spellMap[name] ?? null }).entries;
   });
 
   protected readonly defWindows = computed<ComparisonWindow[]>(() => {

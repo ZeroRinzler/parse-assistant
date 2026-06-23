@@ -8,10 +8,10 @@ function result(findings: AnalysisFinding[], cdSpellIds: Record<string, number> 
   return { player: 'Rogue', spec: 'Sub', rulebook_source: 'generated', findings, cd_spell_ids: cdSpellIds, ability_icons: {} };
 }
 
-/** Mount the component with a given analysis result and read its `cdEntries` computed. */
+/** Mount the component with a given analysis result and read its bucketed cooldown entries. */
 function cdEntriesFor(findings: AnalysisFinding[], cdSpellIds?: Record<string, number>): FindingEntry[] {
   const { vm } = mountVm(AnalysisResultComponent, { data: result(findings, cdSpellIds) });
-  return (vm['cdEntries'] as () => FindingEntry[])();
+  return (vm['bucketed'] as () => { entries: FindingEntry[] })().entries;
 }
 
 describe('AnalysisResultComponent cdEntries', () => {

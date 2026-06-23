@@ -93,7 +93,7 @@ All analysis thresholds adapt to the encounter and spec via top-parse data:
 | BL timing | avg BL-offset across top parses ± 2σ |
 | Burst windows | CD-cast-centric windows (variable length), clustered across top parses |
 
-If no parse samples exist for the encounter, all checks fall back to conservative static values.
+Every check is bench-driven: it runs only where top-parse data exists for that encounter and spec. There are no static fallbacks - absent data means the check is skipped, not estimated.
 
 ## Architecture overview
 

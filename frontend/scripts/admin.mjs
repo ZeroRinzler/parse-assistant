@@ -9,7 +9,6 @@
  *
  * Usage:
  *   npm run admin
- *   npm run admin -- rulebook   (jump to rulebook menu)
  *
  * Related scripts:
  *   npm run scrape   - add and scrape guide URLs
@@ -18,10 +17,10 @@
 
 import fs from 'fs';
 import path from 'path';
-import readline from 'readline';
 import { spawn, spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import Ajv from 'ajv';
+import { MAX_GUIDE_CHARS, readJson, writeJson, getKnownSpecs as listSpecs, createPrompt } from './lib.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,44 +28,9 @@ const FRONTEND_ROOT = path.resolve(__dirname, '..');
 const DATA_DIR = path.join(FRONTEND_ROOT, 'public', 'data', 'specs');
 const PROMPTS_DIR = path.resolve(__dirname, '..', '..', 'prompts');
 const SCHEMA_PATH = path.join(PROMPTS_DIR, 'rulebook.schema.json');
-const MAX_GUIDE_CHARS = 60_000;
 
-// ── Readline helpers ──────────────────────────────────────────────────────────
-
-const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-
-function ask(prompt) {
-  return new Promise(resolve => rl.question(prompt, resolve));
-}
-
-async function askList(prompt, choices) {
-  const lines = choices.map((c, i) => `  [${i + 1}] ${c}`).join('\n');
-  while (true) {
-    const ans = await ask(`${prompt}\n${lines}\n> `);
-    const n = parseInt(ans);
-    if (n >= 1 && n <= choices.length) return n - 1;
-    console.log('Invalid choice, try again.');
-  }
-}
-
-// ── File I/O ──────────────────────────────────────────────────────────────────
-
-function readJson(filePath) {
-  if (!fs.existsSync(filePath)) return null;
-  try { return JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch { return null; }
-}
-
-function writeJson(filePath, data) {
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
-}
-
-function getKnownSpecs() {
-  if (!fs.existsSync(DATA_DIR)) return [];
-  return fs.readdirSync(DATA_DIR).filter(d => {
-    try { return fs.statSync(path.join(DATA_DIR, d)).isDirectory(); } catch { return false; }
-  }).sort();
-}
+const { rl, ask, askList } = createPrompt();
+const getKnownSpecs = () => listSpecs(DATA_DIR);
 
 // ── Clipboard ────────────────────────────────────────────────────────────────
 
@@ -288,7 +252,6 @@ async function pickSpec() {
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const arg = process.argv[2];
   console.log('warcraft-learner - Rulebook Admin');
   console.log('For guides: npm run scrape');
   console.log('For parses: npm run ingest\n');

@@ -35,9 +35,4 @@ export class IconCacheService {
     if (!info?.icon) return null;
     return `https://wow.zamimg.com/images/wow/icons/small/${info.icon}.jpg`;
   }
-
-  fetchMissing(_spellIds: number[]): void {
-    // Icons are sourced from masterData.abilities seeded during report load.
-    // Unknown spell IDs will render without icons; Wowhead tooltips still work via the link.
-  }
 }

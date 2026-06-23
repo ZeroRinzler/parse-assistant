@@ -119,7 +119,7 @@ warcraft-learner/
 │   └── ingest-parses.yml  # Daily + manual: runs ingest.mjs, commits data/specs/**
 ```
 
-**Data location**: `frontend/public/data/specs/` - Angular's `public/` directory serves these at `/data/specs/` in both the dev server and the built app. The dev server also has a `proxy.conf.json` wired in (stale - points to a `localhost:8000` that no longer exists; can be removed).
+**Data location**: `frontend/public/data/specs/` - Angular's `public/` directory serves these at `/data/specs/` in both the dev server and the built app.
 
 **Build output** (`static/angular/`) is gitignored - rebuilt by `deploy-pages.yml` on every push to `main`.
 
@@ -133,7 +133,7 @@ WCL event fetching runs on the **main thread** through the `AnalysisDataSource` 
 
 ### Player analysis (client-side, `analysis-engine.ts`)
 1. Accepts a WCL report code + fight ID + player actor ID.
-2. Fetches `playerDetails` to resolve spec (`SubtletyRogue`). WCL changed `actor.subType` in Midnight to return class-only - `playerDetails` is the reliable source.
+2. Fetches `playerDetails` to resolve spec (`SubtletyRogue`) - the reliable source since the Midnight `actor.subType` change (see WCL API quirks).
 3. Fetches `Casts`, `Buffs`, `DamageDone`, and `DamageTaken` events directly from WCL (PKCE token).
 4. Loads static bench data from `/data/specs/{spec}/encounters/{enc_id}.json` and rulebook from `/data/specs/{spec}/rulebook.json`.
 5. `analysis-engine.ts` checks per offensive cooldown:
@@ -163,7 +163,7 @@ Runs `frontend/scripts/ingest.mjs`. Also runs as `ingest-parses.yml` GHA daily +
 5. Writes raw samples → `parse_samples/{enc_id}.json`.
 6. Aggregates across parses → `encounters/{enc_id}.json` (bench file: per-CD thresholds, clustered burst/defensive windows, gear aggregates).
 7. Writes per-parse position timelines (ranked player + notable enemies, resampled) → `positions/{enc_id}.json` for the positioning map. Requires `includeResources`/`hostilityType` event fetches (see WCL API quirks).
-7. Updates `encounters.json` index.
+8. Updates `encounters.json` index.
 
 GHA commits `frontend/public/data/specs/**`, which triggers `deploy-pages.yml` to rebuild and redeploy.
 

@@ -14,47 +14,19 @@
  *   simc     - Raw text file (GitHub raw URLs auto-converted)
  */
 
-import fs from 'fs';
 import path from 'path';
-import readline from 'readline';
 import { fileURLToPath } from 'url';
+import { MAX_GUIDE_CHARS as MAX_CONTENT_CHARS, readJson, writeJson, getKnownSpecs as listSpecs, createPrompt } from './lib.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const FRONTEND_ROOT = path.resolve(__dirname, '..');
 const DATA_DIR = path.join(FRONTEND_ROOT, 'public', 'data', 'specs');
 
-const MAX_CONTENT_CHARS = 60_000;
+const { rl, ask, askList } = createPrompt();
+const getKnownSpecs = () => listSpecs(DATA_DIR);
 
-// ── Readline helpers ──────────────────────────────────────────────────────────
-
-const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-
-function ask(prompt) {
-  return new Promise(resolve => rl.question(prompt, resolve));
-}
-
-async function askList(prompt, choices) {
-  const lines = choices.map((c, i) => `  [${i + 1}] ${c}`).join('\n');
-  while (true) {
-    const ans = await ask(`${prompt}\n${lines}\n> `);
-    const n = parseInt(ans);
-    if (n >= 1 && n <= choices.length) return n - 1;
-    console.log('Invalid choice, try again.');
-  }
-}
-
-// ── File I/O ──────────────────────────────────────────────────────────────────
-
-function readJson(filePath) {
-  if (!fs.existsSync(filePath)) return null;
-  try { return JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch { return null; }
-}
-
-function writeJson(filePath, data) {
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
-}
+// ── Guides storage ──────────────────────────────────────────────────────────
 
 function guidesPath(spec) {
   return path.join(DATA_DIR, spec, 'guides.json');
@@ -66,13 +38,6 @@ function loadGuides(spec) {
 
 function saveGuides(spec, guides) {
   writeJson(guidesPath(spec), guides);
-}
-
-function getKnownSpecs() {
-  if (!fs.existsSync(DATA_DIR)) return [];
-  return fs.readdirSync(DATA_DIR).filter(d => {
-    try { return fs.statSync(path.join(DATA_DIR, d)).isDirectory(); } catch { return false; }
-  }).sort();
 }
 
 // ── Scraping ──────────────────────────────────────────────────────────────────
