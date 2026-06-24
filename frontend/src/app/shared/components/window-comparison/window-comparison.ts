@@ -1,7 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
-import { MatCardModule } from '@angular/material/card';
 import { RangeRow } from '../range-chart/range-chart';
 import { GameIconComponent } from '../game-icon/game-icon';
 import { CompactAbilityRowComponent } from '../compact-ability-row/compact-ability-row';
@@ -40,7 +39,7 @@ const DOT_CLASS: Record<WindowStatus, string> = {
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-window-comparison',
-  imports: [MatIconModule, MatButtonModule, MatCardModule, GameIconComponent, CompactAbilityRowComponent, FormatDurationPipe, FormatDamagePipe],
+  imports: [MatIconModule, MatButtonModule, GameIconComponent, CompactAbilityRowComponent, FormatDurationPipe, FormatDamagePipe],
   templateUrl: './window-comparison.html',
 })
 export class WindowComparisonComponent {
