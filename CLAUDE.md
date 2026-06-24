@@ -152,6 +152,7 @@ WCL event fetching runs on the **main thread** through the `AnalysisDataSource` 
 8. Response sections: **Needs Improvement** (critical/warning), **Timing Suggestions** (info/hold_suggestion), **Doing Well** (success).
 9. **Burst Windows** card shows top recurring damage windows from top parses (CD-cast-centric, variable length). **Defensive Windows** shows when top parsers used each defensive and how much damage they mitigated.
 10. Ability icons come from `masterData.abilities` in the WCL report response - the only reliable source since WCL removed `gameData.spell()`.
+11. **Gear comparison** - after analysis completes, `post-raid.ts` fetches the selected player's gear via `getCharGear(player.name, player.server, reportRegion, encounterID)`. The report region (added to `REPORT_Q` as `region{slug}`) is shared by all players in the log, so gear lookup works for any raider - not just the logged-in account's own characters. Falls back gracefully (bench-only view) when the character has no ranked kills for the encounter.
 
 ### Ingestion (`npm run ingest`)
 Runs `frontend/scripts/ingest.mjs`. Also runs as `ingest-parses.yml` GHA daily + manually.
@@ -182,10 +183,10 @@ Entirely client-side. No backend calls.
 1. User enters a character name/server/region (or WCL character URL).
 2. `wcl-api.ts` queries `characterData.character.encounterRankings(includeCombatantInfo: true)` directly on WCL for the selected encounter - extracts gear, talents from the player's most recent ranked kill.
 3. Bench data (talent distributions, trinket usage, enchant usage) loaded from static `/data/specs/{spec}/encounters/{enc_id}.json`.
-4. Three cards rendered client-side:
+4. A unified gear card rendered client-side (shared `wl-gear-section` in bench-only mode):
    - **Talents** - compares player's `v2:` talent fingerprint against top-parse distribution.
    - **Trinkets** - per-slot (12 = Trinket 1, 13 = Trinket 2) comparison.
-   - **Enchants** - per-slot; missing enchants on high-consensus slots (≥70% of top parsers) flagged as warnings.
+   - **Enchants** - per-slot; missing enchants on high-consensus slots (>=70% of top parsers) flagged as warnings.
 
 ### Encounter selection
 Encounters loaded from `/data/specs/{spec}/encounters.json` (static file). Filtered client-side to:
@@ -236,7 +237,6 @@ List of raw parse samples. Source of truth for bench files.
 | `talent_key` | top-level | `v2:`-prefixed sorted talent node IDs (Midnight format) |
 | `trinkets` | top-level | `{slot, id, name}` for slots 12 and 13 |
 | `enchants` | top-level | `{slot, id, name}` for all enchanted slots |
-| `gems` | top-level | `{slot, id}` per socketed gem. Only the count is used (filled-socket check on `/pre`); gem choice is a sim question, so ids are not aggregated. Bench `gear.gems` = `{avg_count, max_count, sample_count}` |
 
 ### Rulebook JSON schema
 

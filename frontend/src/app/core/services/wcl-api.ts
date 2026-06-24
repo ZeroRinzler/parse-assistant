@@ -6,16 +6,23 @@ import { WclReport, WclAbility, CharacterInfo, CharacterGear, WclUserCharacter, 
 import { logWarn } from '../log';
 import {
   REPORT_Q, REPORT_ABILITIES_Q, PLAYER_DETAILS_Q, FIGHTS_Q, EVENTS_Q,
-  USER_CHARS_Q, CHAR_Q, CHAR_ENC_Q, buildEnchantNamesQuery,
+  USER_CHARS_Q, CHAR_Q, COMBATANT_INFO_Q, buildGearNamesQuery,
   ReportQueryVars, ReportAbilitiesQueryVars, PlayerDetailsQueryVars,
-  FightsQueryVars, EventsQueryVars, CharQueryVars, CharEncQueryVars,
+  FightsQueryVars, EventsQueryVars, CharQueryVars, CombatantInfoQueryVars,
 } from './wcl-queries';
 import {
-  buildSpecMap, mapUserCharacters, extractGear, talentKeyV2,
-  CLASS_NAMES, WclRankEntry, PlayerDetailGroups,
+  buildSpecMap, mapUserCharacters, extractGear, talentKeyFromTree, decodeHtmlEntities,
+  WclRankEntry, PlayerDetailGroups,
 } from './wcl-mappers';
 
 const API_URL = 'https://www.warcraftlogs.com/api/v2/user';
+
+/** A CombatantInfo event carries gear + talentTree, keyed by sourceID. */
+interface CombatantInfoEvent {
+  sourceID?: number;
+  gear?: WclRankEntry['gear'];
+  talentTree?: Array<{ nodeID?: number }>;
+}
 
 @Injectable({ providedIn: 'root' })
 export class WclApiService {
@@ -95,6 +102,55 @@ export class WclApiService {
     return events;
   }
 
+  /**
+   * Fetch the analyzed player's gear, trinkets, enchants, and talent key from the
+   * current combat log's CombatantInfo event - not from historical ranked kills.
+   * This ensures data is always available (every pull records combatant info)
+   * regardless of whether the player has a ranked kill on the encounter.
+   */
+  async getCombatantGear(code: string, fightId: number, playerId: number, spec?: string): Promise<CharacterGear> {
+    const vars: CombatantInfoQueryVars = { code, fightIDs: [fightId], sourceID: playerId };
+    const result = await this.query<{ reportData: { report: { events: { data: CombatantInfoEvent[] } } } }>(
+      COMBATANT_INFO_Q, vars,
+    );
+    const events = result?.reportData?.report?.events?.data ?? [];
+    const event = events.find(e => e.sourceID === playerId) ?? events[0];
+
+    if (!event?.gear?.length) {
+      return { found: false, message: 'No combatant info in this log.' };
+    }
+
+    const { trinkets, enchants } = extractGear(event as WclRankEntry);
+    const talent_key = talentKeyFromTree(event.talentTree);
+
+    // Resolve item and enchant names in a single batched gameData query.
+    const itemIds = [...new Set(trinkets.filter(t => t.id).map(t => t.id))];
+    const enchantIds = [...new Set(enchants.filter(e => e.id).map(e => e.id))];
+    if (itemIds.length || enchantIds.length) {
+      let nameData: Record<string, { id: number; name: string }> = {};
+      try {
+        const nameResult = await this.query<{ gameData: Record<string, { id: number; name: string }> }>(
+          buildGearNamesQuery(itemIds, enchantIds),
+        );
+        nameData = nameResult?.gameData ?? {};
+      } catch (err) {
+        logWarn('getCombatantGear: name resolution failed', err);
+      }
+      for (const trinket of trinkets) {
+        if (!trinket.name && trinket.id) {
+          trinket.name = decodeHtmlEntities(nameData[`i${trinket.id}`]?.name ?? '');
+        }
+      }
+      for (const enchant of enchants) {
+        if (!enchant.name && enchant.id) {
+          enchant.name = decodeHtmlEntities(nameData[`e${enchant.id}`]?.name ?? '');
+        }
+      }
+    }
+
+    return { found: true, spec, source_report: code, talent_key, trinkets, enchants };
+  }
+
   async getUserCharacters(): Promise<WclUserCharacter[]> {
     const result = await this.query<{ userData: { currentUser: { characters: Array<{ id: number; name: string; server: { slug: string; region: { slug: string } } }> } } }>(
       USER_CHARS_Q,
@@ -137,48 +193,5 @@ export class WclApiService {
       }
     }
     return { name: character.name, spec, server: serverSlug, region: serverRegion, source_report: sourceReport };
-  }
-
-  async getCharGear(name: string, server: string, region: string, encounterId: number): Promise<CharacterGear> {
-    const vars: CharEncQueryVars = { name, serverSlug: server, serverRegion: region, encID: encounterId };
-    const result = await this.query<{ characterData: { character: { encounterRankings: string | { ranks?: WclRankEntry[] } } } }>(
-      CHAR_ENC_Q, vars,
-    );
-    const rawRankings = result?.characterData?.character?.encounterRankings;
-    if (rawRankings == null) throw new Error(`Character not found: ${name}-${server} (${region})`);
-    const rankData = typeof rawRankings === 'string'
-      ? JSON.parse(rawRankings) as { ranks?: WclRankEntry[] }
-      : rawRankings;
-    const ranks = rankData?.ranks ?? [];
-    if (!ranks.length) return { found: false, message: 'No ranked kills found for this encounter.' };
-
-    const mostRecent = ranks.reduce((best, rank) =>
-      (rank.startTime ?? 0) > (best.startTime ?? 0) ? rank : best,
-    );
-
-    const { trinkets, enchants, gem_count } = extractGear(mostRecent);
-    const talent_key = talentKeyV2(mostRecent.talents);
-    const specPart = mostRecent.spec ?? '';
-    const className = CLASS_NAMES[mostRecent.class ?? -1] ?? '';
-    const fullSpec = specPart && className ? specPart + className : specPart;
-
-    const enchantIds = [...new Set(enchants.filter(e => e.id).map(e => e.id))];
-    if (enchantIds.length) {
-      let enchantNames: Record<string, { id: number; name: string }> = {};
-      try {
-        const enchantData = await this.query<{ gameData: Record<string, { id: number; name: string }> }>(
-          buildEnchantNamesQuery(enchantIds),
-        );
-        enchantNames = enchantData?.gameData ?? {};
-      } catch (err) {
-        logWarn('getCharGear: enchant name resolution failed', err);
-        // Unresolved names surface as a visible 'Unknown enchant' marker below.
-      }
-      for (const enchant of enchants) {
-        if (!enchant.name && enchant.id) enchant.name = enchantNames[`e${enchant.id}`]?.name ?? 'Unknown enchant';
-      }
-    }
-
-    return { found: true, spec: fullSpec, source_report: mostRecent.report?.code ?? null, talent_key, trinkets, enchants, gem_count };
   }
 }

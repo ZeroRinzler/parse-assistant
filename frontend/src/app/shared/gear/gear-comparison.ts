@@ -26,12 +26,14 @@ export function slotName(slot: number): string { return SLOT_NAMES[slot] || `Slo
 export function statusIcon(status: GearStatus): string { return STATUS_ICONS[status]; }
 export function statusClass(status: GearStatus): string { return STATUS_CLASSES[status]; }
 
-// ── Shared types ────────────────────────────────────────────────────────────
+// ── Shared types ─────────────────────────────────────────────────────────────
 
 export interface EnchantRow {
   slotName: string;
   status: GearStatus;
   name: string;
+  /** Usage % of the player's current enchant among top parsers, or null when absent/unknown. */
+  topPct: number | null;
   note: string | null;
 }
 
@@ -43,13 +45,19 @@ export interface TalentBuildRow {
   label: string;
 }
 
-export interface GemCheck {
-  count: number;
-  expected: number;
+export interface TrinketRow {
+  slotLabel: string;
+  /** Item id for wl-game-icon (player's item if they have one, else the top-parse item). */
+  id: number;
+  name: string;
+  icon: string;
   status: GearStatus;
+  /** Usage % of the displayed item among top parsers, or null when unknown. */
+  topPct: number | null;
+  note: string | null;
 }
 
-// ── Player-vs-bench comparison (analyze page) ───────────────────────────────
+// ── Player-vs-bench comparison (analyze page) ─────────────────────────────────
 
 /**
  * Enchants: flag slots the player left un-enchanted that top parsers consider
@@ -71,21 +79,24 @@ export function buildEnchantRows(gear: CharacterGear | null, stats: EncounterGea
     const player = playerEnch.find(e => e.slot === slot);
     if (!player) {
       if (top && top.pct >= 70) {
-        rows.push({ slotName: name, status: 'warn', name: 'Not enchanted',
-          note: `${top.pct}% of top parsers enchant this slot` });
+        rows.push({ slotName: name, status: 'warn', name: 'Not enchanted', topPct: top.pct,
+          note: `Apply ${topName}` });
       } else if (top && top.pct >= 40) {
-        rows.push({ slotName: name, status: 'info', name: 'Not enchanted',
-          note: `${top.pct}% of top parsers enchant this slot` });
+        rows.push({ slotName: name, status: 'info', name: 'Not enchanted', topPct: top.pct,
+          note: `${top.pct}% of top parsers use ${topName}` });
       }
       continue;
     }
     const playerName = player.name || `Enchant #${player.id}`;
+    const playerUsagePct = topEnch[slot]?.find(e => e.id === player.id)?.pct ?? null;
     if (top && player.id === top.id) {
-      rows.push({ slotName: name, status: 'ok', name: playerName, note: `Matches top parsers (${top.pct}%)` });
+      rows.push({ slotName: name, status: 'ok', name: playerName, topPct: top.pct,
+        note: `Matches top parsers (${top.pct}%)` });
     } else if (top) {
-      rows.push({ slotName: name, status: 'info', name: playerName, note: `Top parsers use ${topName} (${top.pct}%)` });
+      rows.push({ slotName: name, status: 'info', name: playerName, topPct: playerUsagePct,
+        note: `Top parsers use ${topName} (${top.pct}%)` });
     } else {
-      rows.push({ slotName: name, status: 'ok', name: playerName, note: null });
+      rows.push({ slotName: name, status: 'ok', name: playerName, topPct: null, note: null });
     }
   }
   return rows;
@@ -123,15 +134,56 @@ export function talentStatusOf(topStats: EncounterGearStats | null, playerKey: s
   return { status: 'warn', note: `Your build differs - most common used by ${topPct}% of top parsers` };
 }
 
-/** Filled-socket check: compare the player's gem count to the top-parse total. */
-export function buildGemCheck(stats: EncounterGearStats | null, count: number | null | undefined): GemCheck | null {
-  const gems = stats?.gems;
-  if (!gems || count == null) return null;
-  const expected = gems.max_count;
-  return { count, expected, status: count >= expected ? 'ok' : 'warn' };
+/**
+ * Per-slot trinket comparison: player's item vs top-parse consensus.
+ * Returns a row for each slot (12, 13) that has either a player item or bench data.
+ */
+export function buildTrinketRows(gear: CharacterGear | null, stats: EncounterGearStats | null): TrinketRow[] {
+  const topTrinkets = stats?.trinkets ?? {};
+  const playerTrinkets = gear?.trinkets ?? [];
+  const rows: TrinketRow[] = [];
+
+  for (const slot of [12, 13]) {
+    const label = slotName(slot);
+    const topList = topTrinkets[slot] ?? [];
+    const top = topList[0];
+    const player = playerTrinkets.find(t => t.slot === slot);
+
+    if (!player && !top) continue;
+
+    if (!player) {
+      // No player item; surface the top recommendation as an info prompt.
+      rows.push({ slotLabel: label, id: top.id, name: top.name, icon: '',
+        status: 'info', topPct: top.pct, note: `${top.pct}% of top parsers use this trinket` });
+      continue;
+    }
+
+    // Find how popular the player's current trinket is among top parsers.
+    const playerUsagePct = topList.find(t => t.id === player.id)?.pct ?? null;
+
+    if (top && player.id === top.id) {
+      rows.push({ slotLabel: label, id: player.id, name: player.name, icon: player.icon ?? '',
+        status: 'ok', topPct: top.pct, note: null });
+    } else if (top) {
+      rows.push({ slotLabel: label, id: player.id, name: player.name, icon: player.icon ?? '',
+        status: 'info', topPct: playerUsagePct,
+        note: `Switch to ${top.name} - ${top.pct}% of top parsers` });
+    } else {
+      // No bench data for this slot; player item is acceptable.
+      rows.push({ slotLabel: label, id: player.id, name: player.name, icon: player.icon ?? '',
+        status: 'ok', topPct: null, note: null });
+    }
+  }
+  return rows;
 }
 
-// ── Bench-only display (/pre boss-study page) ───────────────────────────────
+export function trinketStatusOf(rows: TrinketRow[]): GearStatus {
+  if (rows.some(r => r.status === 'warn')) return 'warn';
+  if (rows.some(r => r.status === 'info')) return 'info';
+  return 'ok';
+}
+
+// ── Bench-only display (/pre boss-study page) ─────────────────────────────────
 
 export interface BenchEnchantRow {
   slotName: string;

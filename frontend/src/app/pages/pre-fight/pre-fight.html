@@ -39,76 +39,9 @@
   }
 
   @if (selectedEncId() && !loadingBrief()) {
-    <!-- Gear: Talents + Trinkets stacked beside the taller Enchants card -->
+    <!-- Gear: unified card via shared wl-gear-section (bench-only mode since no player gear here) -->
     @if (gearStats()) {
-      <div class="flex flex-col gap-3 md:flex-row md:items-start">
-        <div class="flex flex-1 flex-col gap-3">
-          <!-- Talents -->
-          <mat-card class="p-4">
-            @let ts = talentStatus(gearStats());
-            <div class="mb-2 flex items-center gap-2">
-              <mat-icon [class]="statusClass(ts.status)">{{ statusIcon(ts.status) }}</mat-icon>
-              <span class="font-medium">Talents</span>
-            </div>
-            @if (talentBuilds().length) {
-              @for (b of talentBuilds(); track b.label) {
-                <div class="flex items-center justify-between gap-2 py-1">
-                  <div class="min-w-0">
-                    <div class="text-[13px]">{{ b.label }}</div>
-                    <div class="text-[12px] text-[var(--muted)]">{{ b.pct }}% of top parsers</div>
-                  </div>
-                  @if (b.link) {
-                    <a mat-button [href]="b.link" target="_blank" rel="noopener">View parse</a>
-                  }
-                </div>
-              }
-            } @else {
-              <p class="text-[13px] text-[var(--muted)]">{{ ts.note }}</p>
-            }
-          </mat-card>
-
-          <!-- Trinkets -->
-          <mat-card class="p-4">
-            <div class="mb-2 flex items-center gap-2">
-              <mat-icon class="badge-info">people</mat-icon>
-              <span class="font-medium">Trinkets</span>
-            </div>
-            @for (row of benchTrinketRows(); track row.slotLabel) {
-              <div class="flex items-start gap-3 py-1">
-                <span class="w-16 shrink-0 text-[12px] text-[var(--muted)]">{{ row.slotLabel }}</span>
-                <div class="min-w-0 text-[13px]">
-                  <wl-game-icon kind="item" [id]="row.id" [name]="row.name" icon=""></wl-game-icon>
-                  <div class="text-[12px] text-[var(--muted)]">{{ row.pct }}% of top parsers</div>
-                </div>
-              </div>
-            }
-            @if (!benchTrinketRows().length) {
-              <p class="text-[13px] text-[var(--muted)]">No trinket data yet.</p>
-            }
-          </mat-card>
-        </div>
-
-        <!-- Enchants -->
-        <mat-card class="flex-1 p-4">
-          <div class="mb-2 flex items-center gap-2">
-            <mat-icon class="badge-info">people</mat-icon>
-            <span class="font-medium">Enchants</span>
-          </div>
-          @if (benchEnchantRows().length) {
-            @for (row of benchEnchantRows(); track row.slotName) {
-              <div class="flex items-start gap-3 py-1">
-                <span class="w-16 shrink-0 text-[12px] text-[var(--muted)]">{{ row.slotName }}</span>
-                <div class="min-w-0 text-[13px]">
-                  <div>{{ row.name }}</div>
-                  <div class="text-[12px] text-[var(--muted)]">{{ row.pct }}% of top parsers</div>
-                </div>
-              </div>
-            }
-          } @else {
-            <p class="text-[13px] text-[var(--muted)]">No enchant data yet.</p>
-          }
-        </mat-card>
-      </div>
+      <wl-gear-section [topGear]="gearStats()"></wl-gear-section>
     }
 
     <!-- Cooldown plan -->

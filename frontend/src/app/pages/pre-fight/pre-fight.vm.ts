@@ -8,10 +8,6 @@
 import { EncounterBench } from '../../core/models/encounter.models';
 import { Rulebook } from '../../core/models/rulebook.models';
 
-// Re-export shared utilities so pre-fight.ts has a single import point.
-export type { GearStatus } from '../../shared/gear/gear-comparison';
-export { slotName, statusIcon, statusClass } from '../../shared/gear/gear-comparison';
-
 export interface CdPlanItem {
   name: string;
   spellId: number | null;

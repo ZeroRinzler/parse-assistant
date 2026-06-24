@@ -10,12 +10,13 @@ import { MatCardModule } from '@angular/material/card';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatIconModule } from '@angular/material/icon';
+import { GearSectionComponent } from '../post-raid/gear-section/gear-section';
 import { WclAuthService } from '../../core/services/wcl-auth';
 import { WclApiService } from '../../core/services/wcl-api';
 import { logWarn } from '../../core/log';
 import { EncounterService } from '../../core/services/encounter';
 import { PositioningPanelService } from '../../core/services/positioning-panel';
-import { SpecEntry, EncounterEntry, EncounterBench, EncounterGearStats } from '../../core/models/encounter.models';
+import { SpecEntry, EncounterEntry, EncounterBench } from '../../core/models/encounter.models';
 import { Rulebook } from '../../core/models/rulebook.models';
 import { IconCacheService } from '../../core/services/icon-cache';
 import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner/loading-spinner';
@@ -24,12 +25,6 @@ import { GameIconComponent } from '../../shared/components/game-icon/game-icon';
 import { FormatDurationPipe } from '../../shared/pipes/format-duration-pipe';
 import { FormatDamagePipe } from '../../shared/pipes/format-damage-pipe';
 import { FormatSpecPipe } from '../../shared/pipes/format-spec-pipe';
-import {
-  GearStatus, slotName, statusIcon, statusClass,
-  buildTalentBuilds, TalentBuildRow,
-  buildBenchEnchantRows, BenchEnchantRow,
-  buildBenchTrinketRows, BenchTrinketRow,
-} from '../../shared/gear/gear-comparison';
 import {
   BurstWindowVm,
   buildCdPlan, buildDefensivePlan, buildBurstWindows,
@@ -41,7 +36,7 @@ import {
   imports: [
     ReactiveFormsModule, MatFormFieldModule, MatSelectModule,
     MatButtonModule, MatCardModule, MatChipsModule, MatDividerModule, MatIconModule,
-    LoadingSpinnerComponent, CalloutComponent, GameIconComponent,
+    LoadingSpinnerComponent, CalloutComponent, GameIconComponent, GearSectionComponent,
     DecimalPipe, FormatDurationPipe, FormatDamagePipe, FormatSpecPipe,
   ],
   templateUrl: './pre-fight.html',
@@ -71,9 +66,6 @@ export class PreFightComponent implements OnInit {
 
   protected readonly cdPlan = computed(() => buildCdPlan(this.rulebook(), this.bench()));
   protected readonly defensivePlan = computed(() => buildDefensivePlan(this.rulebook(), this.bench()));
-  protected readonly talentBuilds = computed<TalentBuildRow[]>(() => buildTalentBuilds(this.gearStats(), ''));
-  protected readonly benchEnchantRows = computed<BenchEnchantRow[]>(() => buildBenchEnchantRows(this.gearStats()));
-  protected readonly benchTrinketRows = computed<BenchTrinketRow[]>(() => buildBenchTrinketRows(this.gearStats()));
   protected readonly burstWindows = computed<BurstWindowVm[]>(() => buildBurstWindows(this.rulebook(), this.bench()));
 
   protected readonly showMap = computed(() => !!this.panel.positions());
@@ -176,13 +168,4 @@ export class PreFightComponent implements OnInit {
     } catch (err) { logWarn('pre-fight: icon seed from recent report', err); }
   }
 
-  protected readonly slotName = slotName;
-  protected readonly statusIcon = statusIcon;
-  protected readonly statusClass = statusClass;
-
-  protected talentStatus(topStats: EncounterGearStats | null): { status: GearStatus; note: string } {
-    const builds = topStats?.talent_builds ?? [];
-    if (!builds.length) return { status: 'unknown', note: 'No talent data yet.' };
-    return { status: 'ok', note: `Most common build used by ${builds[0]?.pct ?? 0}% of top parsers` };
-  }
 }

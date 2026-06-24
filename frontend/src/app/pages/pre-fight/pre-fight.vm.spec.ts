@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildCdPlan, buildDefensivePlan, buildBurstWindows } from './pre-fight.vm';
 import {
-  buildEnchantRows, enchantStatusOf, buildTalentBuilds, buildGemCheck, talentStatusOf,
+  buildEnchantRows, enchantStatusOf, buildTalentBuilds, talentStatusOf,
 } from '../../shared/gear/gear-comparison';
 import { CharacterGear } from '../../core/models/wcl.models';
 import { EncounterGearStats } from '../../core/models/encounter.models';
@@ -126,7 +126,7 @@ describe('buildEnchantRows / enchantStatusOf', () => {
 
   it('accepts a player enchant on a slot with no top-parse data', () => {
     const rows = buildEnchantRows(gear([{ slot: 9, id: 7, name: 'Handguard' }]), stats({}));
-    expect(rows[0]).toEqual({ slotName: 'Hands', status: 'ok', name: 'Handguard', note: null });
+    expect(rows[0]).toMatchObject({ slotName: 'Hands', status: 'ok', name: 'Handguard', note: null, topPct: null });
   });
 
   it('is empty when neither side has enchant data', () => {
@@ -156,20 +156,6 @@ describe('buildTalentBuilds', () => {
   });
 });
 
-describe('buildGemCheck', () => {
-  const stats = (max: number): EncounterGearStats =>
-    ({ talent_builds: [], trinkets: {}, enchants: {}, gems: { avg_count: max, max_count: max, sample_count: 10 } });
-
-  it('is ok when the player meets the top-parse socket count and warns below it', () => {
-    expect(buildGemCheck(stats(3), 3)?.status).toBe('ok');
-    expect(buildGemCheck(stats(3), 2)?.status).toBe('warn');
-  });
-
-  it('is null when gem data is missing on either side', () => {
-    expect(buildGemCheck({ talent_builds: [], trinkets: {}, enchants: {} }, 3)).toBeNull();
-    expect(buildGemCheck(stats(3), null)).toBeNull();
-  });
-});
 
 describe('buildBurstWindows', () => {
   it('resolves cooldown names to spell ids, flags AoE, and derives the end time', () => {

@@ -97,5 +97,4 @@ export interface EncounterGearStats {
   talent_builds: Array<{ key: string; pct: number; report_code?: string; fight_id?: number; player_name?: string }>;
   trinkets: Record<number, Array<{ id: number; name: string; pct: number }>>;
   enchants: Record<number, Array<{ id: number; name: string; pct: number }>>;
-  gems?: { avg_count: number; max_count: number; sample_count: number };
 }

@@ -143,8 +143,9 @@ export class PostRaidComponent implements OnInit {
         throw new Error('Sign in with WCL to load reports.');
       }
       this.loadingMsg.set('Fetching report from WCL…');
+      const code = extractCode(url);
       const [report, userChars] = await Promise.all([
-        this.wclApi.getReport(extractCode(url)),
+        this.wclApi.getReport(code),
         this.wclApi.getUserCharacters().catch(err => {
           logWarn('loadReport: fetch user characters', err);
           return [] as WclUserCharacter[];
@@ -157,7 +158,7 @@ export class PostRaidComponent implements OnInit {
       this.fightControl.setValue(autoFight ?? lastFight?.id ?? null);
       this._applyAutoPlayer(autoPlayer);
       // Set reportCode last - this activates the polling pipeline if liveSync is on.
-      this.reportCode.set(extractCode(url));
+      this.reportCode.set(code);
       this._syncUrl();
       await this.analyzePlayer();
     } catch (err) {
@@ -251,20 +252,17 @@ export class PostRaidComponent implements OnInit {
           if (nonce === this._gearFetchNonce && bench) this.topGear.set(bench.gear);
         });
 
-        // Fetch player gear in background; matches the logged-in account's characters.
+        // Read the player's gear, trinkets, enchants, and talents from the current
+        // log's CombatantInfo - always available regardless of ranked-kill status.
         const player = this.players().find(p => p.id === playerId);
-        const userChar = this._userChars.find(character =>
-          character.name.toLowerCase() === (player?.name ?? '').toLowerCase() &&
-          character.serverSlug.toLowerCase() === (player?.server ?? '').toLowerCase(),
-        );
-        if (userChar) {
-          this.wclApi.getCharGear(userChar.name, userChar.serverSlug, userChar.serverRegion, fight.encounterID)
+        if (player) {
+          this.wclApi.getCombatantGear(this.reportCode(), fightId, playerId, data.spec)
             .then(gearData => {
               if (nonce === this._gearFetchNonce && gearData.found) {
                 this.result.update(r => r ? { ...r, player_gear: gearData } : r);
               }
             })
-            .catch(err => logWarn('analyzePlayer: fetch player gear', err));
+            .catch(err => logWarn('analyzePlayer: fetch combatant gear', err));
         }
       }
     } catch (err) {

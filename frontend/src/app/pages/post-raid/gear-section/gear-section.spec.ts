@@ -3,7 +3,10 @@ import { mountVm } from '../../../../testing/component-harness';
 import { GearSectionComponent } from './gear-section';
 import { EncounterGearStats } from '../../../core/models/encounter.models';
 import { CharacterGear } from '../../../core/models/wcl.models';
-import { BenchEnchantRow, BenchTrinketRow, EnchantRow } from '../../../shared/gear/gear-comparison';
+import {
+  BenchEnchantRow, BenchTrinketRow, EnchantRow, TrinketRow,
+  buildTrinketRows, trinketStatusOf,
+} from '../../../shared/gear/gear-comparison';
 
 function stats(partial: Partial<EncounterGearStats> = {}): EncounterGearStats {
   return { talent_builds: [], trinkets: {}, enchants: {}, ...partial };
@@ -97,5 +100,99 @@ describe('GearSectionComponent - playerGear loaded (comparison state)', () => {
     // enchantRows now shows "Not enchanted" - template uses benchEnchantRows when null
     const afterRows = (vm['enchantRows'] as () => EnchantRow[])();
     expect(afterRows[0].name).toBe('Not enchanted');
+  });
+
+  it('trinketRows shows ok when player has the top trinket', () => {
+    const { vm } = mountVm(GearSectionComponent, {
+      topGear: stats({ trinkets: { 12: [{ id: 193701, name: 'Guidon', pct: 70 }] } }),
+      playerGear: gear({ trinkets: [{ slot: 12, id: 193701, name: 'Guidon' }] }),
+    });
+
+    const rows = (vm['trinketRows'] as () => TrinketRow[])();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ status: 'ok', topPct: 70, note: null });
+  });
+
+  it('trinketRows shows info with remedy when player has a different trinket', () => {
+    const { vm } = mountVm(GearSectionComponent, {
+      topGear: stats({ trinkets: { 12: [{ id: 193701, name: 'Guidon', pct: 80 }] } }),
+      playerGear: gear({ trinkets: [{ slot: 12, id: 249343, name: 'Gaze', icon: '' }] }),
+    });
+
+    const rows = (vm['trinketRows'] as () => TrinketRow[])();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ status: 'info', name: 'Gaze' });
+    expect(rows[0].note).toContain('Switch to Guidon');
+  });
+
+  it('trinketIssues returns only non-ok rows', () => {
+    const { vm } = mountVm(GearSectionComponent, {
+      topGear: stats({
+        trinkets: {
+          12: [{ id: 193701, name: 'Guidon', pct: 70 }],
+          13: [{ id: 249343, name: 'Gaze', pct: 80 }],
+        },
+      }),
+      playerGear: gear({
+        trinkets: [
+          { slot: 12, id: 193701, name: 'Guidon' },  // matches top
+          { slot: 13, id: 99999, name: 'Other', icon: '' }, // differs
+        ],
+      }),
+    });
+
+    const issues = (vm['trinketIssues'] as () => TrinketRow[])();
+    const onPlan = (vm['trinketOnPlan'] as () => TrinketRow[])();
+    expect(issues).toHaveLength(1);
+    expect(issues[0].slotLabel).toBe('Trinket 2');
+    expect(onPlan).toHaveLength(1);
+    expect(onPlan[0].slotLabel).toBe('Trinket 1');
+  });
+});
+
+describe('buildTrinketRows (pure helper)', () => {
+  it('returns ok when player has the top trinket', () => {
+    const topGear = stats({ trinkets: { 12: [{ id: 1, name: 'A', pct: 75 }] } });
+    const playerGear = gear({ trinkets: [{ slot: 12, id: 1, name: 'A' }] });
+    const rows = buildTrinketRows(playerGear, topGear);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ status: 'ok', topPct: 75, note: null });
+  });
+
+  it('returns info with note when player has a different trinket', () => {
+    const topGear = stats({ trinkets: { 12: [{ id: 1, name: 'Top', pct: 80 }] } });
+    const playerGear = gear({ trinkets: [{ slot: 12, id: 2, name: 'Other', icon: '' }] });
+    const rows = buildTrinketRows(playerGear, topGear);
+    expect(rows[0]).toMatchObject({ status: 'info', name: 'Other' });
+    expect(rows[0].note).toContain('Switch to Top');
+    expect(rows[0].note).toContain('80%');
+  });
+
+  it('returns info pointing at top trinket when player has no item', () => {
+    const topGear = stats({ trinkets: { 12: [{ id: 1, name: 'Top', pct: 70 }] } });
+    const rows = buildTrinketRows(null, topGear);
+    expect(rows[0]).toMatchObject({ status: 'info', id: 1, name: 'Top', topPct: 70 });
+  });
+
+  it('returns empty when there is no bench data and no player items', () => {
+    expect(buildTrinketRows(null, null)).toEqual([]);
+    expect(buildTrinketRows(null, stats())).toEqual([]);
+  });
+});
+
+describe('trinketStatusOf (pure helper)', () => {
+  it('returns ok when all rows are ok', () => {
+    const rows: TrinketRow[] = [
+      { slotLabel: 'Trinket 1', id: 1, name: 'A', icon: '', status: 'ok', topPct: 70, note: null },
+    ];
+    expect(trinketStatusOf(rows)).toBe('ok');
+  });
+
+  it('returns info when any row is info', () => {
+    const rows: TrinketRow[] = [
+      { slotLabel: 'Trinket 1', id: 1, name: 'A', icon: '', status: 'ok', topPct: 70, note: null },
+      { slotLabel: 'Trinket 2', id: 2, name: 'B', icon: '', status: 'info', topPct: 20, note: 'Switch...' },
+    ];
+    expect(trinketStatusOf(rows)).toBe('info');
   });
 });

@@ -17,13 +17,6 @@ export interface WclGearItem {
   icon?: string;
   permanentEnchant?: number | string;
   permanentEnchantName?: string;
-  gems?: Array<{ id?: number | string }>;
-}
-
-export interface WclTalentNode { node?: { nodeId?: number }; nodeId?: number; }
-export interface WclTalentTree {
-  class?: Record<string, WclTalentNode[]>;
-  spec?: Record<string, WclTalentNode[]>;
 }
 
 export interface WclRankEntry {
@@ -32,7 +25,6 @@ export interface WclRankEntry {
   class?: number;
   report?: { code?: string };
   gear?: WclGearItem[];
-  talents?: WclTalentTree;
 }
 
 export interface PlayerDetailEntry {
@@ -92,15 +84,13 @@ export function mapUserCharacters(
   }));
 }
 
-/** Extract trinkets, enchants, and filled-socket count from a ranking's combatant info. */
+/** Extract trinkets and enchants from a ranking's combatant info. */
 export function extractGear(entry: WclRankEntry): {
   trinkets: NonNullable<CharacterGear['trinkets']>;
   enchants: NonNullable<CharacterGear['enchants']>;
-  gem_count: number;
 } {
   const trinkets: NonNullable<CharacterGear['trinkets']> = [];
   const enchants: NonNullable<CharacterGear['enchants']> = [];
-  let gem_count = 0;
 
   (entry.gear ?? []).forEach((item, slotIndex) => {
     if (item?.id == null) return;
@@ -115,30 +105,29 @@ export function extractGear(entry: WclRankEntry): {
       const enchantId = typeof enchant === 'string' ? parseInt(enchant, 10) : enchant;
       enchants.push({ slot: slotIndex, id: enchantId, name: item.permanentEnchantName ?? '' });
     }
-
-    for (const gem of (item.gems ?? [])) {
-      if (gem?.id != null) gem_count++;
-    }
   });
 
-  return { trinkets, enchants, gem_count };
+  return { trinkets, enchants };
 }
 
 /**
- * Convert a Midnight-format talent tree (from `encounterRankings`) to the
- * sorted `v2:`-prefixed node-ID key used throughout the application.
+ * Build a `v2:`-prefixed talent key from a CombatantInfo `talentTree` array.
+ * The key is the sorted (string order, no dedup) nodeIDs, matching the
+ * representation that ingestion builds from the same source.
  */
-export function talentKeyV2(talents: WclTalentTree | undefined): string {
-  if (!talents) return '';
-  const ids: number[] = [];
-  for (const section of [talents.class, talents.spec]) {
-    if (!section) continue;
-    for (const rowArr of Object.values(section)) {
-      for (const entry of (rowArr ?? [])) {
-        const nodeId = entry?.node?.nodeId ?? entry?.nodeId;
-        if (nodeId != null) ids.push(nodeId);
-      }
-    }
-  }
-  return ids.length ? 'v2:' + [...new Set(ids)].sort((a, b) => a - b).join(',') : '';
+export function talentKeyFromTree(tree: Array<{ nodeID?: number }> | undefined): string {
+  if (!tree?.length) return '';
+  const ids = tree.filter(n => n.nodeID != null).map(n => String(n.nodeID));
+  if (!ids.length) return '';
+  return 'v2:' + ids.sort().join(',');
+}
+
+/** Decode HTML entities in a string returned by WCL's gameData queries. */
+export function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
 }

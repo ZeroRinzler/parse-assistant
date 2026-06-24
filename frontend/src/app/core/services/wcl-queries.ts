@@ -25,7 +25,7 @@ export interface EventsQueryVars {
   hostilityType?: 'Friendlies' | 'Enemies';
 }
 export interface CharQueryVars { name: string; serverSlug: string; serverRegion: string }
-export interface CharEncQueryVars { name: string; serverSlug: string; serverRegion: string; encID: number }
+export interface CombatantInfoQueryVars { code: string; fightIDs: number[]; sourceID: number }
 
 // ---------------------------------------------------------------------------
 // Query strings
@@ -71,19 +71,24 @@ query($name:String!,$serverSlug:String!,$serverRegion:String!){
   }}
 }`;
 
-export const CHAR_ENC_Q = `
-query($name:String!,$serverSlug:String!,$serverRegion:String!,$encID:Int!){
-  characterData{character(name:$name,serverSlug:$serverSlug,serverRegion:$serverRegion){
-    encounterRankings(encounterID:$encID,includeCombatantInfo:true)
+/** Fetch CombatantInfo for a single player actor in a specific fight. */
+export const COMBATANT_INFO_Q = `
+query($code:String!,$fightIDs:[Int]!,$sourceID:Int){
+  reportData{report(code:$code){
+    events(fightIDs:$fightIDs,dataType:CombatantInfo,sourceID:$sourceID){data}
   }}
 }`;
 
 /**
- * Build a batched `gameData { ... }` query that resolves enchant names by ID.
- * Each alias is prefixed with `e` to produce valid GraphQL field names
- * (numeric-only identifiers are not valid).
+ * Build a batched `gameData { ... }` query that resolves trinket item names and
+ * enchant names by ID in a single round-trip. Item aliases are prefixed `i`,
+ * enchant aliases `e` (bare numeric identifiers are not valid GraphQL field names).
+ * Enchant names may contain HTML entities - callers must decode them.
  */
-export function buildEnchantNamesQuery(enchantIds: number[]): string {
-  const fields = enchantIds.map(id => `e${id}: enchant(id:${id}){id name}`).join(' ');
+export function buildGearNamesQuery(itemIds: number[], enchantIds: number[]): string {
+  const fields = [
+    ...itemIds.map(id => `i${id}: item(id:${id}){id name}`),
+    ...enchantIds.map(id => `e${id}: enchant(id:${id}){id name}`),
+  ].join(' ');
   return `query{gameData{${fields}}}`;
 }
