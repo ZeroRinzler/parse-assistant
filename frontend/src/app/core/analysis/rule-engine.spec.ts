@@ -95,6 +95,64 @@ describe('evaluateRules / hold_cooldown_for_anchor', () => {
   });
 });
 
+describe('evaluateRules / cast_without_prior / after exception', () => {
+  // Exception: a Symbols of Death cast within 25s AFTER SecTech excuses the missing Dance.
+  const ruleWithAfterException = castWithoutPriorRule({
+    spell_id: SECRET_TECHNIQUE,
+    spell_name: 'Secret Technique',
+    required_spell_id: SHADOW_DANCE,
+    required_spell_name: 'Shadow Dance',
+    window_s: 5,
+    exception: { context_spell_id: SYMBOLS_OF_DEATH, context_window_s: 25, position: 'after' },
+  });
+
+  it('excuses a cast when the context spell comes AFTER the primary within the window', () => {
+    // SecTech at 0:20, Symbols at 0:30 (10s after) -> ct - t = 10, within 25s -> no violation.
+    const casts = Events.cast(SECRET_TECHNIQUE, '0:20').cast(SYMBOLS_OF_DEATH, '0:30').build();
+    expect(evaluateRules([ruleWithAfterException], casts, FIGHT_START)).toHaveLength(0);
+  });
+
+  it('flags the cast when the context spell comes BEFORE (not after) the primary', () => {
+    // Symbols at 0:10, SecTech at 0:20 -> context is before primary -> "after" exception does NOT fire.
+    const casts = Events.cast(SYMBOLS_OF_DEATH, '0:10').cast(SECRET_TECHNIQUE, '0:20').build();
+    expect(evaluateRules([ruleWithAfterException], casts, FIGHT_START)).toHaveLength(1);
+  });
+});
+
+describe('evaluateRules / hold_cooldown_for_anchor / exact boundary', () => {
+  // RULE: hold Shadow Dance in the 20s before each Shadow Blades.
+  const rule = holdForAnchorRule(
+    { spell_ids: [SHADOW_DANCE], spell_names: ['Shadow Dance'], anchor_spell_id: SHADOW_BLADES, anchor_spell_name: 'Shadow Blades', hold_window_s: 20 },
+    { priority: 'high', action: 'Pool for Shadow Blades.' },
+  );
+
+  it('does not flag a charge cast at exactly the anchor time (half-open: castTime < anchorTime)', () => {
+    // Dance at exactly 2:00 = anchor. Window is [100, 120). 120 < 120 is false -> not in window.
+    const casts = Events.cast(SHADOW_BLADES, '0:05').cast(SHADOW_DANCE, '2:00').cast(SHADOW_BLADES, '2:00').build();
+    expect(evaluateRules([rule], casts, FIGHT_START)).toHaveLength(0);
+  });
+});
+
+describe('evaluateRules / hold_cooldown_for_anchor / multiple anchors', () => {
+  const rule = holdForAnchorRule(
+    { spell_ids: [SHADOW_DANCE], spell_names: ['Shadow Dance'], anchor_spell_id: SHADOW_BLADES, anchor_spell_name: 'Shadow Blades', hold_window_s: 20 },
+    { priority: 'high', action: 'Pool for Shadow Blades.' },
+  );
+
+  it('aggregates violations from multiple anchor windows into one finding with the charge count', () => {
+    // SB at 0:05, 2:00, 4:00. Dance at 1:50 (in window before 2:00) AND 3:50 (in window before 4:00).
+    const casts = Events.cast(SHADOW_BLADES, '0:05')
+      .cast(SHADOW_DANCE, '1:50')
+      .cast(SHADOW_BLADES, '2:00')
+      .cast(SHADOW_DANCE, '3:50')
+      .cast(SHADOW_BLADES, '4:00')
+      .build();
+    const findings = evaluateRules([rule], casts, FIGHT_START);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].measured?.value).toBe('2');
+  });
+});
+
 describe('evaluateRules', () => {
   it('silently skips rules with no condition', () => {
     expect(evaluateRules([{ priority: 'critical', description: 'prose only', condition: null }], [], FIGHT_START)).toEqual([]);

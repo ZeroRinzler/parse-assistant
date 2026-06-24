@@ -58,7 +58,7 @@ export function rowsFromEntries(entries: FindingEntry[], catLabel: Record<string
         spellId: entry.spellId,
         timestampMs: f.timestamp_ms ?? null,
         chip: catLabel[f.category],
-        measured: f.measured!,
+        measured: f.measured ?? { value: '-' },
         fix: f.details?.remedy,
       });
     }
@@ -103,7 +103,8 @@ export function bucketFindings(
     } else if (options.collectRules && (finding.category === 'rule_violation' || !finding.cd_name)) {
       ruleFindings.push(finding);
     } else {
-      const name = finding.cd_name!;
+      const name = finding.cd_name;
+      if (!name) continue;
       (byName[name] ??= { issues: [], holds: [] }).issues.push(finding);
     }
   }

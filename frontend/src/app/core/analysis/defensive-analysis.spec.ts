@@ -81,6 +81,56 @@ describe('analyzeDefensiveFindings', () => {
   });
 });
 
+describe('analyzeDefensives / unclosed buff window', () => {
+  it('counts a use even when applybuff has no matching removebuff (log truncated or buff active at fight end)', () => {
+    // wE stays null -> end falls back to wS + duration (feint.duration = 6s).
+    const buffs = Events.start().applyBuff(FEINT, '1:00').build();
+    const [def] = analyzeDefensives([feint], [], buffs, [], FIGHT_START, FIVE_MIN);
+
+    expect(def.uses).toBe(1);
+    expect(def.windows[0].start_s).toBe(60);
+    expect(def.windows[0].end_s).toBe(66);
+  });
+});
+
+describe('analyzeDefensiveFindings / held defensive gap', () => {
+  it('emits a cooldown_delay warning when the gap between uses exceeds avg + 2 sigma', () => {
+    // Two uses: 0:30 and 4:00 -> gap = 210s. Bench avg_gap 120s +/- 10s -> threshold 140s.
+    const evasion = { name: 'Evasion', spell_id: EVASION, cooldown: 120, duration: 10 };
+    const buffs = Events.start().buffWindow(EVASION, '0:30', '0:40').buffWindow(EVASION, '4:00', '4:10').build();
+    const players = analyzeDefensives([evasion], [], buffs, [], FIGHT_START, FIVE_MIN);
+
+    const findings = analyzeDefensiveFindings(players, {
+      Evasion: perDefensive({
+        uses_per_min: { avg: 0.4, stddev: 0, min: 0.4, max: 0.4 }, avg_uses_per_min: 0.4,
+        avg_gap_s: 120, stddev_gap_s: 10,
+      }),
+    }, 300);
+
+    expect(findings.some((f) => f.category === 'cooldown_delay')).toBe(true);
+  });
+});
+
+describe('analyzeDefensiveFindings / hold suggestion', () => {
+  it('emits hold_suggestion when player uses a defensive earlier than the top-parse hold target', () => {
+    // Use at 30s; hold_target for use #1 is 60s +/- 5s. 30 < 60 - 5 = 55 -> flag.
+    const evasion = { name: 'Evasion', spell_id: EVASION, cooldown: 120, duration: 10 };
+    const buffs = Events.start().buffWindow(EVASION, '0:30', '0:40').build();
+    const players = analyzeDefensives([evasion], [], buffs, [], FIGHT_START, FIVE_MIN);
+
+    const findings = analyzeDefensiveFindings(players, {
+      Evasion: perDefensive({
+        uses_per_min: { avg: 0.2, stddev: 0, min: 0.2, max: 0.2 }, avg_uses_per_min: 0.2,
+        hold_targets: { '1': { target_s: 60, stddev_s: 5, count: 8, total_samples: 10 } },
+      }),
+    }, 300);
+
+    const sugg = findings.find((f) => f.category === 'hold_suggestion');
+    expect(sugg?.severity).toBe('info');
+    expect(sugg?.details?.remedy).toContain('Consider holding Evasion');
+  });
+});
+
 describe('analyzeDefensiveFindings / bench-driven lost uses', () => {
   const cloak = { name: 'Cloak', spell_id: EVASION, cooldown: 120, duration: 5 };
 

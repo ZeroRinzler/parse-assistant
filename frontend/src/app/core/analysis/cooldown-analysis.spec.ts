@@ -174,6 +174,37 @@ describe('analyzeCooldowns / unsupported spec', () => {
   });
 });
 
+describe('analyzeCooldowns / BL alignment when no Bloodlust in the fight', () => {
+  it('does not flag alignment when there is no Bloodlust buff in the fight', () => {
+    // Real scenario: wipes before BL, or group with no BL class.
+    // blTimeS stays null -> the entire alignment block is skipped.
+    const cds = rulebook({ cooldowns: [{ name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 180, align_with_bloodlust: true }] }).major_cooldowns!;
+    const bk = bench({ perCd: { 'Shadow Blades': { uses_per_min: { avg: 0.2, stddev: 0, min: 0.2, max: 0.2 }, avg_uses_per_min: 0.2 } } });
+    const casts = Events.cast(SHADOW_BLADES, '0:05').build();
+
+    const result = analyzeCooldowns('Rogue', 'Sub', FIGHT_START, FIVE_MIN, casts, [], cds, [], bk);
+
+    expect(find(result.findings, 'cooldown_alignment')).toBeUndefined();
+  });
+});
+
+describe('analyzeCooldowns / hold suggestion target out of bounds', () => {
+  it('does not crash or emit a finding when hold_target index exceeds actual cast count', () => {
+    // hold_targets has entry for cast #2 but the player only made one cast.
+    // Guard: k = parseInt('2') - 1 = 1; times.length = 1; 1 >= 1 -> continue.
+    const cds = rulebook({ cooldowns: [{ name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 180 }] }).major_cooldowns!;
+    const bk = bench({ perCd: { 'Shadow Blades': {
+      uses_per_min: { avg: 0.2, stddev: 0, min: 0.2, max: 0.2 }, avg_uses_per_min: 0.2,
+      hold_targets: { '2': { target_s: 200, stddev_s: 10, count: 8, total_samples: 10 } },
+    } } });
+    const casts = Events.cast(SHADOW_BLADES, '0:05').build();
+
+    expect(() => analyzeCooldowns('Rogue', 'Sub', FIGHT_START, FIVE_MIN, casts, [], cds, [], bk)).not.toThrow();
+    const result = analyzeCooldowns('Rogue', 'Sub', FIGHT_START, FIVE_MIN, casts, [], cds, [], bk);
+    expect(find(result.findings, 'hold_suggestion')).toBeUndefined();
+  });
+});
+
 describe('analyzeCooldowns / talent_gated', () => {
   const bk = bench({ perCd: { 'Avatar': { uses_per_min: { avg: 0.4, stddev: 0, min: 0.4, max: 0.4 }, avg_uses_per_min: 0.4 },
                                'Recklessness': { uses_per_min: { avg: 0.4, stddev: 0, min: 0.4, max: 0.4 }, avg_uses_per_min: 0.4 } } });

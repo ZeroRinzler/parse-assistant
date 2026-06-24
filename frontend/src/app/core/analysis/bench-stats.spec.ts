@@ -16,6 +16,12 @@ describe('isOutlierAbove', () => {
     expect(isOutlierAbove(13, 10, 1, 3)).toBe(false); // threshold 13, not strictly greater
     expect(isOutlierAbove(13.1, 10, 1, 3)).toBe(true);
   });
+
+  it('when stddev is 0, only values strictly above the mean are outliers', () => {
+    // Occurs when all top parsers opened at the exact same second (zero variance).
+    expect(isOutlierAbove(5, 5, 0)).toBe(false);    // exactly at mean, not an outlier
+    expect(isOutlierAbove(5.001, 5, 0)).toBe(true); // any value above mean is flagged
+  });
 });
 
 describe('isOutlierBeyond (two-tailed)', () => {
@@ -48,6 +54,11 @@ describe('expectedUses', () => {
     expect(expectedUses(90, 90)).toBe(2); // 1 + floor(1)
     expect(expectedUses(89, 90)).toBe(1); // 1 + floor(0.98)
   });
+
+  it('returns 1 when cooldown exceeds fight duration (minimum is always 1)', () => {
+    // Short fight or very long CD (e.g. 60s fight, 180s CD).
+    expect(expectedUses(60, 180)).toBe(1); // 1 + floor(0.33) = 1
+  });
 });
 
 describe('castEfficiencyPct', () => {
@@ -65,6 +76,12 @@ describe('closestToZero', () => {
   it('returns the value with the smallest absolute magnitude', () => {
     expect(closestToZero([5, -2, 8])).toBe(-2);
     expect(closestToZero([-1, 1])).toBe(-1); // ties keep the first-seen best
+  });
+
+  it('throws on empty array (uses reduce with no initial value - caller must guard)', () => {
+    // Array.reduce throws TypeError for empty arrays without an initial value.
+    // The function is always called with at least one BL-window cast; callers ensure non-empty.
+    expect(() => closestToZero([])).toThrow(TypeError);
   });
 });
 

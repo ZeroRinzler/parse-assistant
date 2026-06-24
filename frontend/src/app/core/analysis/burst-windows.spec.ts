@@ -43,7 +43,34 @@ describe('findPlayerBurstWindows', () => {
   });
 });
 
+describe('findPlayerBurstWindows / empty windows', () => {
+  it('returns an empty array when the windows input is empty', () => {
+    const dmg = Events.start().damage(EVISCERATE, '0:15', 1000).build();
+    expect(findPlayerBurstWindows([], dmg, [], FIGHT_START)).toHaveLength(0);
+  });
+
+  it('returns window_damage of 0 when all events fall outside the window', () => {
+    const dmg = Events.start()
+      .damage(EVISCERATE, '0:05', 999) // before window start (10s)
+      .damage(EVISCERATE, '0:30', 999) // exactly at window end (excluded, half-open)
+      .build();
+    const [pw] = findPlayerBurstWindows([window], dmg, [], FIGHT_START);
+    expect(pw.window_damage).toBe(0);
+  });
+});
+
 describe('computePlayerDefensiveWindows', () => {
+  it('sums damage taken inside the window', () => {
+    // Window [10, 30). Two events inside, one outside.
+    const dtEvents = Events.start()
+      .damageTaken(EVISCERATE, '0:15', 300)
+      .damageTaken(EVISCERATE, '0:25', 500)
+      .damageTaken(EVISCERATE, '0:35', 9999) // after window end - excluded by half-open boundary
+      .build();
+    const [pw] = computePlayerDefensiveWindows([window], dtEvents, FIGHT_START);
+    expect(pw.window_damage).toBe(800);
+  });
+
   it('caps the ability breakdown at 6 entries', () => {
     let dt = Events.start();
     for (let i = 0; i < 8; i++) dt = dt.damageTaken(1000 + i, '0:15', (i + 1) * 100);
