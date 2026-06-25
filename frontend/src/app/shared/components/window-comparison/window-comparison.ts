@@ -20,22 +20,6 @@ export interface ComparisonWindow {
   detailRows: RangeRow[];
 }
 
-// Status -> Tailwind class maps. Colors reference the global design tokens
-// (--success / --warning / --critical / --muted) instead of hardcoded hex.
-const SEGMENT_CLASS: Record<WindowStatus, string> = {
-  good: 'bg-[var(--success)]/55 border border-[var(--success)] text-[var(--success)]',
-  warn: 'bg-[var(--warning)]/55 border border-[var(--warning)] text-[var(--warning)]',
-  bad: 'bg-[var(--critical)]/55 border border-[var(--critical)] text-[var(--critical)]',
-  muted: '',
-};
-
-const DOT_CLASS: Record<WindowStatus, string> = {
-  good: 'bg-[var(--success)]',
-  warn: 'bg-[var(--warning)]',
-  bad: 'bg-[var(--critical)]',
-  muted: 'bg-[var(--muted)]',
-};
-
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-window-comparison',
@@ -56,6 +40,9 @@ export class WindowComparisonComponent {
   // Minimum center-to-center gap between adjacent segments, as a percentage of
   // the track width, so buttons never visually collide on a crowded timeline.
   private static readonly MIN_GAP_PCT = 5;
+  // Keep each segment center this far (in % of track width) from either rail end
+  // so a half-button never overhangs the rail tips.
+  private static readonly EDGE_INSET_PCT = 4;
 
   protected readonly selectedIndex = computed(() => {
     const windows = this.windows();
@@ -96,26 +83,6 @@ export class WindowComparisonComponent {
     return Array.from({ length: steps + 1 }, (_, i) => (end / steps) * i);
   });
 
-  // Per-segment Tailwind classes (color + active outline). Muted windows split
-  // into "scheduled" (dashed neutral) vs "missing" (dashed critical tint).
-  protected readonly segmentClasses = computed(() => {
-    const activeIdx = this.activeIndex();
-    return this.windows().map((w, i) => {
-      const outline = activeIdx === i ? ' outline outline-2 outline-offset-2 outline-[var(--gold)]' : '';
-      if (w.status === 'muted') {
-        const muted = w.statusIcon === 'schedule'
-          ? 'border border-dashed border-[var(--border)] text-[var(--muted)]'
-          : 'bg-[var(--critical)]/10 border border-dashed border-[var(--critical)]/40 text-[var(--muted)]';
-        return muted + outline;
-      }
-      return SEGMENT_CLASS[w.status] + outline;
-    });
-  });
-
-  protected dotClass(status: WindowStatus): string {
-    return DOT_CLASS[status];
-  }
-
   protected select(i: number): void {
     this._manualIndex.set(i);
   }
@@ -150,12 +117,14 @@ export class WindowComparisonComponent {
     return Math.min(100, Math.max(0, (timeS / end) * 100));
   }
 
-  // Resolved `left` CSS value per segment, in percentage space so no DOM
-  // measurement is needed and buttons can never overflow the track.
-  // A two-pass collision algorithm nudges overlapping buttons apart.
-  protected readonly segmentLefts = computed<string[]>(() => {
+  // `left` per segment as a raw percentage (bound via [style.left.%]), so no DOM
+  // measurement is needed. A two-pass collision algorithm nudges overlapping
+  // buttons apart, then each center is held inside a small inset band so a
+  // half-button never hangs off the rail ends.
+  protected readonly segmentLeftPcts = computed<number[]>(() => {
     const windows = this.windows();
     const minGap = WindowComparisonComponent.MIN_GAP_PCT;
+    const inset = WindowComparisonComponent.EDGE_INSET_PCT;
     const centers = windows.map(w => this.leftPct(w.timeStartS));
     // Forward pass: push later buttons right.
     for (let i = 1; i < centers.length; i++) {
@@ -166,8 +135,7 @@ export class WindowComparisonComponent {
     for (let i = centers.length - 2; i >= 0; i--) {
       centers[i] = Math.min(centers[i], centers[i + 1] - minGap);
     }
-    return centers.map(c =>
-      `clamp(1.125rem, ${Math.max(0, c)}%, calc(100% - 1.125rem))`);
+    return centers.map(c => Math.min(100 - inset, Math.max(inset, c)));
   });
 
   protected readonly overviewMax = computed(() => {
@@ -196,11 +164,12 @@ export class WindowComparisonComponent {
     return `${sign}${delta.toFixed(0)}%`;
   });
 
-  protected readonly overviewDeltaClass = computed(() => {
+  // Semantic delta state only - the template maps it to a badge-* class.
+  protected readonly overviewDeltaStatus = computed<'muted' | 'better' | 'worse'>(() => {
     const delta = this.overviewDelta();
-    if (delta == null) return 'text-[var(--muted)]';
+    if (delta == null) return 'muted';
     const isBetter = this.higherIsBetter() ? delta >= 0 : delta <= 0;
-    return isBetter ? 'badge-success' : 'badge-critical';
+    return isBetter ? 'better' : 'worse';
   });
 
   // Overview bar geometry as plain percentages, bound via [style.left.%] /
@@ -209,11 +178,6 @@ export class WindowComparisonComponent {
     const w = this.activeWindow();
     if (!w || w.overview.playerPct == null) return null;
     return this.barPct(w.overview.playerPct, this.overviewMax());
-  });
-
-  protected readonly overviewPlayerFillClass = computed(() => {
-    const w = this.activeWindow();
-    return w ? DOT_CLASS[w.status] : '';
   });
 
   protected readonly overviewRangeLeftPct = computed<number | null>(() => {

@@ -4,7 +4,7 @@ import { CharacterGear } from '../../../core/models/wcl.models';
 import { EncounterGearStats } from '../../../core/models/encounter.models';
 import { GameIconComponent } from '../../../shared/components/game-icon/game-icon';
 import {
-  GearStatus, slotName, statusIcon, statusClass,
+  GearStatus, slotName, statusIcon,
   buildEnchantRows, enchantStatusOf, EnchantRow,
   buildTrinketRows, TrinketRow,
   buildTalentBuilds, talentStatusOf, TalentBuildRow,
@@ -56,5 +56,4 @@ export class GearSectionComponent {
 
   protected readonly slotName = slotName;
   protected readonly statusIcon = statusIcon;
-  protected readonly statusClass = statusClass;
 }

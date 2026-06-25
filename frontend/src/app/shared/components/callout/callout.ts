@@ -10,7 +10,7 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
   selector: 'wl-callout',
   host: {
     class:
-      'block rounded-r border-l-2 border-[var(--accent)] bg-[rgba(88,166,255,0.07)] px-2.5 py-1.5 text-[11px] leading-relaxed text-[var(--muted)]',
+      'block rounded-r border-l-2 border-[var(--accent)] bg-[var(--accent)]/[0.07] px-2.5 py-1.5 text-[11px] leading-relaxed text-[var(--muted)]',
   },
   template: `<ng-content />`,
 })

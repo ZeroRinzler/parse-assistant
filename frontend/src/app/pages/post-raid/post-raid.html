@@ -46,7 +46,7 @@
     }
 
     @if (error()) {
-      <div class="mb-4 rounded-lg border border-[rgba(224,82,82,0.3)] bg-[rgba(224,82,82,0.1)] px-4 py-3.5 text-[13px] text-[var(--critical)]">⚠ {{ error() }}</div>
+      <div class="mb-4 rounded-lg border border-[var(--critical)]/30 bg-[var(--critical)]/10 px-4 py-3.5 text-[13px] text-[var(--critical)]">⚠ {{ error() }}</div>
     }
 
     @if (loadingReport() || loadingAnalysis()) {

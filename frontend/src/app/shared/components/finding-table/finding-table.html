@@ -15,7 +15,7 @@
 
   @for (row of rows(); track $index) {
     <div class="grid grid-cols-[20px_minmax(0,1fr)_96px_200px] gap-[14px] px-4 py-[10px] items-center border-t border-[var(--border)]"
-         [style.background]="row.severity === 'critical' ? 'rgba(248,81,73,0.04)' : null">
+         [class.row-critical]="row.severity === 'critical'">
 
       <!-- Severity icon -->
       <div class="flex items-center justify-center">
@@ -47,9 +47,9 @@
             }
             @if (row.chip) {
               @if (row.severity === 'critical') {
-                <span class="text-[10px] rounded-sm px-[5px] tabular-nums text-[#cf8d8d] bg-[rgba(248,81,73,0.1)] border border-[rgba(248,81,73,0.25)]">{{ row.chip }}</span>
+                <span class="text-[10px] rounded-sm px-[5px] tabular-nums text-[var(--critical)] bg-[var(--critical)]/10 border border-[var(--critical)]/25">{{ row.chip }}</span>
               } @else {
-                <span class="text-[10px] rounded-sm px-[5px] tabular-nums text-[#c4a460] bg-[rgba(210,153,34,0.1)] border border-[rgba(210,153,34,0.25)]">{{ row.chip }}</span>
+                <span class="text-[10px] rounded-sm px-[5px] tabular-nums text-[var(--warning)] bg-[var(--warning)]/10 border border-[var(--warning)]/25">{{ row.chip }}</span>
               }
             }
           </div>
@@ -85,7 +85,7 @@
     <div class="flex items-center gap-2 flex-wrap border-t border-[var(--border)] px-4 py-[10px]">
       <span class="text-[10px] uppercase tracking-widest text-[var(--success)] mr-0.5">On plan</span>
       @for (c of onPlan(); track c.name) {
-        <span class="inline-flex items-center gap-[6px] bg-[rgba(63,185,80,0.06)] border border-[rgba(63,185,80,0.25)] rounded-[20px] py-[3px] pr-[11px] pl-[7px]">
+        <span class="inline-flex items-center gap-[6px] bg-[var(--success)]/[0.06] border border-[var(--success)]/25 rounded-[20px] py-[3px] pr-[11px] pl-[7px]">
           @if (c.spellId) {
             <!-- wl-game-icon renders icon + name; no extra name span needed -->
             <wl-game-icon [id]="c.spellId"></wl-game-icon>

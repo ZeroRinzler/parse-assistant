@@ -13,7 +13,10 @@
 
   @if (showCasts() && !hidePlayer()) {
     <span class="w-[7.5rem] shrink-0 justify-self-center text-center tabular-nums text-xs rounded px-2 py-0.5 border border-current"
-          [class]="castsClass()">
+          [class.badge-success]="castsStatus() === 'success'"
+          [class.badge-warning]="castsStatus() === 'warning'"
+          [class.badge-critical]="castsStatus() === 'critical'"
+          [class.badge-muted]="castsStatus() === 'muted'">
       {{ row().playerCasts ?? 0 }}<span class="text-[var(--muted)]"> / {{ row().topCasts ?? '-' }}</span>
     </span>
   }
@@ -23,7 +26,11 @@
   </span>
 
   @if (!hidePlayer()) {
-    <span class="w-[9rem] shrink-0 text-right tabular-nums text-xs font-semibold" [class]="gapClass()">
+    <span class="w-[9rem] shrink-0 text-right tabular-nums text-xs font-semibold"
+          [class.badge-success]="gapStatus() === 'success'"
+          [class.badge-warning]="gapStatus() === 'warning'"
+          [class.badge-critical]="gapStatus() === 'critical'"
+          [class.badge-muted]="gapStatus() === 'muted'">
       @if (row().playerPct == null) {
         missed
       } @else {

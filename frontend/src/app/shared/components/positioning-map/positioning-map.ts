@@ -191,10 +191,18 @@ export class PositioningMapComponent {
     const scale = radiusPx / maxYd;
     const toScreen = (q: { fwd: number; right: number }): [number, number] => [cx + q.right * scale, cy - q.fwd * scale];
 
+    // The canvas draws imperatively and cannot consume `var(--token)`, so the
+    // design tokens (the single source of color truth) are resolved to concrete
+    // values here. No hardcoded fallbacks - if a token is missing that is a
+    // styles.scss problem, not something to paper over with a literal color.
     const css = getComputedStyle(canvas);
-    const gold = css.getPropertyValue('--gold').trim() || '#e5cc80';
-    const border = css.getPropertyValue('--border').trim() || 'rgba(255,255,255,0.15)';
-    const muted = css.getPropertyValue('--muted').trim() || 'rgba(255,255,255,0.5)';
+    const token = (name: string): string => css.getPropertyValue(name).trim();
+    const gold = token('--gold');
+    const border = token('--border');
+    const muted = token('--muted');
+    const enemyColor = token('--critical');
+    const rankedColor = token('--accent');
+    const outline = token('--chart-dot-outline');
 
     // Range rings.
     ctx.strokeStyle = border; ctx.fillStyle = muted; ctx.font = '11px system-ui, sans-serif'; ctx.lineWidth = 1;
@@ -204,7 +212,7 @@ export class PositioningMapComponent {
     }
 
     // Reference at centre, facing up.
-    ctx.fillStyle = '#e05252';
+    ctx.fillStyle = enemyColor;
     ctx.beginPath(); ctx.moveTo(cx, cy - 9); ctx.lineTo(cx - 7, cy + 6); ctx.lineTo(cx + 7, cy + 6); ctx.closePath(); ctx.fill();
 
     // Benchmark: faint top-parse trails + their current dots.
@@ -221,7 +229,7 @@ export class PositioningMapComponent {
     for (const q of benchNow) { const [x, y] = toScreen(q); ctx.beginPath(); ctx.arc(x, y, 3, 0, 2 * Math.PI); ctx.fill(); }
     if (read?.centroid) {
       const [x, y] = toScreen(read.centroid);
-      ctx.strokeStyle = '#5b9bd5'; ctx.lineWidth = 2;
+      ctx.strokeStyle = rankedColor; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(x, y, 7, 0, 2 * Math.PI); ctx.stroke();
     }
 
@@ -240,7 +248,7 @@ export class PositioningMapComponent {
       const r = 5;
       ctx.fillStyle = gold;
       ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath(); ctx.fill();
-      ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.stroke();
+      ctx.strokeStyle = outline; ctx.lineWidth = 1; ctx.stroke();
     }
   }
 }

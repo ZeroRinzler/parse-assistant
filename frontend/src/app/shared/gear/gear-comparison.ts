@@ -18,13 +18,8 @@ const STATUS_ICONS: Record<GearStatus, string> = {
   ok: 'check_circle', warn: 'warning', info: 'info', unknown: 'help_outline',
 };
 
-const STATUS_CLASSES: Record<GearStatus, string> = {
-  ok: 'badge-success', warn: 'badge-warning', info: 'badge-info', unknown: 'text-[var(--muted)]',
-};
-
 export function slotName(slot: number): string { return SLOT_NAMES[slot] || `Slot ${slot}`; }
 export function statusIcon(status: GearStatus): string { return STATUS_ICONS[status]; }
-export function statusClass(status: GearStatus): string { return STATUS_CLASSES[status]; }
 
 // ── Shared types ─────────────────────────────────────────────────────────────
 

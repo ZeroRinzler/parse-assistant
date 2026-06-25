@@ -24,13 +24,18 @@
       @for (w of windows(); track $index; let i = $index) {
         <div
           class="absolute top-0 flex flex-col items-center -translate-x-1/2"
-          [style.left]="segmentLefts()[i]"
+          [style.left.%]="segmentLeftPcts()[i]"
           [style.z-index]="activeIndex() === i ? 2 : 1">
           <button
             type="button"
             role="option"
             class="flex items-center justify-center w-9 h-9 rounded"
-            [class]="segmentClasses()[i]"
+            [class.seg-good]="w.status === 'good'"
+            [class.seg-warn]="w.status === 'warn'"
+            [class.seg-bad]="w.status === 'bad'"
+            [class.seg-scheduled]="w.status === 'muted' && w.statusIcon === 'schedule'"
+            [class.seg-missing]="w.status === 'muted' && w.statusIcon !== 'schedule'"
+            [class.seg-active]="activeIndex() === i"
             [attr.aria-selected]="activeIndex() === i"
             [attr.aria-label]="(w.timeStartS | formatDuration)"
             (click)="select(i)">
@@ -54,7 +59,11 @@
 
     <!-- Header: status dot · window title · spell icons · value · delta -->
     <div class="flex items-center gap-2 px-4 py-2.5 bg-[var(--surface)] border-t border-[var(--border)]">
-      <span class="w-2.5 h-2.5 rounded-full shrink-0" [class]="dotClass(w.status)"></span>
+      <span class="w-2.5 h-2.5 rounded-full shrink-0"
+        [class.fill-success]="w.status === 'good'"
+        [class.fill-warning]="w.status === 'warn'"
+        [class.fill-critical]="w.status === 'bad'"
+        [class.fill-muted]="w.status === 'muted'"></span>
       <span class="flex-1 text-sm font-medium">
         Window {{ activeIndex() + 1 }} - {{ w.timeStartS | formatDuration }} to {{ w.timeEndS | formatDuration }}
       </span>
@@ -74,7 +83,10 @@
           <span class="text-[var(--muted)]">{{ w.overview.playerPct | formatDamage }}</span>
           @if (overviewDeltaText()) {
             <span class="text-[var(--muted)]">·</span>
-            <span [class]="overviewDeltaClass()">{{ overviewDeltaText() }}</span>
+            <span
+              [class.badge-muted]="overviewDeltaStatus() === 'muted'"
+              [class.badge-success]="overviewDeltaStatus() === 'better'"
+              [class.badge-critical]="overviewDeltaStatus() === 'worse'">{{ overviewDeltaText() }}</span>
           }
         </span>
       } @else {
@@ -86,7 +98,12 @@
     <div class="px-4 py-2 border-t border-[var(--border)]">
       <div class="relative h-5 rounded bg-[var(--bg)]" aria-hidden="true">
         @if (overviewPlayerWidthPct() !== null) {
-          <div class="absolute inset-y-0 left-0 rounded opacity-[0.65]" [class]="overviewPlayerFillClass()" [style.width.%]="overviewPlayerWidthPct()"></div>
+          <div class="absolute inset-y-0 left-0 rounded opacity-[0.65]"
+            [class.fill-success]="w.status === 'good'"
+            [class.fill-warning]="w.status === 'warn'"
+            [class.fill-critical]="w.status === 'bad'"
+            [class.fill-muted]="w.status === 'muted'"
+            [style.width.%]="overviewPlayerWidthPct()"></div>
         }
         @if (overviewRangeLeftPct() !== null) {
           <div class="absolute inset-y-0 rounded bg-[var(--info)]/30 border border-[var(--info)]" [style.left.%]="overviewRangeLeftPct()" [style.width.%]="overviewRangeWidthPct()"></div>

@@ -3,6 +3,9 @@ import { GameIconComponent } from '../game-icon/game-icon';
 import { FormatDamagePipe } from '../../pipes/format-damage-pipe';
 import { RangeRow } from '../range-chart/range-chart';
 
+/** Severity state a row can be in; the template maps it to a badge-* class. */
+export type RowStatus = 'success' | 'warning' | 'critical' | 'muted';
+
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-compact-ability-row',
@@ -25,25 +28,25 @@ export class CompactAbilityRowComponent {
   protected readonly gapSign = computed(() => (this.gap() ?? 0) >= 0 ? '+' : '-');
   protected readonly gapMagnitude = computed(() => Math.abs(this.gap() ?? 0));
 
-  // Severity badge class (color comes from the global badge-* design tokens).
-  protected readonly gapClass = computed(() => {
+  // Semantic severity state only - the template maps it to a badge-* class.
+  protected readonly gapStatus = computed<RowStatus>(() => {
     const { playerPct, topAvg } = this.row();
-    if (playerPct == null) return 'badge-critical';
+    if (playerPct == null) return 'critical';
     const gap = this.gap();
-    if (gap == null || topAvg == null || topAvg === 0) return 'text-[var(--muted)]';
+    if (gap == null || topAvg == null || topAvg === 0) return 'muted';
     // Direction-aware: burst wants gap >= 0; defensives want gap <= 0 (less taken).
     const signed = this.higherIsBetter() ? gap : -gap;
-    if (signed >= 0) return 'badge-success';
-    if (Math.abs(gap) <= topAvg * 0.1) return 'badge-warning';
-    return 'badge-critical';
+    if (signed >= 0) return 'success';
+    if (Math.abs(gap) <= topAvg * 0.1) return 'warning';
+    return 'critical';
   });
 
-  protected readonly castsClass = computed(() => {
+  protected readonly castsStatus = computed<RowStatus>(() => {
     const { playerCasts, topCasts } = this.row();
-    if (topCasts == null) return 'text-[var(--muted)]';
+    if (topCasts == null) return 'muted';
     const player = playerCasts ?? 0;
-    if (player >= topCasts) return 'badge-success';
-    if (topCasts - player <= 1) return 'badge-warning';
-    return 'badge-critical';
+    if (player >= topCasts) return 'success';
+    if (topCasts - player <= 1) return 'warning';
+    return 'critical';
   });
 }
