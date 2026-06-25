@@ -19,6 +19,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { Command } from 'commander';
+import { GraphQLClient, ClientError } from 'graphql-request';
 import { BLOODLUST_IDS } from '../src/app/core/analysis/format.ts';
 import { talentKeyFromTree, type WclGearItem } from '../src/app/core/services/wcl-mappers.ts';
 import type { Rulebook, RulebookCooldown, RulebookDefensive } from '../src/app/core/models/rulebook.models.ts';
@@ -292,6 +293,7 @@ class WCLClient {
   private readonly _serverSlugCache = new Map<number, [string, string]>();
   private _limitPerHour: number | null = null;
   private _pointsSpentThisHour = 0;
+  private readonly _client = new GraphQLClient(WCL_API_URL);
 
   constructor() {
     this.clientId = process.env['WCL_CLIENT_ID'] ?? '';
@@ -327,28 +329,22 @@ class WCLClient {
 
   async query<T = unknown>(gql: string, variables: Record<string, unknown> = {}): Promise<T> {
     const token = await this._getToken();
-    const res = await fetch(WCL_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ query: gql, variables }),
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      if (res.status === 429) throw new BudgetExceededError(`WCL rate limit hit (429): ${text.slice(0, 200)}`);
-      throw new Error(`WCL API error ${res.status}: ${text.slice(0, 300)}`);
-    }
-    const body = await res.json() as { data?: T; errors?: Array<{ message: string }> };
-    if (body.errors) {
-      const msg = JSON.stringify(body.errors);
-      if (/rate.?limit|too many requests|exhausted/i.test(msg)) {
-        throw new BudgetExceededError(`WCL rate limit (GraphQL): ${msg.slice(0, 200)}`);
+    try {
+      // graphql-request returns the GraphQL `data` payload directly and throws a
+      // ClientError both on a non-2xx HTTP status and on a 200 response that carries
+      // a top-level `errors` array, so all error handling lives in the catch below.
+      return await this._client.request<T>(gql, variables, { Authorization: `Bearer ${token}` });
+    } catch (err) {
+      if (err instanceof ClientError) {
+        const status = err.response.status;
+        const errText = JSON.stringify(err.response.errors ?? err.response);
+        if (status === 429 || /rate.?limit|too many requests|exhausted/i.test(errText)) {
+          throw new BudgetExceededError(`WCL rate limit: ${errText.slice(0, 200)}`);
+        }
+        throw new Error(`WCL API error ${status}: ${errText.slice(0, 300)}`);
       }
-      throw new Error(`GraphQL error: ${msg}`);
+      throw err;
     }
-    return body.data as T;
   }
 
   // Reads the live hourly point budget and caches it on the instance.
@@ -374,11 +370,14 @@ class WCLClient {
     }
   }
 
-  async getAllEvents(
+  // Streams WCL event pages via cursor pagination, yielding one page of events at a
+  // time. The generator owns only the cursor (`nextPageTimestamp`); accumulation is
+  // the caller's concern, so deep pagination never builds a growing array in here.
+  async *fetchAllEvents(
     code: string, fightId: number, dataType: string,
     startTime: number, endTime: number,
     options: { sourceId?: number; targetId?: number; includeResources?: boolean; hostilityType?: string } = {},
-  ): Promise<WclResourceEvent[]> {
+  ): AsyncGenerator<WclResourceEvent[]> {
     const EVENTS_QUERY = `
       query GetEvents(
         $code: String! $fightIDs: [Int]! $dataType: EventDataType
@@ -393,7 +392,6 @@ class WCLClient {
           }
         }}
       }`;
-    const events: WclResourceEvent[] = [];
     let currentStart = startTime;
     while (true) {
       const vars: Record<string, unknown> = { code, fightIDs: [fightId], dataType, startTime: currentStart, endTime };
@@ -405,9 +403,21 @@ class WCLClient {
         reportData: { report: { events: { data: WclResourceEvent[]; nextPageTimestamp?: number | null } } }
       }>(EVENTS_QUERY, vars);
       const page = data.reportData.report.events;
-      if (page.data) events.push(...page.data);
+      if (page.data?.length) yield page.data;
       if (page.nextPageTimestamp == null) break;
       currentStart = page.nextPageTimestamp;
+    }
+  }
+
+  // Thin accumulator over fetchAllEvents for callers that want the full event list.
+  async getAllEvents(
+    code: string, fightId: number, dataType: string,
+    startTime: number, endTime: number,
+    options: { sourceId?: number; targetId?: number; includeResources?: boolean; hostilityType?: string } = {},
+  ): Promise<WclResourceEvent[]> {
+    const events: WclResourceEvent[] = [];
+    for await (const page of this.fetchAllEvents(code, fightId, dataType, startTime, endTime, options)) {
+      events.push(...page);
     }
     return events;
   }

@@ -17,6 +17,7 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { Command } from 'commander';
+import { JSDOM } from 'jsdom';
 import { MAX_GUIDE_CHARS as MAX_CONTENT_CHARS, readJson, writeJson, getKnownSpecs as listSpecs, createPrompt } from './lib.ts';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -76,34 +77,31 @@ async function saveGuides(spec: string, guides: Guide[]): Promise<void> {
 
 // ── Scraping ──────────────────────────────────────────────────────────────────
 
+// Block-level tags whose boundaries should become line breaks in the extracted text,
+// so adjacent blocks don't run their words together once tags are gone.
+const BLOCK_SELECTOR = 'br, p, div, h1, h2, h3, h4, h5, h6, li, tr, section, article';
+
+// A detached <textarea> whose `.innerHTML`/`.value` pair decodes HTML entities via the
+// DOM (no regex). Reused across calls to avoid spinning up a JSDOM per string.
+const entityDecoder = new JSDOM('').window.document.createElement('textarea');
+function decodeHtmlEntities(text: string): string {
+  entityDecoder.innerHTML = text;
+  return entityDecoder.value;
+}
+
 function htmlToText(html: string): string {
-  // Remove scripts, styles, nav, footer
-  let text = html
-    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<nav[\s\S]*?<\/nav>/gi, ' ')
-    .replace(/<footer[\s\S]*?<\/footer>/gi, ' ')
-    .replace(/<header[\s\S]*?<\/header>/gi, ' ');
+  const doc = new JSDOM(html).window.document;
 
-  // Turn block elements into newlines
-  text = text.replace(/<br\s*\/?>/gi, '\n');
-  text = text.replace(/<\/?(p|div|h[1-6]|li|tr|section|article)[^>]*>/gi, '\n');
+  // Drop non-content chrome.
+  doc.querySelectorAll('script, style, nav, footer, header').forEach(el => el.remove());
 
-  // Strip remaining tags
-  text = text.replace(/<[^>]+>/g, ' ');
+  // Mark block boundaries with newlines before flattening to text.
+  doc.querySelectorAll(BLOCK_SELECTOR).forEach(el => el.after(doc.createTextNode('\n')));
 
-  // Decode common HTML entities
-  text = text
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&#\d+;/g, ' ')
-    .replace(/&[a-z]+;/g, ' ');
+  // textContent strips tags and decodes entities natively.
+  const text = doc.body?.textContent ?? '';
 
-  // Collapse whitespace
+  // Collapse whitespace (not tag/entity work, so plain string handling is fine).
   return text.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
 }
 
@@ -156,17 +154,13 @@ async function scrapeYouTube(url: string): Promise<string> {
   if (!ttRes.ok) throw new Error(`HTTP ${ttRes.status} fetching timedtext`);
   const xml = await ttRes.text();
 
-  // Parse <text> elements from XML
-  const segments = [...xml.matchAll(/<text[^>]*>([\s\S]*?)<\/text>/g)].map(m =>
-    m[1]
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-      .replace(/&#\d+;/g, '')
-      .trim()
-  );
+  // Parse <text> elements from the caption XML via the DOM. textContent decodes the XML
+  // entity layer; YouTube captions encode entities twice, so decodeHtmlEntities peels the
+  // inner layer (e.g. "&amp;#39;" -> "&#39;" -> "'").
+  const xmlDoc = new JSDOM(xml, { contentType: 'text/xml' }).window.document;
+  const segments = [...xmlDoc.querySelectorAll('text')]
+    .map(node => decodeHtmlEntities(node.textContent ?? '').trim())
+    .filter(Boolean);
 
   return segments.join(' ').slice(0, MAX_CONTENT_CHARS);
 }

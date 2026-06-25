@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
+import { Apollo, gql } from 'apollo-angular';
+import { ServerError, CombinedGraphQLErrors, type FetchPolicy, type OperationVariables } from '@apollo/client';
 import { WclAuthService } from './wcl-auth';
 import { WclReport, WclAbility, CharacterInfo, CharacterGear, WclUserCharacter, WclEvent } from '../models/wcl.models';
 import { logWarn } from '../log';
@@ -15,8 +16,6 @@ import {
   WclRankEntry, PlayerDetailGroups,
 } from './wcl-mappers';
 
-const API_URL = 'https://www.warcraftlogs.com/api/v2/user';
-
 /** A CombatantInfo event carries gear + talentTree, keyed by sourceID. */
 interface CombatantInfoEvent {
   sourceID?: number;
@@ -27,38 +26,53 @@ interface CombatantInfoEvent {
 @Injectable({ providedIn: 'root' })
 export class WclApiService {
   private readonly auth = inject(WclAuthService);
-  private readonly http = inject(HttpClient);
+  private readonly apollo = inject(Apollo);
 
-  async query<TData = unknown>(gql: string, variables: object = {}): Promise<TData> {
+  /**
+   * Runs a GraphQL query against WCL via Apollo. The PKCE bearer token is attached
+   * per request through Apollo's operation context (it changes on re-auth, so it must
+   * not be baked into the link). `fetchPolicy` defaults to `cache-first` to leverage
+   * Apollo's in-memory cache; callers that must always see fresh data (report polling,
+   * large event fetches) pass `network-only`.
+   */
+  async query<TData = unknown>(
+    gqlString: string, variables: object = {}, fetchPolicy: FetchPolicy = 'cache-first',
+  ): Promise<TData> {
     const token = this.auth.getToken();
     if (!token) {
       this.auth.logout();
       throw new Error('Not logged in to WCL - click "Sign In" to authorize.');
     }
-    let body: { data?: TData; errors?: { message?: string }[] };
     try {
-      body = await firstValueFrom(this.http.post<{ data?: TData; errors?: { message?: string }[] }>(
-        API_URL,
-        { query: gql, variables },
-        { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } },
-      ));
+      const result = await firstValueFrom(this.apollo.query<TData, OperationVariables>({
+        query: gql(gqlString),
+        variables: variables as OperationVariables,
+        fetchPolicy,
+        context: { headers: { Authorization: `Bearer ${token}` } },
+      }));
+      return result.data as TData;
     } catch (error) {
-      if (error instanceof HttpErrorResponse) {
-        if (error.status === 401) {
+      // apollo-angular maps a non-2xx HTTP response to ServerError (with statusCode).
+      if (ServerError.is(error)) {
+        if (error.statusCode === 401) {
           this.auth.logout();
           throw new Error('WCL session expired - sign in again.');
         }
-        throw new Error(`WCL API error (${error.status})`);
+        throw new Error(`WCL API error (${error.statusCode})`);
+      }
+      // A 200 response carrying a top-level `errors` array surfaces as CombinedGraphQLErrors.
+      if (CombinedGraphQLErrors.is(error)) {
+        throw new Error(error.errors[0]?.message || 'WCL GraphQL error');
       }
       throw error;
     }
-    if (body.errors?.length) throw new Error(body.errors[0].message || 'WCL GraphQL error');
-    return body.data as TData;
   }
 
   async getReport(code: string): Promise<WclReport> {
     const vars: ReportQueryVars = { code };
-    const result = await this.query<{ reportData: { report: WclReport } }>(REPORT_Q, vars);
+    // network-only: the report is re-polled to detect new pulls, so it must never
+    // be served from cache (a cache hit would silently hide newly-recorded fights).
+    const result = await this.query<{ reportData: { report: WclReport } }>(REPORT_Q, vars, 'network-only');
     return result.reportData.report;
   }
 
@@ -91,8 +105,10 @@ export class WclApiService {
       if (sourceId != null) vars.sourceID = sourceId;
       if (includeResources) vars.includeResources = true;
       if (hostilityType) vars.hostilityType = hostilityType;
+      // network-only: event pages are large and per-pull; caching them wastes memory
+      // and risks serving stale data on re-analysis.
       const result = await this.query<{ reportData: { report: { events: { data: WclEvent[]; nextPageTimestamp?: number } } } }>(
-        EVENTS_Q, vars,
+        EVENTS_Q, vars, 'network-only',
       );
       const page = result.reportData.report.events;
       events.push(...(page.data ?? []));
