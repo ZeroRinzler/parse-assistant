@@ -1,18 +1,12 @@
 # warcraft-learner
 
-A web-based diagnostic tool for Mythic WoW raiders. It fetches combat data from Warcraft Logs, evaluates it against spec-specific rulebooks (AI-generated from guides), and delivers prescriptive, coaching-style feedback with comparison against top-parse players.
-
-The app is a **fully static Angular SPA** deployed on GitHub Pages. There is no backend server. All analysis runs client-side. WCL is queried directly from the browser via PKCE OAuth2.
+A web-based diagnostic tool for Mythic WoW raiders: it evaluates Warcraft Logs combat data against AI-generated, spec-specific rulebooks and delivers coaching-style feedback benchmarked against top parses. The app is a **fully static Angular SPA** on GitHub Pages - no backend, all analysis client-side, WCL queried directly from the browser via PKCE OAuth2.
 
 ## Branding & naming
 
 - **The product name is always `warcraft-learner`** - lowercase, hyphenated, exactly that casing. Never "Warcraft Learner", "WarcraftLearner", or any other variant. This applies to the page `<title>`, nav wordmark, CLI banners, READMEs, and any new user-facing copy.
 - **Do not confuse it with "Warcraft Logs"** (a.k.a. WCL) - that is the external data provider, a separate product. Leave "Warcraft Logs" / "WCL" strings as-is; only our own app name is normalized to `warcraft-learner`.
-- **Logo / favicon** - a gold shield with an ascending bar chart (martial "Warcraft" + the analytics/"learner" angle). Single source of truth: `frontend/public/favicon.svg`. It also drives the `.ico` and the nav-bar mark.
-  - `favicon.ico` is **regenerated from** `favicon.svg` (16/32/48px) - do not hand-edit the binary. Regen with `sharp` + `png-to-ico` (rasterize the SVG at high density, resize to each size, pack into one `.ico`).
-  - `index.html` references the SVG favicon first (`type="image/svg+xml"`) with the `.ico` as legacy fallback.
-  - The nav-bar logo (`shared/components/page-nav`) is the **same artwork inlined as SVG** in the template, so it themes with CSS vars. Set its fills via Tailwind utility classes (`fill-[var(--gold)]` / `fill-[var(--surface)]`) - **not** `fill="var(--…)"` presentation attributes, which browsers don't reliably honor.
-  - Brand gold is `--gold` (`#e5cc80`) - the Warcraft Logs 100-parse ("Astounding") gold, chosen deliberately since the tool benchmarks against top parses. The favicon's literal hex colors must track the design tokens in `styles.scss`.
+- **Logo / favicon** - gold shield with an ascending bar chart. Single source of truth: `frontend/public/favicon.svg`, which drives the `.ico` (regenerated at 16/32/48px via `sharp` + `png-to-ico`, never hand-edited) and the nav-bar mark. `index.html` references the SVG first (`type="image/svg+xml"`) with the `.ico` as legacy fallback. The nav-bar logo (`shared/components/page-nav`) is the same artwork inlined as SVG so it themes with CSS vars - set its fills via Tailwind classes (`fill-[var(--gold)]` / `fill-[var(--surface)]`), **not** `fill="var(--…)"` attributes (browsers don't reliably honor them). Brand gold `--gold` (`#e5cc80`) is the WCL 100-parse "Astounding" gold; the favicon's literal hex must track the `styles.scss` tokens.
 
 ## Analysis design principles
 
@@ -126,13 +120,28 @@ warcraft-learner/
 ├── prompts/
 │   └── rulebook_skill.md       # LLM prompt template for rulebook generation
 ├── .github/workflows/
-│   ├── deploy-pages.yml   # Build Angular --base-href /warcraft-learner/ → GitHub Pages
-│   └── ingest-parses.yml  # Daily + manual: runs `npm run ingest`, commits data/specs/**
+│   ├── deploy-pages.yml         # Build Angular --base-href /warcraft-learner/ → GitHub Pages (push to main)
+│   ├── ingest-parses.yml        # Hourly (cron 23 * * * *) + manual: runs `npm run ingest`, commits data/specs/**
+│   ├── pr-preview.yml           # Per-PR preview deploy
+│   ├── pr-preview-cleanup.yml   # Tear down preview when PR closes
+│   └── test.yml                 # CI: lint + tests
 ```
 
 **Data location**: `frontend/public/data/specs/` - Angular's `public/` directory serves these at `/data/specs/` in both the dev server and the built app.
 
 **Build output** (`static/angular/`) is gitignored - rebuilt by `deploy-pages.yml` on every push to `main`.
+
+**Local dev / scripts** (all run from `frontend/`):
+
+| Command | Description |
+|---|---|
+| `npm start` | Angular dev server on http://localhost:4200 |
+| `npm run build` | Production build to `../static/angular/` |
+| `npm run ingest` | Ingest top WCL parses (interactive, or `--spec Name --all`); needs `WCL_CLIENT_ID`/`WCL_CLIENT_SECRET` |
+| `npm run scrape` | Add and scrape guide URLs |
+| `npm run admin` | Manage rulebooks (build AI prompt, save AI JSON output) |
+
+The CLI scripts are TypeScript run via `tsx` (e.g. `tsx --tsconfig tsconfig.scripts.json scripts/ingest.ts`), not `.mjs`/`node`. `WCL_CLIENT_ID`/`WCL_CLIENT_SECRET` come from the [Warcraft Logs API clients](https://www.warcraftlogs.com/api/clients/) page and are only used server-side (GHA secrets), never in the browser. No Anthropic API key is needed - rulebook generation is a copy-prompt / paste-back flow that works with any LLM.
 
 ## Key flows
 
@@ -166,7 +175,7 @@ WCL event fetching runs on the **main thread** through the `AnalysisDataSource` 
 11. **Gear comparison** - after analysis completes, `post-raid.ts` fetches the selected player's gear via `getCharGear(player.name, player.server, reportRegion, encounterID)`. The report region (added to `REPORT_Q` as `region{slug}`) is shared by all players in the log, so gear lookup works for any raider - not just the logged-in account's own characters. Falls back gracefully (bench-only view) when the character has no ranked kills for the encounter.
 
 ### Ingestion (`npm run ingest`)
-Runs `frontend/scripts/ingest.ts` (orchestrator; ETL modules under `scripts/ingest/`). Also runs as `ingest-parses.yml` GHA daily + manually.
+Runs `frontend/scripts/ingest.ts` (orchestrator; ETL modules under `scripts/ingest/`). Also runs as the `ingest-parses.yml` GHA hourly (cron `23 * * * *`) and on manual `workflow_dispatch`.
 
 1. Authenticates to WCL with client credentials (from `WCL_CLIENT_ID`/`WCL_CLIENT_SECRET` environment variables - server-side secret, only used in GHA, never in the browser).
 2. Queries `characterRankings` for each boss to find top 10 parses.
@@ -178,6 +187,15 @@ Runs `frontend/scripts/ingest.ts` (orchestrator; ETL modules under `scripts/inge
 8. Updates `encounters.json` index.
 
 GHA commits `frontend/public/data/specs/**`, which triggers `deploy-pages.yml` to rebuild and redeploy.
+
+**Ingesting spec data from a branch (preferred over local ingestion - no local WCL credentials needed).** The ingest workflow can run on any branch via manual trigger:
+
+1. Push the branch to GitHub (rulebook changes, new spec dirs, etc.).
+2. **Actions -> Ingest Parse Samples -> Run workflow**, select the branch.
+3. Optionally set a specific spec name, or leave blank to ingest all specs that have a `rulebook.json`.
+4. Run. The workflow commits updated `frontend/public/data/specs/**` directly to that branch; `git pull` to get the files.
+
+For Claude: trigger via the `mcp__github__actions_run_trigger` tool on the current feature branch, wait for the run to complete, then `git pull`.
 
 > **Keep data shapes in sync.** The bench/sample shape that ingestion writes lives in `scripts/ingest/models/*.models.ts` (`wcl.models.ts`, `bench.models.ts`, `parse-sample.models.ts`) and is mirrored in the frontend consumers - `core/models/analysis.models.ts`, `core/models/encounter.models.ts`, `core/services/analysis-core.ts` - and documented in the **Data models** section below. **Whenever you change what ingestion emits (add/remove/rename a field), check and update all of these together, plus the rulebook skill + schema** (`prompts/rulebook_skill.md`, `prompts/rulebook.schema.json`) since ingestion consumes the rulebook (`duration`, `spell_id`s). Dropping a feature end-to-end means removing it from ingestion **and** every consumer above. Already-committed JSON under `data/specs/**` keeps stale fields until the next re-ingest - harmless, since consumers ignore unknown fields.
 
@@ -207,7 +225,7 @@ Encounters loaded from `/data/specs/{spec}/encounters.json` (static file). Filte
 ## Data models
 
 ### `index.json` (`frontend/public/data/specs/index.json`)
-Spec manifest written by `ingest.mjs` `writeSpecIndex()` at the end of each spec ingestion. Rebuilt by scanning all spec folders on disk - safe to run sharded (one spec at a time). Consumed by `EncounterService.getSpecs()` to populate the spec dropdown on `/pre`.
+Spec manifest written by `ingest.ts` `writeSpecIndex()` at the end of each spec ingestion. Rebuilt by scanning all spec folders on disk - safe to run sharded (one spec at a time). Consumed by `EncounterService.getSpecs()` to populate the spec dropdown on `/pre`.
 
 | field | notes |
 |---|---|
@@ -228,7 +246,7 @@ Spec manifest written by `ingest.mjs` `writeSpecIndex()` at the end of each spec
 AI-generated rulebook. Extra top-level fields added on save: `guide_count`, `saved_at`.
 
 ### `positions/{enc_id}.json`
-Per-parse position timelines for the positioning map (written by `ingest.mjs` `buildParsePositions`/`savePositions`; consumed by `core/services/positioning-core.ts` + `core/models/positioning.models.ts`). Top-level: `{spec, encounter_id, encounter_name, interval_s, sample_count, parses[]}`. Each parse: `{report_code, fight_id, player_name, duration_s, interval_s, player: PosRow[], enemies: [{game_id, name, is_boss, samples: PosRow[]}]}`. A `PosRow` is `[t_s, x, y, facing|null, mapID|null]` with **raw** WCL units (x/y in hundredths of a yard, facing in milliradians) - the frontend scales them. Enemies are keyed by `game_id` so the same boss/add matches across parses; `is_boss` = the enemy with the highest `maxHitPoints`.
+Per-parse position timelines for the positioning map (written by `ingest.ts` `buildParsePositions`/`savePositions`; consumed by `core/services/positioning-core.ts` + `core/models/positioning.models.ts`). Top-level: `{spec, encounter_id, encounter_name, interval_s, sample_count, parses[]}`. Each parse: `{report_code, fight_id, player_name, duration_s, interval_s, player: PosRow[], enemies: [{game_id, name, is_boss, samples: PosRow[]}]}`. A `PosRow` is `[t_s, x, y, facing|null, mapID|null]` with **raw** WCL units (x/y in hundredths of a yard, facing in milliradians) - the frontend scales them. Enemies are keyed by `game_id` so the same boss/add matches across parses; `is_boss` = the enemy with the highest `maxHitPoints`.
 
 ### `parse_samples/{enc_id}.json`
 List of raw parse samples. Source of truth for bench files.
@@ -324,9 +342,9 @@ Non-obvious things that have caused bugs - read before touching gear extraction 
 | **Gear array is positionally indexed** | WCL returns gear as a bare array; the array index (0-based) IS the slot number. No `slot` field. |
 | **Weapon slots shifted in Midnight** | Gear array has 17 entries (0-16). Weapons at index 15 (MH) and 16 (OH). Index 14 is Back/Cloak. |
 | **Trinket slots are 12 and 13** | Confirmed from `encounterRankings` responses. |
-| **`permanentEnchant` is a string** | Numeric ID returned as string. `permanentEnchantName` is never populated. Enchant names resolved via `gameData.enchant(id)` in `ingest.mjs`. |
+| **`permanentEnchant` is a string** | Numeric ID returned as string. `permanentEnchantName` is never populated. Enchant names resolved via `gameData.enchant(id)` in `ingest.ts`. |
 | **Two incompatible talent formats** | `characterRankings` → old format (`{talentID, points}` list) → `v1:` key. `encounterRankings` → Midnight format (nested `nodeId` dict) → `v2:` key. ID spaces are incompatible; cannot compare directly. |
-| **Solving the talent format problem** | `ingest.mjs` fires a parallel `encounterRankings` query per ranked player to get the `v2:` talent key, overwriting the `v1:` key from `characterRankings`. |
+| **Solving the talent format problem** | `ingest.ts` fires a parallel `encounterRankings` query per ranked player to get the `v2:` talent key, overwriting the `v1:` key from `characterRankings`. |
 | **`server.region` may be a string** | In `characterRankings` JSON blob, `server.region` is sometimes `"EU"` (string) rather than `{slug: "eu"}`. Handle both forms. |
 | **`gameData.spell()` was removed** | Spell icons and names must come from `masterData.abilities` in the report response. |
 | **Event positions need `includeResources: true`** | The default `events` response carries no coordinates. Passing `includeResources: true` attaches the actor's resource snapshot, which includes position. Adds bandwidth, so it is off by default and only requested by the positioning feature. |
@@ -340,7 +358,7 @@ Non-obvious things that have caused bugs - read before touching gear extraction 
 | API | Auth | Where used |
 |---|---|---|
 | Warcraft Logs v2 (GraphQL, `/api/v2/user`) | PKCE OAuth2 (browser) | Report events, character rankings, gear lookup |
-| Warcraft Logs v2 (GraphQL, `/api/v2/client`) | Client credentials (CLI/GHA only, never browser) | `ingest.mjs` parse fetching |
+| Warcraft Logs v2 (GraphQL, `/api/v2/client`) | Client credentials (CLI/GHA only, never browser) | `ingest.ts` parse fetching |
 
 ## Analysis thresholds
 
@@ -359,7 +377,7 @@ Non-obvious things that have caused bugs - read before touching gear extraction 
 | Comparison table (uses/min) | `top_stddev_uses_per_min` per CD | ±0.05 |
 | Comparison table (first cast) | `top_stddev_first_cast_s` per CD | ±3s |
 
-### Burst window definition (`ingest.mjs` → `findBurstWindows` / `clusterBurstWindows`)
+### Burst window definition (`ingest.ts` → `findBurstWindows` / `clusterBurstWindows`)
 
 **Per-parse**:
 1. Build candidate windows from CD cast times × CD durations (from rulebook `duration`).
@@ -376,7 +394,7 @@ Non-obvious things that have caused bugs - read before touching gear extraction 
 4. `window_length_s` = mean of member window lengths.
 5. Emits **absolute damage** stats (`dmg_avg`/`dmg_min`/`dmg_max`/`dmg_stddev`, per-ability `avg_damage`/`min_damage`/`max_damage`) - **not** percentages. The player vs top-parse comparison and the Burst/Defensive Windows cards compare raw damage so the numbers stay meaningful on progression (a wipe's short fight-total would otherwise inflate every window's share).
 
-### Defensive window definition (`ingest.mjs` → `findDefensiveWindows` / `clusterDefensiveWindows`)
+### Defensive window definition (`ingest.ts` → `findDefensiveWindows` / `clusterDefensiveWindows`)
 
 **Per-parse**:
 1. For each defensive in rulebook, find buff apply/remove pairs matching its `spell_id`.
@@ -390,26 +408,3 @@ Non-obvious things that have caused bugs - read before touching gear extraction 
 4. Each cluster: `defensive_name`, `spell_id`, `window_length_s`, absolute damage stats (`dmg_avg`/`dmg_min`/`dmg_max`/`dmg_stddev`), ability breakdown of damage sources (absolute `avg_damage`), and `ref_game_id` (the gameID of the enemy dealing the window's main damage - the positioning map's default reference for defensive windows). `ref_game_id` is null for burst clusters.
 
 Both cluster functions share `groupByTime()` and `clusterBaseStats()` helpers.
-
-### Remaining static values
-
-| Value | Location | Notes |
-|---|---|---|
-| `bl_time - 30` to `bl_time + 55` BL window | `ingest.mjs` | BL duration (40s) + 15s grace. Defines what we measure - not worth deriving from data. |
-
-### Built
-
-| Feature | Notes |
-|---|---|
-| Guide ingestion → LLM → rulebook | `scrape.mjs` + `admin.mjs`; copy-prompt / paste-back workflow |
-| Deterministic rules engine | `cast_without_prior`, `hold_cooldown_for_anchor` |
-| Cooldown analysis | Lost casts, BL alignment, opener delay, held CDs, hold suggestions, cast efficiency |
-| Top-parse comparison | Uses/min normalization; per-CD first cast comparison |
-| Burst window analysis | CD-cast-centric, variable count + length, candle diagrams |
-| Defensive analysis | Per-defensive lost/held/suggestions; buff-window-centric defensive windows |
-| Pre-fight gear check | Talents, trinkets, enchants vs top-parse aggregates (all client-side WCL queries) |
-| Hold pattern detection | Per-cast-index hold targets; "Timing Suggestions" section |
-| Fight dropdown with attempt numbering | Wipes `✗ #N`, kills `✓` |
-| GHA ingestion pipeline | Daily + manual; commits `frontend/public/data/specs/**` |
-| GitHub Pages deployment | `deploy-pages.yml`; builds with `--base-href /warcraft-learner/` |
-| Angular 22 SPA | Replaced old vanilla JS; fully client-side; no backend |
