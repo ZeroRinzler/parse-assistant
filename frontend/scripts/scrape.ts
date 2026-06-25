@@ -66,12 +66,12 @@ function guidesPath(spec: string): string {
   return path.join(DATA_DIR, spec, 'guides.json');
 }
 
-function loadGuides(spec: string): Guide[] {
-  return readJson<Guide[]>(guidesPath(spec)) ?? [];
+async function loadGuides(spec: string): Promise<Guide[]> {
+  return await readJson<Guide[]>(guidesPath(spec)) ?? [];
 }
 
-function saveGuides(spec: string, guides: Guide[]): void {
-  writeJson(guidesPath(spec), guides);
+async function saveGuides(spec: string, guides: Guide[]): Promise<void> {
+  await writeJson(guidesPath(spec), guides);
 }
 
 // ── Scraping ──────────────────────────────────────────────────────────────────
@@ -192,7 +192,7 @@ async function addGuide(spec: string): Promise<void> {
   const typeIdx = await askList('Guide type:', ['web', 'youtube', 'simc']);
   const guideType = (['web', 'youtube', 'simc'] as const)[typeIdx];
 
-  const guides = loadGuides(spec);
+  const guides = await loadGuides(spec);
   const newGuide: Guide = {
     id: nextId(guides),
     spec,
@@ -202,7 +202,7 @@ async function addGuide(spec: string): Promise<void> {
     status: 'pending',
   };
   guides.push(newGuide);
-  saveGuides(spec, guides);
+  await saveGuides(spec, guides);
   console.log(`Added guide #${newGuide.id}`);
 
   const doScrape = await ask('Scrape now? [Y/n] ');
@@ -212,7 +212,7 @@ async function addGuide(spec: string): Promise<void> {
 }
 
 async function scrapeGuideById(spec: string, guideId: number): Promise<void> {
-  const guides = loadGuides(spec);
+  const guides = await loadGuides(spec);
   const idx = guides.findIndex(g => g.id === guideId);
   if (idx === -1) { console.log(`Guide #${guideId} not found`); return; }
 
@@ -221,18 +221,18 @@ async function scrapeGuideById(spec: string, guideId: number): Promise<void> {
   try {
     const content = await scrapeGuide(guide);
     guides[idx] = { ...guide, content, status: 'scraped' };
-    saveGuides(spec, guides);
+    await saveGuides(spec, guides);
     console.log(` OK (${content.length} chars)`);
   } catch (err) {
     guides[idx] = { ...guide, content: '', status: 'error' };
-    saveGuides(spec, guides);
+    await saveGuides(spec, guides);
     console.log(` ERROR: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
 async function guidesMenu(spec: string): Promise<void> {
   while (true) {
-    const guides = loadGuides(spec);
+    const guides = await loadGuides(spec);
     console.log(`\n-- Guides for ${spec} (${guides.length}) ----------------------------------`);
     guides.forEach((g, i) =>
       console.log(`  ${i + 1}. [${g.status.padEnd(7)}] ${g.guide_type.toUpperCase().padEnd(7)} ${g.url.slice(0, 70)}`));
@@ -261,7 +261,7 @@ async function guidesMenu(spec: string): Promise<void> {
       const n = parseInt(await ask('Guide number to delete: '));
       if (n >= 1 && n <= guides.length) {
         const removed = guides.splice(n - 1, 1)[0];
-        saveGuides(spec, guides);
+        await saveGuides(spec, guides);
         console.log(`Deleted guide #${removed.id}`);
       }
     } else {
@@ -294,10 +294,10 @@ async function main(): Promise<void> {
 
   // ── CLI mode (non-interactive) ──────────────────────────────────────────────
   if (cliSpec && cliUrl) {
-    const guides = loadGuides(cliSpec);
+    const guides = await loadGuides(cliSpec);
     const newGuide: Guide = { id: nextId(guides), spec: cliSpec, url: cliUrl, guide_type: cliType, content: '', status: 'pending' };
     guides.push(newGuide);
-    saveGuides(cliSpec, guides);
+    await saveGuides(cliSpec, guides);
     console.log(`Added guide #${newGuide.id} for ${cliSpec}. Scraping...`);
     await scrapeGuideById(cliSpec, newGuide.id);
     rl.close();

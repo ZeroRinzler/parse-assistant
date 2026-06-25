@@ -19,10 +19,9 @@ import fs from 'fs';
 import path from 'path';
 import { spawn, spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
-import Ajv from 'ajv';
 import { Command } from 'commander';
 import type { Rulebook } from '../src/app/core/models/rulebook.models.ts';
-import { MAX_GUIDE_CHARS, readJson, writeJson, getKnownSpecs as listSpecs, createPrompt } from './lib.ts';
+import { MAX_GUIDE_CHARS, readJson, writeJson, getKnownSpecs as listSpecs, createPrompt, readRulebookSchemaText, validateRulebook } from './lib.ts';
 
 new Command()
   .name('admin')
@@ -35,7 +34,6 @@ const __dirname = path.dirname(__filename);
 const FRONTEND_ROOT = path.resolve(__dirname, '..');
 const DATA_DIR = path.join(FRONTEND_ROOT, 'public', 'data', 'specs');
 const PROMPTS_DIR = path.resolve(__dirname, '..', '..', 'prompts');
-const SCHEMA_PATH = path.join(PROMPTS_DIR, 'rulebook.schema.json');
 
 const { rl, ask, askList } = createPrompt();
 const getKnownSpecs = (): string[] => listSpecs(DATA_DIR);
@@ -91,30 +89,18 @@ interface GuideEntry {
   url: string;
 }
 
-interface SchemaResult { text: string; schema: Record<string, unknown>; }
-
-function loadSchema(): SchemaResult {
-  if (!fs.existsSync(SCHEMA_PATH)) throw new Error(`Schema file not found: ${SCHEMA_PATH}`);
-  const raw = fs.readFileSync(SCHEMA_PATH, 'utf8');
-  try {
-    return { text: raw, schema: JSON.parse(raw) as Record<string, unknown> };
-  } catch (err) {
-    throw new Error(`Schema file is not valid JSON: ${err instanceof Error ? err.message : String(err)}`);
-  }
-}
-
-function buildPrompt(spec: string): string {
+async function buildPrompt(spec: string): Promise<string> {
   const skillPath = path.join(PROMPTS_DIR, 'rulebook_skill.md');
   if (!fs.existsSync(skillPath)) throw new Error(`Skill file not found: ${skillPath}`);
 
-  const { text: schemaText } = loadSchema();
+  const schemaText = await readRulebookSchemaText();
 
   let skill = fs.readFileSync(skillPath, 'utf8');
   skill = skill.replace(/\{\{spec\}\}/g, spec);
   skill = skill.replace(/\{\{schema\}\}/g, () => schemaText.trim());
 
   const guidesPath = path.join(DATA_DIR, spec, 'guides.json');
-  const guides = readJson<GuideEntry[]>(guidesPath) ?? [];
+  const guides = await readJson<GuideEntry[]>(guidesPath) ?? [];
   const scraped = guides.filter(g => g.status === 'scraped' && g.content);
 
   if (!scraped.length) {
@@ -126,28 +112,6 @@ function buildPrompt(spec: string): string {
   );
 
   return `${skill}\n\n## Guide Content\n\n${sections.join('\n\n')}`;
-}
-
-// ── JSON Schema validation ──────────────────────────────────────────────────
-//
-// Validates pasted rulebook JSON against prompts/rulebook.schema.json using
-// ajv (draft-07). strict:false silences ajv's warnings about the draft-2019
-// $defs/examples annotation keywords, which it still resolves correctly.
-
-let _validator: ReturnType<Ajv['compile']> | null = null;
-function getValidator(): ReturnType<Ajv['compile']> {
-  if (_validator) return _validator;
-  const { schema } = loadSchema();
-  const ajv = new Ajv({ allErrors: true, strict: false });
-  _validator = ajv.compile(schema);
-  return _validator;
-}
-
-// Returns an array of human-readable error strings (empty = valid).
-function validateRulebook(value: unknown): string[] {
-  const validate = getValidator();
-  if (validate(value)) return [];
-  return (validate.errors ?? []).map(e => `${e.instancePath || '(root)'} ${e.message}`);
 }
 
 // ── Rulebook management ───────────────────────────────────────────────────────
@@ -176,7 +140,7 @@ function readJsonPaste(): Promise<string> {
 async function rulebookMenu(spec: string): Promise<void> {
   while (true) {
     const rbPath = path.join(DATA_DIR, spec, 'rulebook.json');
-    const rb = readJson<Rulebook>(rbPath);
+    const rb = await readJson<Rulebook>(rbPath);
 
     console.log(`\n-- Rulebook for ${spec} ------------------------------------------------`);
     if (rb) {
@@ -197,7 +161,7 @@ async function rulebookMenu(spec: string): Promise<void> {
     if (idx === 0) {
       let prompt: string;
       try {
-        prompt = buildPrompt(spec);
+        prompt = await buildPrompt(spec);
       } catch (err) {
         console.error(`\nError: ${err instanceof Error ? err.message : String(err)}`);
         continue;
@@ -222,7 +186,7 @@ async function rulebookMenu(spec: string): Promise<void> {
         const parsed = JSON.parse(json) as Record<string, unknown>;
         if (!parsed['spec']) parsed['spec'] = spec;
 
-        const errors = validateRulebook(parsed);
+        const errors = await validateRulebook(parsed);
         if (errors.length) {
           console.error(`\nPasted JSON failed schema validation (${errors.length} error(s)):`);
           errors.slice(0, 20).forEach(e => console.error(`  - ${e}`));
@@ -232,7 +196,7 @@ async function rulebookMenu(spec: string): Promise<void> {
         }
 
         const guidesPath = path.join(DATA_DIR, spec, 'guides.json');
-        const guides = readJson<GuideEntry[]>(guidesPath) ?? [];
+        const guides = await readJson<GuideEntry[]>(guidesPath) ?? [];
         const guideCount = guides.filter(g => g.status === 'scraped').length;
 
         const toSave = {
@@ -241,7 +205,7 @@ async function rulebookMenu(spec: string): Promise<void> {
           saved_at: new Date().toISOString().replace('T', ' ').slice(0, 19),
         };
 
-        writeJson(rbPath, toSave);
+        await writeJson(rbPath, toSave);
         console.log(`\nRulebook saved to ${rbPath}`);
         const savedRb = toSave as Partial<Rulebook>;
         console.log(`  ${savedRb.major_cooldowns?.length ?? 0} cooldowns, ${savedRb.defensives?.length ?? 0} defensives, ${savedRb.rules?.length ?? 0} rules`);
@@ -295,4 +259,5 @@ if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
   });
 }
 
-export { loadSchema, buildPrompt, validateRulebook };
+export { buildPrompt };
+export { validateRulebook } from './lib.ts';

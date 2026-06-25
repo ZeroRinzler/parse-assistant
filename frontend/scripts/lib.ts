@@ -6,20 +6,60 @@
  */
 
 import fs from 'fs';
+import fsp from 'fs/promises';
 import path from 'path';
 import readline from 'readline';
+import { fileURLToPath } from 'url';
+import Ajv from 'ajv';
 
 /** Max guide content length fed into the LLM prompt (admin) and stored per guide (scrape). */
 export const MAX_GUIDE_CHARS: number = 60_000;
 
-export function readJson<T = unknown>(filePath: string): T | null {
-  if (!fs.existsSync(filePath)) return null;
-  try { return JSON.parse(fs.readFileSync(filePath, 'utf8')) as T; } catch { return null; }
+export async function readJson<T = unknown>(filePath: string): Promise<T | null> {
+  try {
+    return JSON.parse(await fsp.readFile(filePath, 'utf8')) as T;
+  } catch {
+    // Missing file (ENOENT) or unparseable content both resolve to null - same
+    // contract as the previous existsSync + readFileSync implementation.
+    return null;
+  }
 }
 
-export function writeJson(filePath: string, data: unknown, compact = false): void {
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, JSON.stringify(data, null, compact ? 0 : 2), 'utf8');
+export async function writeJson(filePath: string, data: unknown, compact = false): Promise<void> {
+  await fsp.mkdir(path.dirname(filePath), { recursive: true });
+  await fsp.writeFile(filePath, JSON.stringify(data, null, compact ? 0 : 2), 'utf8');
+}
+
+// ── Rulebook schema validation ─────────────────────────────────────────────────
+//
+// One shared validator for prompts/rulebook.schema.json, used by both admin (before
+// saving a pasted rulebook) and ingest (pre-flight before consuming a rulebook).
+// ajv draft-07; strict:false silences warnings about the draft-2019 $defs/examples
+// annotation keywords, which ajv still resolves correctly.
+
+const SCHEMA_PATH = path.resolve(
+  fileURLToPath(import.meta.url), '..', '..', '..', 'prompts', 'rulebook.schema.json',
+);
+
+let _validator: ReturnType<Ajv['compile']> | null = null;
+
+/** Read the raw rulebook schema text (used by admin to build the LLM prompt). */
+export async function readRulebookSchemaText(): Promise<string> {
+  return fsp.readFile(SCHEMA_PATH, 'utf8');
+}
+
+/**
+ * Validate a value against the rulebook schema. Returns an array of human-readable,
+ * property-level error strings (empty array = valid). The compiled validator is
+ * cached after first use.
+ */
+export async function validateRulebook(value: unknown): Promise<string[]> {
+  if (!_validator) {
+    const schema = JSON.parse(await readRulebookSchemaText()) as Record<string, unknown>;
+    _validator = new Ajv({ allErrors: true, strict: false }).compile(schema);
+  }
+  if (_validator(value)) return [];
+  return (_validator.errors ?? []).map(e => `${e.instancePath || '(root)'} ${e.message}`);
 }
 
 /**

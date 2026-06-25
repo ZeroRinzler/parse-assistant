@@ -29,7 +29,9 @@ import type {
   RawDefensiveWindowAbility, RawDefensiveWindow,
   ParseCooldownData, ParseSample,
 } from './parse-sample.models.ts';
-import { readJson, writeJson, getKnownSpecs as listSpecs } from './lib.ts';
+import * as ss from 'simple-statistics';
+import pLimit from 'p-limit';
+import { readJson, writeJson, getKnownSpecs as listSpecs, validateRulebook } from './lib.ts';
 
 // ── Paths ─────────────────────────────────────────────────────────────────────
 
@@ -121,6 +123,10 @@ const EXCLUDE_ZONE_PATTERNS = ['beta', 'ptr', 'mythic+', 'complete raids', 'delv
 const FRESH_HOURS = 23;
 // Stop cleanly when fewer than this many WCL points remain in the hour.
 const POINTS_MARGIN = 500;
+// Max parses fetched/analyzed concurrently per encounter. Bounds the burst of
+// WCL requests so concurrency cannot blow past the point budget; each task still
+// asserts budget before its network work.
+const PARSE_CONCURRENCY = 4;
 
 // ── Ingest-local WCL API response types ──────────────────────────────────────
 
@@ -742,20 +748,19 @@ function clusterDefensiveWindows(windows: RawDefensiveWindow[], totalSamples: nu
 
 // ── Parse analysis ────────────────────────────────────────────────────────────
 
-function loadRulebook(spec: string): Rulebook | null {
+async function loadRulebook(spec: string): Promise<Rulebook | null> {
   const rbPath = path.join(DATA_DIR, spec, 'rulebook.json');
-  if (!fs.existsSync(rbPath)) return null;
   return readJson<Rulebook>(rbPath);
 }
 
-function getSpecCooldowns(spec: string): RulebookCooldown[] | null {
-  const rb = loadRulebook(spec);
+async function getSpecCooldowns(spec: string): Promise<RulebookCooldown[] | null> {
+  const rb = await loadRulebook(spec);
   if (rb?.major_cooldowns?.length) return rb.major_cooldowns;
   return null;
 }
 
-function getSpecDefensives(spec: string): RulebookDefensive[] {
-  const rb = loadRulebook(spec);
+async function getSpecDefensives(spec: string): Promise<RulebookDefensive[]> {
+  const rb = await loadRulebook(spec);
   if (rb?.defensives?.length) return rb.defensives;
   return [];
 }
@@ -884,8 +889,8 @@ async function analyzeParse(
   wcl: WCLClient, spec: string, reportCode: string, fightId: number,
   playerName: string, combatantInfo: EnrichedRanking['combatant_info'],
 ): Promise<{ cooldown_data: ParseCooldownData; positions: ParsePositions | null } | null> {
-  const specCds = getSpecCooldowns(spec) ?? [];
-  const specDefensives = getSpecDefensives(spec);
+  const specCds = await getSpecCooldowns(spec) ?? [];
+  const specDefensives = await getSpecDefensives(spec);
 
   let meta: { reportData: { report: { fights: WclFightEntry[]; masterData: { actors: WclActorEntry[] } } } };
   try {
@@ -1157,22 +1162,20 @@ async function analyzeParse(
 
 // ── Analysis utils ────────────────────────────────────────────────────────────
 
+// Thin guarded delegators to simple-statistics. The guards preserve the
+// zero-on-empty / zero-on-single contract the ~30 call sites rely on
+// (ss.mean/ss.median throw on empty input; sampleStandardDeviation needs n >= 2).
+// stdev uses the sample (n-1) standard deviation, matching the prior implementation.
 function median(arr: number[]): number {
-  if (!arr.length) return 0;
-  const sorted = [...arr].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+  return arr.length ? ss.median(arr) : 0;
 }
 
 function mean(arr: number[]): number {
-  if (!arr.length) return 0;
-  return arr.reduce((s, v) => s + v, 0) / arr.length;
+  return arr.length ? ss.mean(arr) : 0;
 }
 
 function stdev(arr: number[]): number {
-  if (arr.length < 2) return 0;
-  const m = mean(arr);
-  return Math.sqrt(arr.reduce((s, v) => s + (v - m) ** 2, 0) / (arr.length - 1));
+  return arr.length >= 2 ? ss.sampleStandardDeviation(arr) : 0;
 }
 
 function round(v: number, decimals = 1): number {
@@ -1181,18 +1184,32 @@ function round(v: number, decimals = 1): number {
 
 // ── Shared clustering primitives ─────────────────────────────────────────────
 
-// Greedy: group windows by proximity in time (within mergeS seconds of running cluster median).
+// Median of an already-ascending-sorted array (O(1)); matches median() exactly.
+function medianOfSorted(sortedTimes: number[]): number {
+  const mid = sortedTimes.length >> 1;
+  return sortedTimes.length % 2
+    ? sortedTimes[mid]
+    : (sortedTimes[mid - 1] + sortedTimes[mid]) / 2;
+}
+
+// Group windows by proximity in time (within mergeS seconds of the running cluster
+// median). Single O(N) pass: windows are processed in ascending time order, so the
+// moment a new cluster is created every earlier cluster's median is already below
+// w - mergeS and (since later windows only increase) can never match again. Hence
+// only the most-recently-created cluster is ever a candidate - the previous greedy
+// scan over all clusters was redundant. Output is identical to that greedy version.
 function groupByTime<T extends { time_s: number }>(windows: T[], mergeS: number): T[][] {
   const sorted = [...windows].sort((a, b) => a.time_s - b.time_s);
   const clusters: T[][] = [];
+  let openTimes: number[] = []; // ascending times of the last (only open) cluster
   for (const w of sorted) {
-    let placed = false;
-    for (const cl of clusters) {
-      if (Math.abs(w.time_s - median(cl.map(c => c.time_s))) <= mergeS) {
-        cl.push(w); placed = true; break;
-      }
+    if (clusters.length && Math.abs(w.time_s - medianOfSorted(openTimes)) <= mergeS) {
+      clusters[clusters.length - 1].push(w);
+      openTimes.push(w.time_s); // w.time_s >= every prior time, so still sorted
+    } else {
+      clusters.push([w]);
+      openTimes = [w.time_s];
     }
-    if (!placed) clusters.push([w]);
   }
   return clusters;
 }
@@ -1365,7 +1382,7 @@ function aggregateGear(samples: ParseSample[]): GearStats {
 async function resolveEnchantNames(wcl: WCLClient, spec: string, encounterId: number): Promise<void> {
   const encPath = getEncounterPath(spec, encounterId);
   type EncFile = { gear: { enchants: Record<string, Array<{ id: number | string; name: string }>> } };
-  const data = readJson<EncFile>(encPath);
+  const data = await readJson<EncFile>(encPath);
   if (!data?.gear?.enchants) return;
 
   const enchantsMap = data.gear.enchants;
@@ -1398,7 +1415,7 @@ async function resolveEnchantNames(wcl: WCLClient, spec: string, encounterId: nu
         patched = true;
       }
     }
-    if (patched) writeJson(encPath, data);
+    if (patched) await writeJson(encPath, data);
   } catch {
     // gameData.enchant may not be available for all enchant IDs; keep empty names.
   }
@@ -1427,22 +1444,22 @@ function getPositionsPath(spec: string, encounterId: number): string {
 }
 
 /** Append a parse's position timelines (deduped by report+fight) to the positions file. */
-function savePositions(spec: string, encounterId: number, encounterName: string, positions: ParsePositions | null): void {
+async function savePositions(spec: string, encounterId: number, encounterName: string, positions: ParsePositions | null): Promise<void> {
   if (!positions) return;
   const file = getPositionsPath(spec, encounterId);
-  const existing = readJson<EncounterPositions>(file) ?? {};
+  const existing = await readJson<EncounterPositions>(file) ?? {};
   let parses = Array.isArray((existing as EncounterPositions).parses) ? (existing as EncounterPositions).parses : [];
   parses = parses.filter(p => !(p.report_code === positions.report_code && p.fight_id === positions.fight_id));
   parses.push(positions);
-  writeJson(file, {
+  await writeJson(file, {
     spec, encounter_id: encounterId, encounter_name: encounterName,
     interval_s: POSITIONS_INTERVAL_S, sample_count: parses.length, parses,
   }, true);
 }
 
-function saveParseSample(spec: string, encounterId: number, encounterName: string, reportCode: string, fightId: number, playerName: string, cooldownData: ParseCooldownData): void {
+async function saveParseSample(spec: string, encounterId: number, encounterName: string, reportCode: string, fightId: number, playerName: string, cooldownData: ParseCooldownData): Promise<void> {
   const samplesPath = getSamplesPath(spec, encounterId);
-  let samples = readJson<ParseSample[]>(samplesPath) ?? [];
+  let samples = await readJson<ParseSample[]>(samplesPath) ?? [];
   // Remove duplicate
   samples = samples.filter(s => !(s.report_code === reportCode && s.fight_id === fightId));
   samples.push({
@@ -1450,7 +1467,7 @@ function saveParseSample(spec: string, encounterId: number, encounterName: strin
     report_code: reportCode, fight_id: fightId, player_name: playerName,
     sampled_at: nowUtc(), ingest_hash: INGEST_HASH, cooldown_data: cooldownData,
   });
-  writeJson(samplesPath, samples);
+  await writeJson(samplesPath, samples);
 }
 
 function benchUsesPerMin(entries: BenchEntry[]): { avg: number; stddev: number; min: number; max: number } | Record<string, never> {
@@ -1536,9 +1553,9 @@ function buildBaseBenchmark(entries: BenchEntry[], usesOf: (e: BenchEntry) => nu
   };
 }
 
-function syncEncounterFile(spec: string, encounterId: number): void {
+async function syncEncounterFile(spec: string, encounterId: number): Promise<void> {
   const samplesPath = getSamplesPath(spec, encounterId);
-  const samples = readJson<ParseSample[]>(samplesPath) ?? [];
+  const samples = await readJson<ParseSample[]>(samplesPath) ?? [];
   if (!samples.length) return;
 
   const encName = samples[0].encounter_name ?? '';
@@ -1614,7 +1631,7 @@ function syncEncounterFile(spec: string, encounterId: number): void {
   const gear = aggregateGear(samples);
 
   // Defensive benchmarks
-  const specDefensives = getSpecDefensives(spec);
+  const specDefensives = await getSpecDefensives(spec);
   const aggDefUses = new Map<string, number[]>();
   for (const s of samples) {
     for (const d of (s.cooldown_data.defensives ?? [])) {
@@ -1675,18 +1692,18 @@ function syncEncounterFile(spec: string, encounterId: number): void {
   };
 
   const encPath = getEncounterPath(spec, encounterId);
-  writeJson(encPath, out);
-  syncEncountersIndex(spec);
+  await writeJson(encPath, out);
+  await syncEncountersIndex(spec);
 }
 
-function syncEncountersIndex(spec: string): void {
+async function syncEncountersIndex(spec: string): Promise<void> {
   const encDir = path.join(DATA_DIR, spec, 'encounters');
   if (!fs.existsSync(encDir)) return;
   const entries: Array<{ id: number; name: string; sample_count: number }> = [];
   for (const f of fs.readdirSync(encDir).sort()) {
     if (!f.endsWith('.json')) continue;
     try {
-      const d = readJson<{ encounter_id?: number; encounter_name?: string; sample_count?: number }>(path.join(encDir, f)) ?? {};
+      const d = await readJson<{ encounter_id?: number; encounter_name?: string; sample_count?: number }>(path.join(encDir, f)) ?? {};
       entries.push({
         id: d.encounter_id ?? parseInt(f),
         name: d.encounter_name ?? f,
@@ -1694,38 +1711,42 @@ function syncEncountersIndex(spec: string): void {
       });
     } catch {}
   }
-  writeJson(path.join(DATA_DIR, spec, 'encounters.json'), entries);
+  await writeJson(path.join(DATA_DIR, spec, 'encounters.json'), entries);
 }
 
 /** Rebuild data/specs/index.json by scanning all spec folders on disk. */
-function writeSpecIndex(): void {
+async function writeSpecIndex(): Promise<void> {
   if (!fs.existsSync(DATA_DIR)) return;
   const entries: Array<{ spec: string; encounter_count: number }> = [];
   for (const spec of fs.readdirSync(DATA_DIR).sort()) {
     const encFile = path.join(DATA_DIR, spec, 'encounters.json');
     if (!fs.existsSync(encFile)) continue;
     try {
-      const enc = readJson<Array<{ sample_count?: number }>>(encFile) ?? [];
+      const enc = await readJson<Array<{ sample_count?: number }>>(encFile) ?? [];
       const count = enc.filter(e => e.sample_count && e.sample_count > 0).length;
       if (count > 0) entries.push({ spec, encounter_count: count });
     } catch {}
   }
-  writeJson(path.join(DATA_DIR, 'index.json'), entries);
+  await writeJson(path.join(DATA_DIR, 'index.json'), entries);
 }
 
 // ── Spec selection ────────────────────────────────────────────────────────────
 
 // Returns known specs (those with a rulebook.json) sorted most-stale-first.
-function specsByStaleness(encounters: IngestEncounter[]): string[] {
+async function specsByStaleness(encounters: IngestEncounter[]): Promise<string[]> {
   const now = Date.now();
   const known = getKnownSpecs();
-  return known.slice().sort((a, b) => staleness(a, encounters, now) - staleness(b, encounters, now));
+  // Precompute staleness per spec (async I/O) before the synchronous sort.
+  const scores = new Map<string, number>(
+    await Promise.all(known.map(async spec => [spec, await staleness(spec, encounters, now)] as const)),
+  );
+  return known.slice().sort((a, b) => (scores.get(a) ?? 0) - (scores.get(b) ?? 0));
 }
 
-function staleness(spec: string, encounters: IngestEncounter[], now: number): number {
+async function staleness(spec: string, encounters: IngestEncounter[], now: number): Promise<number> {
   let worst = 0;
   for (const enc of encounters) {
-    const samples = readJson<ParseSample[]>(getSamplesPath(spec, enc.id)) ?? [];
+    const samples = await readJson<ParseSample[]>(getSamplesPath(spec, enc.id)) ?? [];
     if (!samples.length) return Infinity; // never ingested
     const newestMs = Math.max(...samples.map(s => new Date(s.sampled_at ?? 0).getTime()));
     const ageMs = now - newestMs;
@@ -1738,6 +1759,18 @@ function staleness(spec: string, encounters: IngestEncounter[], now: number): nu
 
 async function ingestSpecNonInteractive(wcl: WCLClient, spec: string, encounters: IngestEncounter[]): Promise<boolean> {
   console.log(`\nIngesting ${spec} - ${encounters.length} encounters (top ${TOP_N})`);
+
+  // Pre-flight: the rulebook drives every finding (cooldown spell IDs, durations).
+  // Refuse to ingest a spec whose rulebook violates the schema rather than emit
+  // garbage bench data; log the property-level errors so it can be fixed.
+  const rulebook = await loadRulebook(spec);
+  const schemaErrors = await validateRulebook(rulebook);
+  if (schemaErrors.length) {
+    console.error(`\n[${spec}] rulebook.json failed schema validation (${schemaErrors.length} error(s)) - skipping ingestion:`);
+    schemaErrors.forEach(err => console.error(`  - ${err}`));
+    return false;
+  }
+
   try {
     for (const enc of encounters) {
       // Freshness short-circuit: skip this encounter entirely (0 queries) when we
@@ -1745,7 +1778,7 @@ async function ingestSpecNonInteractive(wcl: WCLClient, spec: string, encounters
       // on count > 0 (not >= TOP_N) handles anonymous parses and low-population
       // bosses that can never fill a full TOP_N slot.
       const samplesPath = getSamplesPath(spec, enc.id);
-      const existingSamples = readJson<ParseSample[]>(samplesPath) ?? [];
+      const existingSamples = await readJson<ParseSample[]>(samplesPath) ?? [];
       if (existingSamples.length > 0) {
         const allFresh = existingSamples.every(s => s.ingest_hash === INGEST_HASH);
         if (allFresh) {
@@ -1773,38 +1806,53 @@ async function ingestSpecNonInteractive(wcl: WCLClient, spec: string, encounters
       console.log(` ${rankings.length} rankings found`);
 
       // Build set of cached parse keys
-      const cachedKeys = new Set<string>((readJson<ParseSample[]>(getSamplesPath(spec, enc.id)) ?? []).map(s => parseKey(s.report_code, s.fight_id)));
+      const cachedKeys = new Set<string>((await readJson<ParseSample[]>(getSamplesPath(spec, enc.id)) ?? []).map(s => parseKey(s.report_code, s.fight_id)));
+      const uncached = rankings.filter(ranking => !cachedKeys.has(parseKey(ranking.report_code, ranking.fight_id)));
+      const cached = rankings.length - uncached.length;
 
-      let done = 0, cached = 0;
-      for (const ranking of rankings) {
-        const key = parseKey(ranking.report_code, ranking.fight_id);
-        if (cachedKeys.has(key)) {
-          cached++;
-          done++;
-          continue;
-        }
-
-        // Uncached parse: enrich (server slug) then analyze.
+      // Fetch + analyze uncached parses concurrently (bounded by PARSE_CONCURRENCY)
+      // since the work is network-bound. Each task only fetches/analyzes and returns
+      // its result; the shared per-encounter sample/position files are written
+      // sequentially AFTER the batch to avoid a read-modify-write race.
+      const limit = pLimit(PARSE_CONCURRENCY);
+      let completed = 0;
+      const settled = await Promise.allSettled(uncached.map(ranking => limit(async () => {
+        // Budget gate before each parse's network work; throws BudgetExceededError
+        // to stop the run cleanly once the hourly point budget runs low.
         await wcl.assertBudget(POINTS_MARGIN);
-        process.stdout.write(`\r  [${enc.name}] Analyzing ${done + 1}/${rankings.length}: ${ranking.player}...    `);
-        try {
-          const enriched = await enrichRanking(wcl, ranking);
-          const combatant_info = enriched.combatant_info;
-          const res = await analyzeParse(wcl, spec, ranking.report_code, ranking.fight_id, ranking.player, combatant_info);
+        const enriched = await enrichRanking(wcl, ranking);
+        const res = await analyzeParse(wcl, spec, ranking.report_code, ranking.fight_id, ranking.player, enriched.combatant_info);
+        completed++;
+        process.stdout.write(`\r  [${enc.name}] Analyzed ${completed}/${uncached.length}...    `);
+        return res;
+      })));
+
+      // Persist results sequentially (in ranking order) - no concurrent writes.
+      let budgetErr: BudgetExceededError | null = null;
+      for (let i = 0; i < settled.length; i++) {
+        const outcome = settled[i];
+        if (outcome.status === 'fulfilled') {
+          const res = outcome.value;
           if (res?.cooldown_data) {
-            saveParseSample(spec, enc.id, enc.name, ranking.report_code, ranking.fight_id, ranking.player, res.cooldown_data);
-            savePositions(spec, enc.id, enc.name, res.positions);
+            const ranking = uncached[i];
+            await saveParseSample(spec, enc.id, enc.name, ranking.report_code, ranking.fight_id, ranking.player, res.cooldown_data);
+            await savePositions(spec, enc.id, enc.name, res.positions);
           }
-        } catch (err) {
-          if (err instanceof BudgetExceededError) throw err;
-          process.stdout.write(` (skip: ${err instanceof Error ? err.message.slice(0, 40) : String(err)})`);
+        } else if (outcome.reason instanceof BudgetExceededError) {
+          budgetErr = outcome.reason;
+        } else {
+          const reason = outcome.reason;
+          process.stdout.write(` (skip ${uncached[i].player}: ${reason instanceof Error ? reason.message.slice(0, 40) : String(reason)})`);
         }
-        done++;
       }
-      process.stdout.write(`\r  [${enc.name}] ${rankings.length - cached} analyzed, ${cached} cached.          \n`);
+      process.stdout.write(`\r  [${enc.name}] ${uncached.length} analyzed, ${cached} cached.          \n`);
+
+      // Partial progress for this encounter is now committed; surface the budget
+      // stop so the outer handler can exit cleanly.
+      if (budgetErr) throw budgetErr;
 
       process.stdout.write(`  [${enc.name}] Computing bench data...`);
-      syncEncounterFile(spec, enc.id);
+      await syncEncounterFile(spec, enc.id);
       await resolveEnchantNames(wcl, spec, enc.id);
       console.log(' done');
     }
@@ -1812,12 +1860,12 @@ async function ingestSpecNonInteractive(wcl: WCLClient, spec: string, encounters
     if (err instanceof BudgetExceededError) {
       console.log(`\n[budget] Stopping cleanly: ${err.message}`);
       console.log('[budget] Partial progress committed; remaining work picked up next run.');
-      writeSpecIndex();
+      await writeSpecIndex();
       return true;
     }
     throw err;
   }
-  writeSpecIndex();
+  await writeSpecIndex();
   console.log(`\nIngestion complete for ${spec}.`);
   return false;
 }
@@ -1854,7 +1902,7 @@ async function main(): Promise<void> {
     specs = [specArg];
     console.log(`Targeting spec: ${specArg}`);
   } else {
-    specs = specsByStaleness(encounters);
+    specs = await specsByStaleness(encounters);
     if (!specs.length) {
       console.log('No known specs (no rulebook.json found). Nothing to do.');
       return;
