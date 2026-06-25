@@ -5,19 +5,17 @@ html {
   height: 100%;
   color-scheme: dark;
 
-  @include mat.theme(
-    (
-      color: (
-        primary: mat.$azure-palette,
-        tertiary: mat.$blue-palette,
-        theme-type: dark,
-      ),
-      typography: Roboto,
-      density: 0,
-    )
-  );
+  @include mat.theme((
+    color: (
+      primary: mat.$azure-palette,
+      tertiary: mat.$blue-palette,
+      theme-type: dark,
+    ),
+    typography: Roboto,
+    density: 0,
+  ));
 
-  // App-level design tokens
+  /* App-level design tokens - the single source of color truth */
   --bg: #0e1117;
   --surface: #161b22;
   --surface-alt: #1c2128;
@@ -29,7 +27,14 @@ html {
   --warning: #d29922;
   --success: #3fb950;
   --info: #58a6ff;
-  --gold: #e5cc80; // Warcraft Logs 100-parse ("Astounding") gold - brand color
+  --gold: #e5cc80; /* Warcraft Logs 100-parse ("Astounding") gold - brand color */
+
+  /* Range-chart palette (shared by the SVG legend swatches and the Chart.js canvas) */
+  --chart-range: #4a9eff;
+  --chart-range-fill: rgba(74, 158, 255, 0.28);
+  --chart-avg: #60cfff;
+  --chart-you: #ffd700;
+  --chart-dot-outline: rgba(0, 0, 0, 0.55);
 }
 
 body {
@@ -40,12 +45,12 @@ body {
   height: 100%;
 }
 
-// ── Scrollbar ────────────────────────────────────────────────────────────────
+/* Scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
-// ── Material overrides ────────────────────────────────────────────────────────
+/* Material overrides */
 .mat-mdc-card {
   background-color: var(--surface) !important;
   color: var(--text) !important;
@@ -53,12 +58,14 @@ body {
   border-radius: 10px !important;
 }
 
-// Compact "row" cards (window-comparison, burst-window headers):
-// status glyph · label · spell · chevron. Material's card-header padding is
-// asymmetric (16px top, 0 bottom) and doesn't reliably center its items, which
-// left header-only rows top-heavy and the spell/label out of line with the
-// glyph and chevron. Force symmetric padding + vertical centering so every row
-// reads the same whether or not it has a content block below.
+/*
+ * Compact "row" cards (window-comparison, burst-window headers):
+ * status glyph - label - spell - chevron. Material's card-header padding is
+ * asymmetric (16px top, 0 bottom) and doesn't reliably center its items, which
+ * left header-only rows top-heavy and the spell/label out of line with the
+ * glyph and chevron. Force symmetric padding + vertical centering so every row
+ * reads the same whether or not it has a content block below.
+ */
 .mat-mdc-card-header {
   align-items: center !important;
   padding: 10px 14px !important;
@@ -72,313 +79,8 @@ body {
 
 .mat-mdc-form-field-subscript-wrapper { display: none; }
 
-// ── Shared comparison candle styles (legends used by burst-windows, defensives, damage-taken) ──
-.cmp-legend {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 8px;
-  font-size: 11px;
-  color: var(--muted);
-}
-
-.cmp-leg-item { display: flex; align-items: center; gap: 4px; }
-.cmp-range-note { font-size: 10px; color: var(--border); }
-.cmp-no-data { font-size: 11px; color: var(--muted); font-style: italic; }
-
-.cmp-leg {
-  display: inline-block;
-  width: 10px;
-  height: 10px;
-  border-radius: 2px;
-
-  &.player { background: var(--accent); opacity: 0.7; }
-  &.top    { background: var(--muted); opacity: 0.5; }
-}
-
-.cmp-item {
-  padding: 6px 0;
-  border-bottom: 1px solid var(--border);
-
-  &:last-child { border-bottom: none; }
-  &.cmp-highlight { background: rgba(248, 81, 73, 0.04); border-radius: 4px; padding: 6px 4px; }
-}
-
-.cmp-item-label {
-  font-size: 12px;
-  color: var(--text);
-  margin-bottom: 4px;
-
-  a { color: var(--accent); text-decoration: none; &:hover { text-decoration: underline; } }
-}
-
-.cmp-item-bars { display: flex; flex-direction: column; gap: 2px; }
-
-.cmp-subrow {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.cmp-track {
-  flex: 1;
-  height: 12px;
-  position: relative;
-  background: var(--surface);
-  border-radius: 3px;
-  overflow: visible;
-}
-
-.cmp-fill {
-  position: absolute;
-  top: 0;
-  left: 0;
-  height: 100%;
-  border-radius: 3px;
-  transition: width 0.3s;
-
-  &.player { background: var(--accent); opacity: 0.6; }
-  &.top    { background: var(--muted); opacity: 0.3; }
-}
-
-.cmp-candle {
-  position: absolute;
-  top: 1px;
-  height: 10px;
-  background: rgba(88, 166, 255, 0.15);
-  border: 1px solid rgba(88, 166, 255, 0.4);
-  border-radius: 2px;
-}
-
-.cmp-candle-tick {
-  position: absolute;
-  top: 0;
-  width: 2px;
-  height: 100%;
-  background: var(--accent);
-  transform: translateX(-50%);
-}
-
-.cmp-val {
-  width: 80px;
-  text-align: right;
-  font-size: 11px;
-  color: var(--muted);
-  flex-shrink: 0;
-
-  &.top { color: var(--muted); }
-  &.delta-good { color: var(--success); }
-  &.delta-warn { color: var(--warning); }
-  &.delta-bad  { color: var(--critical); }
-}
-
-.cmp-range {
-  display: block;
-  font-size: 9px;
-  color: var(--border);
-}
-
-// ── Burst window / defensive window shared card layout ───────────────────────
-.bw-card-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.bw-status-badge {
-  font-size: 10px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-weight: 600;
-
-  &.bw-badge-bw-ok      { color: var(--success); border: 1px solid var(--success); }
-  &.bw-badge-bw-low     { color: var(--critical); border: 1px solid var(--critical); }
-  &.bw-badge-bw-warn    { color: var(--warning); border: 1px solid var(--warning); }
-  &.bw-badge-bw-future  { color: var(--muted); border: 1px solid var(--border); }
-  &.bw-badge-bw-missing { color: var(--muted); border: 1px solid var(--border); }
-}
-
-.bw-expand-btn {
-  background: none;
-  border: none;
-  color: var(--accent);
-  font-size: 11px;
-  cursor: pointer;
-  padding: 2px 6px;
-  border-radius: 3px;
-  margin-left: auto;
-
-  &:hover { background: var(--surface); }
-}
-
-.bw-cmp-wrap {
-  margin-top: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.bw-future-wrap { opacity: 0.6; }
-
-.bw-cmp-caption {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-  font-size: 11px;
-  color: var(--muted);
-
-  .bw-cmp-you { color: var(--accent); }
-}
-
-// ── Ability breakdown (shared by burst-windows and defensives-section) ────────
-.bw-breakdown {
-  margin-top: 10px;
-  border-top: 1px solid var(--border);
-  padding-top: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-// Reserve height while the deferred chart chunk loads, to avoid layout shift.
-.chart-placeholder { min-height: 80px; }
-
-.ab-row { display: flex; flex-direction: column; gap: 4px; }
-
-.ab-name { display: flex; align-items: center; gap: 6px; font-size: 12px; }
-
-.ab-link { color: var(--accent); text-decoration: none; &:hover { text-decoration: underline; } }
-
-.ab-candle-row { display: flex; align-items: center; gap: 6px; font-size: 11px; padding-left: 4px; }
-
-// ── Comparison chart ──────────────────────────────────────────────────────────
-.cmp-chart {
-  width: 100%;
-  font-size: 12px;
-}
-
-.cmp-chart-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 0;
-  border-bottom: 1px solid var(--border);
-
-  &:last-child { border-bottom: none; }
-}
-
-.cmp-label {
-  width: 120px;
-  flex-shrink: 0;
-  color: var(--muted);
-  font-size: 11px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.cmp-bar-track {
-  flex: 1;
-  position: relative;
-  height: 20px;
-}
-
-.cmp-bar-bg {
-  position: absolute;
-  inset: 4px 0;
-  background: var(--surface-alt);
-  border-radius: 3px;
-}
-
-.cmp-bar-fill {
-  position: absolute;
-  top: 4px;
-  left: 0;
-  height: 12px;
-  border-radius: 3px;
-  background: var(--accent);
-  opacity: 0.4;
-  transition: width 0.3s;
-}
-
-.cmp-candle {
-  position: absolute;
-  top: 2px;
-  width: 2px;
-  height: 16px;
-  background: var(--muted);
-  border-radius: 1px;
-}
-
-.cmp-candle-box {
-  position: absolute;
-  top: 5px;
-  height: 10px;
-  background: rgba(88, 166, 255, 0.2);
-  border: 1px solid var(--accent);
-  border-radius: 2px;
-}
-
-.cmp-value {
-  width: 56px;
-  text-align: right;
-  flex-shrink: 0;
-  font-variant-numeric: tabular-nums;
-
-  &.good { color: var(--success); }
-  &.bad  { color: var(--critical); }
-}
-
-// ── Burst window cards ────────────────────────────────────────────────────────
-.bw-card {
-  margin-bottom: 12px;
-  padding: 14px 16px;
-}
-
-.bw-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  cursor: pointer;
-}
-
-.bw-time {
-  font-weight: 600;
-  color: var(--accent);
-  font-size: 13px;
-  min-width: 48px;
-}
-
-.bw-cds {
-  flex: 1;
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.bw-body {
-  margin-top: 12px;
-  border-top: 1px solid var(--border);
-  padding-top: 10px;
-}
-
-// ── Defensive table ────────────────────────────────────────────────────────────
-.def-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12px;
-}
-
-.def-table th, .def-table td {
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--border);
-  text-align: left;
-}
-
-.def-table th { color: var(--muted); font-weight: 500; }
-
-// ── Severity badges ────────────────────────────────────────────────────────────
+/* Severity badges */
 .badge-critical { color: var(--critical); }
 .badge-warning  { color: var(--warning); }
 .badge-success  { color: var(--success); }
 .badge-info     { color: var(--info); }
-

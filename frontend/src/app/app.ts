@@ -15,7 +15,7 @@ import { PositioningPanelService } from './core/services/positioning-panel';
   selector: 'wl-root',
   imports: [RouterOutlet, PageNavComponent, AuthBannerComponent, PositioningPanelComponent],
   templateUrl: './app.html',
-  styleUrl: './app.scss',
+  host: { class: 'block' },
 })
 export class App implements OnInit {
   private readonly auth = inject(WclAuthService);

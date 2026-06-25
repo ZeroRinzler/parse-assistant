@@ -9,23 +9,15 @@ import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner
   imports: [LoadingSpinnerComponent],
   template: `
     @if (error()) {
-      <div class="callback-error">
+      <div class="text-center px-6 py-12 text-[var(--critical)]">
         <h3>Authentication Error</h3>
         <p>{{ error() }}</p>
-        <a href="/">Return home</a>
+        <a href="/" class="text-[var(--gold)]">Return home</a>
       </div>
     } @else {
       <wl-loading-spinner message="Completing sign in…"></wl-loading-spinner>
     }
   `,
-  styles: [`
-    .callback-error {
-      text-align: center;
-      padding: 48px 24px;
-      color: var(--critical);
-    }
-    a { color: var(--gold); }
-  `],
 })
 export class CallbackComponent implements OnInit {
   private readonly auth = inject(WclAuthService);

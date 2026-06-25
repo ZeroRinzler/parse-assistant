@@ -23,7 +23,7 @@ const MOBILE_QUERY = '(max-width: 600px)';
     MatButtonModule, MatIconModule, MatMenuModule, MatDividerModule,
   ],
   templateUrl: './page-nav.html',
-  styleUrl: './page-nav.scss',
+  host: { class: 'flex flex-col h-[100dvh]' },
 })
 export class PageNavComponent {
   protected readonly auth = inject(WclAuthService);

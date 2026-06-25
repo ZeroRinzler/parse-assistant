@@ -1,21 +1,21 @@
-<mat-toolbar class="shell-toolbar">
+<mat-toolbar class="bg-[var(--surface)]! border-b border-[var(--border)] gap-2">
   <button mat-icon-button (click)="toggleNav()" aria-label="Toggle navigation menu">
     <mat-icon>menu</mat-icon>
   </button>
 
-  <a routerLink="/" class="shell-brand" aria-label="warcraft-learner home">
-    <svg class="shell-brand__mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
-      <path class="shell-brand__shield" d="M16 4 L27 7 L27 15.5 C27 21.5 22.5 26.5 16 29 C9.5 26.5 5 21.5 5 15.5 L5 7 Z"/>
-      <g class="shell-brand__bars">
+  <a routerLink="/" class="flex items-center gap-2 no-underline text-[var(--gold)] font-bold text-[15px]" aria-label="warcraft-learner home">
+    <svg class="w-6 h-6 shrink-0" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+      <path class="fill-[var(--gold)]" d="M16 4 L27 7 L27 15.5 C27 21.5 22.5 26.5 16 29 C9.5 26.5 5 21.5 5 15.5 L5 7 Z"/>
+      <g class="fill-[var(--surface)]">
         <rect x="9.5" y="18" width="3" height="4" rx="1"/>
         <rect x="14.5" y="14" width="3" height="8" rx="1"/>
         <rect x="19.5" y="10" width="3" height="12" rx="1"/>
       </g>
     </svg>
-    <span class="shell-brand__name">warcraft-learner</span>
+    <span>warcraft-learner</span>
   </a>
 
-  <span class="shell-spacer"></span>
+  <span class="flex-1"></span>
 
   <button mat-icon-button [matMenuTriggerFor]="userMenu" aria-label="Account menu">
     <mat-icon>account_circle</mat-icon>
@@ -40,7 +40,7 @@
   </mat-menu>
 </mat-toolbar>
 
-<mat-sidenav-container class="shell-container">
+<mat-sidenav-container class="flex-1">
   <mat-sidenav [mode]="sidenavMode()" [opened]="sidenavOpened()"
                (openedChange)="onOpenedChange($event)">
     <mat-nav-list>
