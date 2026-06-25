@@ -17,6 +17,7 @@ export function findBurstWindows(
   damageEvents: WclResourceEvent[], fightStartMs: number,
   cdSummary: CdCastSummary[], specCds: RulebookCooldown[],
   minPctThreshold = 0.03, castEvents: WclResourceEvent[] = [],
+  abilityNames: Map<number, string> = new Map(),
 ): RawBurstWindow[] {
   const hits = damageEvents
     .filter(event => event.type === 'damage' && (event.amount ?? 0) + (event.absorbed ?? 0) > 0)
@@ -70,14 +71,20 @@ export function findBurstWindows(
     for (const [, damage, , abilityId] of windowHits) {
       if (abilityId) abilityDmg.set(abilityId, (abilityDmg.get(abilityId) ?? 0) + damage);
     }
-    // Count casts per ability inside the window (boundary matches damage hits: [start, end]).
-    const abilityCasts = new Map<number, number>();
+    // Count casts per ability NAME inside the window (boundary matches damage hits:
+    // [start, end]). A damage row's spell id often differs from its cast id (e.g.
+    // Shadow Blades damage 279043 vs cast 121471); the shared name is the bridge.
+    const nameOf = (spellId: number) => abilityNames.get(spellId) ?? `Spell ${spellId}`;
+    const castsByName = new Map<string, number>();
     for (const [timestamp, abilityId] of casts) {
-      if (timestamp >= startMs && timestamp <= endMs) abilityCasts.set(abilityId, (abilityCasts.get(abilityId) ?? 0) + 1);
+      if (timestamp >= startMs && timestamp <= endMs) {
+        const name = nameOf(abilityId);
+        castsByName.set(name, (castsByName.get(name) ?? 0) + 1);
+      }
     }
     const topAbilities: RawBurstWindowAbility[] = [...abilityDmg.entries()]
       .sort((a, b) => b[1] - a[1]).slice(0, 6)
-      .map(([spellId, damage]) => ({ spell_id: spellId, damage, pct: Math.round(damage / windowDmg * 1000) / 1000, casts: abilityCasts.get(spellId) ?? 0 }));
+      .map(([spellId, damage]) => ({ spell_id: spellId, damage, pct: Math.round(damage / windowDmg * 1000) / 1000, casts: castsByName.get(nameOf(spellId)) ?? 0 }));
 
     result.push({
       time_s: Math.round(window.startS * 10) / 10,

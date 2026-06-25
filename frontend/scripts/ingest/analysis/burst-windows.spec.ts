@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { findBurstWindows, clusterBurstWindows } from './burst-windows.ts';
 import { Events } from '../testing/events.ts';
 import { FIGHT_START } from '../testing/clock.ts';
-import { SHADOW_BLADES, EVISCERATE, BLACK_POWDER } from '../testing/spell-ids.ts';
+import { SHADOW_BLADES, SHADOW_BLADES_DAMAGE, EVISCERATE, BLACK_POWDER } from '../testing/spell-ids.ts';
 import type { CdCastSummary, RawBurstWindow } from '../models/parse-sample.models.ts';
 import type { RulebookCooldown } from '../../../src/app/core/models/rulebook.models.ts';
 
@@ -40,6 +40,30 @@ describe('findBurstWindows', () => {
     expect(window.ability_breakdown).toEqual([
       { spell_id: EVISCERATE, damage: 800, pct: 0.8, casts: 2 },
       { spell_id: BLACK_POWDER, damage: 200, pct: 0.2, casts: 1 },
+    ]);
+  });
+
+  it('attributes casts to the damage row by ability NAME when cast and damage ids differ', () => {
+    // Shadow Blades casts as 121471 but deals damage as 279043; both are named
+    // "Shadow Blades". Without the name bridge the damage row would show 0 casts.
+    const names = new Map<number, string>([
+      [SHADOW_BLADES, 'Shadow Blades'],
+      [SHADOW_BLADES_DAMAGE, 'Shadow Blades'],
+      [EVISCERATE, 'Eviscerate'],
+    ]);
+    const damage = Events.start()
+      .damage(SHADOW_BLADES_DAMAGE, '0:12', 900)
+      .damage(EVISCERATE, '0:14', 500)
+      .build();
+    const casts = Events.start()
+      .cast(SHADOW_BLADES, '0:11').cast(EVISCERATE, '0:13').cast(EVISCERATE, '0:18')
+      .build();
+
+    const windows = findBurstWindows(damage, FIGHT_START, cdSummary([10]), [SB], 0.03, casts, names);
+
+    expect(windows[0].ability_breakdown).toEqual([
+      { spell_id: SHADOW_BLADES_DAMAGE, damage: 900, pct: 0.643, casts: 1 },
+      { spell_id: EVISCERATE, damage: 500, pct: 0.357, casts: 2 },
     ]);
   });
 

@@ -128,7 +128,7 @@ export async function enrichRanking(client: WclQueryClient, ranking: ParseRankin
 export async function getParseEvents(
   client: WclQueryClient, reportCode: string, fightId: number, playerName: string,
 ): Promise<ParseEventBundle | null> {
-  let meta: { reportData: { report: { fights: WclFightEntry[]; masterData: { actors: WclActorEntry[] } } } };
+  let meta: { reportData: { report: { fights: WclFightEntry[]; masterData: { actors: WclActorEntry[]; abilities: Array<{ gameID: number; name: string }> } } } };
   try {
     meta = await client.query<typeof meta, ReportMetaQueryVars>(REPORT_META_QUERY, { code: reportCode });
   } catch (err) {
@@ -145,6 +145,8 @@ export async function getParseEvents(
   if (!player) throw new Error(`Player "${playerName}" not found in report ${reportCode} (fight ${fightId}).`);
   // Enemy actor lookup (by actor id) for position timelines, keyed later by gameID.
   const npcById = new Map<number, WclActorEntry>(actors.filter(actor => actor.type !== 'Player').map(actor => [actor.id, actor]));
+  // Ability id -> name, used to attribute burst-window cast counts by name.
+  const abilityNames = new Map<number, string>((report.masterData.abilities ?? []).map(ability => [ability.gameID, ability.name]));
 
   const start = fight.startTime;
   const end = fight.endTime;
@@ -187,7 +189,7 @@ export async function getParseEvents(
   }
 
   return {
-    report_code: reportCode, fight_id: fightId, player, npcById, start, end, fightDurS,
+    report_code: reportCode, fight_id: fightId, player, npcById, abilityNames, start, end, fightDurS,
     castEvents, buffEvents, damageEvents, damageTakenEvents, enemyCastEvents, combatantEvents, bossDamageEvents,
   };
 }

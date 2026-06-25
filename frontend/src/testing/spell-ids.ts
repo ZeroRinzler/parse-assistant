@@ -36,3 +36,8 @@ export const FEINT = 1966;
 // Generic damage-ability labels.
 export const EVISCERATE = 196819;
 export const BLACK_POWDER = 319175;
+
+// Real WCL quirk: an ability's damage event carries a different id than its cast
+// event, but both share the same name. Shadow Blades is cast as 121471 yet its
+// damage rows show up as 279043 - the name is the only bridge between the two.
+export const SHADOW_BLADES_DAMAGE = 279043;

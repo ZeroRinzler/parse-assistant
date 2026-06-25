@@ -17,6 +17,7 @@ function bundle(over: Partial<ParseEventBundle> = {}): ParseEventBundle {
   return {
     report_code: 'rep', fight_id: 1, player,
     npcById: new Map<number, WclActorEntry>([[BOSS, { id: BOSS, name: 'Boss', type: 'NPC', gameID: 5000 }]]),
+    abilityNames: new Map<number, string>(),
     start: 0, end: 60_000, fightDurS: 60,
     castEvents: [], buffEvents: [], damageEvents: [], damageTakenEvents: [],
     enemyCastEvents: [], combatantEvents: [], bossDamageEvents: [],

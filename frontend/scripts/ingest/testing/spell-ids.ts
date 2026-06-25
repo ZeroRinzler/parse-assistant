@@ -20,6 +20,11 @@ export const EVISCERATE = 196819;
 export const BLACK_POWDER = 319175;
 export const MELEE = 1;
 
+// WCL quirk: a cooldown's damage event carries a different id than its cast
+// event though both share the same name. Shadow Blades casts as 121471 but its
+// damage rows are 279043 - only the name bridges the two id spaces.
+export const SHADOW_BLADES_DAMAGE = 279043;
+
 // Boss/enemy damage abilities (damage taken).
 export const BOSS_SWING = 6603;
 export const BOSS_NUKE = 999001;

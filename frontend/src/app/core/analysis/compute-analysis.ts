@@ -66,7 +66,10 @@ export function computeAnalysis(input: AnalysisInput): AnalysisResult {
   }
 
   if (result.burst_windows?.length) {
-    result.player_burst_windows = findPlayerBurstWindows(result.burst_windows, dmgEvents, castEvents, fStart);
+    const abilityNames = new Map<number, string>(
+      Object.entries(abilityMap).map(([id, v]) => [Number(id), v.name]),
+    );
+    result.player_burst_windows = findPlayerBurstWindows(result.burst_windows, dmgEvents, castEvents, fStart, abilityNames);
   }
   result.player_defensives = analyzeDefensives(defensives, castEvents, buffEvents, dtEvents, fStart, fEnd);
 

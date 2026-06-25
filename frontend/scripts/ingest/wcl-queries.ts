@@ -44,7 +44,7 @@ export const REPORT_META_QUERY = `
 query($code: String!) {
   reportData { report(code: $code) {
     fights(killType: Kills) { id startTime endTime encounterID }
-    masterData { actors { id name type subType gameID } }
+    masterData { actors { id name type subType gameID } abilities { gameID name } }
   }}
 }`;
 

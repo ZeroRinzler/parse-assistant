@@ -27,7 +27,7 @@ export function analyzeParse(
   combatantInfo: EnrichedRanking['combatant_info'],
 ): { cooldown_data: ParseCooldownData; positions: ParsePositions | null } {
   const {
-    player, npcById, start, fightDurS,
+    player, npcById, abilityNames, start, fightDurS,
     castEvents, buffEvents, damageEvents, damageTakenEvents,
     enemyCastEvents, combatantEvents, bossDamageEvents,
   } = bundle;
@@ -35,7 +35,7 @@ export function analyzeParse(
   const blTimeS = detectBloodlust(buffEvents, start);
   const cdSummary = summarizeCooldownCasts(castEvents, specCds, start, blTimeS);
   const { castEffPct, castGapListMs } = computeCastEfficiency(castEvents, fightDurS);
-  const burstWindows = findBurstWindows(damageEvents, start, cdSummary, specCds, BURST_SIGNIFICANCE_PCT, castEvents);
+  const burstWindows = findBurstWindows(damageEvents, start, cdSummary, specCds, BURST_SIGNIFICANCE_PCT, castEvents, abilityNames);
   const talentKey = resolveTalentKey(combatantEvents, player.id);
 
   const buffWindows = buildBuffWindows(buffEvents, start);

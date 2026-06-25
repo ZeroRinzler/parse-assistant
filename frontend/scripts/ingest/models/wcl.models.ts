@@ -101,6 +101,9 @@ export interface ParseEventBundle {
   fight_id: number;
   player: WclActorEntry;
   npcById: Map<number, WclActorEntry>;
+  // id -> WCL ability name, from the report's masterData.abilities. Bridges the
+  // damage-id and cast-id spaces when attributing burst-window cast counts.
+  abilityNames: Map<number, string>;
   start: number;
   end: number;
   fightDurS: number;

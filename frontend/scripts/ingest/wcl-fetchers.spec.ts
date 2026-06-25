@@ -152,7 +152,8 @@ describe('getParseEvents', () => {
     { id: 1, name: 'Tester', type: 'Player' },
     { id: 2, name: 'Boss', type: 'NPC', gameID: 5000 },
   ];
-  const meta = (fights: object[]) => ({ reportData: { report: { fights, masterData: { actors } } } });
+  const abilities = [{ gameID: SHADOW_BLADES, name: 'Shadow Blades' }];
+  const meta = (fights: object[]) => ({ reportData: { report: { fights, masterData: { actors, abilities } } } });
 
   it('returns null when the fight is not in the report', async () => {
     const client = fakeClient({ query: () => meta([]) });
@@ -183,6 +184,7 @@ describe('getParseEvents', () => {
     expect(bundle!.castEvents).toHaveLength(1);
     expect(bundle!.bossDamageEvents.length).toBeGreaterThan(0);
     expect(bundle!.npcById.get(2)?.gameID).toBe(5000);
+    expect(bundle!.abilityNames.get(SHADOW_BLADES)).toBe('Shadow Blades');
   });
 });
 
