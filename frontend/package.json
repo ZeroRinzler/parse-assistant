@@ -8,9 +8,9 @@
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "test:watch": "ng test --watch",
-    "admin": "node scripts/admin.mjs",
-    "ingest": "node scripts/ingest.mjs",
-    "scrape": "node scripts/scrape.mjs"
+    "admin": "tsx --tsconfig tsconfig.scripts.json scripts/admin.ts",
+    "ingest": "tsx --tsconfig tsconfig.scripts.json scripts/ingest.ts",
+    "scrape": "tsx --tsconfig tsconfig.scripts.json scripts/scrape.ts"
   },
   "private": true,
   "packageManager": "npm@11.13.0",
@@ -35,9 +35,12 @@
     "@angular/build": "^22.0.1",
     "@angular/cli": "^22.0.1",
     "@angular/compiler-cli": "^22.0.0",
+    "@types/node": "^26.0.1",
     "ajv": "^8.20.0",
+    "commander": "^13.1.0",
     "jsdom": "^25.0.1",
     "prettier": "^3.8.1",
+    "tsx": "^4.22.4",
     "typescript": "~6.0.2",
     "vitest": "^4.0.8"
   }

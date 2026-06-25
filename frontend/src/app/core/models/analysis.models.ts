@@ -1,4 +1,4 @@
-import { CharacterGear } from './wcl.models';
+import type { CharacterGear } from './wcl.models';
 
 export interface AnalysisFinding {
   severity: 'critical' | 'warning' | 'info' | 'hold_suggestion' | 'success';

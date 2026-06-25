@@ -5,7 +5,7 @@
  * They belong here and not inside the transport service so the API contract
  * can evolve independently of the application models.
  */
-import { CharacterGear, WclUserCharacter } from '../models/wcl.models';
+import type { CharacterGear, WclUserCharacter } from '../models/wcl.models';
 
 // ---------------------------------------------------------------------------
 // Internal WCL response shapes (not part of the application model)

@@ -43,7 +43,8 @@ jobs:
         env:
           WCL_CLIENT_ID: ${{ secrets.WCL_CLIENT_ID }}
           WCL_CLIENT_SECRET: ${{ secrets.WCL_CLIENT_SECRET }}
-        run: node frontend/scripts/ingest.mjs
+        working-directory: frontend
+        run: npm run ingest
 
       - name: Pull latest before committing
         env:

@@ -18,7 +18,18 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { readJson, writeJson, getKnownSpecs as listSpecs } from './lib.mjs';
+import { Command } from 'commander';
+import { BLOODLUST_IDS } from '../src/app/core/analysis/format.ts';
+import { talentKeyFromTree, type WclGearItem } from '../src/app/core/services/wcl-mappers.ts';
+import type { Rulebook, RulebookCooldown, RulebookDefensive } from '../src/app/core/models/rulebook.models.ts';
+import type { ParsePositions, EncounterPositions } from '../src/app/core/models/positioning.models.ts';
+import type {
+  HoldWindow, CdCastSummary, DefensiveCastSummary,
+  RawBurstWindowAbility, RawBurstWindow,
+  RawDefensiveWindowAbility, RawDefensiveWindow,
+  ParseCooldownData, ParseSample,
+} from './parse-sample.models.ts';
+import { readJson, writeJson, getKnownSpecs as listSpecs } from './lib.ts';
 
 // ── Paths ─────────────────────────────────────────────────────────────────────
 
@@ -26,9 +37,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const FRONTEND_ROOT = path.resolve(__dirname, '..');
 // WL_DATA_DIR lets a test/dry run write elsewhere instead of the committed data dir.
-const DATA_DIR = process.env.WL_DATA_DIR || path.join(FRONTEND_ROOT, 'public', 'data', 'specs');
+const DATA_DIR = process.env['WL_DATA_DIR'] ?? path.join(FRONTEND_ROOT, 'public', 'data', 'specs');
 // Ingest only manages specs that already have a rulebook to drive analysis.
-const getKnownSpecs = () => listSpecs(DATA_DIR, { requireRulebook: true });
+const getKnownSpecs = (): string[] => listSpecs(DATA_DIR, { requireRulebook: true });
 
 // Hash of this script file - used as a cache key so any change to ingestion logic
 // automatically invalidates existing parse samples and forces re-analysis.
@@ -49,9 +60,7 @@ const CLUSTER_MIN_FRAC = 0.35;      // min cluster size to surface a burst/defen
 const HOLD_TRIGGER_FRAC = 0.4;      // min parsers holding at a cast index to emit a hold target
 const MEMBER_MAJORITY_FRAC = 0.5;   // "more than half the member parses" (ability inclusion, majority hold)
 
-const BLOODLUST_SPELL_IDS = new Set([2825, 32182, 80353, 90355, 264667, 390386]);
-
-const SPEC_TO_WCL = {
+const SPEC_TO_WCL_FORWARD: Record<string, [string, string]> = {
   RetributionPaladin:    ['Paladin',    'Retribution'],
   HolyPaladin:           ['Paladin',    'Holy'],
   ProtectionPaladin:     ['Paladin',    'Protection'],
@@ -93,12 +102,170 @@ const SPEC_TO_WCL = {
   AugmentationEvoker:    ['Evoker',     'Augmentation'],
 };
 
+const SPEC_TO_WCL = SPEC_TO_WCL_FORWARD;
+
+// ── CLI argument parsing ───────────────────────────────────────────────────────
+
+const program = new Command()
+  .name('ingest')
+  .description('Fetch top WCL parses for all known specs (stalest-first) and write bench data.')
+  .option('--spec <spec>', 'target a single spec instead of all (e.g. SubtletyRogue)')
+  .addHelpText('after', `\nKnown specs: ${Object.keys(SPEC_TO_WCL_FORWARD).join(', ')}`);
+
+program.parse(process.argv);
+const opts = program.opts<{ spec?: string }>();
+
 const EXCLUDE_ZONE_PATTERNS = ['beta', 'ptr', 'mythic+', 'complete raids', 'delves', 'torghast'];
 
 // Skip encounters whose samples were all refreshed within this window.
 const FRESH_HOURS = 23;
 // Stop cleanly when fewer than this many WCL points remain in the hour.
 const POINTS_MARGIN = 500;
+
+// ── Ingest-local WCL API response types ──────────────────────────────────────
+
+interface WclRateLimitData {
+  limitPerHour?: number;
+  pointsSpentThisHour?: number;
+  pointsResetIn?: number | null;
+}
+
+interface WclPartition { id: number; name: string; }
+interface WclZone { id: number; name: string; partitions?: WclPartition[]; encounters?: Array<{ id: number; name: string }>; }
+interface WclExpansion { id: number; name: string; zones?: WclZone[]; }
+
+interface WclServerRef { id?: number; name?: string; region?: { slug?: string }; }
+interface WclReportRef { code?: string; fightID?: number; }
+
+interface WclRawRanking {
+  name?: string;
+  amount?: number;
+  duration?: number;
+  server?: WclServerRef;
+  report?: WclReportRef;
+  gear?: WclGearItem[];
+}
+
+interface WclFightEntry { id: number; startTime: number; endTime: number; encounterID: number; }
+interface WclActorEntry { id: number; name: string; type: string; subType?: string; gameID?: number | null; }
+
+// Event from WCL (may include position fields when includeResources: true).
+interface WclResourceEvent {
+  type: string;
+  timestamp: number;
+  abilityGameID?: number;
+  amount?: number;
+  absorbed?: number;
+  sourceID?: number;
+  targetID?: number;
+  resourceActor?: number;
+  x?: number;
+  y?: number;
+  facing?: number;
+  mapID?: number;
+  maxHitPoints?: number;
+}
+
+// CombatantInfo event shape.
+interface WclCombatantInfoEvent {
+  type: string;
+  timestamp: number;
+  sourceID?: number;
+  talentTree?: Array<{ id?: number; rank?: number; nodeID?: number }>;
+}
+
+// ── Ingest-local aggregation types ───────────────────────────────────────────
+
+interface ParseRanking {
+  rank: number;
+  player: string;
+  amount: number;
+  duration_s: number;
+  report_code: string;
+  fight_id: number;
+  server: string;
+  _raw: WclRawRanking;
+}
+
+interface EnrichedRanking {
+  server_slug: string;
+  server_region: string;
+  combatant_info: {
+    talent_key: string;
+    trinkets: Array<{ slot: number; id: number | string; name: string }>;
+    enchants: Array<{ slot: number; id: number | string; name: string }>;
+  };
+}
+
+interface IngestEncounter {
+  id: number;
+  name: string;
+  zone: string;
+  expansion: string;
+  partitionIds: number[];
+}
+
+// Shared base for clustered windows (written to encounters/{enc_id}.json).
+interface ClusterBaseStats {
+  time_s: number;
+  stddev_s: number;
+  count: number;
+  total_samples: number;
+  dmg_avg: number;
+  dmg_stddev: number;
+  dmg_min: number;
+  dmg_max: number;
+  ability_breakdown: Array<{
+    spell_id: number;
+    avg_damage: number;
+    min_damage: number;
+    max_damage: number;
+    count: number;
+    avg_casts?: number;
+  }>;
+  ref_game_id: number | null;
+}
+
+interface ClusteredBurstWindow extends ClusterBaseStats {
+  common_cds: string[];
+  avg_targets: number;
+  window_length_s: number;
+}
+
+interface ClusteredDefensiveWindow extends ClusterBaseStats {
+  defensive_name: string;
+  spell_id: number;
+  common_defensives: string[];
+  common_cds: string[];
+  window_length_s: number;
+}
+
+// Shared entry shape for buildBaseBenchmark.
+interface BenchEntry {
+  first_cast_s: number | null;
+  cast_times_s: number[];
+  fight_duration_s: number;
+  hold_windows: HoldWindow[];
+  cast_pattern: string;
+}
+
+// Position sample before resampling.
+interface RawPosSample {
+  t: number;
+  x: number;
+  y: number;
+  facing: number | null;
+  mapID: number | null;
+  maxHp: number;
+}
+
+interface EnemyWithSamples {
+  actorId: number;
+  count: number;
+  maxHp: number;
+  samples: RawPosSample[];
+  meta: WclActorEntry;
+}
 
 // ── WCL OAuth2 client ─────────────────────────────────────────────────────────
 
@@ -107,25 +274,28 @@ const POINTS_MARGIN = 500;
 // is picked up on the next run. We do NOT retry: the limit resets on an hourly
 // boundary and an hourly task must not stall waiting for it.
 class BudgetExceededError extends Error {
-  constructor(msg) { super(msg); this.name = 'BudgetExceededError'; }
+  override name = 'BudgetExceededError';
+  constructor(msg: string) { super(msg); }
 }
 
 class WCLClient {
+  private readonly clientId: string;
+  private readonly clientSecret: string;
+  private _token: string | null = null;
+  private _tokenExpiry = 0;
+  private readonly _serverSlugCache = new Map<number, [string, string]>();
+  private _limitPerHour: number | null = null;
+  private _pointsSpentThisHour = 0;
+
   constructor() {
-    this.clientId = process.env.WCL_CLIENT_ID || '';
-    this.clientSecret = process.env.WCL_CLIENT_SECRET || '';
+    this.clientId = process.env['WCL_CLIENT_ID'] ?? '';
+    this.clientSecret = process.env['WCL_CLIENT_SECRET'] ?? '';
     if (!this.clientId || !this.clientSecret) {
       throw new Error('WCL_CLIENT_ID and WCL_CLIENT_SECRET environment variables must be set');
     }
-    this._token = null;
-    this._tokenExpiry = 0;
-    this._serverSlugCache = new Map();
-    // Live rate-limit state, refreshed lazily via assertBudget().
-    this._limitPerHour = null;
-    this._pointsSpentThisHour = 0;
   }
 
-  async _getToken() {
+  private async _getToken(): Promise<string> {
     if (this._token && Date.now() / 1000 < this._tokenExpiry - 60) {
       return this._token;
     }
@@ -143,13 +313,13 @@ class WCLClient {
       const text = await res.text();
       throw new Error(`OAuth2 token error ${res.status}: ${text.slice(0, 200)}`);
     }
-    const data = await res.json();
+    const data = await res.json() as { access_token: string; expires_in?: number };
     this._token = data.access_token;
     this._tokenExpiry = Date.now() / 1000 + (data.expires_in ?? 3600);
     return this._token;
   }
 
-  async query(gql, variables = {}) {
+  async query<T = unknown>(gql: string, variables: Record<string, unknown> = {}): Promise<T> {
     const token = await this._getToken();
     const res = await fetch(WCL_API_URL, {
       method: 'POST',
@@ -164,7 +334,7 @@ class WCLClient {
       if (res.status === 429) throw new BudgetExceededError(`WCL rate limit hit (429): ${text.slice(0, 200)}`);
       throw new Error(`WCL API error ${res.status}: ${text.slice(0, 300)}`);
     }
-    const body = await res.json();
+    const body = await res.json() as { data?: T; errors?: Array<{ message: string }> };
     if (body.errors) {
       const msg = JSON.stringify(body.errors);
       if (/rate.?limit|too many requests|exhausted/i.test(msg)) {
@@ -172,22 +342,22 @@ class WCLClient {
       }
       throw new Error(`GraphQL error: ${msg}`);
     }
-    return body.data;
+    return body.data as T;
   }
 
   // Reads the live hourly point budget and caches it on the instance.
-  async getRateLimit() {
-    const data = await this.query(
+  async getRateLimit(): Promise<{ limitPerHour: number | null; pointsSpentThisHour: number; pointsResetIn: number | null }> {
+    const data = await this.query<{ rateLimitData?: WclRateLimitData }>(
       'query { rateLimitData { limitPerHour pointsSpentThisHour pointsResetIn } }',
     );
-    const rl = (data || {}).rateLimitData || {};
+    const rl = data.rateLimitData ?? {};
     if (rl.limitPerHour != null) this._limitPerHour = rl.limitPerHour;
     if (rl.pointsSpentThisHour != null) this._pointsSpentThisHour = rl.pointsSpentThisHour;
     return { limitPerHour: this._limitPerHour, pointsSpentThisHour: this._pointsSpentThisHour, pointsResetIn: rl.pointsResetIn ?? null };
   }
 
   // Fetches live budget then throws BudgetExceededError if remaining points < margin.
-  async assertBudget(margin) {
+  async assertBudget(margin: number): Promise<void> {
     const { limitPerHour, pointsSpentThisHour } = await this.getRateLimit();
     if (limitPerHour == null) return; // unknown - don't block
     const remaining = limitPerHour - pointsSpentThisHour;
@@ -198,7 +368,11 @@ class WCLClient {
     }
   }
 
-  async getAllEvents(code, fightId, dataType, startTime, endTime, options = {}) {
+  async getAllEvents(
+    code: string, fightId: number, dataType: string,
+    startTime: number, endTime: number,
+    options: { sourceId?: number; targetId?: number; includeResources?: boolean; hostilityType?: string } = {},
+  ): Promise<WclResourceEvent[]> {
     const EVENTS_QUERY = `
       query GetEvents(
         $code: String! $fightIDs: [Int]! $dataType: EventDataType
@@ -213,15 +387,17 @@ class WCLClient {
           }
         }}
       }`;
-    const events = [];
+    const events: WclResourceEvent[] = [];
     let currentStart = startTime;
     while (true) {
-      const vars = { code, fightIDs: [fightId], dataType, startTime: currentStart, endTime };
-      if (options.sourceId != null) vars.sourceID = options.sourceId;
-      if (options.targetId != null) vars.targetID = options.targetId;
-      if (options.includeResources) vars.includeResources = true;
-      if (options.hostilityType) vars.hostilityType = options.hostilityType;
-      const data = await this.query(EVENTS_QUERY, vars);
+      const vars: Record<string, unknown> = { code, fightIDs: [fightId], dataType, startTime: currentStart, endTime };
+      if (options.sourceId != null) vars['sourceID'] = options.sourceId;
+      if (options.targetId != null) vars['targetID'] = options.targetId;
+      if (options.includeResources) vars['includeResources'] = true;
+      if (options.hostilityType) vars['hostilityType'] = options.hostilityType;
+      const data = await this.query<{
+        reportData: { report: { events: { data: WclResourceEvent[]; nextPageTimestamp?: number | null } } }
+      }>(EVENTS_QUERY, vars);
       const page = data.reportData.report.events;
       if (page.data) events.push(...page.data);
       if (page.nextPageTimestamp == null) break;
@@ -230,13 +406,14 @@ class WCLClient {
     return events;
   }
 
-  async resolveServerSlug(serverId) {
-    if (this._serverSlugCache.has(serverId)) return this._serverSlugCache.get(serverId);
+  async resolveServerSlug(serverId: number): Promise<[string, string]> {
+    const cached = this._serverSlugCache.get(serverId);
+    if (cached) return cached;
     const SERVER_QUERY = `query($id: Int!) { worldData { server(id: $id) { slug region { slug } } } }`;
     try {
-      const data = await this.query(SERVER_QUERY, { id: serverId });
-      const srv = (data.worldData || {}).server || {};
-      const result = [(srv.slug || '').toLowerCase(), ((srv.region || {}).slug || '').toLowerCase()];
+      const data = await this.query<{ worldData: { server?: { slug?: string; region?: { slug?: string } } } }>(SERVER_QUERY, { id: serverId });
+      const srv = data.worldData.server ?? {};
+      const result: [string, string] = [(srv.slug ?? '').toLowerCase(), ((srv.region?.slug) ?? '').toLowerCase()];
       this._serverSlugCache.set(serverId, result);
       return result;
     } catch {
@@ -272,71 +449,50 @@ query($encounterID: Int!, $className: String!, $specName: String!, $partition: I
   }
 }`;
 
-const REPORT_META_QUERY = `
-query($code: String!) {
-  reportData { report(code: $code) {
-    fights(killType: Kills) { id startTime endTime encounterID }
-    masterData { actors(type: "Player") { id name subType } }
-  }}
-}`;
-
 // ── Encounter fetching ────────────────────────────────────────────────────────
 
-async function getEncounters(wcl) {
-  const data = await wcl.query(ENCOUNTERS_QUERY);
+async function getEncounters(wcl: WCLClient): Promise<IngestEncounter[]> {
+  const data = await wcl.query<{ worldData: { expansions: WclExpansion[] } }>(ENCOUNTERS_QUERY);
   const expansions = data.worldData.expansions;
 
-  // Current expansion: newest (first returned), detect by first unique name
-  // Build a flat list of all expansions sorted newest first (WCL returns newest first)
-  // Find current expansion: first expansion whose name doesn't repeat in a later one
-  // Simple approach: take the first expansion (newest) and find its unique zone names
-  const seenZoneNames = new Set();
-  let currentExpName = null;
-  for (const exp of expansions) {
-    for (const zone of (exp.zones || [])) {
-      if (!seenZoneNames.has(zone.name)) {
-        seenZoneNames.add(zone.name);
-      }
-    }
-    if (currentExpName === null) currentExpName = exp.name;
-  }
-
-  // Collect encounters from current expansion, filtering excluded zones
-  const result = [];
+  const result: IngestEncounter[] = [];
   const firstExp = expansions[0];
   if (!firstExp) return result;
 
-  for (const zone of (firstExp.zones || [])) {
+  for (const zone of (firstExp.zones ?? [])) {
     const lname = zone.name.toLowerCase();
     if (EXCLUDE_ZONE_PATTERNS.some(p => lname.includes(p))) continue;
     // Sort partition IDs descending (highest = newest first) so we try the
     // most recent patch partition first and fall back to older ones when the
     // new partition is empty (e.g. right after a patch drops).
-    const partitionIds = (zone.partitions || [])
+    const partitionIds = (zone.partitions ?? [])
       .map(p => p.id)
       .sort((a, b) => b - a);
-    for (const enc of (zone.encounters || [])) {
+    for (const enc of (zone.encounters ?? [])) {
       result.push({ id: enc.id, name: enc.name, zone: zone.name, expansion: firstExp.name, partitionIds });
     }
   }
   return result;
 }
 
-// ── Talent extraction ─────────────────────────────────────────────────────────
+// ── Gear extraction ───────────────────────────────────────────────────────────
 
 const TRINKET_INDICES = new Set([12, 13]);
 
 // Trinkets (gear slots 12/13) and permanent enchants. Gear shape is identical
 // across both ranking APIs, so this is shared.
-function extractGear(rankingEntry) {
-  const gear = rankingEntry.gear || [];
-  const trinkets = [];
-  const enchants = [];
+function extractGear(rankingEntry: WclRawRanking): {
+  trinkets: Array<{ slot: number; id: number | string; name: string }>;
+  enchants: Array<{ slot: number; id: number | string; name: string }>;
+} {
+  const gear = rankingEntry.gear ?? [];
+  const trinkets: Array<{ slot: number; id: number | string; name: string }> = [];
+  const enchants: Array<{ slot: number; id: number | string; name: string }> = [];
   for (let idx = 0; idx < gear.length; idx++) {
     const item = gear[idx];
     if (!item || !item.id) continue;
-    const itemId = parseInt(item.id) || item.id;
-    const name = item.name || '';
+    const itemId = typeof item.id === 'number' ? item.id : (parseInt(String(item.id)) || item.id);
+    const name = item.name ?? '';
 
     if (TRINKET_INDICES.has(idx)) {
       trinkets.push({ slot: idx, id: itemId, name });
@@ -344,20 +500,11 @@ function extractGear(rankingEntry) {
 
     const encRaw = item.permanentEnchant;
     if (encRaw) {
-      const encId = parseInt(encRaw) || encRaw;
-      enchants.push({ slot: idx, id: encId, name: item.permanentEnchantName || '' });
+      const encId = typeof encRaw === 'number' ? encRaw : (parseInt(String(encRaw)) || encRaw);
+      enchants.push({ slot: idx, id: encId, name: item.permanentEnchantName ?? '' });
     }
   }
   return { trinkets, enchants };
-}
-
-// Build a v2: talent key from a CombatantInfo talentTree flat list [{id, rank, nodeID}].
-// String sort, no dedup - matches the frontend talentKeyFromTree exactly.
-function talentKeyFromTree(talentTree) {
-  if (!Array.isArray(talentTree) || !talentTree.length) return '';
-  const ids = talentTree.filter(n => n.nodeID != null).map(n => String(n.nodeID));
-  if (!ids.length) return '';
-  return 'v2:' + ids.sort().join(',');
 }
 
 // ── Rankings fetching ─────────────────────────────────────────────────────────
@@ -365,44 +512,45 @@ function talentKeyFromTree(talentTree) {
 // Cheap rankings fetch: 1 API query. Returns raw ranking objects with an
 // additional `_raw` field so the caller can extract gear later.
 // Server slug resolution deferred to enrichRanking(); talent key from analyzeParse().
-async function fetchRankingsLite(wcl, spec, encounterId, count = 10, partitionIds = []) {
+async function fetchRankingsLite(wcl: WCLClient, spec: string, encounterId: number, count = 10, partitionIds: number[] = []): Promise<ParseRanking[]> {
   const mapping = SPEC_TO_WCL[spec];
   if (!mapping) throw new Error(`Unknown spec: ${spec}`);
   const [className, specName] = mapping;
 
   // Try partitions newest-first; fall back to null (current) when zone has none.
-  const attempts = partitionIds.length > 0 ? partitionIds : [null];
-  let rawRankings = [];
+  const attempts: Array<number | null> = partitionIds.length > 0 ? partitionIds : [null];
+  let rawRankings: WclRawRanking[] = [];
   for (const partition of attempts) {
-    const data = await wcl.query(RANKINGS_QUERY, { encounterID: encounterId, className, specName, partition });
+    const vars: Record<string, unknown> = { encounterID: encounterId, className, specName };
+    if (partition != null) vars['partition'] = partition;
+    const data = await wcl.query<{ worldData: { encounter: { name: string; characterRankings: string | { rankings: WclRawRanking[] } } } }>(RANKINGS_QUERY, vars);
     const enc = data.worldData.encounter;
     const raw = enc.characterRankings;
-    const rankingsData = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    const rankingsData = typeof raw === 'string' ? JSON.parse(raw) as { rankings: WclRawRanking[] } : raw;
     // Filter anonymous parses (report: null) before slicing - the full page is
     // already in the response, so this costs zero extra queries and ensures we
     // always get TOP_N public (fetchable) parses rather than wasting a slot on
     // a parse we can never access.
-    rawRankings = (rankingsData.rankings || []).filter(r => (r.report || {}).code).slice(0, count);
+    rawRankings = (rankingsData.rankings ?? []).filter(r => r.report?.code).slice(0, count);
     if (rawRankings.length > 0) break;
   }
 
   return rawRankings.map((r, i) => ({
     rank: i + 1,
-    player: r.name,
-    amount: Math.round(r.amount || 0),
-    duration_s: Math.round((r.duration || 0) / 100) / 10,
-    report_code: (r.report || {}).code,
-    fight_id: (r.report || {}).fightID,
-    server: (r.server || {}).name,
+    player: r.name ?? '',
+    amount: Math.round(r.amount ?? 0),
+    duration_s: Math.round((r.duration ?? 0) / 100) / 10,
+    report_code: r.report?.code ?? '',
+    fight_id: r.report?.fightID ?? 0,
+    server: r.server?.name ?? '',
     _raw: r, // kept for enrichRanking(); not persisted
   }));
 }
 
 // Per-player enrichment: resolves server slug (1 query, in-memory cached per server).
-// talent_key is now derived from CombatantInfo inside analyzeParse and written there.
-async function enrichRanking(wcl, ranking) {
+async function enrichRanking(wcl: WCLClient, ranking: ParseRanking): Promise<EnrichedRanking> {
   const r = ranking._raw;
-  const sid = (r.server || {}).id;
+  const sid = r.server?.id;
   const [serverSlug, serverRegion] = sid ? await wcl.resolveServerSlug(sid) : ['', ''];
   return {
     server_slug: serverSlug,
@@ -413,36 +561,40 @@ async function enrichRanking(wcl, ranking) {
 
 // ── Burst window analysis ─────────────────────────────────────────────────────
 
-function findBurstWindows(damageEvents, fightStartMs, cdSummary, specCds, minPctThreshold = 0.03, castEvents = []) {
+function findBurstWindows(
+  damageEvents: WclResourceEvent[], fightStartMs: number,
+  cdSummary: CdCastSummary[], specCds: RulebookCooldown[],
+  minPctThreshold = 0.03, castEvents: WclResourceEvent[] = [],
+): RawBurstWindow[] {
   const hits = damageEvents
-    .filter(e => e.type === 'damage' && (e.amount || 0) + (e.absorbed || 0) > 0)
-    .map(e => [e.timestamp, (e.amount || 0) + (e.absorbed || 0), e.targetID || 0, e.abilityGameID || 0])
+    .filter(e => e.type === 'damage' && (e.amount ?? 0) + (e.absorbed ?? 0) > 0)
+    .map(e => [e.timestamp, (e.amount ?? 0) + (e.absorbed ?? 0), e.targetID ?? 0, e.abilityGameID ?? 0] as [number, number, number, number])
     .sort((a, b) => a[0] - b[0]);
 
   // Cast timestamps per ability - used to count player casts inside each window.
   const casts = castEvents
     .filter(e => e.type === 'cast' && e.abilityGameID)
-    .map(e => [e.timestamp, e.abilityGameID]);
+    .map(e => [e.timestamp, e.abilityGameID!] as [number, number]);
 
   if (!hits.length) return [];
   const total = hits.reduce((s, h) => s + h[1], 0);
   if (!total) return [];
 
-  // Build windows from CD cast times × CD durations
-  const rawWins = [];
-  for (const cdEntry of (cdSummary || [])) {
-    const cdDef = specCds?.find(c => c.name === cdEntry.name);
-    const dur = cdDef?.duration || 0;
+  // Build windows from CD cast times x CD durations
+  const rawWins: Array<{ startS: number; endS: number; cdNames: string[] }> = [];
+  for (const cdEntry of cdSummary) {
+    const cdDef = specCds.find(c => c.name === cdEntry.name);
+    const dur = cdDef?.duration ?? 0;
     if (dur <= 0) continue;
-    for (const castS of (cdEntry.cast_times_s || [])) {
+    for (const castS of (cdEntry.cast_times_s ?? [])) {
       rawWins.push({ startS: castS, endS: castS + dur, cdNames: [cdEntry.name] });
     }
   }
   if (!rawWins.length) return [];
 
-  // Merge overlapping or near-adjacent windows (≤3s gap)
+  // Merge overlapping or near-adjacent windows (<= 3s gap)
   rawWins.sort((a, b) => a.startS - b.startS);
-  const merged = [{ ...rawWins[0], cdNames: [...rawWins[0].cdNames] }];
+  const merged: Array<{ startS: number; endS: number; cdNames: string[] }> = [{ ...rawWins[0], cdNames: [...rawWins[0].cdNames] }];
   for (let i = 1; i < rawWins.length; i++) {
     const prev = merged[merged.length - 1];
     const cur = rawWins[i];
@@ -454,7 +606,7 @@ function findBurstWindows(damageEvents, fightStartMs, cdSummary, specCds, minPct
     }
   }
 
-  const result = [];
+  const result: RawBurstWindow[] = [];
   for (const win of merged) {
     const startMs = fightStartMs + win.startS * 1000;
     const endMs = fightStartMs + win.endS * 1000;
@@ -462,18 +614,18 @@ function findBurstWindows(damageEvents, fightStartMs, cdSummary, specCds, minPct
     const windowDmg = windowHits.reduce((s, h) => s + h[1], 0);
     if (!windowDmg || windowDmg / total < minPctThreshold) continue;
 
-    const abilityDmg = new Map();
+    const abilityDmg = new Map<number, number>();
     for (const [, dmg, , aid] of windowHits) {
-      if (aid) abilityDmg.set(aid, (abilityDmg.get(aid) || 0) + dmg);
+      if (aid) abilityDmg.set(aid, (abilityDmg.get(aid) ?? 0) + dmg);
     }
     // Count casts per ability inside the window (boundary matches damage hits: [start, end]).
-    const abilityCasts = new Map();
+    const abilityCasts = new Map<number, number>();
     for (const [ts, aid] of casts) {
-      if (ts >= startMs && ts <= endMs) abilityCasts.set(aid, (abilityCasts.get(aid) || 0) + 1);
+      if (ts >= startMs && ts <= endMs) abilityCasts.set(aid, (abilityCasts.get(aid) ?? 0) + 1);
     }
-    const topAbilities = [...abilityDmg.entries()]
+    const topAbilities: RawBurstWindowAbility[] = [...abilityDmg.entries()]
       .sort((a, b) => b[1] - a[1]).slice(0, 6)
-      .map(([sid, d]) => ({ spell_id: sid, damage: d, pct: Math.round(d / windowDmg * 1000) / 1000, casts: abilityCasts.get(sid) || 0 }));
+      .map(([sid, d]) => ({ spell_id: sid, damage: d, pct: Math.round(d / windowDmg * 1000) / 1000, casts: abilityCasts.get(sid) ?? 0 }));
 
     result.push({
       time_s: Math.round(win.startS * 10) / 10,
@@ -489,23 +641,28 @@ function findBurstWindows(damageEvents, fightStartMs, cdSummary, specCds, minPct
   return result.sort((a, b) => a.time_s - b.time_s);
 }
 
-function findDefensiveWindows(damageTakenEvents, fightStartMs, buffWindows, specDefensives, npcById) {
+function findDefensiveWindows(
+  damageTakenEvents: WclResourceEvent[], fightStartMs: number,
+  buffWindows: Map<number, Array<[number, number | null]>>,
+  specDefensives: RulebookDefensive[],
+  npcById: Map<number, WclActorEntry>,
+): RawDefensiveWindow[] {
   const hits = damageTakenEvents
-    .filter(e => e.type === 'damage' && (e.amount || 0) + (e.absorbed || 0) > 0)
-    .map(e => [e.timestamp, (e.amount || 0) + (e.absorbed || 0), e.abilityGameID || 0, e.sourceID ?? null])
+    .filter(e => e.type === 'damage' && (e.amount ?? 0) + (e.absorbed ?? 0) > 0)
+    .map(e => [e.timestamp, (e.amount ?? 0) + (e.absorbed ?? 0), e.abilityGameID ?? 0, e.sourceID ?? null] as [number, number, number, number | null])
     .sort((a, b) => a[0] - b[0]);
 
   if (!hits.length) return [];
   const total = hits.reduce((s, h) => s + h[1], 0);
   if (!total) return [];
 
-  const result = [];
+  const result: RawDefensiveWindow[] = [];
 
   for (const defn of specDefensives) {
     const sid = defn.spell_id;
-    const dur = defn.duration || 5;
+    const dur = defn.duration ?? 5;
 
-    for (const bw of (buffWindows.get(sid) || [])) {
+    for (const bw of (buffWindows.get(sid) ?? [])) {
       // buffWindows store relative-seconds from fight start
       const startS = bw[0];
       const endS = bw[1] != null ? bw[1] : startS + dur;
@@ -516,11 +673,11 @@ function findDefensiveWindows(damageTakenEvents, fightStartMs, buffWindows, spec
       const windowDmg = windowHits.reduce((s, h) => s + h[1], 0);
       const pct = total ? Math.round(windowDmg / total * 1000) / 1000 : 0;
 
-      const abilityDmg = new Map();
+      const abilityDmg = new Map<number, number>();
       for (const [, dmg, aid] of windowHits) {
-        if (aid) abilityDmg.set(aid, (abilityDmg.get(aid) || 0) + dmg);
+        if (aid) abilityDmg.set(aid, (abilityDmg.get(aid) ?? 0) + dmg);
       }
-      const topAbilities = [...abilityDmg.entries()]
+      const topAbilities: RawDefensiveWindowAbility[] = [...abilityDmg.entries()]
         .sort((a, b) => b[1] - a[1])
         .slice(0, 6)
         .map(([abilityId, d]) => ({
@@ -530,9 +687,9 @@ function findDefensiveWindows(damageTakenEvents, fightStartMs, buffWindows, spec
         }));
 
       // Reference for the map = the enemy that dealt the most damage in the window.
-      const dmgBySource = new Map();
+      const dmgBySource = new Map<number, number>();
       for (const [, dmg, , src] of windowHits) {
-        if (src != null && npcById?.has(src)) dmgBySource.set(src, (dmgBySource.get(src) || 0) + dmg);
+        if (src != null && npcById.has(src)) dmgBySource.set(src, (dmgBySource.get(src) ?? 0) + dmg);
       }
       const topSource = [...dmgBySource.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
       const refGameId = topSource != null ? (npcById.get(topSource)?.gameID ?? null) : null;
@@ -547,7 +704,7 @@ function findDefensiveWindows(damageTakenEvents, fightStartMs, buffWindows, spec
         active_cds: [defn.name],
         defensive_name: defn.name,
         spell_id: sid,
-        ref_game_id: refGameId,
+        ref_game_id: refGameId ?? null,
       });
     }
   }
@@ -557,15 +714,15 @@ function findDefensiveWindows(damageTakenEvents, fightStartMs, buffWindows, spec
 
 // Defensive windows cluster per-defensive first (so Cloak at 1:00 and Feint at 1:00
 // remain separate clusters), then by time within each defensive group.
-function clusterDefensiveWindows(windows, totalSamples, mergeS = 20.0) {
+function clusterDefensiveWindows(windows: RawDefensiveWindow[], totalSamples: number, mergeS = 20.0): ClusteredDefensiveWindow[] {
   if (!windows.length) return [];
-  const byDefensive = new Map();
+  const byDefensive = new Map<string, RawDefensiveWindow[]>();
   for (const w of windows) {
     const name = w.defensive_name || w.active_cds?.[0] || '';
     if (!byDefensive.has(name)) byDefensive.set(name, []);
-    byDefensive.get(name).push(w);
+    byDefensive.get(name)!.push(w);
   }
-  const result = [];
+  const result: ClusteredDefensiveWindow[] = [];
   for (const [defensiveName, defWindows] of byDefensive.entries()) {
     for (const cl of groupByTime(defWindows, mergeS)) {
       if (cl.length < Math.max(2, totalSamples * CLUSTER_MIN_FRAC)) continue;
@@ -585,21 +742,21 @@ function clusterDefensiveWindows(windows, totalSamples, mergeS = 20.0) {
 
 // ── Parse analysis ────────────────────────────────────────────────────────────
 
-function loadRulebook(spec) {
+function loadRulebook(spec: string): Rulebook | null {
   const rbPath = path.join(DATA_DIR, spec, 'rulebook.json');
   if (!fs.existsSync(rbPath)) return null;
-  try { return JSON.parse(fs.readFileSync(rbPath, 'utf8')); } catch { return null; }
+  return readJson<Rulebook>(rbPath);
 }
 
-function getSpecCooldowns(spec) {
+function getSpecCooldowns(spec: string): RulebookCooldown[] | null {
   const rb = loadRulebook(spec);
-  if (rb && rb.major_cooldowns && rb.major_cooldowns.length > 0) return rb.major_cooldowns;
+  if (rb?.major_cooldowns?.length) return rb.major_cooldowns;
   return null;
 }
 
-function getSpecDefensives(spec) {
+function getSpecDefensives(spec: string): RulebookDefensive[] {
   const rb = loadRulebook(spec);
-  if (rb && rb.defensives && rb.defensives.length > 0) return rb.defensives;
+  if (rb?.defensives?.length) return rb.defensives;
   return [];
 }
 
@@ -613,28 +770,28 @@ const POSITIONS_INTERVAL_S = 1.5;
 const MAX_TRACKED_ENEMIES = 5;
 const MIN_ENEMY_SAMPLES = 4;
 
-function posActorId(e) {
+function posActorId(e: WclResourceEvent): number | null {
   if (typeof e.x !== 'number' || typeof e.y !== 'number') return null;
-  return e.resourceActor === 2 ? e.targetID : e.sourceID;
+  return e.resourceActor === 2 ? (e.targetID ?? null) : (e.sourceID ?? null);
 }
 
 /** Boss actor id = the NPC with the highest maxHitPoints across resource snapshots. */
-function pickBossActorId(events, npcById) {
-  const maxHp = new Map();
+function pickBossActorId(events: WclResourceEvent[], npcById: Map<number, WclActorEntry>): number | null {
+  const maxHp = new Map<number, number>();
   for (const e of events) {
     const id = posActorId(e);
     if (id == null || !npcById.has(id)) continue;
     const hp = typeof e.maxHitPoints === 'number' ? e.maxHitPoints : 0;
     if (hp > (maxHp.get(id) ?? -1)) maxHp.set(id, hp);
   }
-  let bossId = null, best = -1;
+  let bossId: number | null = null, best = -1;
   for (const [id, hp] of maxHp) if (hp > best) { best = hp; bossId = id; }
   return bossId;
 }
 
 /** Group raw position samples per actor id from resource-bearing events. */
-function collectPositionSamples(events, fightStartMs) {
-  const byActor = new Map();
+function collectPositionSamples(events: WclResourceEvent[], fightStartMs: number): Map<number, RawPosSample[]> {
+  const byActor = new Map<number, RawPosSample[]>();
   for (const e of events) {
     const id = posActorId(e);
     if (id == null) continue;
@@ -642,7 +799,7 @@ function collectPositionSamples(events, fightStartMs) {
     if (!arr) { arr = []; byActor.set(id, arr); }
     arr.push({
       t: (e.timestamp - fightStartMs) / 1000,
-      x: e.x, y: e.y,
+      x: e.x!, y: e.y!,
       facing: typeof e.facing === 'number' ? e.facing : null,
       mapID: typeof e.mapID === 'number' ? e.mapID : null,
       maxHp: typeof e.maxHitPoints === 'number' ? e.maxHitPoints : 0,
@@ -653,10 +810,10 @@ function collectPositionSamples(events, fightStartMs) {
 }
 
 /** Resample to a fixed cadence: [t, x, y, facing, mapID] rows, linear for x/y, nearest for facing/mapID. */
-function resampleTimeline(samples, durationS, intervalS) {
+function resampleTimeline(samples: RawPosSample[], durationS: number, intervalS: number): ParsePositions['player'] {
   if (!samples.length) return [];
   const first = samples[0].t, last = samples[samples.length - 1].t;
-  const out = [];
+  const out: ParsePositions['player'] = [];
   let idx = 0;
   for (let t = 0; t <= durationS + 1e-6; t += intervalS) {
     if (t < first - intervalS || t > last + intervalS) continue;
@@ -683,18 +840,23 @@ function resampleTimeline(samples, durationS, intervalS) {
  * notable enemy timelines (boss = highest maxHitPoints). Enemies are keyed by
  * gameID so the frontend can match "the same boss/add" across parses.
  */
-function buildParsePositions(reportCode, fightId, playerName, playerId, npcById, posEvents, fightStartMs, durationS) {
+function buildParsePositions(
+  reportCode: string, fightId: number, playerName: string, playerId: number,
+  npcById: Map<number, WclActorEntry>, posEvents: WclResourceEvent[],
+  fightStartMs: number, durationS: number,
+): ParsePositions {
   const byActor = collectPositionSamples(posEvents, fightStartMs);
-  const playerSamples = byActor.get(playerId) || [];
+  const playerSamples = byActor.get(playerId) ?? [];
 
-  const enemies = [];
+  const enemies: EnemyWithSamples[] = [];
   for (const [id, samples] of byActor) {
     if (id === playerId || !npcById.has(id)) continue;
     const maxHp = samples.reduce((m, s) => Math.max(m, s.maxHp), 0);
-    enemies.push({ actorId: id, count: samples.length, maxHp, samples, meta: npcById.get(id) });
+    enemies.push({ actorId: id, count: samples.length, maxHp, samples, meta: npcById.get(id)! });
   }
   enemies.sort((a, b) => b.count - a.count);
-  const bossId = enemies.reduce((best, e) => (e.maxHp > (best?.maxHp ?? -1) ? e : best), null)?.actorId;
+  const bossEntry = enemies.reduce<EnemyWithSamples | null>((best, e) => (e.maxHp > (best?.maxHp ?? -1) ? e : best), null);
+  const bossId = bossEntry?.actorId ?? null;
   // Keep the boss plus the most-active enemies (likely add/mechanic casters).
   const kept = enemies.slice(0, MAX_TRACKED_ENEMIES);
   if (bossId != null && !kept.some(e => e.actorId === bossId)) {
@@ -711,18 +873,21 @@ function buildParsePositions(reportCode, fightId, playerName, playerId, npcById,
     player: resampleTimeline(playerSamples, durationS, POSITIONS_INTERVAL_S),
     enemies: kept.map(e => ({
       game_id: e.meta.gameID ?? null,
-      name: e.meta.name || '',
+      name: e.meta.name ?? '',
       is_boss: e.actorId === bossId,
       samples: resampleTimeline(e.samples, durationS, POSITIONS_INTERVAL_S),
     })).filter(e => e.is_boss || e.samples.length >= MIN_ENEMY_SAMPLES),
   };
 }
 
-async function analyzeParse(wcl, spec, reportCode, fightId, playerName, combatantInfo) {
-  const specCds = getSpecCooldowns(spec) || [];
+async function analyzeParse(
+  wcl: WCLClient, spec: string, reportCode: string, fightId: number,
+  playerName: string, combatantInfo: EnrichedRanking['combatant_info'],
+): Promise<{ cooldown_data: ParseCooldownData; positions: ParsePositions | null } | null> {
+  const specCds = getSpecCooldowns(spec) ?? [];
   const specDefensives = getSpecDefensives(spec);
 
-  let meta;
+  let meta: { reportData: { report: { fights: WclFightEntry[]; masterData: { actors: WclActorEntry[] } } } };
   try {
     const REPORT_META_Q = `
       query($code: String!) {
@@ -744,7 +909,7 @@ async function analyzeParse(wcl, spec, reportCode, fightId, playerName, combatan
   const player = actors.find(a => a.name === playerName && a.type === 'Player');
   if (!player) throw new Error(`Player "${playerName}" not found in report ${reportCode} (fight ${fightId}).`);
   // Enemy actor lookup (by actor id) for position timelines, keyed later by gameID.
-  const npcById = new Map(actors.filter(a => a.type !== 'Player').map(a => [a.id, a]));
+  const npcById = new Map<number, WclActorEntry>(actors.filter(a => a.type !== 'Player').map(a => [a.id, a]));
 
   const start = fight.startTime;
   const end = fight.endTime;
@@ -752,43 +917,48 @@ async function analyzeParse(wcl, spec, reportCode, fightId, playerName, combatan
 
   // Fetch all event types in parallel. Positions ride along on the (smaller)
   // Casts streams via includeResources, keeping the dense damage streams plain.
-  // The boss reference gets one targeted DamageDone stream below (single actor),
-  // which is far cheaper than fetching every enemy's damage with resources.
-  let castEvents, buffEvents, damageEvents, damageTakenEvents, enemyCastEvents, combatantEvents;
+  let castEvents: WclResourceEvent[], buffEvents: WclResourceEvent[], damageEvents: WclResourceEvent[],
+    damageTakenEvents: WclResourceEvent[], enemyCastEvents: WclResourceEvent[], combatantEvents: WclCombatantInfoEvent[];
   try {
-    [castEvents, buffEvents, damageEvents, damageTakenEvents, enemyCastEvents, combatantEvents] = await Promise.all([
+    const results = await Promise.all([
       wcl.getAllEvents(reportCode, fightId, 'Casts',         start, end, { sourceId: player.id, includeResources: true }),
       wcl.getAllEvents(reportCode, fightId, 'Buffs',         start, end, { targetId: player.id }),
       wcl.getAllEvents(reportCode, fightId, 'DamageDone',    start, end, { sourceId: player.id }),
       wcl.getAllEvents(reportCode, fightId, 'DamageTaken',   start, end, { sourceId: player.id }),
-      wcl.getAllEvents(reportCode, fightId, 'Casts',         start, end, { includeResources: true, hostilityType: 'Enemies' }).catch(() => []),
-      wcl.getAllEvents(reportCode, fightId, 'CombatantInfo', start, end, { sourceId: player.id }).catch(() => []),
+      wcl.getAllEvents(reportCode, fightId, 'Casts',         start, end, { includeResources: true, hostilityType: 'Enemies' }).catch((): WclResourceEvent[] => []),
+      wcl.getAllEvents(reportCode, fightId, 'CombatantInfo', start, end, { sourceId: player.id }).catch((): WclResourceEvent[] => []),
     ]);
+    castEvents = results[0];
+    buffEvents = results[1];
+    damageEvents = results[2];
+    damageTakenEvents = results[3];
+    enemyCastEvents = results[4];
+    combatantEvents = results[5] as unknown as WclCombatantInfoEvent[];
   } catch {
     return null;
   }
 
   // Dense boss positions from a single targeted stream (boss auto-attacks),
   // identified as the highest-maxHitPoints enemy in the enemy cast snapshots.
-  let bossDamageEvents = [];
+  let bossDamageEvents: WclResourceEvent[] = [];
   const bossActorId = pickBossActorId(enemyCastEvents, npcById);
   if (bossActorId != null) {
     bossDamageEvents = await wcl
       .getAllEvents(reportCode, fightId, 'DamageDone', start, end, { sourceId: bossActorId, includeResources: true })
-      .catch(() => []);
+      .catch((): WclResourceEvent[] => []);
   }
 
   // Detect Bloodlust
-  let blTimeS = null;
+  let blTimeS: number | null = null;
   for (const e of buffEvents) {
-    if (e.type === 'applybuff' && BLOODLUST_SPELL_IDS.has(e.abilityGameID)) {
+    if (e.type === 'applybuff' && e.abilityGameID != null && BLOODLUST_IDS.has(e.abilityGameID)) {
       blTimeS = (e.timestamp - start) / 1000;
       break;
     }
   }
 
   // Per-CD analysis
-  const cdSummary = [];
+  const cdSummary: CdCastSummary[] = [];
   for (const cd of specCds) {
     const cdCasts = castEvents
       .filter(c => c.type === 'cast' && c.abilityGameID === cd.spell_id)
@@ -798,23 +968,23 @@ async function analyzeParse(wcl, spec, reportCode, fightId, playerName, combatan
     const firstCastS = castTimesS.length > 0 ? castTimesS[0] : null;
 
     let blAligned = false;
-    let blOffsetS = null;
+    let blOffsetS: number | null = null;
     if (blTimeS != null && castTimesS.length > 0) {
       for (const t of castTimesS) {
         if (blTimeS - 30 <= t && t <= blTimeS + 55) { blAligned = true; break; }
       }
       const windowOffsets = castTimesS
-        .filter(t => blTimeS - 30 <= t && t <= blTimeS + 55)
-        .map(t => t - blTimeS);
+        .filter(t => blTimeS! - 30 <= t && t <= blTimeS! + 55)
+        .map(t => t - blTimeS!);
       if (windowOffsets.length > 0) {
         blOffsetS = Math.round(windowOffsets.reduce((best, v) => Math.abs(v) < Math.abs(best) ? v : best) * 10) / 10;
       }
     }
 
     // Hold pattern
-    const holdWindows = [];
+    const holdWindows: HoldWindow[] = [];
     if (castTimesS.length > 1) {
-      const cdSeconds = cd.cooldown || 90;
+      const cdSeconds = cd.cooldown ?? 90;
       let expectedT = castTimesS[0];
       for (let k = 1; k < castTimesS.length; k++) {
         expectedT += cdSeconds;
@@ -846,8 +1016,8 @@ async function analyzeParse(wcl, spec, reportCode, fightId, playerName, combatan
 
   // Cast efficiency
   const completed = castEvents.filter(e => e.type === 'cast').sort((a, b) => a.timestamp - b.timestamp);
-  let castEffPct = null;
-  let castGapListMs = [];
+  let castEffPct: number | null = null;
+  let castGapListMs: number[] = [];
   if (completed.length >= 2 && fightDurS > 0) {
     castGapListMs = [];
     for (let i = 1; i < completed.length; i++) {
@@ -863,43 +1033,44 @@ async function analyzeParse(wcl, spec, reportCode, fightId, playerName, combatan
 
   // Gear data from combatant info (trinkets/enchants from rankings; talent key from this fight's
   // CombatantInfo talentTree, which uses the same full-tree representation as the frontend).
-  const gearData = combatantInfo || {};
-  const ciEvent = (combatantEvents || []).find(e => e.sourceID === player.id) || combatantEvents?.[0];
+  const gearData = combatantInfo;
+  const ciEvent = combatantEvents.find(e => e.sourceID === player.id) ?? combatantEvents[0];
   const talentKey = talentKeyFromTree(ciEvent?.talentTree);
 
   // Defensive tracking
   // Build buff window lookup: Map<spell_id, [[start_s, end_s|null], ...]>
-  const buffWindows = new Map();
+  const buffWindows = new Map<number, Array<[number, number | null]>>();
   for (const e of buffEvents) {
     const sid = e.abilityGameID;
+    if (sid == null) continue;
     const tS = (e.timestamp - start) / 1000;
     if (e.type === 'applybuff') {
       if (!buffWindows.has(sid)) buffWindows.set(sid, []);
-      buffWindows.get(sid).push([tS, null]);
+      buffWindows.get(sid)!.push([tS, null]);
     } else if (e.type === 'removebuff') {
-      const windows = buffWindows.get(sid) || [];
+      const windows = buffWindows.get(sid) ?? [];
       for (let i = windows.length - 1; i >= 0; i--) {
         if (windows[i][1] == null) { windows[i][1] = tS; break; }
       }
     }
   }
 
-  const defensiveSummary = [];
+  const defensiveSummary: DefensiveCastSummary[] = [];
   for (const defn of specDefensives) {
     const sid = defn.spell_id;
-    const duration = defn.duration || 0;
-    const cooldownS = defn.cooldown || 90;
-    const windows = [];
-    let castTimes = [];
+    const duration = defn.duration ?? 0;
+    const cooldownS = defn.cooldown ?? 90;
+    const windows: Array<{ start_s: number; end_s: number; dmg_during: number }> = [];
+    let castTimes: number[] = [];
 
-    for (const bw of (buffWindows.get(sid) || [])) {
+    for (const bw of (buffWindows.get(sid) ?? [])) {
       const wStart = bw[0];
       const wEnd = bw[1] != null ? bw[1] : (duration ? wStart + duration : wStart + 5);
       const dmgDuring = damageTakenEvents
         .filter(e => e.type === 'damage')
         .reduce((s, e) => {
           const tS = (e.timestamp - start) / 1000;
-          return tS >= wStart && tS <= wEnd ? s + (e.amount || 0) + (e.absorbed || 0) : s;
+          return tS >= wStart && tS <= wEnd ? s + (e.amount ?? 0) + (e.absorbed ?? 0) : s;
         }, 0);
       windows.push({ start_s: Math.round(wStart * 10) / 10, end_s: Math.round(wEnd * 10) / 10, dmg_during: Math.round(dmgDuring) });
       castTimes.push(Math.round(wStart * 10) / 10);
@@ -916,7 +1087,7 @@ async function analyzeParse(wcl, spec, reportCode, fightId, playerName, combatan
           .filter(e => e.type === 'damage')
           .reduce((s, e) => {
             const eS = (e.timestamp - start) / 1000;
-            return eS >= tS && eS <= wEnd ? s + (e.amount || 0) + (e.absorbed || 0) : s;
+            return eS >= tS && eS <= wEnd ? s + (e.amount ?? 0) + (e.absorbed ?? 0) : s;
           }, 0);
         windows.push({ start_s: tS, end_s: Math.round(wEnd * 10) / 10, dmg_during: Math.round(dmgDuring) });
         castTimes.push(tS);
@@ -924,7 +1095,7 @@ async function analyzeParse(wcl, spec, reportCode, fightId, playerName, combatan
     }
 
     castTimes.sort((a, b) => a - b);
-    const holdWindowsDef = [];
+    const holdWindowsDef: HoldWindow[] = [];
     for (let j = 1; j < castTimes.length; j++) {
       const expectedS = castTimes[j - 1] + cooldownS;
       const actualS = castTimes[j];
@@ -956,7 +1127,7 @@ async function analyzeParse(wcl, spec, reportCode, fightId, playerName, combatan
 
   const defensiveWindows = findDefensiveWindows(damageTakenEvents, start, buffWindows, specDefensives, npcById);
 
-  const cooldownData = {
+  const cooldownData: ParseCooldownData = {
     player: player.name,
     spec,
     fight_duration_s: Math.round(fightDurS * 10) / 10,
@@ -968,11 +1139,11 @@ async function analyzeParse(wcl, spec, reportCode, fightId, playerName, combatan
     defensives: defensiveSummary,
     defensive_windows: defensiveWindows,
     talent_key: talentKey,
-    trinkets: gearData.trinkets || [],
-    enchants: gearData.enchants || [],
+    trinkets: gearData.trinkets,
+    enchants: gearData.enchants,
   };
 
-  let positions = null;
+  let positions: ParsePositions | null = null;
   try {
     positions = buildParsePositions(
       reportCode, fightId, player.name, player.id, npcById,
@@ -984,36 +1155,36 @@ async function analyzeParse(wcl, spec, reportCode, fightId, playerName, combatan
   return { cooldown_data: cooldownData, positions };
 }
 
-// ── Analysis utils (JS port of analysis_utils.py) ────────────────────────────
+// ── Analysis utils ────────────────────────────────────────────────────────────
 
-function median(arr) {
+function median(arr: number[]): number {
   if (!arr.length) return 0;
   const sorted = [...arr].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
-function mean(arr) {
+function mean(arr: number[]): number {
   if (!arr.length) return 0;
   return arr.reduce((s, v) => s + v, 0) / arr.length;
 }
 
-function stdev(arr) {
+function stdev(arr: number[]): number {
   if (arr.length < 2) return 0;
   const m = mean(arr);
   return Math.sqrt(arr.reduce((s, v) => s + (v - m) ** 2, 0) / (arr.length - 1));
 }
 
-function round(v, decimals = 1) {
+function round(v: number, decimals = 1): number {
   return Math.round(v * 10 ** decimals) / 10 ** decimals;
 }
 
 // ── Shared clustering primitives ─────────────────────────────────────────────
 
 // Greedy: group windows by proximity in time (within mergeS seconds of running cluster median).
-function groupByTime(windows, mergeS) {
+function groupByTime<T extends { time_s: number }>(windows: T[], mergeS: number): T[][] {
   const sorted = [...windows].sort((a, b) => a.time_s - b.time_s);
-  const clusters = [];
+  const clusters: T[][] = [];
   for (const w of sorted) {
     let placed = false;
     for (const cl of clusters) {
@@ -1030,44 +1201,44 @@ function groupByTime(windows, mergeS) {
 // Windows are compared by absolute damage rather than share-of-fight-total: on
 // progression (wipes) the fight-total denominator is unstable, so a share would
 // inflate against full-kill top parses. Absolute damage stays comparable.
-function clusterBaseStats(cl, totalSamples) {
+function clusterBaseStats(cl: Array<{ time_s: number; window_damage?: number; ability_breakdown?: Array<{ spell_id: number; damage?: number; casts?: number }>; ref_game_id?: number | null }>, totalSamples: number): ClusterBaseStats {
   const times = cl.map(c => c.time_s);
-  const dmgs  = cl.map(c => c.window_damage || 0);
+  const dmgs  = cl.map(c => c.window_damage ?? 0);
   const sorted = [...dmgs].sort((a, b) => a - b);
 
-  const abilityTotals = new Map();
-  const abilityCasts = new Map();
+  const abilityTotals = new Map<number, number[]>();
+  const abilityCasts = new Map<number, number[]>();
   for (const c of cl) {
-    for (const ab of (c.ability_breakdown || [])) {
+    for (const ab of (c.ability_breakdown ?? [])) {
       if (!abilityTotals.has(ab.spell_id)) abilityTotals.set(ab.spell_id, []);
-      abilityTotals.get(ab.spell_id).push(ab.damage || 0);
+      abilityTotals.get(ab.spell_id)!.push(ab.damage ?? 0);
       // Cast counts only exist on burst windows; defensive windows omit them.
       if (ab.casts != null) {
         if (!abilityCasts.has(ab.spell_id)) abilityCasts.set(ab.spell_id, []);
-        abilityCasts.get(ab.spell_id).push(ab.casts);
+        abilityCasts.get(ab.spell_id)!.push(ab.casts);
       }
     }
   }
-  const ability_breakdown = [...abilityTotals.entries()]
+  const ability_breakdown: ClusterBaseStats['ability_breakdown'] = [...abilityTotals.entries()]
     .filter(([, ds]) => ds.length >= cl.length * MEMBER_MAJORITY_FRAC)
     .map(([sid, ds]) => {
       const castsArr = abilityCasts.get(sid);
-      const entry = {
+      const entry: ClusterBaseStats['ability_breakdown'][number] = {
         spell_id: sid,
         avg_damage: Math.round(mean(ds)),
         min_damage: Math.round(Math.min(...ds)),
         max_damage: Math.round(Math.max(...ds)),
         count: ds.length,
       };
-      if (castsArr && castsArr.length) entry.avg_casts = Math.round(mean(castsArr));
+      if (castsArr?.length) entry.avg_casts = Math.round(mean(castsArr));
       return entry;
     })
     .sort((a, b) => b.avg_damage - a.avg_damage)
     .slice(0, 6);
 
   // Majority map-reference enemy across members (defensive windows only; null for burst).
-  const refCounts = new Map();
-  for (const c of cl) if (c.ref_game_id != null) refCounts.set(c.ref_game_id, (refCounts.get(c.ref_game_id) || 0) + 1);
+  const refCounts = new Map<number, number>();
+  for (const c of cl) if (c.ref_game_id != null) refCounts.set(c.ref_game_id, (refCounts.get(c.ref_game_id) ?? 0) + 1);
   const ref_game_id = [...refCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
 
   return {
@@ -1084,69 +1255,75 @@ function clusterBaseStats(cl, totalSamples) {
   };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-
-function clusterBurstWindows(windows, totalSamples, mergeS = 15.0) {
+function clusterBurstWindows(windows: RawBurstWindow[], totalSamples: number, mergeS = 15.0): ClusteredBurstWindow[] {
   if (!windows.length) return [];
-  const result = [];
+  const result: ClusteredBurstWindow[] = [];
   for (const cl of groupByTime(windows, mergeS)) {
     if (cl.length < Math.max(2, totalSamples * CLUSTER_MIN_FRAC)) continue;
     const base = clusterBaseStats(cl, totalSamples);
-    const cdCounts = new Map();
+    const cdCounts = new Map<string, number>();
     for (const c of cl) {
-      for (const name of (c.active_cds || [])) cdCounts.set(name, (cdCounts.get(name) || 0) + 1);
+      for (const name of (c.active_cds ?? [])) cdCounts.set(name, (cdCounts.get(name) ?? 0) + 1);
     }
     const common_cds = [...cdCounts.entries()]
       .sort((a, b) => b[1] - a[1])
       .filter(([, cnt]) => cnt >= cl.length * MEMBER_MAJORITY_FRAC)
       .map(([name]) => name);
     const window_length_s = round(mean(cl.map(c => c.window_length_s)));
-    result.push({ ...base, common_cds, avg_targets: round(mean(cl.map(c => c.target_count || 1))), window_length_s });
+    result.push({ ...base, common_cds, avg_targets: round(mean(cl.map(c => c.target_count ?? 1))), window_length_s });
   }
   return result.sort((a, b) => a.time_s - b.time_s);
 }
 
-function aggregateGear(samples) {
+interface GearStats {
+  sample_count: number;
+  talent_builds: Array<{ key: string; count: number; pct: number; report_code?: string; fight_id?: number; player_name?: string }>;
+  trinkets: Record<string, Array<{ id: number | string; name: string; count: number; pct: number }>>;
+  enchants: Record<string, Array<{ id: number | string; name: string; count: number; pct: number }>>;
+}
+
+function aggregateGear(samples: ParseSample[]): GearStats {
   const total = samples.length;
-  const talentCounter = new Map();
-  const talentExample = new Map();
-  const trinketCounters = { 12: new Map(), 13: new Map() };
-  const trinketNames = new Map();
-  const enchantCounters = new Map();
-  const enchantNames = new Map();
+  const talentCounter = new Map<string, number>();
+  const talentExample = new Map<string, { report_code: string; fight_id: number; player_name: string }>();
+  const trinketCounters: Record<number, Map<number | string, number>> = { 12: new Map(), 13: new Map() };
+  const trinketNames = new Map<number | string, string>();
+  const enchantCounters = new Map<number, Map<number | string, number>>();
+  const enchantNames = new Map<number | string, string>();
+
   for (const s of samples) {
-    const cdData = s.cooldown_data || {};
-    const tk = cdData.talent_key || '';
+    const cdData = s.cooldown_data;
+    const tk = cdData.talent_key ?? '';
     if (tk) {
-      talentCounter.set(tk, (talentCounter.get(tk) || 0) + 1);
+      talentCounter.set(tk, (talentCounter.get(tk) ?? 0) + 1);
       if (!talentExample.has(tk)) {
         talentExample.set(tk, {
-          report_code: s.report_code || '',
+          report_code: s.report_code ?? '',
           fight_id: s.fight_id,
-          player_name: s.player_name || '',
+          player_name: s.player_name ?? '',
         });
       }
     }
 
-    for (const t of (cdData.trinkets || [])) {
-      const slot = t.slot;
+    for (const t of (cdData.trinkets ?? [])) {
+      const slot = t.slot as 12 | 13;
       const itemId = t.id;
       if ((slot === 12 || slot === 13) && itemId) {
-        trinketCounters[slot].set(itemId, (trinketCounters[slot].get(itemId) || 0) + 1);
-        if (!trinketNames.has(itemId)) trinketNames.set(itemId, t.name || '');
+        trinketCounters[slot].set(itemId, (trinketCounters[slot].get(itemId) ?? 0) + 1);
+        if (!trinketNames.has(itemId)) trinketNames.set(itemId, t.name ?? '');
       }
     }
 
-    for (const e of (cdData.enchants || [])) {
+    for (const e of (cdData.enchants ?? [])) {
       const slot = e.slot;
       const encId = e.id;
       if (slot != null && encId) {
         if (!enchantCounters.has(slot)) enchantCounters.set(slot, new Map());
-        enchantCounters.get(slot).set(encId, (enchantCounters.get(slot).get(encId) || 0) + 1);
-        if (!enchantNames.has(encId)) enchantNames.set(encId, e.name || '');
+        const slotMap = enchantCounters.get(slot)!;
+        slotMap.set(encId, (slotMap.get(encId) ?? 0) + 1);
+        if (!enchantNames.has(encId)) enchantNames.set(encId, e.name ?? '');
       }
     }
-
   }
 
   const talentBuilds = [...talentCounter.entries()]
@@ -1154,25 +1331,26 @@ function aggregateGear(samples) {
     .slice(0, 5)
     .map(([k, c]) => ({
       key: k, count: c, pct: total ? Math.round(c / total * 100) : 0,
-      ...(talentExample.get(k) || {}),
+      ...(talentExample.get(k) ?? {}),
     }));
 
-  const trinkets = {};
+  const trinkets: Record<string, Array<{ id: number | string; name: string; count: number; pct: number }>> = {};
   for (const [slot, counter] of Object.entries(trinketCounters)) {
-    if (!counter.size) continue;
-    trinkets[slot] = [...counter.entries()]
+    const counterMap = counter as Map<number | string, number>;
+    if (!counterMap.size) continue;
+    trinkets[slot] = [...counterMap.entries()]
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
-      .map(([id, c]) => ({ id, name: trinketNames.get(id) || '', count: c, pct: total ? Math.round(c / total * 100) : 0 }));
+      .map(([id, c]) => ({ id, name: trinketNames.get(id) ?? '', count: c, pct: total ? Math.round(c / total * 100) : 0 }));
   }
 
-  const enchants = {};
+  const enchants: Record<string, Array<{ id: number | string; name: string; count: number; pct: number }>> = {};
   for (const [slot, counter] of enchantCounters.entries()) {
     if (!counter.size) continue;
     enchants[String(slot)] = [...counter.entries()]
       .sort((a, b) => b[1] - a[1])
       .slice(0, 3)
-      .map(([id, c]) => ({ id, name: enchantNames.get(id) || '', count: c, pct: total ? Math.round(c / total * 100) : 0 }));
+      .map(([id, c]) => ({ id, name: enchantNames.get(id) ?? '', count: c, pct: total ? Math.round(c / total * 100) : 0 }));
   }
 
   return { sample_count: total, talent_builds: talentBuilds, trinkets, enchants };
@@ -1180,25 +1358,24 @@ function aggregateGear(samples) {
 
 // ── Enchant name resolution ───────────────────────────────────────────────────
 
-/**
- * Patches missing enchant names in an already-written encounter bench file by
- * batch-querying WCL `gameData.enchant(id)` for each unique ID whose name is
- * empty. Uses GraphQL field aliases so all IDs are resolved in one round-trip.
- * Silently skips if the API does not support the query or returns no names.
- */
-async function resolveEnchantNames(wcl, spec, encounterId) {
+// Patches missing enchant names in an already-written encounter bench file by
+// batch-querying WCL `gameData.enchant(id)` for each unique ID whose name is
+// empty. Uses GraphQL field aliases so all IDs are resolved in one round-trip.
+// Silently skips if the API does not support the query or returns no names.
+async function resolveEnchantNames(wcl: WCLClient, spec: string, encounterId: number): Promise<void> {
   const encPath = getEncounterPath(spec, encounterId);
-  const data = readJson(encPath);
-  if (!data || !data.gear || !data.gear.enchants) return;
+  type EncFile = { gear: { enchants: Record<string, Array<{ id: number | string; name: string }>> } };
+  const data = readJson<EncFile>(encPath);
+  if (!data?.gear?.enchants) return;
 
   const enchantsMap = data.gear.enchants;
-  const toResolve = new Map(); // id -> [{slot, idx}]
+  const toResolve = new Map<number | string, Array<{ slot: string; idx: number }>>();
   for (const [slot, items] of Object.entries(enchantsMap)) {
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       if (item.id && !item.name) {
         if (!toResolve.has(item.id)) toResolve.set(item.id, []);
-        toResolve.get(item.id).push({ slot, idx: i });
+        toResolve.get(item.id)!.push({ slot, idx: i });
       }
     }
   }
@@ -1210,11 +1387,11 @@ async function resolveEnchantNames(wcl, spec, encounterId) {
   const query = `query { gameData { ${aliases} } }`;
 
   try {
-    const result = await wcl.query(query);
-    const gameData = result?.gameData ?? {};
+    const result = await wcl.query<{ gameData: Record<string, { id: number; name: string } | null | undefined> }>(query);
+    const gameData = result.gameData ?? {};
     let patched = false;
     for (const [id, locations] of toResolve.entries()) {
-      const name = (gameData[`e${id}`]?.name || '').trim();
+      const name = (gameData[`e${id}`]?.name ?? '').trim();
       if (!name) continue;
       for (const { slot, idx } of locations) {
         enchantsMap[slot][idx].name = name;
@@ -1229,32 +1406,32 @@ async function resolveEnchantNames(wcl, spec, encounterId) {
 
 // ── File I/O ──────────────────────────────────────────────────────────────────
 
-function nowUtc() {
+function nowUtc(): string {
   return new Date().toISOString().replace('T', ' ').slice(0, 19);
 }
 
-function getSamplesPath(spec, encounterId) {
+function getSamplesPath(spec: string, encounterId: number): string {
   return path.join(DATA_DIR, spec, 'parse_samples', `${encounterId}.json`);
 }
 
-function parseKey(reportCode, fightId, hash = INGEST_HASH) {
+function parseKey(reportCode: string, fightId: number, hash = INGEST_HASH): string {
   return `${reportCode}:${fightId}:${hash}`;
 }
 
-function getEncounterPath(spec, encounterId) {
+function getEncounterPath(spec: string, encounterId: number): string {
   return path.join(DATA_DIR, spec, 'encounters', `${encounterId}.json`);
 }
 
-function getPositionsPath(spec, encounterId) {
+function getPositionsPath(spec: string, encounterId: number): string {
   return path.join(DATA_DIR, spec, 'positions', `${encounterId}.json`);
 }
 
 /** Append a parse's position timelines (deduped by report+fight) to the positions file. */
-function savePositions(spec, encounterId, encounterName, positions) {
+function savePositions(spec: string, encounterId: number, encounterName: string, positions: ParsePositions | null): void {
   if (!positions) return;
   const file = getPositionsPath(spec, encounterId);
-  const existing = readJson(file) || {};
-  let parses = Array.isArray(existing.parses) ? existing.parses : [];
+  const existing = readJson<EncounterPositions>(file) ?? {};
+  let parses = Array.isArray((existing as EncounterPositions).parses) ? (existing as EncounterPositions).parses : [];
   parses = parses.filter(p => !(p.report_code === positions.report_code && p.fight_id === positions.fight_id));
   parses.push(positions);
   writeJson(file, {
@@ -1263,9 +1440,9 @@ function savePositions(spec, encounterId, encounterName, positions) {
   }, true);
 }
 
-function saveParseSample(spec, encounterId, encounterName, reportCode, fightId, playerName, cooldownData) {
+function saveParseSample(spec: string, encounterId: number, encounterName: string, reportCode: string, fightId: number, playerName: string, cooldownData: ParseCooldownData): void {
   const samplesPath = getSamplesPath(spec, encounterId);
-  let samples = readJson(samplesPath) || [];
+  let samples = readJson<ParseSample[]>(samplesPath) ?? [];
   // Remove duplicate
   samples = samples.filter(s => !(s.report_code === reportCode && s.fight_id === fightId));
   samples.push({
@@ -1276,11 +1453,11 @@ function saveParseSample(spec, encounterId, encounterName, reportCode, fightId, 
   writeJson(samplesPath, samples);
 }
 
-function benchUsesPerMin(entries) {
-  const upms = [];
+function benchUsesPerMin(entries: BenchEntry[]): { avg: number; stddev: number; min: number; max: number } | Record<string, never> {
+  const upms: number[] = [];
   for (const e of entries) {
-    const dur = e.fight_duration_s || 0;
-    const times = e.cast_times_s || [];
+    const dur = e.fight_duration_s ?? 0;
+    const times = e.cast_times_s ?? [];
     if (dur > 0 && times.length > 0) {
       upms.push(Math.round(times.length / dur * 60 * 1000) / 1000);
     }
@@ -1297,15 +1474,15 @@ function benchUsesPerMin(entries) {
 // Per-cast-index hold targets: cast positions where enough top parsers delayed
 // the cast, with the median delay players should match. Shared by the cooldown
 // and defensive benchmark passes.
-function buildHoldTargets(entries) {
-  const holdByCastIdx = new Map();
+function buildHoldTargets(entries: BenchEntry[]): Record<string, { target_s: number; stddev_s: number; count: number; total_samples: number }> {
+  const holdByCastIdx = new Map<number, number[]>();
   for (const entry of entries) {
-    for (const hw of (entry.hold_windows || [])) {
+    for (const hw of (entry.hold_windows ?? [])) {
       if (!holdByCastIdx.has(hw.cast_index)) holdByCastIdx.set(hw.cast_index, []);
-      holdByCastIdx.get(hw.cast_index).push(hw.actual_s);
+      holdByCastIdx.get(hw.cast_index)!.push(hw.actual_s);
     }
   }
-  const holdTargets = {};
+  const holdTargets: Record<string, { target_s: number; stddev_s: number; count: number; total_samples: number }> = {};
   for (const [castIdx, times] of holdByCastIdx.entries()) {
     if (times.length >= Math.max(2, entries.length * HOLD_TRIGGER_FRAC)) {
       holdTargets[String(castIdx)] = {
@@ -1319,14 +1496,27 @@ function buildHoldTargets(entries) {
   return holdTargets;
 }
 
+interface BaseBenchmark {
+  sample_count: number;
+  avg_first_cast_s: number;
+  stddev_first_cast_s: number;
+  avg_gap_s: number | null;
+  stddev_gap_s: number | null;
+  hold_targets: Record<string, { target_s: number; stddev_s: number; count: number; total_samples: number }>;
+  avg_uses: number;
+  avg_uses_per_min: number;
+  uses_per_min: { avg: number; stddev: number; min: number; max: number } | Record<string, never>;
+  majority_hold: boolean;
+}
+
 // Benchmark fields common to cooldowns and defensives. `usesOf` reads the per-parse
 // use count (cooldowns expose `total_uses`, defensives `uses`); `requireUsesForUpm`
 // excludes zero-use parses from the uses-per-minute mean (defensive behavior).
-function buildBaseBenchmark(entries, usesOf, requireUsesForUpm) {
-  const topFirstCasts = entries.map(e => e.first_cast_s).filter(v => v != null);
-  const gaps = [];
+function buildBaseBenchmark(entries: BenchEntry[], usesOf: (e: BenchEntry) => number, requireUsesForUpm: boolean): BaseBenchmark {
+  const topFirstCasts = entries.map(e => e.first_cast_s).filter((v): v is number => v != null);
+  const gaps: number[] = [];
   for (const entry of entries) {
-    const times = entry.cast_times_s || [];
+    const times = entry.cast_times_s ?? [];
     for (let j = 1; j < times.length; j++) gaps.push(times[j] - times[j - 1]);
   }
   const upmList = entries
@@ -1339,24 +1529,24 @@ function buildBaseBenchmark(entries, usesOf, requireUsesForUpm) {
     avg_gap_s: gaps.length ? round(mean(gaps)) : null,
     stddev_gap_s: gaps.length ? round(stdev(gaps)) : null,
     hold_targets: buildHoldTargets(entries),
-    avg_uses: entries.length ? round(mean(entries.map(e => usesOf(e) || 0))) : 0,
+    avg_uses: entries.length ? round(mean(entries.map(e => usesOf(e) ?? 0))) : 0,
     avg_uses_per_min: upmList.length ? round(mean(upmList), 2) : 0,
     uses_per_min: benchUsesPerMin(entries),
     majority_hold: entries.filter(e => e.cast_pattern === 'hold').length > entries.length * MEMBER_MAJORITY_FRAC,
   };
 }
 
-function syncEncounterFile(spec, encounterId) {
+function syncEncounterFile(spec: string, encounterId: number): void {
   const samplesPath = getSamplesPath(spec, encounterId);
-  const samples = readJson(samplesPath) || [];
+  const samples = readJson<ParseSample[]>(samplesPath) ?? [];
   if (!samples.length) return;
 
-  const encName = samples[0].encounter_name || '';
+  const encName = samples[0].encounter_name ?? '';
 
   // Efficiency
-  const allGapsMs = [];
+  const allGapsMs: number[] = [];
   for (const s of samples) {
-    const gaps = (s.cooldown_data || {}).cast_gap_list_ms || [];
+    const gaps = s.cooldown_data.cast_gap_list_ms ?? [];
     allGapsMs.push(...gaps);
   }
   allGapsMs.sort((a, b) => a - b);
@@ -1366,19 +1556,19 @@ function syncEncounterFile(spec, encounterId) {
     downtimeThresholdMs = allGapsMs[p90Idx];
   }
 
-  const effVals = [];
+  const effVals: number[] = [];
   for (const s of samples) {
-    const cdData = s.cooldown_data || {};
-    const gapList = cdData.cast_gap_list_ms || [];
-    const durS = cdData.fight_duration_s || 0;
+    const cdData = s.cooldown_data;
+    const gapList = cdData.cast_gap_list_ms ?? [];
+    const durS = cdData.fight_duration_s ?? 0;
     if (gapList.length && durS > 0) {
-      const dtS = gapList.filter(g => g > downtimeThresholdMs).reduce((s, g) => s + g, 0) / 1000;
+      const dtS = gapList.filter(g => g > downtimeThresholdMs).reduce((acc, g) => acc + g, 0) / 1000;
       effVals.push(round(Math.max(0, (1 - dtS / durS) * 100)));
     }
   }
   if (!effVals.length) {
     for (const s of samples) {
-      const v = (s.cooldown_data || {}).cast_efficiency_pct;
+      const v = s.cooldown_data.cast_efficiency_pct;
       if (v != null) effVals.push(v);
     }
   }
@@ -1386,23 +1576,23 @@ function syncEncounterFile(spec, encounterId) {
   const topEfficiencyStddev = effVals.length ? round(stdev(effVals)) : 0;
 
   // Per-CD benchmarks
-  const agg = new Map();
+  const agg = new Map<string, Array<CdCastSummary & { fight_duration_s: number }>>();
   for (const s of samples) {
-    const cdData = s.cooldown_data || {};
-    const fightDur = cdData.fight_duration_s || 0;
-    for (const cd of (cdData.cooldowns || [])) {
+    const cdData = s.cooldown_data;
+    const fightDur = cdData.fight_duration_s ?? 0;
+    for (const cd of (cdData.cooldowns ?? [])) {
       if (!agg.has(cd.name)) agg.set(cd.name, []);
-      agg.get(cd.name).push({ ...cd, fight_duration_s: fightDur });
+      agg.get(cd.name)!.push({ ...cd, fight_duration_s: fightDur });
     }
   }
 
-  const perCdBenchmarks = {};
+  const perCdBenchmarks: Record<string, BaseBenchmark & { avg_bl_offset_s: number | null; stddev_bl_offset_s: number | null; bl_pct: number }> = {};
   for (const [cdName, entries] of agg.entries()) {
-    const blOffsets = entries.map(e => e.bl_offset_s).filter(v => v != null);
+    const blOffsets = entries.map(e => e.bl_offset_s).filter((v): v is number => v != null);
     const blCount = entries.filter(e => e.bl_aligned).length;
 
     perCdBenchmarks[cdName] = {
-      ...buildBaseBenchmark(entries, e => e.total_uses, false),
+      ...buildBaseBenchmark(entries, e => (e as unknown as CdCastSummary).total_uses, false),
       avg_bl_offset_s: blOffsets.length ? round(mean(blOffsets)) : null,
       stddev_bl_offset_s: blOffsets.length ? round(stdev(blOffsets)) : null,
       bl_pct: entries.length ? Math.round(blCount / entries.length * 100) : 0,
@@ -1410,13 +1600,13 @@ function syncEncounterFile(spec, encounterId) {
   }
 
   // Duration
-  const durations = samples.map(s => (s.cooldown_data || {}).fight_duration_s).filter(Boolean);
+  const durations = samples.map(s => s.cooldown_data.fight_duration_s).filter(Boolean) as number[];
   const avgDurationS = durations.length ? round(mean(durations)) : 0;
 
   // Burst windows
-  const allBw = [];
+  const allBw: RawBurstWindow[] = [];
   for (const s of samples) {
-    for (const bw of ((s.cooldown_data || {}).burst_windows || [])) allBw.push(bw);
+    for (const bw of (s.cooldown_data.burst_windows ?? [])) allBw.push(bw);
   }
   const burstWindowsClustered = allBw.length ? clusterBurstWindows(allBw, samples.length) : [];
 
@@ -1425,18 +1615,18 @@ function syncEncounterFile(spec, encounterId) {
 
   // Defensive benchmarks
   const specDefensives = getSpecDefensives(spec);
-  const aggDefUses = new Map();
+  const aggDefUses = new Map<string, number[]>();
   for (const s of samples) {
-    for (const d of ((s.cooldown_data || {}).defensives || [])) {
+    for (const d of (s.cooldown_data.defensives ?? [])) {
       if (!aggDefUses.has(d.name)) aggDefUses.set(d.name, []);
-      aggDefUses.get(d.name).push(d.uses || 0);
+      aggDefUses.get(d.name)!.push(d.uses ?? 0);
     }
   }
 
-  const topDefensivesSummary = [];
+  const topDefensivesSummary: Array<{ name: string; spell_id: number; avg_uses: number; min_uses: number; max_uses: number; sample_count: number }> = [];
   for (const defn of specDefensives) {
     const uses = aggDefUses.get(defn.name);
-    if (!uses || !uses.length) continue;
+    if (!uses?.length) continue;
     topDefensivesSummary.push({
       name: defn.name,
       spell_id: defn.spell_id,
@@ -1447,25 +1637,25 @@ function syncEncounterFile(spec, encounterId) {
     });
   }
 
-  const aggDef = new Map();
+  const aggDef = new Map<string, Array<DefensiveCastSummary & { fight_duration_s: number }>>();
   for (const s of samples) {
-    const cdData = s.cooldown_data || {};
-    const fightDur = cdData.fight_duration_s || 0;
-    for (const d of (cdData.defensives || [])) {
+    const cdData = s.cooldown_data;
+    const fightDur = cdData.fight_duration_s ?? 0;
+    for (const d of (cdData.defensives ?? [])) {
       if (!aggDef.has(d.name)) aggDef.set(d.name, []);
-      aggDef.get(d.name).push({ ...d, fight_duration_s: fightDur });
+      aggDef.get(d.name)!.push({ ...d, fight_duration_s: fightDur });
     }
   }
 
-  const perDefensiveBenchmarks = {};
+  const perDefensiveBenchmarks: Record<string, BaseBenchmark> = {};
   for (const [defName, entries] of aggDef.entries()) {
-    perDefensiveBenchmarks[defName] = buildBaseBenchmark(entries, e => e.uses, true);
+    perDefensiveBenchmarks[defName] = buildBaseBenchmark(entries, e => (e as DefensiveCastSummary).uses, true);
   }
 
   // Defensive windows
-  const allDw = [];
+  const allDw: RawDefensiveWindow[] = [];
   for (const s of samples) {
-    for (const dw of ((s.cooldown_data || {}).defensive_windows || [])) allDw.push(dw);
+    for (const dw of (s.cooldown_data.defensive_windows ?? [])) allDw.push(dw);
   }
   const defensiveWindowsClustered = allDw.length ? clusterDefensiveWindows(allDw, samples.length) : [];
 
@@ -1489,18 +1679,18 @@ function syncEncounterFile(spec, encounterId) {
   syncEncountersIndex(spec);
 }
 
-function syncEncountersIndex(spec) {
+function syncEncountersIndex(spec: string): void {
   const encDir = path.join(DATA_DIR, spec, 'encounters');
   if (!fs.existsSync(encDir)) return;
-  const entries = [];
+  const entries: Array<{ id: number; name: string; sample_count: number }> = [];
   for (const f of fs.readdirSync(encDir).sort()) {
     if (!f.endsWith('.json')) continue;
     try {
-      const d = readJson(path.join(encDir, f)) || {};
+      const d = readJson<{ encounter_id?: number; encounter_name?: string; sample_count?: number }>(path.join(encDir, f)) ?? {};
       entries.push({
-        id: d.encounter_id || parseInt(f),
-        name: d.encounter_name || f,
-        sample_count: d.sample_count || 0,
+        id: d.encounter_id ?? parseInt(f),
+        name: d.encounter_name ?? f,
+        sample_count: d.sample_count ?? 0,
       });
     } catch {}
   }
@@ -1508,15 +1698,15 @@ function syncEncountersIndex(spec) {
 }
 
 /** Rebuild data/specs/index.json by scanning all spec folders on disk. */
-function writeSpecIndex() {
+function writeSpecIndex(): void {
   if (!fs.existsSync(DATA_DIR)) return;
-  const entries = [];
+  const entries: Array<{ spec: string; encounter_count: number }> = [];
   for (const spec of fs.readdirSync(DATA_DIR).sort()) {
     const encFile = path.join(DATA_DIR, spec, 'encounters.json');
     if (!fs.existsSync(encFile)) continue;
     try {
-      const enc = readJson(encFile) || [];
-      const count = enc.filter(e => e.sample_count > 0).length;
+      const enc = readJson<Array<{ sample_count?: number }>>(encFile) ?? [];
+      const count = enc.filter(e => e.sample_count && e.sample_count > 0).length;
       if (count > 0) entries.push({ spec, encounter_count: count });
     } catch {}
   }
@@ -1526,83 +1716,27 @@ function writeSpecIndex() {
 // ── Spec selection ────────────────────────────────────────────────────────────
 
 // Returns known specs (those with a rulebook.json) sorted most-stale-first.
-// Staleness = age of the most-overdue encounter for that spec:
-//   - No samples at all  -> Infinity (never ingested, always picked first)
-//   - At least one sample -> now - newest sampled_at across that encounter's samples
-// Using age rather than sample count means anonymous parses (which can never
-// fill a full TOP_N slot) and low-population bosses don't cause a spec to
-// appear perpetually overdue.
-function specsByStaleness(encounters) {
+function specsByStaleness(encounters: IngestEncounter[]): string[] {
   const now = Date.now();
   const known = getKnownSpecs();
   return known.slice().sort((a, b) => staleness(a, encounters, now) - staleness(b, encounters, now));
 }
 
-function staleness(spec, encounters, now) {
+function staleness(spec: string, encounters: IngestEncounter[], now: number): number {
   let worst = 0;
   for (const enc of encounters) {
-    const samples = readJson(getSamplesPath(spec, enc.id)) || [];
+    const samples = readJson<ParseSample[]>(getSamplesPath(spec, enc.id)) ?? [];
     if (!samples.length) return Infinity; // never ingested
-    const newestMs = Math.max(...samples.map(s => new Date(s.sampled_at || 0).getTime()));
+    const newestMs = Math.max(...samples.map(s => new Date(s.sampled_at ?? 0).getTime()));
     const ageMs = now - newestMs;
     if (ageMs > worst) worst = ageMs;
   }
   return worst;
 }
 
-
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-async function main() {
-  console.log('warcraft-learner - Parse Ingestion CLI');
-
-  let wcl;
-  try {
-    wcl = new WCLClient();
-  } catch (err) {
-    console.error(err.message);
-    process.exit(1);
-  }
-
-  process.stdout.write('Fetching WCL encounters...');
-  let encounters;
-  try {
-    encounters = await getEncounters(wcl);
-    console.log(` ${encounters.length} encounters in current expansion`);
-  } catch (err) {
-    console.error(`\nFailed to fetch encounters: ${err.message}`);
-    process.exit(1);
-  }
-
-  const specArg = (() => {
-    const idx = process.argv.indexOf('--spec');
-    return idx !== -1 ? process.argv[idx + 1] : null;
-  })();
-
-  let specs;
-  if (specArg) {
-    if (!SPEC_TO_WCL[specArg]) {
-      console.error(`Unknown spec "${specArg}". Known specs: ${Object.keys(SPEC_TO_WCL).join(', ')}`);
-      process.exit(1);
-    }
-    specs = [specArg];
-    console.log(`Targeting spec: ${specArg}`);
-  } else {
-    specs = specsByStaleness(encounters);
-    if (!specs.length) {
-      console.log('No known specs (no rulebook.json found). Nothing to do.');
-      return;
-    }
-    console.log(`Stalest-first: ${specs.join(', ')}`);
-  }
-
-  for (const spec of specs) {
-    const budgetExhausted = await ingestSpecNonInteractive(wcl, spec, encounters);
-    if (budgetExhausted) break;
-  }
-}
-
-async function ingestSpecNonInteractive(wcl, spec, encounters) {
+async function ingestSpecNonInteractive(wcl: WCLClient, spec: string, encounters: IngestEncounter[]): Promise<boolean> {
   console.log(`\nIngesting ${spec} - ${encounters.length} encounters (top ${TOP_N})`);
   try {
     for (const enc of encounters) {
@@ -1611,11 +1745,11 @@ async function ingestSpecNonInteractive(wcl, spec, encounters) {
       // on count > 0 (not >= TOP_N) handles anonymous parses and low-population
       // bosses that can never fill a full TOP_N slot.
       const samplesPath = getSamplesPath(spec, enc.id);
-      const existingSamples = readJson(samplesPath) || [];
+      const existingSamples = readJson<ParseSample[]>(samplesPath) ?? [];
       if (existingSamples.length > 0) {
         const allFresh = existingSamples.every(s => s.ingest_hash === INGEST_HASH);
         if (allFresh) {
-          const newestMs = Math.max(...existingSamples.map(s => new Date(s.sampled_at || 0).getTime()));
+          const newestMs = Math.max(...existingSamples.map(s => new Date(s.sampled_at ?? 0).getTime()));
           const ageH = (Date.now() - newestMs) / 3_600_000;
           if (ageH < FRESH_HOURS) {
             console.log(`\n[${enc.name}] Skipped (${existingSamples.length} samples fresh, ${Math.round(ageH * 10) / 10}h old)`);
@@ -1628,35 +1762,18 @@ async function ingestSpecNonInteractive(wcl, spec, encounters) {
       await wcl.assertBudget(POINTS_MARGIN);
 
       process.stdout.write(`\n[${enc.name}] Fetching top ${TOP_N} rankings...`);
-      let rankings;
+      let rankings: ParseRanking[];
       try {
-        rankings = await fetchRankingsLite(wcl, spec, enc.id, TOP_N, enc.partitionIds || []);
+        rankings = await fetchRankingsLite(wcl, spec, enc.id, TOP_N, enc.partitionIds ?? []);
       } catch (err) {
         if (err instanceof BudgetExceededError) throw err;
-        console.log(` FAILED: ${err.message}`);
+        console.log(` FAILED: ${err instanceof Error ? err.message : String(err)}`);
         continue;
       }
       console.log(` ${rankings.length} rankings found`);
 
-      const currentTopKeys = new Set(rankings.map(r => parseKey(r.report_code, r.fight_id)));
-
-      // Keep cached samples still in the current top N AND produced by this script version.
-      const keptSamples = existingSamples.filter(s =>
-        currentTopKeys.has(parseKey(s.report_code, s.fight_id, s.ingest_hash))
-      );
-      const cachedKeys = new Set(keptSamples.map(s => parseKey(s.report_code, s.fight_id)));
-      writeJson(samplesPath, keptSamples);
-
-      // Keep positions only for samples that are still valid.
-      const posFile = getPositionsPath(spec, enc.id);
-      const existingPosData = readJson(posFile) || {};
-      const existingPosParses = Array.isArray(existingPosData.parses) ? existingPosData.parses : [];
-      const keptPositions = existingPosParses.filter(p => cachedKeys.has(parseKey(p.report_code, p.fight_id)));
-      if (keptPositions.length > 0) {
-        writeJson(posFile, { ...existingPosData, parses: keptPositions, sample_count: keptPositions.length }, true);
-      } else if (fs.existsSync(posFile)) {
-        fs.unlinkSync(posFile);
-      }
+      // Build set of cached parse keys
+      const cachedKeys = new Set<string>((readJson<ParseSample[]>(getSamplesPath(spec, enc.id)) ?? []).map(s => parseKey(s.report_code, s.fight_id)));
 
       let done = 0, cached = 0;
       for (const ranking of rankings) {
@@ -1680,7 +1797,7 @@ async function ingestSpecNonInteractive(wcl, spec, encounters) {
           }
         } catch (err) {
           if (err instanceof BudgetExceededError) throw err;
-          process.stdout.write(` (skip: ${err.message.slice(0, 40)})`);
+          process.stdout.write(` (skip: ${err instanceof Error ? err.message.slice(0, 40) : String(err)})`);
         }
         done++;
       }
@@ -1705,7 +1822,53 @@ async function ingestSpecNonInteractive(wcl, spec, encounters) {
   return false;
 }
 
+async function main(): Promise<void> {
+  console.log('warcraft-learner - Parse Ingestion CLI');
+
+  let wcl: WCLClient;
+  try {
+    wcl = new WCLClient();
+  } catch (err) {
+    console.error(err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  }
+
+  process.stdout.write('Fetching WCL encounters...');
+  let encounters: IngestEncounter[];
+  try {
+    encounters = await getEncounters(wcl);
+    console.log(` ${encounters.length} encounters in current expansion`);
+  } catch (err) {
+    console.error(`\nFailed to fetch encounters: ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  }
+
+  const specArg = opts.spec ?? null;
+
+  let specs: string[];
+  if (specArg) {
+    if (!SPEC_TO_WCL[specArg]) {
+      console.error(`Unknown spec "${specArg}". Known specs: ${Object.keys(SPEC_TO_WCL).join(', ')}`);
+      process.exit(1);
+    }
+    specs = [specArg];
+    console.log(`Targeting spec: ${specArg}`);
+  } else {
+    specs = specsByStaleness(encounters);
+    if (!specs.length) {
+      console.log('No known specs (no rulebook.json found). Nothing to do.');
+      return;
+    }
+    console.log(`Stalest-first: ${specs.join(', ')}`);
+  }
+
+  for (const spec of specs) {
+    const budgetExhausted = await ingestSpecNonInteractive(wcl, spec, encounters);
+    if (budgetExhausted) break;
+  }
+}
+
 main().catch(err => {
-  console.error('\nFatal error:', err.message);
+  console.error('\nFatal error:', err instanceof Error ? err.message : String(err));
   process.exit(1);
 });

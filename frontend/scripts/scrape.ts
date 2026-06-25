@@ -16,33 +16,67 @@
 
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { MAX_GUIDE_CHARS as MAX_CONTENT_CHARS, readJson, writeJson, getKnownSpecs as listSpecs, createPrompt } from './lib.mjs';
+import { Command } from 'commander';
+import { MAX_GUIDE_CHARS as MAX_CONTENT_CHARS, readJson, writeJson, getKnownSpecs as listSpecs, createPrompt } from './lib.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const FRONTEND_ROOT = path.resolve(__dirname, '..');
 const DATA_DIR = path.join(FRONTEND_ROOT, 'public', 'data', 'specs');
 
+// ── CLI argument parsing ───────────────────────────────────────────────────────
+
+const program = new Command()
+  .name('scrape')
+  .description('Manage guide URLs for specs: add, scrape, view, delete.')
+  .option('--spec <spec>', 'spec name for non-interactive add-and-scrape mode')
+  .option('--url <url>', 'guide URL to add (requires --spec)')
+  .option('--type <type>', 'guide type: web | youtube | simc (default: web)', 'web')
+  .addHelpText('after', '\nExamples:\n  npm run scrape\n  npm run scrape -- --spec SubtletyRogue --url https://example.com --type web')
+  .parse(process.argv);
+
+const opts = program.opts<{ spec?: string; url?: string; type: string }>();
+
+if (opts.url && !opts.spec) {
+  program.error('--url requires --spec');
+}
+if (!['web', 'youtube', 'simc'].includes(opts.type)) {
+  program.error(`invalid --type: "${opts.type}". Must be web, youtube, or simc.`);
+}
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface Guide {
+  id: number;
+  spec: string;
+  url: string;
+  guide_type: 'web' | 'youtube' | 'simc';
+  content: string;
+  status: 'pending' | 'scraped' | 'error';
+}
+
+// ── Shared helpers ────────────────────────────────────────────────────────────
+
 const { rl, ask, askList } = createPrompt();
-const getKnownSpecs = () => listSpecs(DATA_DIR);
+const getKnownSpecs = (): string[] => listSpecs(DATA_DIR);
 
 // ── Guides storage ──────────────────────────────────────────────────────────
 
-function guidesPath(spec) {
+function guidesPath(spec: string): string {
   return path.join(DATA_DIR, spec, 'guides.json');
 }
 
-function loadGuides(spec) {
-  return readJson(guidesPath(spec)) || [];
+function loadGuides(spec: string): Guide[] {
+  return readJson<Guide[]>(guidesPath(spec)) ?? [];
 }
 
-function saveGuides(spec, guides) {
+function saveGuides(spec: string, guides: Guide[]): void {
   writeJson(guidesPath(spec), guides);
 }
 
 // ── Scraping ──────────────────────────────────────────────────────────────────
 
-function htmlToText(html) {
+function htmlToText(html: string): string {
   // Remove scripts, styles, nav, footer
   let text = html
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
@@ -73,7 +107,7 @@ function htmlToText(html) {
   return text.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
 }
 
-async function scrapeWeb(url) {
+async function scrapeWeb(url: string): Promise<string> {
   const res = await fetch(url, {
     headers: { 'User-Agent': 'Mozilla/5.0 (compatible; warcraft-learner/1.0)' },
   });
@@ -82,7 +116,7 @@ async function scrapeWeb(url) {
   return htmlToText(html).slice(0, MAX_CONTENT_CHARS);
 }
 
-async function scrapeSimC(url) {
+async function scrapeSimC(url: string): Promise<string> {
   // Convert GitHub blob URLs to raw
   const rawUrl = url
     .replace('github.com', 'raw.githubusercontent.com')
@@ -95,7 +129,7 @@ async function scrapeSimC(url) {
   return text.slice(0, MAX_CONTENT_CHARS);
 }
 
-async function scrapeYouTube(url) {
+async function scrapeYouTube(url: string): Promise<string> {
   // Extract video ID from URL
   const match = url.match(/(?:v=|youtu\.be\/|embed\/)([A-Za-z0-9_-]{11})/);
   if (!match) throw new Error(`Could not extract YouTube video ID from: ${url}`);
@@ -137,7 +171,7 @@ async function scrapeYouTube(url) {
   return segments.join(' ').slice(0, MAX_CONTENT_CHARS);
 }
 
-async function scrapeGuide(guide) {
+async function scrapeGuide(guide: Guide): Promise<string> {
   const { guide_type, url } = guide;
   if (guide_type === 'web') return scrapeWeb(url);
   if (guide_type === 'simc') return scrapeSimC(url);
@@ -147,19 +181,19 @@ async function scrapeGuide(guide) {
 
 // ── Guide management ──────────────────────────────────────────────────────────
 
-function nextId(guides) {
+function nextId(guides: Guide[]): number {
   return guides.length === 0 ? 1 : Math.max(...guides.map(g => g.id || 0)) + 1;
 }
 
-async function addGuide(spec) {
+async function addGuide(spec: string): Promise<void> {
   const url = (await ask('Guide URL: ')).trim();
   if (!url) return;
 
   const typeIdx = await askList('Guide type:', ['web', 'youtube', 'simc']);
-  const guideType = ['web', 'youtube', 'simc'][typeIdx];
+  const guideType = (['web', 'youtube', 'simc'] as const)[typeIdx];
 
   const guides = loadGuides(spec);
-  const newGuide = {
+  const newGuide: Guide = {
     id: nextId(guides),
     spec,
     url,
@@ -177,7 +211,7 @@ async function addGuide(spec) {
   }
 }
 
-async function scrapeGuideById(spec, guideId) {
+async function scrapeGuideById(spec: string, guideId: number): Promise<void> {
   const guides = loadGuides(spec);
   const idx = guides.findIndex(g => g.id === guideId);
   if (idx === -1) { console.log(`Guide #${guideId} not found`); return; }
@@ -192,14 +226,14 @@ async function scrapeGuideById(spec, guideId) {
   } catch (err) {
     guides[idx] = { ...guide, content: '', status: 'error' };
     saveGuides(spec, guides);
-    console.log(` ERROR: ${err.message}`);
+    console.log(` ERROR: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
-async function guidesMenu(spec) {
+async function guidesMenu(spec: string): Promise<void> {
   while (true) {
     const guides = loadGuides(spec);
-    console.log(`\n── Guides for ${spec} (${guides.length}) ──────────────────────────`);
+    console.log(`\n-- Guides for ${spec} (${guides.length}) ----------------------------------`);
     guides.forEach((g, i) =>
       console.log(`  ${i + 1}. [${g.status.padEnd(7)}] ${g.guide_type.toUpperCase().padEnd(7)} ${g.url.slice(0, 70)}`));
 
@@ -238,7 +272,7 @@ async function guidesMenu(spec) {
 
 // ── Spec selection ────────────────────────────────────────────────────────────
 
-async function pickSpec() {
+async function pickSpec(): Promise<string> {
   const specs = getKnownSpecs();
   console.log('\nKnown specs in data/specs/:');
   if (specs.length) specs.forEach((s, i) => console.log(`  [${i + 1}] ${s}`));
@@ -251,22 +285,17 @@ async function pickSpec() {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-async function main() {
+async function main(): Promise<void> {
   console.log('warcraft-learner - Guide Scraper CLI');
 
-  // ── CLI mode (non-interactive) ──────────────────────────────────────────────
-  const argv = process.argv.slice(2);
-  const cliSpec = argv.find((_, i) => argv[i - 1] === '--spec');
-  const cliUrl  = argv.find((_, i) => argv[i - 1] === '--url');
-  const cliType = argv.find((_, i) => argv[i - 1] === '--type') || 'web';
+  const cliSpec = opts.spec;
+  const cliUrl = opts.url;
+  const cliType = opts.type as 'web' | 'youtube' | 'simc';
 
+  // ── CLI mode (non-interactive) ──────────────────────────────────────────────
   if (cliSpec && cliUrl) {
-    if (!['web', 'youtube', 'simc'].includes(cliType)) {
-      console.error(`Unknown guide type: ${cliType}. Use web, youtube, or simc.`);
-      process.exit(1);
-    }
     const guides = loadGuides(cliSpec);
-    const newGuide = { id: nextId(guides), spec: cliSpec, url: cliUrl, guide_type: cliType, content: '', status: 'pending' };
+    const newGuide: Guide = { id: nextId(guides), spec: cliSpec, url: cliUrl, guide_type: cliType, content: '', status: 'pending' };
     guides.push(newGuide);
     saveGuides(cliSpec, guides);
     console.log(`Added guide #${newGuide.id} for ${cliSpec}. Scraping...`);
@@ -290,6 +319,6 @@ async function main() {
 }
 
 main().catch(err => {
-  console.error('\nFatal error:', err.message);
+  console.error('\nFatal error:', err instanceof Error ? err.message : String(err));
   process.exit(1);
 });
