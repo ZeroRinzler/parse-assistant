@@ -104,6 +104,11 @@
             "runner": "vitest",
             "buildTarget": "frontend:build",
             "watch": false
+          },
+          "configurations": {
+            "ci": {
+              "reporters": ["default", "github-actions"]
+            }
           }
         }
       }
