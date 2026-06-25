@@ -1,12 +1,12 @@
 /**
  * Types for the parse_samples/{enc_id}.json format.
  *
- * Written and read by ingest.ts only - the Angular frontend does not consume
- * parse_samples. Defined here (not in src/app/core/models/) so the file format
- * contract lives outside the ingest script itself.
+ * Written and read by the ingestion pipeline only - the Angular frontend does not
+ * consume parse_samples. Defined here (not in src/app/core/models/) so the file
+ * format contract lives outside the ingest scripts themselves.
  */
 
-import type { DefensiveWindow } from '../src/app/core/models/analysis.models.ts';
+import type { DefensiveWindow } from '../../../src/app/core/models/analysis.models.ts';
 
 export interface HoldWindow {
   cast_index: number;
