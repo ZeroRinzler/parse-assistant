@@ -33,7 +33,7 @@ const PROBE_SPECS = ['FireMage', 'RetributionPaladin', 'FuryWarrior'];
 // test boss would promote it; a real raid clears this easily.
 const LIVE_RANKINGS_THRESHOLD = 3;
 const PROBE_COUNT = 10;
-// Stop probing cleanly when the WCL hourly budget runs low (mirrors ingest.ts).
+// Stop probing cleanly when the WCL hourly budget runs low (mirrors ingest-parses.ts).
 const PROBE_BUDGET_MARGIN = 500;
 
 export interface CurrentContent {

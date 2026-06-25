@@ -35,7 +35,7 @@ export const getKnownSpecs = (): string[] => listSpecs(DATA_DIR, { requireRulebo
 // to ETL logic - in any module, not just this one - invalidates cached samples and
 // forces re-analysis on the next run.
 function collectEtlSources(): string[] {
-  const files = [path.join(FRONTEND_ROOT, 'scripts', 'ingest.ts')];
+  const files = [path.join(FRONTEND_ROOT, 'scripts', 'ingest-parses.ts')];
   const walk = (dir: string): void => {
     for (const name of fs.readdirSync(dir).sort()) {
       const full = path.join(dir, name);

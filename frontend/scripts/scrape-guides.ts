@@ -2,11 +2,12 @@
 /**
  * warcraft-learner - Standalone Guide Scraper CLI
  *
- * Manages guides for specs: add URLs, scrape content, view, delete.
- * Writes directly to data/specs/{spec}/guides.json
+ * Re-scrapes every existing guide across all specs, writing fresh content to
+ * data/specs/{spec}/guides.json. Pass --spec/--url to add a new guide instead.
  *
  * Usage:
- *   npm run scrape
+ *   npm run scrape                                            # re-scrape all existing guides
+ *   npm run scrape -- --spec SubtletyRogue --url <url>        # add and scrape one guide
  *
  * Supported guide types:
  *   web      - HTML page scraped with fetch + text extraction
@@ -18,7 +19,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { Command } from 'commander';
 import { JSDOM } from 'jsdom';
-import { MAX_GUIDE_CHARS as MAX_CONTENT_CHARS, readJson, writeJson, getKnownSpecs as listSpecs, createPrompt } from './lib.ts';
+import { MAX_GUIDE_CHARS as MAX_CONTENT_CHARS, readJson, writeJson, getKnownSpecs as listSpecs } from './lib.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,8 +30,8 @@ const DATA_DIR = path.join(FRONTEND_ROOT, 'public', 'data', 'specs');
 
 const program = new Command()
   .name('scrape')
-  .description('Manage guide URLs for specs: add, scrape, view, delete.')
-  .option('--spec <spec>', 'spec name for non-interactive add-and-scrape mode')
+  .description('Re-scrape every existing guide; or add one with --spec/--url.')
+  .option('--spec <spec>', 'spec name for add-and-scrape mode')
   .option('--url <url>', 'guide URL to add (requires --spec)')
   .option('--type <type>', 'guide type: web | youtube | simc (default: web)', 'web')
   .addHelpText('after', '\nExamples:\n  npm run scrape\n  npm run scrape -- --spec SubtletyRogue --url https://example.com --type web')
@@ -58,7 +59,6 @@ interface Guide {
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
-const { rl, ask, askList } = createPrompt();
 const getKnownSpecs = (): string[] => listSpecs(DATA_DIR);
 
 // ── Guides storage ──────────────────────────────────────────────────────────
@@ -179,32 +179,6 @@ function nextId(guides: Guide[]): number {
   return guides.length === 0 ? 1 : Math.max(...guides.map(g => g.id || 0)) + 1;
 }
 
-async function addGuide(spec: string): Promise<void> {
-  const url = (await ask('Guide URL: ')).trim();
-  if (!url) return;
-
-  const typeIdx = await askList('Guide type:', ['web', 'youtube', 'simc']);
-  const guideType = (['web', 'youtube', 'simc'] as const)[typeIdx];
-
-  const guides = await loadGuides(spec);
-  const newGuide: Guide = {
-    id: nextId(guides),
-    spec,
-    url,
-    guide_type: guideType,
-    content: '',
-    status: 'pending',
-  };
-  guides.push(newGuide);
-  await saveGuides(spec, guides);
-  console.log(`Added guide #${newGuide.id}`);
-
-  const doScrape = await ask('Scrape now? [Y/n] ');
-  if (doScrape.trim().toLowerCase() !== 'n') {
-    await scrapeGuideById(spec, newGuide.id);
-  }
-}
-
 async function scrapeGuideById(spec: string, guideId: number): Promise<void> {
   const guides = await loadGuides(spec);
   const idx = guides.findIndex(g => g.id === guideId);
@@ -224,57 +198,20 @@ async function scrapeGuideById(spec: string, guideId: number): Promise<void> {
   }
 }
 
-async function guidesMenu(spec: string): Promise<void> {
-  while (true) {
-    const guides = await loadGuides(spec);
-    console.log(`\n-- Guides for ${spec} (${guides.length}) ----------------------------------`);
-    guides.forEach((g, i) =>
-      console.log(`  ${i + 1}. [${g.status.padEnd(7)}] ${g.guide_type.toUpperCase().padEnd(7)} ${g.url.slice(0, 70)}`));
+// ── Bulk refresh ──────────────────────────────────────────────────────────────
 
-    const actions = [
-      'Add guide',
-      'Scrape a guide',
-      'Scrape all pending',
-      'Delete a guide',
-      'Back',
-    ];
-    const choice = await askList('\nAction:', actions);
-
-    if (choice === 0) {
-      await addGuide(spec);
-    } else if (choice === 1) {
-      if (!guides.length) { console.log('No guides.'); continue; }
-      const n = parseInt(await ask('Guide number to scrape: '));
-      if (n >= 1 && n <= guides.length) await scrapeGuideById(spec, guides[n - 1].id);
-    } else if (choice === 2) {
-      const pending = guides.filter(g => g.status !== 'scraped');
-      if (!pending.length) { console.log('No pending guides.'); continue; }
-      for (const g of pending) await scrapeGuideById(spec, g.id);
-    } else if (choice === 3) {
-      if (!guides.length) { console.log('No guides.'); continue; }
-      const n = parseInt(await ask('Guide number to delete: '));
-      if (n >= 1 && n <= guides.length) {
-        const removed = guides.splice(n - 1, 1)[0];
-        await saveGuides(spec, guides);
-        console.log(`Deleted guide #${removed.id}`);
-      }
-    } else {
-      break;
-    }
-  }
-}
-
-// ── Spec selection ────────────────────────────────────────────────────────────
-
-async function pickSpec(): Promise<string> {
+// Re-scrape every existing guide across all known specs. This is the default action
+// (used by the hourly ingest workflow to keep guide content fresh). Reuses
+// scrapeGuideById, which records per-guide errors as status 'error' rather than
+// throwing, so one dead URL never fails the run.
+async function refreshAllGuides(): Promise<void> {
   const specs = getKnownSpecs();
-  console.log('\nKnown specs in data/specs/:');
-  if (specs.length) specs.forEach((s, i) => console.log(`  [${i + 1}] ${s}`));
-  else console.log('  (none yet)');
-  const raw = await ask('\nEnter spec name or number (e.g. SubtletyRogue): ');
-  const n = parseInt(raw);
-  if (n >= 1 && n <= specs.length) return specs[n - 1];
-  return raw.trim();
+  for (const spec of specs) {
+    const guides = await loadGuides(spec);
+    if (!guides.length) continue;
+    console.log(`\n-- Refreshing ${spec} (${guides.length} guides) --`);
+    for (const guide of guides) await scrapeGuideById(spec, guide.id);
+  }
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
@@ -286,7 +223,7 @@ async function main(): Promise<void> {
   const cliUrl = opts.url;
   const cliType = opts.type as 'web' | 'youtube' | 'simc';
 
-  // ── CLI mode (non-interactive) ──────────────────────────────────────────────
+  // ── Add mode: append and scrape a single new guide ──────────────────────────
   if (cliSpec && cliUrl) {
     const guides = await loadGuides(cliSpec);
     const newGuide: Guide = { id: nextId(guides), spec: cliSpec, url: cliUrl, guide_type: cliType, content: '', status: 'pending' };
@@ -294,22 +231,11 @@ async function main(): Promise<void> {
     await saveGuides(cliSpec, guides);
     console.log(`Added guide #${newGuide.id} for ${cliSpec}. Scraping...`);
     await scrapeGuideById(cliSpec, newGuide.id);
-    rl.close();
     return;
   }
 
-  // ── Interactive mode ────────────────────────────────────────────────────────
-  while (true) {
-    const spec = await pickSpec();
-    if (!spec) break;
-
-    await guidesMenu(spec);
-
-    const again = await ask('\nManage another spec? [y/N] ');
-    if (again.trim().toLowerCase() !== 'y') break;
-  }
-
-  rl.close();
+  // ── Default: re-scrape every existing guide ─────────────────────────────────
+  await refreshAllGuides();
 }
 
 main().catch(err => {

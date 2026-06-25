@@ -1,7 +1,7 @@
 /**
  * warcraft-learner - shared CLI helpers
  *
- * Pure Node, no dependencies. Used by ingest.ts, admin.ts, and scrape.ts so
+ * Pure Node, no dependencies. Used by ingest-parses.ts, build-rulebook.ts, and scrape-guides.ts so
  * the JSON I/O, spec discovery, and interactive prompt code lives in one place.
  */
 

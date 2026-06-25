@@ -9,9 +9,9 @@
     "test": "ng test && vitest run --config vitest.scripts.config.ts && tsc -p tsconfig.scripts.json --noEmit",
     "test:ci": "ng test --configuration ci && vitest run --config vitest.scripts.config.ts && tsc -p tsconfig.scripts.json --noEmit",
     "test:watch": "ng test --watch",
-    "admin": "tsx --tsconfig tsconfig.scripts.json scripts/admin.ts",
-    "ingest": "tsx --tsconfig tsconfig.scripts.json scripts/ingest.ts",
-    "scrape": "tsx --tsconfig tsconfig.scripts.json scripts/scrape.ts"
+    "rulebook": "tsx --tsconfig tsconfig.scripts.json scripts/build-rulebook.ts",
+    "ingest": "tsx --tsconfig tsconfig.scripts.json scripts/ingest-parses.ts",
+    "scrape": "tsx --tsconfig tsconfig.scripts.json scripts/scrape-guides.ts"
   },
   "private": true,
   "packageManager": "npm@11.13.0",

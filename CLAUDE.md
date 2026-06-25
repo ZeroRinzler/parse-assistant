@@ -104,7 +104,7 @@ warcraft-learner/
 │   │           └── positions/
 │   │               └── {enc_id}.json  # Top-parse position timelines (map feature)
 │   └── scripts/                # Node.js CLI tools (TypeScript, run via tsx; no server needed)
-│       ├── ingest.ts    # Ingestion CLI entry / orchestrator (< 200 lines)
+│       ├── ingest-parses.ts    # Ingestion CLI entry / orchestrator (< 200 lines)
 │       ├── ingest/                  # Ingestion ETL modules + colocated *.spec.ts tests
 │       │   ├── wcl-client.ts        # Extract: WCL transport (OAuth, query, rate limit, paginated events)
 │       │   ├── wcl-queries.ts       # Extract: GraphQL query strings + *Vars interfaces
@@ -115,13 +115,13 @@ warcraft-learner/
 │       │   ├── storage.ts           # Load: all data/specs/** file IO
 │       │   ├── models/              # *.models.ts: wcl, bench, parse-sample type shapes
 │       │   └── testing/             # scripts-local test toolkit (events/spell-ids/clock/samples)
-│       ├── admin.ts     # Rulebook management (build prompt, save AI output)
-│       └── scrape.ts    # Add + scrape guide URLs
+│       ├── build-rulebook.ts   # Rulebook management (build prompt, save AI output)
+│       └── scrape-guides.ts    # Re-scrape all guides (default); add one via --spec/--url
 ├── prompts/
 │   └── rulebook_skill.md       # LLM prompt template for rulebook generation
 ├── .github/workflows/
 │   ├── deploy-pages.yml         # Build Angular --base-href /warcraft-learner/ → GitHub Pages (push to main)
-│   ├── ingest-parses.yml        # Hourly (cron 23 * * * *) + manual: runs `npm run ingest`, commits data/specs/**
+│   ├── ingest-parses.yml        # Hourly (cron 23 * * * *) + manual: runs `npm run scrape` then `npm run ingest`, commits data/specs/**
 │   ├── pr-preview.yml           # Per-PR preview deploy
 │   ├── pr-preview-cleanup.yml   # Tear down preview when PR closes
 │   └── test.yml                 # CI: lint + tests
@@ -138,10 +138,10 @@ warcraft-learner/
 | `npm start` | Angular dev server on http://localhost:4200 |
 | `npm run build` | Production build to `../static/angular/` |
 | `npm run ingest` | Ingest top WCL parses (interactive, or `--spec Name --all`); needs `WCL_CLIENT_ID`/`WCL_CLIENT_SECRET` |
-| `npm run scrape` | Add and scrape guide URLs |
-| `npm run admin` | Manage rulebooks (build AI prompt, save AI JSON output) |
+| `npm run scrape` | Re-scrape all existing guides (default); `--spec Name --url URL` to add and scrape one |
+| `npm run rulebook` | Manage rulebooks (build AI prompt, save AI JSON output) |
 
-The CLI scripts are TypeScript run via `tsx` (e.g. `tsx --tsconfig tsconfig.scripts.json scripts/ingest.ts`), not `.mjs`/`node`. `WCL_CLIENT_ID`/`WCL_CLIENT_SECRET` come from the [Warcraft Logs API clients](https://www.warcraftlogs.com/api/clients/) page and are only used server-side (GHA secrets), never in the browser. No Anthropic API key is needed - rulebook generation is a copy-prompt / paste-back flow that works with any LLM.
+The CLI scripts are TypeScript run via `tsx` (e.g. `tsx --tsconfig tsconfig.scripts.json scripts/ingest-parses.ts`), not `.mjs`/`node`. `WCL_CLIENT_ID`/`WCL_CLIENT_SECRET` come from the [Warcraft Logs API clients](https://www.warcraftlogs.com/api/clients/) page and are only used server-side (GHA secrets), never in the browser. No Anthropic API key is needed - rulebook generation is a copy-prompt / paste-back flow that works with any LLM.
 
 ## Key flows
 
@@ -175,7 +175,7 @@ WCL event fetching runs on the **main thread** through the `AnalysisDataSource` 
 11. **Gear comparison** - after analysis completes, `post-raid.ts` fetches the selected player's gear via `getCharGear(player.name, player.server, reportRegion, encounterID)`. The report region (added to `REPORT_Q` as `region{slug}`) is shared by all players in the log, so gear lookup works for any raider - not just the logged-in account's own characters. Falls back gracefully (bench-only view) when the character has no ranked kills for the encounter.
 
 ### Ingestion (`npm run ingest`)
-Runs `frontend/scripts/ingest.ts` (orchestrator; ETL modules under `scripts/ingest/`). Also runs as the `ingest-parses.yml` GHA hourly (cron `23 * * * *`) and on manual `workflow_dispatch`.
+Runs `frontend/scripts/ingest-parses.ts` (orchestrator; ETL modules under `scripts/ingest/`). Also runs as the `ingest-parses.yml` GHA hourly (cron `23 * * * *`) and on manual `workflow_dispatch`. The same hourly workflow runs `npm run scrape` first to keep guide content fresh, then ingestion.
 
 1. Authenticates to WCL with client credentials (from `WCL_CLIENT_ID`/`WCL_CLIENT_SECRET` environment variables - server-side secret, only used in GHA, never in the browser).
 2. Queries `characterRankings` for each boss to find top 10 parses.
@@ -199,12 +199,12 @@ For Claude: trigger via the `mcp__github__actions_run_trigger` tool on the curre
 
 > **Keep data shapes in sync.** The bench/sample shape that ingestion writes lives in `scripts/ingest/models/*.models.ts` (`wcl.models.ts`, `bench.models.ts`, `parse-sample.models.ts`) and is mirrored in the frontend consumers - `core/models/analysis.models.ts`, `core/models/encounter.models.ts`, `core/services/analysis-core.ts` - and documented in the **Data models** section below. **Whenever you change what ingestion emits (add/remove/rename a field), check and update all of these together, plus the rulebook skill + schema** (`prompts/rulebook_skill.md`, `prompts/rulebook.schema.json`) since ingestion consumes the rulebook (`duration`, `spell_id`s). Dropping a feature end-to-end means removing it from ingestion **and** every consumer above. Already-committed JSON under `data/specs/**` keeps stale fields until the next re-ingest - harmless, since consumers ignore unknown fields.
 
-### Rulebook management (`npm run admin` / `npm run scrape`)
-No web UI for admin. Everything is CLI.
+### Rulebook management (`npm run rulebook` / `npm run scrape`)
+No web UI for rulebook management. Everything is CLI.
 
-1. **Add + scrape guides** - `npm run scrape`: add guide URLs, scrape content (web/YouTube/SimC APL), store in `guides.json`.
-2. **Build AI prompt** - `npm run admin` → "Copy prompt": assembles `prompts/rulebook_skill.md` + all scraped guide content into a clipboard-ready prompt.
-3. **Save rulebook** - paste AI output → `npm run admin` → "Save rulebook": writes to `rulebook.json`. No validation server needed - the CLI validates schema directly.
+1. **Add + scrape guides** - `npm run scrape` re-scrapes every existing guide across all specs (web/YouTube/SimC APL), refreshing `guides.json`; this is what the hourly ingest workflow runs. To add a new guide, `npm run scrape -- --spec Name --url URL [--type web|youtube|simc]` appends and scrapes it.
+2. **Build AI prompt** - `npm run rulebook` → "Copy prompt": assembles `prompts/rulebook_skill.md` + all scraped guide content into a clipboard-ready prompt.
+3. **Save rulebook** - paste AI output → `npm run rulebook` → "Save rulebook": writes to `rulebook.json`. No validation server needed - the CLI validates schema directly.
 
 ### Pre-fight gear check (`/pre`)
 Entirely client-side. No backend calls.
@@ -225,7 +225,7 @@ Encounters loaded from `/data/specs/{spec}/encounters.json` (static file). Filte
 ## Data models
 
 ### `index.json` (`frontend/public/data/specs/index.json`)
-Spec manifest written by `ingest.ts` `writeSpecIndex()` at the end of each spec ingestion. Rebuilt by scanning all spec folders on disk - safe to run sharded (one spec at a time). Consumed by `EncounterService.getSpecs()` to populate the spec dropdown on `/pre`.
+Spec manifest written by `ingest-parses.ts` `writeSpecIndex()` at the end of each spec ingestion. Rebuilt by scanning all spec folders on disk - safe to run sharded (one spec at a time). Consumed by `EncounterService.getSpecs()` to populate the spec dropdown on `/pre`.
 
 | field | notes |
 |---|---|
@@ -246,7 +246,7 @@ Spec manifest written by `ingest.ts` `writeSpecIndex()` at the end of each spec 
 AI-generated rulebook. Extra top-level fields added on save: `guide_count`, `saved_at`.
 
 ### `positions/{enc_id}.json`
-Per-parse position timelines for the positioning map (written by `ingest.ts` `buildParsePositions`/`savePositions`; consumed by `core/services/positioning-core.ts` + `core/models/positioning.models.ts`). Top-level: `{spec, encounter_id, encounter_name, interval_s, sample_count, parses[]}`. Each parse: `{report_code, fight_id, player_name, duration_s, interval_s, player: PosRow[], enemies: [{game_id, name, is_boss, samples: PosRow[]}]}`. A `PosRow` is `[t_s, x, y, facing|null, mapID|null]` with **raw** WCL units (x/y in hundredths of a yard, facing in milliradians) - the frontend scales them. Enemies are keyed by `game_id` so the same boss/add matches across parses; `is_boss` = the enemy with the highest `maxHitPoints`.
+Per-parse position timelines for the positioning map (written by `ingest-parses.ts` `buildParsePositions`/`savePositions`; consumed by `core/services/positioning-core.ts` + `core/models/positioning.models.ts`). Top-level: `{spec, encounter_id, encounter_name, interval_s, sample_count, parses[]}`. Each parse: `{report_code, fight_id, player_name, duration_s, interval_s, player: PosRow[], enemies: [{game_id, name, is_boss, samples: PosRow[]}]}`. A `PosRow` is `[t_s, x, y, facing|null, mapID|null]` with **raw** WCL units (x/y in hundredths of a yard, facing in milliradians) - the frontend scales them. Enemies are keyed by `game_id` so the same boss/add matches across parses; `is_boss` = the enemy with the highest `maxHitPoints`.
 
 ### `parse_samples/{enc_id}.json`
 List of raw parse samples. Source of truth for bench files.
@@ -342,9 +342,9 @@ Non-obvious things that have caused bugs - read before touching gear extraction 
 | **Gear array is positionally indexed** | WCL returns gear as a bare array; the array index (0-based) IS the slot number. No `slot` field. |
 | **Weapon slots shifted in Midnight** | Gear array has 17 entries (0-16). Weapons at index 15 (MH) and 16 (OH). Index 14 is Back/Cloak. |
 | **Trinket slots are 12 and 13** | Confirmed from `encounterRankings` responses. |
-| **`permanentEnchant` is a string** | Numeric ID returned as string. `permanentEnchantName` is never populated. Enchant names resolved via `gameData.enchant(id)` in `ingest.ts`. |
+| **`permanentEnchant` is a string** | Numeric ID returned as string. `permanentEnchantName` is never populated. Enchant names resolved via `gameData.enchant(id)` in `ingest-parses.ts`. |
 | **Two incompatible talent formats** | `characterRankings` → old format (`{talentID, points}` list) → `v1:` key. `encounterRankings` → Midnight format (nested `nodeId` dict) → `v2:` key. ID spaces are incompatible; cannot compare directly. |
-| **Solving the talent format problem** | `ingest.ts` fires a parallel `encounterRankings` query per ranked player to get the `v2:` talent key, overwriting the `v1:` key from `characterRankings`. |
+| **Solving the talent format problem** | `ingest-parses.ts` fires a parallel `encounterRankings` query per ranked player to get the `v2:` talent key, overwriting the `v1:` key from `characterRankings`. |
 | **`server.region` may be a string** | In `characterRankings` JSON blob, `server.region` is sometimes `"EU"` (string) rather than `{slug: "eu"}`. Handle both forms. |
 | **`gameData.spell()` was removed** | Spell icons and names must come from `masterData.abilities` in the report response. |
 | **Event positions need `includeResources: true`** | The default `events` response carries no coordinates. Passing `includeResources: true` attaches the actor's resource snapshot, which includes position. Adds bandwidth, so it is off by default and only requested by the positioning feature. |
@@ -358,7 +358,7 @@ Non-obvious things that have caused bugs - read before touching gear extraction 
 | API | Auth | Where used |
 |---|---|---|
 | Warcraft Logs v2 (GraphQL, `/api/v2/user`) | PKCE OAuth2 (browser) | Report events, character rankings, gear lookup |
-| Warcraft Logs v2 (GraphQL, `/api/v2/client`) | Client credentials (CLI/GHA only, never browser) | `ingest.ts` parse fetching |
+| Warcraft Logs v2 (GraphQL, `/api/v2/client`) | Client credentials (CLI/GHA only, never browser) | `ingest-parses.ts` parse fetching |
 
 ## Analysis thresholds
 
@@ -377,7 +377,7 @@ Non-obvious things that have caused bugs - read before touching gear extraction 
 | Comparison table (uses/min) | `top_stddev_uses_per_min` per CD | ±0.05 |
 | Comparison table (first cast) | `top_stddev_first_cast_s` per CD | ±3s |
 
-### Burst window definition (`ingest.ts` → `findBurstWindows` / `clusterBurstWindows`)
+### Burst window definition (`ingest-parses.ts` → `findBurstWindows` / `clusterBurstWindows`)
 
 **Per-parse**:
 1. Build candidate windows from CD cast times × CD durations (from rulebook `duration`).
@@ -394,7 +394,7 @@ Non-obvious things that have caused bugs - read before touching gear extraction 
 4. `window_length_s` = mean of member window lengths.
 5. Emits **absolute damage** stats (`dmg_avg`/`dmg_min`/`dmg_max`/`dmg_stddev`, per-ability `avg_damage`/`min_damage`/`max_damage`) - **not** percentages. The player vs top-parse comparison and the Burst/Defensive Windows cards compare raw damage so the numbers stay meaningful on progression (a wipe's short fight-total would otherwise inflate every window's share).
 
-### Defensive window definition (`ingest.ts` → `findDefensiveWindows` / `clusterDefensiveWindows`)
+### Defensive window definition (`ingest-parses.ts` → `findDefensiveWindows` / `clusterDefensiveWindows`)
 
 **Per-parse**:
 1. For each defensive in rulebook, find buff apply/remove pairs matching its `spell_id`.

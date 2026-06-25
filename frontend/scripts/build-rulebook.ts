@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * warcraft-learner - Rulebook Admin CLI
+ * warcraft-learner - Rulebook Builder CLI
  *
  * Manages AI-generated rulebooks for specs.
  * Reads scraped guides from frontend/public/data/specs/{spec}/guides.json,
@@ -8,7 +8,7 @@
  * frontend/public/data/specs/{spec}/rulebook.json - no server needed.
  *
  * Usage:
- *   npm run admin
+ *   npm run rulebook
  *
  * Related scripts:
  *   npm run scrape   - add and scrape guide URLs
@@ -24,7 +24,7 @@ import type { Rulebook } from '../src/app/core/models/rulebook.models.ts';
 import { MAX_GUIDE_CHARS, readJson, writeJson, getKnownSpecs as listSpecs, createPrompt, readRulebookSchemaText, validateRulebook } from './lib.ts';
 
 new Command()
-  .name('admin')
+  .name('rulebook')
   .description('Manage AI-generated rulebooks for specs (interactive).')
   .addHelpText('after', '\nRelated:\n  npm run scrape   - add and scrape guide URLs\n  npm run ingest   - ingest top WCL parses')
   .parse(process.argv);

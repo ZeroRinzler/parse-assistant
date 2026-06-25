@@ -20,8 +20,8 @@ The build is deployed to GitHub Pages via `.github/workflows/deploy-pages.yml` -
 
 ```bash
 npm run ingest   # Fetch top WCL parses → write bench + sample files
-npm run scrape   # Add and scrape guide URLs
-npm run admin    # Rulebook management (generate prompt, save AI output)
+npm run scrape   # Re-scrape all existing guides (--spec/--url to add one)
+npm run rulebook # Rulebook management (generate prompt, save AI output)
 ```
 
 All scripts write to `public/data/specs/` which Angular serves as static assets at `/data/specs/`.

@@ -39,6 +39,12 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      # Re-scrape every existing guide first so guides.json stays fresh on the same cadence.
+      # Needs no secrets (outbound HTTP only); per-guide errors are recorded, not fatal.
+      - name: Refresh guide content
+        working-directory: frontend
+        run: npm run scrape
+
       # Ingestion self-selects the current live raids from WCL (current expansion,
       # non-frozen zones confirmed live by a rankings probe) and self-prunes data for
       # encounters that are no longer current. No manual per-patch edits needed.
