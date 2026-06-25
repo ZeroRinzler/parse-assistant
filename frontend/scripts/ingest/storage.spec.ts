@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import {
   DATA_DIR, saveParseSample, readSamples, savePositions, syncEncounterFile,
-  writeSpecIndex, resolveEnchantNames, specsByStaleness,
+  writeSpecIndex, resolveEnchantNames, specsByStaleness, pruneStaleEncounters,
 } from './storage.ts';
 import { sample } from './testing/samples.ts';
 import type { WclQueryClient } from './wcl-client.ts';
@@ -99,8 +99,61 @@ describe('resolveEnchantNames', () => {
   });
 });
 
+describe('pruneStaleEncounters', () => {
+  const positions: ParsePositions = {
+    report_code: 'r', fight_id: 1, player_name: 'P', duration_s: 60, interval_s: 1.5,
+    player: [[0, 0, 0, null, null]], enemies: [],
+  };
+
+  async function seedEncounter(spec: string, encounterId: number, name: string): Promise<void> {
+    await saveParseSample(spec, encounterId, name, 'r', 1, 'P', cooldownData);
+    await syncEncounterFile(spec, encounterId);
+    await savePositions(spec, encounterId, name, { ...positions });
+  }
+
+  const filesFor = (spec: string, encounterId: number): string[] => [
+    path.join(DATA_DIR, spec, 'encounters', `${encounterId}.json`),
+    path.join(DATA_DIR, spec, 'parse_samples', `${encounterId}.json`),
+    path.join(DATA_DIR, spec, 'positions', `${encounterId}.json`),
+  ];
+
+  it('deletes all three files for stale ids, keeps live ids, and rebuilds the indexes', async () => {
+    writeRulebook('SpecP');
+    await seedEncounter('SpecP', 100, 'Live');
+    await seedEncounter('SpecP', 999, 'Stale');
+    await writeSpecIndex();
+
+    const { removed } = await pruneStaleEncounters(new Set([100]));
+    expect(removed).toEqual([999]);
+    for (const file of filesFor('SpecP', 999)) expect(fs.existsSync(file)).toBe(false);
+    for (const file of filesFor('SpecP', 100)) expect(fs.existsSync(file)).toBe(true);
+
+    const index = readJsonFile<Array<{ id: number }>>('SpecP', 'encounters.json');
+    expect(index.map(entry => entry.id)).toEqual([100]);
+  });
+
+  it('never deletes when the protected set is empty (transient-failure guard)', async () => {
+    writeRulebook('SpecP');
+    await seedEncounter('SpecP', 999, 'Stale');
+
+    const { removed } = await pruneStaleEncounters(new Set());
+    expect(removed).toEqual([]);
+    for (const file of filesFor('SpecP', 999)) expect(fs.existsSync(file)).toBe(true);
+  });
+
+  it('is a no-op for an already-missing sibling file', async () => {
+    const encDir = path.join(DATA_DIR, 'SpecP', 'encounters');
+    fs.mkdirSync(encDir, { recursive: true });
+    fs.writeFileSync(path.join(encDir, '999.json'), JSON.stringify({ encounter_id: 999, sample_count: 0 }));
+
+    const { removed } = await pruneStaleEncounters(new Set([100]));
+    expect(removed).toEqual([999]);
+    expect(fs.existsSync(path.join(encDir, '999.json'))).toBe(false);
+  });
+});
+
 describe('specsByStaleness', () => {
-  const encounters: IngestEncounter[] = [{ id: 100, name: 'Boss', zone: 'z', expansion: 'e', partitionIds: [] }];
+  const encounters: IngestEncounter[] = [{ id: 100, name: 'Boss', zone: 'z', zoneId: 1, expansion: 'e', partitionIds: [] }];
 
   it('includes only specs with a rulebook and ranks never-ingested after ingested', async () => {
     writeRulebook('SpecIngested');

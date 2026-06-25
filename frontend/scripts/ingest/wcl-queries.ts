@@ -13,7 +13,7 @@ query {
     expansions {
       id name
       zones {
-        id name
+        id name frozen
         partitions { id name }
         encounters { id name }
       }

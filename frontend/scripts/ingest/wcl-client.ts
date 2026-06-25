@@ -33,6 +33,7 @@ export interface WclQueryClient {
   query<T = unknown, TVars extends object = Record<string, never>>(gql: string, variables?: TVars): Promise<T>;
   getAllEvents(code: string, fightId: number, dataType: string, startTime: number, endTime: number, options?: EventFetchOptions): Promise<WclResourceEvent[]>;
   resolveServerSlug(serverId: number): Promise<[string, string]>;
+  assertBudget(margin: number): Promise<void>;
 }
 
 // Thrown when the WCL hourly point budget is (about to be) exhausted. The ingest

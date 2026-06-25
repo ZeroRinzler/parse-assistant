@@ -39,6 +39,9 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      # Ingestion self-selects the current live raids from WCL (current expansion,
+      # non-frozen zones confirmed live by a rankings probe) and self-prunes data for
+      # encounters that are no longer current. No manual per-patch edits needed.
       - name: Run parse ingestion
         env:
           WCL_CLIENT_ID: ${{ secrets.WCL_CLIENT_ID }}

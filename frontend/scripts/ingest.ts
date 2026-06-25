@@ -19,7 +19,7 @@ import { analyzeParse } from './ingest/analysis/parse-analysis.ts';
 import {
   INGEST_HASH, parseKey, readSamples, getSpecCooldowns, getSpecDefensives,
   loadRulebook, saveParseSample, savePositions, syncEncounterFile, resolveEnchantNames,
-  writeSpecIndex, specsByStaleness,
+  writeSpecIndex, specsByStaleness, pruneStaleEncounters,
 } from './ingest/storage.ts';
 import type { IngestEncounter, ParseRanking } from './ingest/models/wcl.models.ts';
 
@@ -85,8 +85,12 @@ async function ingestSpecNonInteractive(wcl: WCLClient, spec: string, encounters
       }
       console.log(` ${rankings.length} rankings found`);
 
-      // Build set of cached parse keys
-      const cachedKeys = new Set<string>((await readSamples(spec, enc.id)).map(sample => parseKey(sample.report_code, sample.fight_id)));
+      // Build the set of cached parse keys from each sample's OWN stored ingest_hash,
+      // not the current one. A ranking is keyed with the current INGEST_HASH, so when
+      // the ETL logic changes the hashes differ and the parse is treated as uncached
+      // and re-analyzed. Omitting sample.ingest_hash here would make both sides use the
+      // current hash, silently defeating hash-based invalidation.
+      const cachedKeys = new Set<string>((await readSamples(spec, enc.id)).map(sample => parseKey(sample.report_code, sample.fight_id, sample.ingest_hash)));
       const uncached = rankings.filter(ranking => !cachedKeys.has(parseKey(ranking.report_code, ranking.fight_id)));
       const cached = rankings.length - uncached.length;
 
@@ -158,14 +162,23 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  process.stdout.write('Fetching WCL encounters...');
+  process.stdout.write('Resolving current raids...');
   let encounters: IngestEncounter[];
+  let protectedIds: Set<number>;
   try {
-    encounters = await getEncounters(wcl);
-    console.log(` ${encounters.length} encounters in current expansion`);
+    ({ encounters, protectedIds } = await getEncounters(wcl));
+    console.log(` ${encounters.length} live encounters`);
   } catch (err) {
-    console.error(`\nFailed to fetch encounters: ${err instanceof Error ? err.message : String(err)}`);
+    console.error(`\nFailed to resolve current raids: ${err instanceof Error ? err.message : String(err)}`);
     process.exit(1);
+  }
+
+  // Prune superseded content before the spec loop (filesystem only, no WCL points).
+  // Guarded inside pruneStaleEncounters against an empty protected set; reaching here
+  // already means getEncounters succeeded, so a failed fetch never triggers deletion.
+  const { removed } = await pruneStaleEncounters(protectedIds);
+  if (removed.length) {
+    console.log(`Pruned ${removed.length} stale encounter(s): ${removed.join(', ')}`);
   }
 
   const specArg = opts.spec ?? null;

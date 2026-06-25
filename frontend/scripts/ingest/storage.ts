@@ -182,6 +182,49 @@ export async function writeSpecIndex(): Promise<void> {
   await writeJson(path.join(DATA_DIR, 'index.json'), entries);
 }
 
+// Delete on-disk data for encounters that are no longer current. An encounter is
+// stale when its id is absent from `protectedIds` (every non-frozen current-expansion
+// encounter id - see protectedEncounterIds). For each stale id in each spec we remove
+// the encounter bench, parse samples, and position timeline, then rebuild the indexes.
+//
+// Safety: an empty `protectedIds` almost always means the worldData fetch transiently
+// failed, not that all content is gone, so we never prune in that case. Because the
+// protected set is every non-frozen current-expansion id (wider than the ingested set),
+// a live raid that briefly fails its liveness probe is never wiped; an encounter only
+// becomes prunable once WCL freezes its zone or it leaves the current expansion.
+export async function pruneStaleEncounters(protectedIds: Set<number>): Promise<{ removed: number[] }> {
+  const removed = new Set<number>();
+  if (!fs.existsSync(DATA_DIR)) return { removed: [] };
+  if (protectedIds.size === 0) {
+    logWarn('pruneStaleEncounters', 'empty protected set - skipping prune (likely a transient WCL failure)');
+    return { removed: [] };
+  }
+
+  const touchedSpecs = new Set<string>();
+  for (const spec of fs.readdirSync(DATA_DIR).sort()) {
+    const encDir = path.join(DATA_DIR, spec, 'encounters');
+    if (!fs.existsSync(encDir)) continue;
+    for (const file of fs.readdirSync(encDir).sort()) {
+      if (!file.endsWith('.json')) continue;
+      const encounterId = parseInt(file);
+      if (!Number.isFinite(encounterId) || protectedIds.has(encounterId)) continue;
+      removed.add(encounterId);
+      touchedSpecs.add(spec);
+      for (const stalePath of [getEncounterPath(spec, encounterId), getSamplesPath(spec, encounterId), getPositionsPath(spec, encounterId)]) {
+        try {
+          fs.rmSync(stalePath, { force: true });
+        } catch (err) {
+          logWarn(`pruneStaleEncounters ${spec}/${encounterId}`, err);
+        }
+      }
+    }
+  }
+
+  for (const spec of touchedSpecs) await syncEncountersIndex(spec);
+  if (touchedSpecs.size) await writeSpecIndex();
+  return { removed: [...removed].sort((a, b) => a - b) };
+}
+
 // ── Enchant name resolution ───────────────────────────────────────────────────
 
 // Patches missing enchant names in an already-written encounter bench file: find
@@ -232,6 +275,11 @@ export async function specsByStaleness(encounters: IngestEncounter[]): Promise<s
   return known.slice().sort((a, b) => (scores.get(a) ?? 0) - (scores.get(b) ?? 0));
 }
 
+// INVARIANT: callers MUST pass the live encounter set (the probe-confirmed current
+// raids). A never-ingested encounter here is intentionally treated as maximally stale
+// so its spec sorts first. This is only correct because the input contains no
+// permanently-unfetchable bosses - feeding it beta/PTR encounters (which never produce
+// samples) would pin every spec to Infinity and destroy the ordering.
 async function staleness(spec: string, encounters: IngestEncounter[], now: number): Promise<number> {
   let worst = 0;
   for (const encounter of encounters) {
