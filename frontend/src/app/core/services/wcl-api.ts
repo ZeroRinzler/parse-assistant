@@ -1,5 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { WclAuthService } from './wcl-auth';
+import { LiveModeState } from './live-mode-state';
 import { WCL_TRANSPORT, WCL_INGEST_MODE, WclTransportError } from './wcl-transport';
 import {
   WclReport, WclAbility, WclEvent,
@@ -33,10 +34,19 @@ const SPEC_TO_WCL: Record<string, [string, string]> = {
 export class WclApiService {
   private readonly auth = inject(WclAuthService);
   private readonly transport = inject(WCL_TRANSPORT);
-  // In ingestion the otherwise per-pull report/event reads are cached so the 5
-  // transforms share one fetch per stream; the browser keeps them network-only.
-  private readonly liveFetchPolicy: 'cache-first' | 'network-only' =
-    inject(WCL_INGEST_MODE) ? 'cache-first' : 'network-only';
+  private readonly ingestMode = inject(WCL_INGEST_MODE);
+  private readonly liveMode = inject(LiveModeState);
+
+  /**
+   * Fetch policy for the otherwise per-pull report/event reads. Ingestion shares one fetch
+   * across the 5 transforms (cache-first). In the browser a saved report is immutable, so
+   * those reads are cache-first too - the report is fetched once and re-selecting a
+   * fight/player is free; only while live-syncing do they go network-only so a poll sees
+   * newly-recorded fights.
+   */
+  private livePolicy(): 'cache-first' | 'network-only' {
+    return this.ingestMode || !this.liveMode.active() ? 'cache-first' : 'network-only';
+  }
 
   /**
    * Runs a GraphQL query against WCL through the injected transport (Apollo in the
@@ -65,9 +75,9 @@ export class WclApiService {
 
   async getReport(code: string): Promise<WclReport> {
     const vars: ReportQueryVars = { code };
-    // network-only: the report is re-polled to detect new pulls, so it must never
-    // be served from cache (a cache hit would silently hide newly-recorded fights).
-    const result = await this.query<{ reportData: { report: WclReport } }>(REPORT_Q, vars, this.liveFetchPolicy);
+    // Saved reports are immutable, so the read is cache-first (see livePolicy); only while
+    // live-syncing does it go network-only, so a poll never hides newly-recorded fights.
+    const result = await this.query<{ reportData: { report: WclReport } }>(REPORT_Q, vars, this.livePolicy());
     return result.reportData.report;
   }
 
@@ -101,10 +111,11 @@ export class WclApiService {
       if (sourceId != null) vars.sourceID = sourceId;
       if (includeResources) vars.includeResources = true;
       if (hostilityType) vars.hostilityType = hostilityType;
-      // network-only: event pages are large and per-pull; caching them wastes memory
-      // and risks serving stale data on re-analysis.
+      // Event pages for a saved report are immutable, so the read is cache-first (see
+      // livePolicy) - re-analysis is served from cache; only while live-syncing does it go
+      // network-only, so the still-recording fight's events are always fresh.
       const result = await this.query<{ reportData: { report: { events: { data: WclEvent[]; nextPageTimestamp?: number } } } }>(
-        EVENTS_Q, vars, this.liveFetchPolicy,
+        EVENTS_Q, vars, this.livePolicy(),
       );
       const page = result.reportData.report.events;
       events.push(...(page.data ?? []));

@@ -14,6 +14,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { WclApiService } from '../../core/services/wcl-api';
+import { LiveModeState } from '../../core/services/live-mode-state';
 import { LiveReportSyncService, POLL_INTERVAL_MS } from '../../core/services/live-report-sync';
 import { WclFight, WclPlayer, WclReport, PlayerDetailGroups } from '../../core/models/wcl.models';
 import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner/loading-spinner';
@@ -69,6 +70,7 @@ export function specOf(groups: PlayerDetailGroups, playerId: number): string {
 export class PostRaidComponent implements OnInit {
   private readonly wclApi = inject(WclApiService);
   private readonly mapFeature = inject(MapFeatureService);
+  private readonly liveMode = inject(LiveModeState);
   private readonly liveSync = inject(LiveReportSyncService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
@@ -154,6 +156,9 @@ export class PostRaidComponent implements OnInit {
   ngOnInit(): void {
     const params = this.route.snapshot.queryParamMap;
     if (params.get('live') === '1') this.liveControl.setValue(true);
+    // Live sync flips report/event reads to network-only; otherwise a saved report is read
+    // cache-first (fetched once, re-selection is free).
+    this.liveMode.active.set(this.liveControl.value);
     const reportParam = params.get('report');
     if (reportParam) {
       this.reportControl.setValue(reportParam);
@@ -211,6 +216,7 @@ export class PostRaidComponent implements OnInit {
   }
 
   protected onLiveToggle(): void {
+    this.liveMode.active.set(this.liveControl.value);
     this._syncUrl();
   }
 
