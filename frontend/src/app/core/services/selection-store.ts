@@ -1,17 +1,18 @@
 import { Injectable } from '@angular/core';
 import { logWarn } from '../log';
 
-/** Persisted player selection for the post-raid page. */
+/**
+ * Persisted player selection for the post-raid page. Only the player NAME is kept:
+ * WCL actor ids are per-report (not stable across pulls or logs), so the name is the
+ * only identifier that can re-select the same character when any fight/log loads.
+ */
 export interface PostRaidSelection {
-  report: string | null;
-  fight: number | null;
-  player: number | null;
+  playerName: string | null;
 }
 
 /** Persisted spec selection for the pre-fight page. */
 export interface PreFightSelection {
   spec: string | null;
-  encounter: number | null;
 }
 
 const POST_RAID_KEY = 'wl.sel.postRaid';

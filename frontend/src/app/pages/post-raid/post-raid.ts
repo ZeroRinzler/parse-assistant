@@ -161,15 +161,9 @@ export class PostRaidComponent implements OnInit {
         params.get('fight')  ? parseInt(params.get('fight')!,  10) : null,
         params.get('player') ? parseInt(params.get('player')!, 10) : null,
       );
-      return;
     }
-
-    // No report in the URL: fall back to the last persisted selection (URL > localStorage).
-    const storedSelection = this.selectionStore.loadPostRaid();
-    if (storedSelection?.report) {
-      this.reportControl.setValue(storedSelection.report);
-      void this.loadReport(storedSelection.fight, storedSelection.player);
-    }
+    // No report is auto-loaded from storage: only the sticky player NAME is persisted, and
+    // it is applied (by `_applyAutoPlayer`) whenever a log is loaded - not by reopening a log.
   }
 
   protected async onReportChange(): Promise<void> {
@@ -292,7 +286,14 @@ export class PostRaidComponent implements OnInit {
   }
 
   private _applyAutoPlayer(autoPlayer: number | null): void {
-    this.playerControl.setValue(pickPlayerId(this.visiblePlayers(), autoPlayer));
+    // An explicit actor id (URL param) wins; otherwise stick to the saved player name so the
+    // same character stays selected across fights and logs (ids are not stable across reports).
+    if (autoPlayer) {
+      this.playerControl.setValue(pickPlayerId(this.visiblePlayers(), autoPlayer));
+      return;
+    }
+    const stickyName = this.selectionStore.loadPostRaid()?.playerName ?? null;
+    this.playerControl.setValue(pickLivePlayerId(this.visiblePlayers(), stickyName));
   }
 
   private _syncUrl(): void {
@@ -302,10 +303,9 @@ export class PostRaidComponent implements OnInit {
     if (this.selectedPlayerId()) queryParams['player'] = String(this.selectedPlayerId());
     if (this.liveSyncEnabled()) queryParams['live'] = '1';
     this.router.navigate([], { queryParams, replaceUrl: true });
-    this.selectionStore.savePostRaid({
-      report: this.reportCode() || null,
-      fight: this.selectedFightId() ?? null,
-      player: this.selectedPlayerId() ?? null,
-    });
+    // Persist only the player NAME, and only when one resolves - never clobber the sticky
+    // value with null while nothing is selected (e.g. mid report switch).
+    const playerName = this.players().find(player => player.id === this.selectedPlayerId())?.name ?? null;
+    if (playerName) this.selectionStore.savePostRaid({ playerName });
   }
 }

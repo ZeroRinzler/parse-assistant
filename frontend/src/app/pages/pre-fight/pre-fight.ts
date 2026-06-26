@@ -68,15 +68,13 @@ export class PreFightComponent implements OnInit {
 
     const params = this.route.snapshot.queryParamMap;
     let autoSpec = params.get('spec') || '';
-    let autoEnc = parseInt(params.get('encounter') || '0', 10);
+    const autoEnc = parseInt(params.get('encounter') || '0', 10);
 
-    // No spec in the URL: fall back to the last persisted selection (URL > localStorage).
+    // No spec in the URL: fall back to the last persisted spec (URL > localStorage). Only the
+    // spec is persisted; the encounter is never restored from storage (URL param still works).
     if (!params.get('spec')) {
       const storedSelection = this.selectionStore.loadPreFight();
-      if (storedSelection?.spec) {
-        autoSpec = storedSelection.spec;
-        autoEnc = storedSelection.encounter ?? 0;
-      }
+      if (storedSelection?.spec) autoSpec = storedSelection.spec;
     }
 
     if (autoSpec && this.specs().some(specEntry => specEntry.spec === autoSpec)) {
@@ -92,7 +90,7 @@ export class PreFightComponent implements OnInit {
   protected async onSpecChange(): Promise<void> {
     const spec = this.specControl.value;
     this.router.navigate([], { queryParams: { spec: spec || null, encounter: null }, replaceUrl: true });
-    this.selectionStore.savePreFight({ spec: spec || null, encounter: null });
+    this.selectionStore.savePreFight({ spec: spec || null });
     this.mapFeature.clear();
     this.encControl.setValue(0, { emitEvent: false });
     this.encControl.disable({ emitEvent: false });
@@ -115,7 +113,6 @@ export class PreFightComponent implements OnInit {
     const encId = this.encControl.value;
     const spec = this.specControl.value;
     this.router.navigate([], { queryParams: { spec: spec || null, encounter: encId || null }, replaceUrl: true });
-    this.selectionStore.savePreFight({ spec: spec || null, encounter: encId || null });
     this.mapFeature.clear();
     if (!encId || !spec) return;
     // Load the top-parse position trails for the map (bench-only, no player log).
