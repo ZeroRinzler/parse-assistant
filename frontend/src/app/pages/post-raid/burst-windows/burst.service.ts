@@ -42,7 +42,11 @@ export function burstWindowStatus(
   topMin: number,
   stddev: number,
   notReached: boolean,
+  benchOnly = false,
 ): { status: WindowStatus; icon: string } {
+  // Bench-only (pre-fight): no player log to compare, so the window is purely
+  // informational - a neutral chart glyph, never a red "missing data" state.
+  if (benchOnly) return { status: 'info', icon: 'insights' };
   if (notReached) return { status: 'muted', icon: 'schedule' };
   if (playerDamage === null) return { status: 'muted', icon: 'help_outline' };
   if (playerDamage < topMin - stddev) return { status: 'bad', icon: 'error' };
@@ -106,6 +110,7 @@ export function buildBurstView(
   fightDurationS: number,
   cdSpellIds: Record<string, number>,
   nameOf: (spellId: number) => string,
+  benchOnly = false,
 ): BurstView {
   const windows: ComparisonWindow[] = [];
   const anchors: BurstMapAnchor[] = [];
@@ -113,7 +118,7 @@ export function buildBurstView(
     const notReached = window.time_s > fightDurationS;
     const playerWindow = notReached ? null : (playerWindows[index] ?? null);
     const playerDamage = playerWindow?.window_damage ?? null;
-    const { status, icon } = burstWindowStatus(playerDamage, window.dmg_avg, window.dmg_min, window.dmg_stddev, notReached);
+    const { status, icon } = burstWindowStatus(playerDamage, window.dmg_avg, window.dmg_min, window.dmg_stddev, notReached, benchOnly);
     const { spellIds, labels } = splitCommonCds(window.common_cds ?? [], cdSpellIds);
     windows.push({
       timeStartS: window.time_s,
@@ -205,7 +210,7 @@ export class BurstFeatureService {
     try {
       const report = await this.wclApi.getReport(reportCode);
       const fight = report.fights.find(entry => entry.id === fightId);
-      if (!fight) return buildBurstView(bench.windows, [], Number.POSITIVE_INFINITY, bench.cd_spell_ids, spellId => `Spell ${spellId}`);
+      if (!fight) return buildBurstView(bench.windows, [], Number.POSITIVE_INFINITY, bench.cd_spell_ids, spellId => `Spell ${spellId}`, true);
 
       const abilityNames = new Map<number, string>();
       for (const ability of report.masterData?.abilities ?? []) abilityNames.set(ability.gameID, ability.name);
@@ -220,7 +225,7 @@ export class BurstFeatureService {
       return buildBurstView(bench.windows, playerWindows, fightDurationS, bench.cd_spell_ids, nameOf);
     } catch (err) {
       logWarn(`BurstFeatureService.loadPlayerView ${reportCode}:${fightId}`, err);
-      return buildBurstView(bench.windows, [], Number.POSITIVE_INFINITY, bench.cd_spell_ids, spellId => `Spell ${spellId}`);
+      return buildBurstView(bench.windows, [], Number.POSITIVE_INFINITY, bench.cd_spell_ids, spellId => `Spell ${spellId}`, true);
     }
   }
 
@@ -228,6 +233,6 @@ export class BurstFeatureService {
   async loadBenchView(spec: string, encounterId: number): Promise<BurstView> {
     const bench = await this.source.getBurstBench(spec, encounterId);
     if (!bench) return { windows: [], anchors: [] };
-    return buildBurstView(bench.windows, [], Number.POSITIVE_INFINITY, bench.cd_spell_ids, spellId => `Spell ${spellId}`);
+    return buildBurstView(bench.windows, [], Number.POSITIVE_INFINITY, bench.cd_spell_ids, spellId => `Spell ${spellId}`, true);
   }
 }

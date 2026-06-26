@@ -25,7 +25,7 @@ import { MapPanelComponent } from './map/map-panel';
 import { MapFeatureService, MapAnchor } from './map/map.service';
 import { FormatDurationPipe } from '../../shared/pipes/format-duration-pipe';
 import { FormatSpecPipe } from '../../shared/pipes/format-spec-pipe';
-import { logWarn } from '../../core/log';
+import { SelectionStore } from '../../core/services/selection-store';
 import { extractCode, buildFights, buildPlayers, visiblePlayersOf, pickPlayerId, pickLivePlayerId } from './post-raid.vm';
 
 /**
@@ -72,6 +72,7 @@ export class PostRaidComponent implements OnInit {
   private readonly liveSync = inject(LiveReportSyncService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly selectionStore = inject(SelectionStore);
 
   protected readonly reportControl = new FormControl('', { nonNullable: true });
   protected readonly fightControl = new FormControl<number | null>(null);
@@ -160,6 +161,14 @@ export class PostRaidComponent implements OnInit {
         params.get('fight')  ? parseInt(params.get('fight')!,  10) : null,
         params.get('player') ? parseInt(params.get('player')!, 10) : null,
       );
+      return;
+    }
+
+    // No report in the URL: fall back to the last persisted selection (URL > localStorage).
+    const storedSelection = this.selectionStore.loadPostRaid();
+    if (storedSelection?.report) {
+      this.reportControl.setValue(storedSelection.report);
+      void this.loadReport(storedSelection.fight, storedSelection.player);
     }
   }
 
@@ -293,5 +302,10 @@ export class PostRaidComponent implements OnInit {
     if (this.selectedPlayerId()) queryParams['player'] = String(this.selectedPlayerId());
     if (this.liveSyncEnabled()) queryParams['live'] = '1';
     this.router.navigate([], { queryParams, replaceUrl: true });
+    this.selectionStore.savePostRaid({
+      report: this.reportCode() || null,
+      fight: this.selectedFightId() ?? null,
+      player: this.selectedPlayerId() ?? null,
+    });
   }
 }

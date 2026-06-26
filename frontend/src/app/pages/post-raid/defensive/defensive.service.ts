@@ -51,7 +51,7 @@ export interface DefensivePlanRow {
   uses: number | null;
   firstCastS: number | null;
   windowsS: number[];
-  holds: Array<{ castIndex: number; targetS: number }>;
+  holds: { castIndex: number; targetS: number }[];
   rule: string | null;
 }
 
@@ -99,7 +99,7 @@ export function analyzeDefensives(
   if (!defensives.length) return [];
   const rel = (ts: number): number => ts - fStart;
   const dmgTaken = dtEvents.filter(event => event.type === 'damage');
-  const buffWin: Record<number, Array<[number, number | null]>> = {};
+  const buffWin: Record<number, [number, number | null][]> = {};
   for (const event of buffEvents) {
     const spellId = event.abilityGameID;
     const timeS = rel(event.timestamp) / 1000;

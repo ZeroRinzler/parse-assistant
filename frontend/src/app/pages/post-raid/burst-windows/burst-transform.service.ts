@@ -15,6 +15,7 @@ import { WclEvent, ParseRanking, WclRawRanking } from '../../../core/models/wcl.
 import { RulebookCooldown, RulebookDefensive } from '../../../core/models/rulebook.models';
 import { BurstWindow } from '../../../core/models/analysis.models';
 import { logWarn } from '../../../core/log';
+import { mean, median, deviation } from 'd3-array';
 import { BurstBench, BurstDataSource } from './burst-data-source';
 
 /** How many top parses to sample (matches the ingest bench). */
@@ -47,22 +48,10 @@ export function toParseRankings(raw: WclRawRanking[], count: number): ParseRanki
     }));
 }
 
-function mean(values: number[]): number {
-  return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
-}
-function median(values: number[]): number {
-  if (!values.length) return 0;
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = sorted.length >> 1;
-  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-}
-function sampleStdev(values: number[]): number {
-  if (values.length < 2) return 0;
-  const avg = mean(values);
-  return Math.sqrt(values.reduce((sum, value) => sum + (value - avg) ** 2, 0) / (values.length - 1));
-}
-function round1(value: number): number {
-  return Math.round(value * 10) / 10;
+
+/** Round to `decimals` places (default 1). d3-array has no rounding helper. */
+function round(value: number, decimals = 1): number {
+  return Math.round(value * 10 ** decimals) / 10 ** decimals;
 }
 
 /** Group windows whose time is within `mergeS` of the running cluster median. */
@@ -71,7 +60,7 @@ function groupByTime<T extends { time_s: number }>(windows: T[], mergeS: number)
   const clusters: T[][] = [];
   let openTimes: number[] = [];
   for (const window of sorted) {
-    if (clusters.length && Math.abs(window.time_s - median(openTimes)) <= mergeS) {
+    if (clusters.length && Math.abs(window.time_s - (median(openTimes) ?? 0)) <= mergeS) {
       clusters[clusters.length - 1].push(window);
       openTimes.push(window.time_s);
     } else {
@@ -110,7 +99,7 @@ export interface ParseWindow {
   window_length_s: number;
   window_damage: number;
   active_cds: string[];
-  ability_breakdown: Array<{ spell_id: number; damage: number; casts: number }>;
+  ability_breakdown: { spell_id: number; damage: number; casts: number }[];
 }
 
 /**
@@ -134,7 +123,7 @@ export function findParseWindows(
     .filter(event => event.type === 'cast' && event.abilityGameID)
     .map(event => [event.timestamp, event.abilityGameID] as [number, number]);
 
-  const raw: Array<{ startS: number; endS: number; cdNames: string[] }> = [];
+  const raw: { startS: number; endS: number; cdNames: string[] }[] = [];
   for (const timing of timings) {
     if (timing.duration <= 0) continue;
     for (const castS of timing.castTimesS) raw.push({ startS: castS, endS: castS + timing.duration, cdNames: [timing.name] });
@@ -142,7 +131,7 @@ export function findParseWindows(
   if (!raw.length) return [];
   raw.sort((a, b) => a.startS - b.startS);
 
-  const merged: Array<{ startS: number; endS: number; cdNames: string[] }> = [{ ...raw[0], cdNames: [...raw[0].cdNames] }];
+  const merged: { startS: number; endS: number; cdNames: string[] }[] = [{ ...raw[0], cdNames: [...raw[0].cdNames] }];
   for (let i = 1; i < raw.length; i++) {
     const prev = merged[merged.length - 1];
     const current = raw[i];
@@ -176,8 +165,8 @@ export function findParseWindows(
       .map(([spell_id, dmg]) => ({ spell_id, damage: dmg, casts: castsByName.get(nameOf(spell_id)) ?? 0 }));
 
     windows.push({
-      time_s: round1(window.startS),
-      window_length_s: round1(window.endS - window.startS),
+      time_s: round(window.startS),
+      window_length_s: round(window.endS - window.startS),
       window_damage: windowDmg,
       active_cds: window.cdNames,
       ability_breakdown,
@@ -209,11 +198,11 @@ export function clusterParseWindows(windows: ParseWindow[], sampleCount: number,
       .filter(([, list]) => list.length >= cluster.length * MEMBER_MAJORITY_FRAC)
       .map(([spell_id, list]) => ({
         spell_id,
-        avg_damage: Math.round(mean(list)),
+        avg_damage: Math.round((mean(list) ?? 0)),
         min_damage: Math.round(Math.min(...list)),
         max_damage: Math.round(Math.max(...list)),
         count: list.length,
-        avg_casts: Math.round(mean(abilityCasts.get(spell_id) ?? [])),
+        avg_casts: Math.round(mean(abilityCasts.get(spell_id) ?? []) ?? 0),
       }))
       .sort((a, b) => b.avg_damage - a.avg_damage)
       .slice(0, 6);
@@ -226,14 +215,14 @@ export function clusterParseWindows(windows: ParseWindow[], sampleCount: number,
       .map(([name]) => name);
 
     result.push({
-      time_s: round1(median(cluster.map(member => member.time_s))),
-      dmg_avg: Math.round(mean(damages)),
-      dmg_stddev: Math.round(sampleStdev(damages)),
+      time_s: round(median(cluster.map(member => member.time_s)) ?? 0),
+      dmg_avg: Math.round((mean(damages) ?? 0)),
+      dmg_stddev: Math.round((deviation(damages) ?? 0)),
       dmg_min: Math.round(Math.min(...damages)),
       dmg_max: Math.round(Math.max(...damages)),
       common_cds,
       avg_targets: 1,
-      window_length_s: round1(mean(cluster.map(member => member.window_length_s))),
+      window_length_s: round(mean(cluster.map(member => member.window_length_s)) ?? 0),
       ability_breakdown,
     });
   }

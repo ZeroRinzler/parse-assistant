@@ -22,6 +22,12 @@ describe('burstWindowStatus', () => {
   ])('$name', ({ player, notReached, status, icon }) => {
     expect(burstWindowStatus(player, 1000, 800, 100, notReached)).toEqual({ status, icon });
   });
+
+  it('bench-only -> neutral info, overriding every other state', () => {
+    // Even with no player data and "not reached", benchOnly forces the neutral info glyph.
+    expect(burstWindowStatus(null, 1000, 800, 100, true, true)).toEqual({ status: 'info', icon: 'insights' });
+    expect(burstWindowStatus(650, 1000, 800, 100, false, true)).toEqual({ status: 'info', icon: 'insights' });
+  });
 });
 
 describe('splitCommonCds', () => {
@@ -73,6 +79,13 @@ describe('buildBurstView', () => {
   it('mutes and drops player data for a window the fight never reached', () => {
     const view = buildBurstView([window], [], 5, {}, id => `Spell ${id}`);
     expect(view.windows[0].status).toBe('muted');
+    expect(view.windows[0].overview.playerPct).toBeNull();
+  });
+
+  it('bench-only marks windows neutral info (no player overlay) instead of muted', () => {
+    const view = buildBurstView([window], [], Number.POSITIVE_INFINITY, {}, id => `Spell ${id}`, true);
+    expect(view.windows[0].status).toBe('info');
+    expect(view.windows[0].statusIcon).toBe('insights');
     expect(view.windows[0].overview.playerPct).toBeNull();
   });
 });
@@ -144,10 +157,12 @@ describe('BurstFeatureService', () => {
     expect(view).toEqual({ windows: [], anchors: [] });
   });
 
-  it('bench-only: shows the top windows with no player overlay', async () => {
+  it('bench-only: shows the top windows with no player overlay (neutral info status)', async () => {
     const view = await withBench(benchFixture).loadBenchView('SubtletyRogue', 1);
     expect(view.windows).toHaveLength(1);
     expect(view.windows[0].overview.playerPct).toBeNull();
+    expect(view.windows[0].status).toBe('info');
+    expect(view.windows[0].statusIcon).toBe('insights');
     expect(view.anchors[0]).toEqual({ timeS: 10, label: 'Shadow Blades', spellIds: [121471] });
   });
 

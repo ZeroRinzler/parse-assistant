@@ -53,6 +53,18 @@ These are hard rules for all Angular code. The `angular-developer` skill (`.clau
 - **Live-sync / polling orchestration belongs in a service, not a component.** Timer and visibility machinery lives in `LiveReportSyncService` (see `core/services/live-report-sync.ts`). Components wire up polling declaratively: `combineLatest + switchMap + exhaustMap + takeUntilDestroyed`. No manual `Subscription` field or `_pollSub?.unsubscribe()` juggling in components.
 - **No imperative subscription management alongside `takeUntilDestroyed`.** Pick one teardown strategy: either a stored `Subscription` unsubscribed in `ngOnDestroy`, or `takeUntilDestroyed(destroyRef)` in an RxJS chain. Do not mix both in the same pipeline.
 
+### Angular/TypeScript conventions
+
+These are the general Angular/TypeScript best practices for the app. The mechanizable ones are **enforced by ESLint** (`frontend/eslint.config.js`, run via `npm run lint` - see "Linting" below): no `any` (use `unknown`); native control flow (`@if`/`@for`/`@switch`) over `*ngIf`/`*ngFor`; standalone components with no explicit `standalone: true`; host bindings in the `host` object, never `@HostBinding`/`@HostListener`; `inject()` over constructor injection; and the `wl` component/directive selector prefix. The remaining guidance is **not lintable** but still expected:
+
+- **Accessibility is a hard requirement.** Markup must pass AXE checks and meet WCAG AA minimums - focus management, color contrast, and ARIA attributes. Interactive elements must be focusable (a `role`/`(keydown)` handler needs a `tabindex`).
+- **Keep components small and focused** on a single responsibility; keep services around a single responsibility with `providedIn: 'root'` for singletons.
+- **Prefer type inference** when the type is obvious; use strict type checking.
+- **Signals for state**: `signal()` for local state, `computed()` for derived state, `set`/`update` never `mutate`. Keep state transformations pure and predictable.
+- **`input()`/`output()` functions** over the `@Input`/`@Output` decorators. Reactive forms over template-driven. `class`/`style` bindings over `ngClass`/`ngStyle` (the styling rules above already require this).
+- **`NgOptimizedImage` for static images** (it does not work for inline base64). Templates stay simple - push complex logic into the component.
+- Prefer inline `template:` only for genuinely tiny components; anything larger gets an external `templateUrl` (see the inline-template rule above). External templates/styles use paths relative to the component TS file.
+
 ## URL routing
 
 All state is persisted in URL query parameters. Every navigable state must be linkable and bookmarkable.
@@ -151,6 +163,79 @@ warcraft-learner/
 
 The CLI scripts are TypeScript run via `tsx` (e.g. `tsx --tsconfig tsconfig.scripts.json scripts/ingest/orchestrator.ts`), not `.mjs`/`node`. `WCL_CLIENT_ID`/`WCL_CLIENT_SECRET` come from the [Warcraft Logs API clients](https://www.warcraftlogs.com/api/clients/) page and are only used server-side (GHA secrets), never in the browser. No Anthropic API key is needed - rulebook generation is a copy-prompt / paste-back flow that works with any LLM.
 
+## Linting
+
+ESLint enforces the Angular/TypeScript conventions. Flat config lives in `frontend/eslint.config.js` (typescript-eslint + angular-eslint, recommended + stylistic sets) and runs through the Angular CLI lint target (`src/**/*.ts` + `src/**/*.html`; the Node `scripts/**` are not linted).
+
+```bash
+npm run lint   # ng lint -> eslint over src/**
+```
+
+On top of the recommended sets the config pins the convention rules: `@typescript-eslint/no-explicit-any` (ban `any`), `@angular-eslint/prefer-standalone`, `@angular-eslint/prefer-host-metadata-property`, `@angular-eslint/prefer-inject`, and `@angular-eslint/template/prefer-control-flow`, plus the `wl` selector prefix. A few recommended rules carry deliberate option tweaks documented inline: template `eqeqeq` allows the `x != null` idiom, `no-unused-vars` allows the `_`-prefix convention, and `no-empty-function` allows empty private constructors (the static-factory guard).
+
+## Testing
+
+The goals are readability, speed, and trivial testability: a test reads like a statement of the business rule, runs in milliseconds, and needs no ceremony.
+
+**Framework and how to run.** Tests use [Vitest](https://vitest.dev) via Angular's official `@angular/build:unit-test` builder (configured in `angular.json`). jsdom is the DOM environment and the builder initializes the `TestBed` environment itself. The app is zoneless (no zone.js); component tests opt into zoneless change detection per-`TestBed` through the `mountVm` harness, so there is no global setup file. The builder needs Node `>= 22.22.3` (the Angular CLI floor).
+
+```bash
+npm test            # ng test (Vitest) + scripts Vitest + scripts typecheck
+npm run test:watch  # watch mode for the frontend suite
+```
+
+`npm test` runs three things in sequence:
+
+1. `ng test` - the frontend specs under `src/**` (TestBed-backed; needs the Angular builder).
+2. `vitest run --config vitest.scripts.config.ts` - the ingestion specs under `scripts/ingest/**`.
+3. `tsc -p tsconfig.scripts.json --noEmit` - typechecks the Node scripts.
+
+The `src/**` specs cannot run under a bare `npx vitest` - they need the `@angular/build:unit-test` builder to set up the Angular TestBed. Use `ng test` for those; the `scripts/**` specs are plain Node Vitest.
+
+**Functional core, imperative shell (per slice).** There is no central analysis module. Each vertical slice (`pages/post-raid/{rotation,burst-windows,defensive,gear,map}/`) owns its math as named, pure, **total** functions colocated in its own `*.service.ts` / `*-transform.service.ts` - no Angular, no async, no IO. The service classes are thin imperative shells that fetch and call those pure functions. So every slice has two kinds of spec, colocated next to the code:
+
+| Spec | What it covers |
+|---|---|
+| `*-transform.service.spec.ts` | the slice's bench math (clustering / aggregation) as pure fns, **plus** an end-to-end pass through the `*TransformService` with a fake `WclApiService` |
+| `*.service.spec.ts` | the `*FeatureService`'s pure view-model fns (table-driven), **plus** an end-to-end pass with a fake `*_DATA_SOURCE` (and a fake `WclApiService` where the slice fetches the player log) |
+
+Ingestion runs these very `*TransformService`s headlessly, so the only specs under `scripts/ingest/**` cover the discovery helpers it still owns (`wcl-fetchers.spec.ts`, `wcl-mappers.spec.ts`, `code-hash.spec.ts`, `signature.spec.ts`).
+
+**Conventions: tests as documentation.** Colocate specs next to the unit (`burst.service.spec.ts` beside `burst.service.ts`). `describe` names the unit (`'burstWindowStatus'`); `it` is a behavior sentence with no "should" (`it('flags a value more than 2 sigma above the mean')`). For rule/threshold tests, pair every "triggers" case with a "does not trigger at the boundary" case - boundary comparisons are strict (a value exactly at `mean + 2*stddev` is **not** an outlier).
+
+**Fluent builders (`src/testing/`).** WCL event data is massive and quirky, so never load a JSON blob - build a minimal, readable event stream:
+
+```ts
+import { Events } from 'src/testing/builders/events';
+import { SHADOW_BLADES, BLOODLUST } from 'src/testing/spell-ids';
+
+const casts = Events.cast(SHADOW_BLADES, '0:01').cast(SHADOW_BLADES, '3:05').build();
+const buffs = Events.start().applyBuff(BLOODLUST, '0:15').build();
+```
+
+Times are `"m:ss"` strings; with `FIGHT_START = 0` they map straight onto the fight-relative milliseconds the slices see. Defaults: player is actor `1`, boss is `2`; `damageTaken(...)` reverses them; `positioned(x, y, deg)` takes plain yards/degrees and encodes the WCL wire units. The `bench(...)` and `rulebook(...)` fixtures default every field, so a test states only what it exercises:
+
+```ts
+import { bench } from 'src/testing/builders/bench';
+import { rulebook } from 'src/testing/builders/rulebook';
+
+const bk = bench({ perCd: { 'Shadow Blades': { avg_first_cast_s: 3, stddev_first_cast_s: 1 } } });
+const rb = rulebook({ cooldowns: [{ name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 180 }] });
+```
+
+**End-to-end through a service (fake client).** The live WCL path is unreachable from CI, so the transform/feature services are driven with a fake `WclApiService` (canned rankings + report + `Events`-built streams), exercising the whole slice pipeline in-process. For a `*FeatureService` that reads a `*_DATA_SOURCE`, provide a fake source alongside the fake `WclApiService`.
+
+**Signal view-models in leaves (`mountVm`).** Read presentational leaves' `computed()` signals directly via the `mountVm` harness - no DOM assertions, no `detectChanges`:
+
+```ts
+import { mountVm } from 'src/testing/component-harness';
+
+const { vm } = mountVm(WindowComparisonComponent, { windows: [/* ComparisonWindow[] */] });
+expect((vm['overviewMax'] as () => number)()).toBe(300);
+```
+
+`mountVm` configures a zoneless `TestBed`, applies each `input.required` via `setInput`, and returns the instance; pass stub providers as the third argument for components that inject a service. Feature components are thin (they delegate to one `*FeatureService` in an `effect`), so their logic is covered by the service spec rather than by mounting the component.
+
 ## Architecture: layers & rules (vertical-slice target)
 
 The app is built as **per-use-case vertical slices** (map / burst / rotation / defensive / gear). Each slice is independent and follows the same shape; the **Burst** slice (`pages/post-raid/burst-windows/`) is the reference implementation. All new work must follow these layer rules.
@@ -209,7 +294,7 @@ Reading the runtime graph: in production each slice's `*_DATA_SOURCE` resolves t
 **Layer rules (hard):**
 
 - **Pass-through API services - exactly two at runtime.** `WclApiService` (raw WCL events/report/rankings/combatant-info/player-details) and `DataFileApiService` (raw static-file reads). They do **no** remapping or aggregation: bytes in, typed bytes out. Every response projection (rankings -> `ParseRanking`, combatant info -> `CharacterGear`, player details -> spec) is a small pure function colocated in the consuming slice/shell, not in the transport. There is no `wcl-mappers.ts` on the runtime side.
-- **Self-contained services - import ONLY the two API services (or the slice `*DataSource` token) + models + `logWarn`.** Both the `*TransformService` and the `*FeatureService` follow this: no importing of outside analysis, mappers, or UI components. Each **reimplements/owns** its math as named, pure, **total** functions (returns `0`/`null`/`[]` for empty input, never throws; optional findings return `T | null`), **exported from and colocated in that service's own `*.service.ts`**, with no Angular/`inject()`/IO. Self-containment over sharing: the transform owns its own math and pulls nothing from outside analysis or mappers (ingestion runs this very service, so there is no second implementation to keep aligned). Data shapes a service needs (view-model rows like `ComparisonWindow`/`RangeRow`, ranking rows like `ParseRanking`) live in `core/models`, never in a component or mapper file. Tested directly in `*.service.spec.ts`. Cross-slice **presentational** derivations may still live under `shared/` (e.g. `shared/gear/gear-comparison.ts`). (No separate `*.vm.ts` file; the older `pre-fight.vm.ts` / `post-raid.vm.ts` are legacy and may stay.)
+- **Self-contained services - import ONLY the two API services (or the slice `*DataSource` token) + models + `logWarn`.** Both the `*TransformService` and the `*FeatureService` follow this: no importing of outside analysis, mappers, or UI components. Each **reimplements/owns** its math as named, pure, **total** functions (returns `0`/`null`/`[]` for empty input, never throws; optional findings return `T | null`), **exported from and colocated in that service's own `*.service.ts`**, with no Angular/`inject()`/IO. Self-containment over sharing: the transform owns its own math and pulls nothing from outside analysis or mappers (ingestion runs this very service, so there is no second implementation to keep aligned). Data shapes a service needs (view-model rows like `ComparisonWindow`/`RangeRow`, ranking rows like `ParseRanking`) live in `core/models`, never in a component or mapper file. Tested directly in `*.service.spec.ts`. Cross-slice **presentational** derivations may still live under `shared/` (e.g. `shared/gear/gear-comparison.ts`). (No separate `*.vm.ts` file; the older `pre-fight.vm.ts` / `post-raid.vm.ts` are legacy and may stay.) One carve-out: importing generic statistics primitives from `d3-array` (`mean`/`median`/`deviation`/`quantile`) directly is permitted, the same way `Math` is - they are pure arithmetic, not domain analysis. Call them directly at the use site (guard d3's `undefined`-on-empty return with `?? 0` to preserve the total-function contract); each service keeps its own tiny `round` helper since `d3-array` has no rounding function. There is no shared stats wrapper module.
 - **`*TransformService` - one per use case, self-contained.** Reimplements its own derivation (its colocated pure functions) to build a slice's prepared data from the two API services - it does NOT import the ingest analysis. Selectable at runtime under the dev flag to compute the prepared data live (no ingestion). Ingestion runs this **very same** `*TransformService` headlessly (booted through the Angular injector in `scripts/ingest/orchestrator.ts`) to write the slice's tailored file (`data/specs/{spec}/burst/{enc}.json`, denormalized + ready to render); ingest and the dev-flag live mode are the same implementation, not just the same shape.
 - **`*DataSource` interface + `*_DATA_SOURCE` InjectionToken - the swap point.** Two impls per slice: `*DataFileService` (reads the tailored file - production) and `*TransformService` (computes live - no-ingestion dev). The provider helper `core/data-source/provide-data-source.ts` binds one impl per `environment.useLiveTransform`. This is the ONLY place the data source differs.
 - **`*FeatureService` - the runtime shell, one per feature component.** Injects its `*DataSource` token + the cached `WclApiService` (the player's chosen log), calls the pure transform functions colocated in its `*.service.ts`, and exposes signals. It contains **no arithmetic** and no other domain service.

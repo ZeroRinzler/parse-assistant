@@ -57,9 +57,9 @@ export class WclApiService {
         // Token was rejected (e.g. expired early or the secret was rotated); drop the
         // cached token so the next request fetches a fresh one.
         this.auth.invalidate();
-        throw new Error('WCL API error (401) - token rejected.');
+        throw new Error('WCL API error (401) - token rejected.', { cause: error });
       }
-      throw error instanceof WclTransportError ? new Error(error.message) : error;
+      throw error instanceof WclTransportError ? new Error(error.message, { cause: error }) : error;
     }
   }
 

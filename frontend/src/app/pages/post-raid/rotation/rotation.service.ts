@@ -57,7 +57,7 @@ export interface CdPlanRow {
   usesPerMin: number | null;
   bloodlust: boolean;
   bloodlustPct: number | null;
-  holds: Array<{ castIndex: number; targetS: number }>;
+  holds: { castIndex: number; targetS: number }[];
   rule: string | null;
 }
 

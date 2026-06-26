@@ -93,7 +93,7 @@ export function extractGear(gear: WclGearItem[] | undefined): {
  * Build a `v2:`-prefixed talent key from a CombatantInfo `talentTree` array: the
  * sorted (string order, no dedup) nodeIDs, matching ingestion's representation.
  */
-export function talentKeyFromTree(tree: Array<{ nodeID?: number }> | undefined): string {
+export function talentKeyFromTree(tree: { nodeID?: number }[] | undefined): string {
   if (!tree?.length) return '';
   const ids = tree.filter(node => node.nodeID != null).map(node => String(node.nodeID));
   if (!ids.length) return '';
@@ -103,8 +103,8 @@ export function talentKeyFromTree(tree: Array<{ nodeID?: number }> | undefined):
 /** One top parse reduced to just its gear fingerprint (or null when unavailable). */
 export interface ParseGear {
   talent_key: string;
-  trinkets: Array<{ slot: number; id: number; name: string }>;
-  enchants: Array<{ slot: number; id: number; name: string }>;
+  trinkets: { slot: number; id: number; name: string }[];
+  enchants: { slot: number; id: number; name: string }[];
 }
 
 /** Reduce a fetched `CharacterGear` to the fields the gear aggregation needs. */

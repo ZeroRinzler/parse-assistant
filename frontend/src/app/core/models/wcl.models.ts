@@ -47,8 +47,8 @@ export interface WclReport {
   title: string;
   fights: WclFight[];
   masterData: {
-    actors: Array<{ id: number; name: string; subType: string; server: string }>;
-    enemies?: Array<{ id: number; name: string; gameID: number }>;
+    actors: { id: number; name: string; subType: string; server: string }[];
+    enemies?: { id: number; name: string; gameID: number }[];
     abilities: WclAbility[];
   };
 }
@@ -78,7 +78,7 @@ export interface WclGearItem {
 export interface WclCombatantInfo {
   sourceID?: number;
   gear?: WclGearItem[];
-  talentTree?: Array<{ nodeID?: number }>;
+  talentTree?: { nodeID?: number }[];
 }
 
 /** One `playerDetails` role entry (dps / healers / tanks / unknown). */
@@ -86,7 +86,7 @@ export interface PlayerDetailEntry {
   id: number;
   type: string;
   name: string;
-  specs?: Array<{ spec: string }>;
+  specs?: { spec: string }[];
 }
 export type PlayerDetailGroups = Record<string, PlayerDetailEntry[]>;
 
@@ -101,7 +101,7 @@ export interface CharacterGear {
   spec?: string;
   source_report?: string | null;
   talent_key?: string;
-  trinkets?: Array<{ slot: number; id: number; name: string; icon?: string }>;
-  enchants?: Array<{ slot: number; id: number; name: string }>;
+  trinkets?: { slot: number; id: number; name: string; icon?: string }[];
+  enchants?: { slot: number; id: number; name: string }[];
   message?: string;
 }

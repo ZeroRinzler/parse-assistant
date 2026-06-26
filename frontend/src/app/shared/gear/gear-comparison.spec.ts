@@ -3,6 +3,7 @@ import {
   buildBenchEnchantRows,
   buildBenchTrinketRows,
   buildEnchantRows,
+  buildTrinketRows,
 } from './gear-comparison';
 import { EncounterGearStats } from '../../core/models/encounter.models';
 import { CharacterGear } from '../../core/models/wcl.models';
@@ -94,6 +95,103 @@ describe('buildBenchTrinketRows', () => {
   it('returns an empty array when stats or trinkets are absent', () => {
     expect(buildBenchTrinketRows(null)).toEqual([]);
     expect(buildBenchTrinketRows(stats({ trinkets: {} }))).toEqual([]);
+  });
+});
+
+describe('buildTrinketRows', () => {
+  const benchStats = stats({
+    trinkets: {
+      12: [{ id: 193701, name: "Algeth'ar Puzzle Box", pct: 50 }],
+      13: [{ id: 249343, name: 'Gaze of the Alnseer', pct: 80 }],
+    },
+  });
+
+  it('accepts both rows when the two top trinkets are worn in swapped slots', () => {
+    // Player wears the same two top trinkets but with the slots reversed:
+    // slot 12 = Gaze (bench top of 13), slot 13 = Puzzle Box (bench top of 12).
+    const rows = buildTrinketRows(
+      gear({
+        trinkets: [
+          { slot: 12, id: 249343, name: 'Gaze of the Alnseer' },
+          { slot: 13, id: 193701, name: "Algeth'ar Puzzle Box" },
+        ],
+      }),
+      benchStats,
+    );
+    expect(rows).toHaveLength(2);
+    expect(rows.every(row => row.status === 'ok')).toBe(true);
+    expect(rows.every(row => row.note === null)).toBe(true);
+    // topPct comes from whichever bench slot lists the worn trinket.
+    expect(rows[0]).toMatchObject({ slotLabel: 'Trinket 1', id: 249343, topPct: 80 });
+    expect(rows[1]).toMatchObject({ slotLabel: 'Trinket 2', id: 193701, topPct: 50 });
+  });
+
+  it('accepts both rows when the two top trinkets are worn in the matching slots', () => {
+    const rows = buildTrinketRows(
+      gear({
+        trinkets: [
+          { slot: 12, id: 193701, name: "Algeth'ar Puzzle Box" },
+          { slot: 13, id: 249343, name: 'Gaze of the Alnseer' },
+        ],
+      }),
+      benchStats,
+    );
+    expect(rows).toHaveLength(2);
+    expect(rows.every(row => row.status === 'ok' && row.note === null)).toBe(true);
+  });
+
+  it('still flags per slot when only one of the two top trinkets is worn', () => {
+    // Slot 12 holds the correct top pick; slot 13 holds an off-meta trinket.
+    const rows = buildTrinketRows(
+      gear({
+        trinkets: [
+          { slot: 12, id: 193701, name: "Algeth'ar Puzzle Box" },
+          { slot: 13, id: 999999, name: 'Off Meta Trinket' },
+        ],
+      }),
+      benchStats,
+    );
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({ slotLabel: 'Trinket 1', status: 'ok', note: null });
+    expect(rows[1]).toMatchObject({
+      slotLabel: 'Trinket 2',
+      status: 'info',
+      note: 'Switch to Gaze of the Alnseer - 80% of top parsers',
+    });
+  });
+
+  it('flags a slot whose worn trinket matches neither bench top pick', () => {
+    const rows = buildTrinketRows(
+      gear({
+        trinkets: [
+          { slot: 12, id: 111111, name: 'Wrong A' },
+          { slot: 13, id: 222222, name: 'Wrong B' },
+        ],
+      }),
+      benchStats,
+    );
+    expect(rows[0]).toMatchObject({ status: 'info', note: "Switch to Algeth'ar Puzzle Box - 50% of top parsers" });
+    expect(rows[1]).toMatchObject({ status: 'info', note: 'Switch to Gaze of the Alnseer - 80% of top parsers' });
+  });
+
+  it('surfaces the top recommendation when the player has no trinket in a slot', () => {
+    const rows = buildTrinketRows(
+      gear({ trinkets: [{ slot: 12, id: 193701, name: "Algeth'ar Puzzle Box" }] }),
+      benchStats,
+    );
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({ slotLabel: 'Trinket 1', status: 'ok', note: null });
+    expect(rows[1]).toMatchObject({
+      slotLabel: 'Trinket 2',
+      id: 249343,
+      status: 'info',
+      note: '80% of top parsers use this trinket',
+    });
+  });
+
+  it('returns an empty array when there is neither player gear nor bench data', () => {
+    expect(buildTrinketRows(null, null)).toEqual([]);
+    expect(buildTrinketRows(gear({ trinkets: [] }), stats({ trinkets: {} }))).toEqual([]);
   });
 });
 

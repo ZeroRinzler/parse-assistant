@@ -52,7 +52,7 @@ export interface BurstWindow {
 export interface PlayerBurstWindow {
   time_s?: number;
   window_damage: number;
-  ability_breakdown?: Array<{ spell_id: number; damage: number; casts?: number }>;
+  ability_breakdown?: { spell_id: number; damage: number; casts?: number }[];
 }
 
 export interface DefensiveWindow {

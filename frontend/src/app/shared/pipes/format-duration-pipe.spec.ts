@@ -12,7 +12,7 @@ describe('FormatDurationPipe', () => {
     { input: 300,       expected: '5:00',   why: 'exact five minutes' },
     { input: 3661,      expected: '61:01',  why: 'minutes can exceed 59 (no capping)' },
     { input: 9.9,       expected: '0:09',   why: 'fractional seconds are floored' },
-  ] as Array<{ input: number | null | undefined; expected: string; why: string }>)(
+  ] as { input: number | null | undefined; expected: string; why: string }[])(
     'transform($input) === "$expected" ($why)',
     ({ input, expected }) => {
       expect(pipe.transform(input)).toBe(expected);

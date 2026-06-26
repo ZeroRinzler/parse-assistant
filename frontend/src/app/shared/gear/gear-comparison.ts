@@ -130,6 +130,33 @@ export function talentStatusOf(topStats: EncounterGearStats | null, playerKey: s
 }
 
 /**
+ * Trinket slot order is irrelevant in WoW: wearing the two correct top-pick
+ * trinkets counts as optimal regardless of which slot (12 vs 13) each sits in.
+ * Returns true when the player's worn trinket id set for slots {12, 13} equals
+ * the bench's top-pick id set {benchTop12Id, benchTop13Id}, compared unordered.
+ * Returns false when either side lacks two distinct ids.
+ */
+function trinketSetMatches(
+  playerTrinkets: NonNullable<CharacterGear['trinkets']>,
+  benchTop12Id: number | undefined,
+  benchTop13Id: number | undefined,
+): boolean {
+  const playerTrinketIds = new Set(
+    [12, 13]
+      .map(slot => playerTrinkets.find(trinket => trinket.slot === slot)?.id)
+      .filter((id): id is number => id !== undefined),
+  );
+  const benchTopIds = new Set(
+    [benchTop12Id, benchTop13Id].filter((id): id is number => id !== undefined),
+  );
+  if (playerTrinketIds.size !== 2 || benchTopIds.size !== 2) return false;
+  for (const id of playerTrinketIds) {
+    if (!benchTopIds.has(id)) return false;
+  }
+  return true;
+}
+
+/**
  * Per-slot trinket comparison: player's item vs top-parse consensus.
  * Returns a row for each slot (12, 13) that has either a player item or bench data.
  */
@@ -137,6 +164,25 @@ export function buildTrinketRows(gear: CharacterGear | null, stats: EncounterGea
   const topTrinkets = stats?.trinkets ?? {};
   const playerTrinkets = gear?.trinkets ?? [];
   const rows: TrinketRow[] = [];
+
+  // Trinket slot order does not matter: if the player wears both top-pick
+  // trinkets (in either slot order), accept both rows as optimal instead of
+  // flagging each slot for a "Switch to" swap.
+  const benchTop12 = topTrinkets[12]?.[0];
+  const benchTop13 = topTrinkets[13]?.[0];
+  if (trinketSetMatches(playerTrinkets, benchTop12?.id, benchTop13?.id)) {
+    for (const slot of [12, 13]) {
+      const label = slotName(slot);
+      const player = playerTrinkets.find(trinket => trinket.slot === slot)!;
+      // The player's worn trinket is one of the two bench top picks; pull its
+      // usage pct from whichever bench slot lists it.
+      const matchingBenchPct =
+        benchTop12?.id === player.id ? benchTop12.pct : benchTop13?.id === player.id ? benchTop13.pct : null;
+      rows.push({ slotLabel: label, id: player.id, name: player.name, icon: player.icon ?? '',
+        status: 'ok', topPct: matchingBenchPct, note: null });
+    }
+    return rows;
+  }
 
   for (const slot of [12, 13]) {
     const label = slotName(slot);

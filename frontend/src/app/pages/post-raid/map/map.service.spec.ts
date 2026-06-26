@@ -110,8 +110,8 @@ describe('FACING_OFFSET_RAD', () => {
 
 /* ----------------------------- feature service ---------------------------- */
 
-function withData(data: MapData | null): { service: MapFeatureService; calls: Array<[string, number]> } {
-  const calls: Array<[string, number]> = [];
+function withData(data: MapData | null): { service: MapFeatureService; calls: [string, number][] } {
+  const calls: [string, number][] = [];
   const source: MapDataSource = {
     getMapData: (spec, enc) => { calls.push([spec, enc]); return Promise.resolve(data); },
   };

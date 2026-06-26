@@ -113,7 +113,7 @@ export function buildActorTimelines(events: WclEvent[], fightStartMs: number): M
  * Distinct reference enemies across all parses, for the map's reference picker.
  * Ported from `positioning-core.listReferenceEnemies`.
  */
-export function listReferenceEnemies(positions: EncounterPositions): Array<{ gameId: number; name: string; isBoss: boolean }> {
+export function listReferenceEnemies(positions: EncounterPositions): { gameId: number; name: string; isBoss: boolean }[] {
   const map = new Map<number, { gameId: number; name: string; isBoss: boolean }>();
   for (const parse of positions.parses) {
     for (const enemy of parse.enemies) {

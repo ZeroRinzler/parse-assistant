@@ -6,6 +6,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
 import { MatCardModule } from '@angular/material/card';
 import { DataFileApiService } from '../../core/services/data-file-api';
+import { SelectionStore } from '../../core/services/selection-store';
 import { SpecEntry, EncounterEntry } from '../../core/models/encounter.models';
 import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner/loading-spinner';
 import { FormatSpecPipe } from '../../shared/pipes/format-spec-pipe';
@@ -39,6 +40,7 @@ export class PreFightComponent implements OnInit {
   private readonly mapFeature = inject(MapFeatureService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly selectionStore = inject(SelectionStore);
 
   protected readonly specControl = new FormControl('', { nonNullable: true });
   protected readonly encControl = new FormControl<number>({ value: 0, disabled: true }, { nonNullable: true });
@@ -65,13 +67,22 @@ export class PreFightComponent implements OnInit {
     }
 
     const params = this.route.snapshot.queryParamMap;
-    const autoSpec = params.get('spec') || '';
-    const autoEnc = parseInt(params.get('encounter') || '0', 10);
+    let autoSpec = params.get('spec') || '';
+    let autoEnc = parseInt(params.get('encounter') || '0', 10);
 
-    if (autoSpec && this.specs().some(s => s.spec === autoSpec)) {
+    // No spec in the URL: fall back to the last persisted selection (URL > localStorage).
+    if (!params.get('spec')) {
+      const storedSelection = this.selectionStore.loadPreFight();
+      if (storedSelection?.spec) {
+        autoSpec = storedSelection.spec;
+        autoEnc = storedSelection.encounter ?? 0;
+      }
+    }
+
+    if (autoSpec && this.specs().some(specEntry => specEntry.spec === autoSpec)) {
       this.specControl.setValue(autoSpec);
       await this._onSpecSelected(autoSpec);
-      if (autoEnc) {
+      if (autoEnc && this.encounters().some(encEntry => encEntry.id === autoEnc)) {
         this.encControl.setValue(autoEnc);
         await this.onEncChange();
       }
@@ -81,6 +92,7 @@ export class PreFightComponent implements OnInit {
   protected async onSpecChange(): Promise<void> {
     const spec = this.specControl.value;
     this.router.navigate([], { queryParams: { spec: spec || null, encounter: null }, replaceUrl: true });
+    this.selectionStore.savePreFight({ spec: spec || null, encounter: null });
     this.mapFeature.clear();
     this.encControl.setValue(0, { emitEvent: false });
     this.encControl.disable({ emitEvent: false });
@@ -103,6 +115,7 @@ export class PreFightComponent implements OnInit {
     const encId = this.encControl.value;
     const spec = this.specControl.value;
     this.router.navigate([], { queryParams: { spec: spec || null, encounter: encId || null }, replaceUrl: true });
+    this.selectionStore.savePreFight({ spec: spec || null, encounter: encId || null });
     this.mapFeature.clear();
     if (!encId || !spec) return;
     // Load the top-parse position trails for the map (bench-only, no player log).

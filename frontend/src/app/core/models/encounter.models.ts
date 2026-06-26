@@ -43,7 +43,7 @@ export interface BurstWindowBench {
   common_cds: string[];
   avg_targets: number;
   window_length_s: number;
-  ability_breakdown: Array<{ spell_id: number; avg_damage: number; min_damage: number; max_damage: number; count: number; avg_casts?: number }>;
+  ability_breakdown: { spell_id: number; avg_damage: number; min_damage: number; max_damage: number; count: number; avg_casts?: number }[];
 }
 
 export interface EncounterBench {
@@ -77,7 +77,7 @@ export interface DefensiveWindowBench {
   defensive_name: string;
   spell_id: number;
   avg_targets?: number;
-  ability_breakdown: Array<{ spell_id: number; avg_damage: number; min_damage: number; max_damage: number; count: number }>;
+  ability_breakdown: { spell_id: number; avg_damage: number; min_damage: number; max_damage: number; count: number }[];
 }
 
 export interface PerDefensiveBenchmark {
@@ -94,7 +94,7 @@ export interface PerDefensiveBenchmark {
 }
 
 export interface EncounterGearStats {
-  talent_builds: Array<{ key: string; pct: number; report_code?: string; fight_id?: number; player_name?: string }>;
-  trinkets: Record<number, Array<{ id: number; name: string; pct: number }>>;
-  enchants: Record<number, Array<{ id: number; name: string; pct: number }>>;
+  talent_builds: { key: string; pct: number; report_code?: string; fight_id?: number; player_name?: string }[];
+  trinkets: Record<number, { id: number; name: string; pct: number }[]>;
+  enchants: Record<number, { id: number; name: string; pct: number }[]>;
 }

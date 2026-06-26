@@ -19,7 +19,7 @@ export interface RangeRow {
   topCasts?: number | null;
 }
 
-export type WindowStatus = 'good' | 'warn' | 'bad' | 'muted';
+export type WindowStatus = 'good' | 'warn' | 'bad' | 'muted' | 'info';
 
 export interface ComparisonWindow {
   timeStartS: number;

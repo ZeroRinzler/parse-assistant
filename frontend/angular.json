@@ -3,7 +3,8 @@
   "version": 1,
   "cli": {
     "packageManager": "npm",
-    "analytics": false
+    "analytics": false,
+    "schematicCollections": ["angular-eslint"]
   },
   "newProjectRoot": "projects",
   "projects": {
@@ -51,15 +52,10 @@
               {
                 "glob": "**/*",
                 "input": "public",
-                "ignore": [
-                  "data/specs/**/parse_samples/**",
-                  "data/specs/**/guides.json"
-                ]
+                "ignore": ["data/specs/**/parse_samples/**", "data/specs/**/guides.json"]
               }
             ],
-            "styles": [
-              "src/styles.scss"
-            ]
+            "styles": ["src/styles.scss"]
           },
           "configurations": {
             "production": {
@@ -115,6 +111,12 @@
             "ci": {
               "reporters": ["default", "github-actions"]
             }
+          }
+        },
+        "lint": {
+          "builder": "@angular-eslint/builder:lint",
+          "options": {
+            "lintFilePatterns": ["src/**/*.ts", "src/**/*.html"]
           }
         }
       }

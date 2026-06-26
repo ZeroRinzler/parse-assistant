@@ -90,6 +90,25 @@ describe('WindowComparisonComponent selection', () => {
   });
 });
 
+describe('WindowComparisonComponent activeIsMuted', () => {
+  const activeIsMutedFor = (status: WindowStatus): boolean => {
+    const { vm } = mountVm(WindowComparisonComponent, { windows: [win({}, status)] });
+    return (vm['activeIsMuted'] as () => boolean)();
+  };
+
+  it('treats info (bench-only) the same as muted so the player columns hide', () => {
+    expect(activeIsMutedFor('info')).toBe(true);
+  });
+
+  it('still treats muted (not reached) as muted', () => {
+    expect(activeIsMutedFor('muted')).toBe(true);
+  });
+
+  it('is false for a normal compared window', () => {
+    expect(activeIsMutedFor('good')).toBe(false);
+  });
+});
+
 describe('WindowComparisonComponent activeDetailRows', () => {
   function winWithRows(rows: RangeRow[]): ComparisonWindow {
     return { ...win({}), detailRows: rows };

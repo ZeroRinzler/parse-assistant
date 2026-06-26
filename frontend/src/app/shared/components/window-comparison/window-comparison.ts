@@ -5,7 +5,7 @@ import { GameIconComponent } from '../game-icon/game-icon';
 import { CompactAbilityRowComponent } from '../compact-ability-row/compact-ability-row';
 import { FormatDurationPipe } from '../../pipes/format-duration-pipe';
 import { FormatDamagePipe } from '../../pipes/format-damage-pipe';
-import { RangeRow, WindowStatus, ComparisonWindow } from '../../../core/models/window-comparison.models';
+import { RangeRow, ComparisonWindow } from '../../../core/models/window-comparison.models';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -82,8 +82,12 @@ export class WindowComparisonComponent {
     if (next >= 0 && next < this.windows().length) this.select(next);
   }
 
-  protected readonly activeIsMuted = computed(() =>
-    this.activeWindow()?.status === 'muted');
+  // 'info' (bench-only, pre-fight) has no player overlay, so it hides the
+  // absent player columns/delta exactly like a muted (not-reached) window.
+  protected readonly activeIsMuted = computed(() => {
+    const status = this.activeWindow()?.status;
+    return status === 'muted' || status === 'info';
+  });
 
   // Active window's ability rows, sorted by absolute gap (biggest damage loss
   // first) so the most actionable abilities surface at the top of the table.

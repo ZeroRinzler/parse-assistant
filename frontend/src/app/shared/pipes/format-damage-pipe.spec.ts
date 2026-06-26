@@ -15,7 +15,7 @@ describe('FormatDamagePipe', () => {
     { input: 999_999,     expected: '1.0M',   why: 'rounds up to 1.0M, not the nonsensical 1000K' },
     { input: 1_000_000,   expected: '1.0M',   why: 'exact lower boundary for the M branch' },
     { input: 1_240_000,   expected: '1.2M',   why: 'typical raider damage number' },
-  ] as Array<{ input: number | null | undefined; expected: string; why: string }>)(
+  ] as { input: number | null | undefined; expected: string; why: string }[])(
     'transform($input) === "$expected" ($why)',
     ({ input, expected }) => {
       expect(pipe.transform(input)).toBe(expected);

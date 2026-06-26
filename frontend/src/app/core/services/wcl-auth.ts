@@ -76,7 +76,7 @@ export class WclAuthService {
       const detail = err instanceof HttpErrorResponse
         ? (typeof err.error === 'string' ? err.error : JSON.stringify(err.error))
         : '';
-      throw new Error(`WCL token request failed (${status}): ${detail}`);
+      throw new Error(`WCL token request failed (${status}): ${detail}`, { cause: err });
     }
     this._token = data.access_token;
     this._expiry = Date.now() + (data.expires_in || 3600) * 1000;

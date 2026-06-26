@@ -142,7 +142,7 @@ export function buildParsePositions(
   const byActor = collectPositionSamples(posEvents, fightStartMs);
   const playerSamples = byActor.get(playerId) ?? [];
 
-  const enemies: Array<{ actorId: number; count: number; maxHp: number; samples: RawPosSample[]; meta: EnemyMeta }> = [];
+  const enemies: { actorId: number; count: number; maxHp: number; samples: RawPosSample[]; meta: EnemyMeta }[] = [];
   for (const [actorId, samples] of byActor) {
     if (actorId === playerId || !enemyMetaById.has(actorId)) continue;
     const maxHp = samples.reduce((max, sample) => Math.max(max, sample.maxHp), 0);

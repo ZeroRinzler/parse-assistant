@@ -134,7 +134,8 @@ export class MapCanvasComponent {
   protected onScrub(value: number): void { this.pause(); this.scrubT.set(value); }
 
   protected togglePlay(): void {
-    this.playing() ? this.pause() : this.play();
+    if (this.playing()) this.pause();
+    else this.play();
   }
 
   private play(): void {
@@ -222,7 +223,7 @@ export class MapCanvasComponent {
     ctx.strokeStyle = muted; ctx.globalAlpha = 0.25; ctx.lineWidth = 1.5;
     for (const trail of benchTrails) {
       ctx.beginPath();
-      trail.forEach((point, index) => { const [x, y] = toScreen(point); index ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+      trail.forEach((point, index) => { const [x, y] = toScreen(point); if (index) ctx.lineTo(x, y); else ctx.moveTo(x, y); });
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
@@ -240,7 +241,7 @@ export class MapCanvasComponent {
     if (liveTrail.length) {
       ctx.strokeStyle = gold; ctx.globalAlpha = 0.5; ctx.lineWidth = 2;
       ctx.beginPath();
-      liveTrail.forEach((point, index) => { const [x, y] = toScreen(point); index ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+      liveTrail.forEach((point, index) => { const [x, y] = toScreen(point); if (index) ctx.lineTo(x, y); else ctx.moveTo(x, y); });
       ctx.stroke(); ctx.globalAlpha = 1;
     }
     // Live player current position at the scrubbed moment.

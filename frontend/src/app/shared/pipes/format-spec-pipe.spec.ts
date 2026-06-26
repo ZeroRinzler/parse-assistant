@@ -12,7 +12,7 @@ describe('FormatSpecPipe', () => {
     { input: 'SubtletyRogue',       expected: 'Subtlety Rogue',      why: 'typical WCL two-word spec name' },
     { input: 'BeastMasteryHunter',  expected: 'Beast Mastery Hunter', why: 'three words' },
     { input: 'FrostDeathKnight',    expected: 'Frost Death Knight',  why: 'multi-word class name' },
-  ] as Array<{ input: string | null | undefined; expected: string; why: string }>)(
+  ] as { input: string | null | undefined; expected: string; why: string }[])(
     'transform($input) === "$expected" ($why)',
     ({ input, expected }) => {
       expect(pipe.transform(input)).toBe(expected);

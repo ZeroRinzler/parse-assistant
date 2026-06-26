@@ -16,6 +16,7 @@
     <div
       class="relative mx-2 h-9"
       role="listbox"
+      tabindex="0"
       aria-label="Burst windows"
       (keydown)="onKeydown($event)">
       <!-- Track: rounded rail the segments sit on. -->
@@ -35,6 +36,7 @@
             [class.seg-bad]="w.status === 'bad'"
             [class.seg-scheduled]="w.status === 'muted' && w.statusIcon === 'schedule'"
             [class.seg-missing]="w.status === 'muted' && w.statusIcon !== 'schedule'"
+            [class.seg-info]="w.status === 'info'"
             [class.seg-active]="activeIndex() === i"
             [attr.aria-selected]="activeIndex() === i"
             [attr.aria-label]="(w.timeStartS | formatDuration)"
@@ -63,7 +65,8 @@
         [class.fill-success]="w.status === 'good'"
         [class.fill-warning]="w.status === 'warn'"
         [class.fill-critical]="w.status === 'bad'"
-        [class.fill-muted]="w.status === 'muted'"></span>
+        [class.fill-muted]="w.status === 'muted'"
+        [class.fill-info]="w.status === 'info'"></span>
       <span class="flex-1 text-sm font-medium">
         Window {{ activeIndex() + 1 }} - {{ w.timeStartS | formatDuration }} to {{ w.timeEndS | formatDuration }}
       </span>
@@ -103,6 +106,7 @@
             [class.fill-warning]="w.status === 'warn'"
             [class.fill-critical]="w.status === 'bad'"
             [class.fill-muted]="w.status === 'muted'"
+            [class.fill-info]="w.status === 'info'"
             [style.width.%]="overviewPlayerWidthPct()"></div>
         }
         @if (overviewRangeLeftPct() !== null) {
