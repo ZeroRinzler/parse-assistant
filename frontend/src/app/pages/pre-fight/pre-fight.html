@@ -46,114 +46,17 @@
 
     <!-- Cooldown plan -->
     @if (cdPlan().length) {
-      <mat-card class="p-4">
-        <p class="mb-1 font-medium">Cooldown plan</p>
-        @for (cd of cdPlan(); track cd.name; let last = $last) {
-          <div class="py-2">
-            <div class="text-[13px] font-medium">
-              @if (cd.spellId) {
-                <wl-game-icon [id]="cd.spellId" [name]="cd.name"></wl-game-icon>
-              } @else {
-                {{ cd.name }}
-              }
-            </div>
-            <mat-chip-set class="mt-1">
-              @if (cd.firstCastS != null) { <mat-chip>First cast {{ cd.firstCastS | formatDuration }}</mat-chip> }
-              @if (cd.uses != null) { <mat-chip>{{ cd.uses | number:'1.0-1' }} uses</mat-chip> }
-              @if (cd.usesPerMin != null) { <mat-chip>{{ cd.usesPerMin | number:'1.1-1' }}/min</mat-chip> }
-              @if (cd.bloodlust) { <mat-chip highlighted>Bloodlust@if (cd.bloodlustPct != null) { ({{ cd.bloodlustPct }}%)}</mat-chip> }
-              @for (h of cd.holds; track h.castIndex) { <mat-chip>Hold #{{ h.castIndex + 1 }} {{ h.targetS | formatDuration }}</mat-chip> }
-            </mat-chip-set>
-            @if (cd.rule) { <wl-callout class="mt-2">{{ cd.rule }}</wl-callout> }
-          </div>
-          @if (!last) { <mat-divider></mat-divider> }
-        }
-      </mat-card>
+      <wl-cooldown-plan [items]="cdPlan()"></wl-cooldown-plan>
     }
 
     <!-- Defensive plan -->
     @if (defensivePlan().length) {
-      <mat-card class="p-4">
-        <p class="mb-1 font-medium">Defensive plan</p>
-        @for (def of defensivePlan(); track def.name; let last = $last) {
-          <div class="py-2">
-            <div class="text-[13px] font-medium">
-              @if (def.spellId) {
-                <wl-game-icon [id]="def.spellId" [name]="def.name"></wl-game-icon>
-              } @else {
-                {{ def.name }}
-              }
-            </div>
-            <mat-chip-set class="mt-1">
-              @if (def.uses != null) { <mat-chip>{{ def.uses | number:'1.0-1' }} uses</mat-chip> }
-              @if (def.firstCastS != null) { <mat-chip>First use {{ def.firstCastS | formatDuration }}</mat-chip> }
-            </mat-chip-set>
-            @if (def.windowsS.length) {
-              <div class="mt-1 flex flex-wrap items-center gap-2">
-                <span class="text-[12px] text-[var(--muted)]">Top windows</span>
-                <mat-chip-set>
-                  @for (w of def.windowsS; track $index) { <mat-chip>{{ w | formatDuration }}</mat-chip> }
-                </mat-chip-set>
-              </div>
-            }
-            @if (def.rule) { <wl-callout class="mt-2">{{ def.rule }}</wl-callout> }
-          </div>
-          @if (!last) { <mat-divider></mat-divider> }
-        }
-      </mat-card>
+      <wl-defensive-plan [items]="defensivePlan()"></wl-defensive-plan>
     }
 
     <!-- Burst windows -->
     @if (bench()) {
-      <mat-card class="p-4">
-        <div class="flex gap-6">
-          @if (bench()!.avg_duration_s) {
-            <div>
-              <div class="text-xl font-semibold">{{ bench()!.avg_duration_s | formatDuration }}</div>
-              <div class="text-[11px] text-[var(--muted)]">Avg kill time</div>
-            </div>
-          }
-          @if (burstWindows().length) {
-            <div>
-              <div class="text-xl font-semibold">{{ burstWindows().length }}</div>
-              <div class="text-[11px] text-[var(--muted)]">Burst windows</div>
-            </div>
-          }
-        </div>
-
-        @if (burstWindows().length) {
-          <mat-divider class="my-3"></mat-divider>
-          <p class="mb-1 font-medium">Burst windows</p>
-          @for (bw of burstWindows(); track bw.startS) {
-            <div class="flex items-center gap-3 py-1 text-[13px]">
-              @if (showMap()) {
-                <button class="shrink-0" mat-icon-button aria-label="Open positioning map" (click)="openMap(bw)">
-                  <mat-icon class="text-[18px]">my_location</mat-icon>
-                </button>
-              }
-              <span class="shrink-0 font-semibold tabular-nums">{{ bw.startS | formatDuration }} - {{ bw.endS | formatDuration }}</span>
-              <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
-                @for (cd of bw.cds; track cd.name) {
-                  @if (cd.spellId) {
-                    <wl-game-icon [id]="cd.spellId" [name]="cd.name"></wl-game-icon>
-                  } @else {
-                    <span>{{ cd.name }}</span>
-                  }
-                }
-                @if (!bw.cds.length) {
-                  <span class="text-[var(--muted)]">no tracked CD</span>
-                }
-              </div>
-              @if (bw.aoe) {
-                <mat-chip-set><mat-chip highlighted>AoE</mat-chip></mat-chip-set>
-              }
-              @if (bw.dmg) {
-                <span class="shrink-0 tabular-nums text-[var(--muted)]">{{ bw.dmg | formatDamage }}</span>
-              }
-            </div>
-          }
-        }
-      </mat-card>
+      <wl-pre-burst-windows [windows]="burstWindows()" [avgDurationS]="bench()!.avg_duration_s"></wl-pre-burst-windows>
     }
   }
 </div>

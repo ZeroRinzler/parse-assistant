@@ -1,26 +1,20 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal, computed } from '@angular/core';
-import { DecimalPipe } from '@angular/common';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
-import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
-import { MatChipsModule } from '@angular/material/chips';
-import { MatDividerModule } from '@angular/material/divider';
-import { MatIconModule } from '@angular/material/icon';
 import { GearSectionComponent } from '../post-raid/gear-section/gear-section';
 import { EncounterService } from '../../core/services/encounter';
 import { PositioningPanelService } from '../../core/services/positioning-panel';
 import { SpecEntry, EncounterEntry, EncounterBench } from '../../core/models/encounter.models';
 import { Rulebook } from '../../core/models/rulebook.models';
 import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner/loading-spinner';
-import { CalloutComponent } from '../../shared/components/callout/callout';
-import { GameIconComponent } from '../../shared/components/game-icon/game-icon';
-import { FormatDurationPipe } from '../../shared/pipes/format-duration-pipe';
-import { FormatDamagePipe } from '../../shared/pipes/format-damage-pipe';
 import { FormatSpecPipe } from '../../shared/pipes/format-spec-pipe';
+import { CooldownPlanComponent } from './cooldown-plan/cooldown-plan';
+import { DefensivePlanComponent } from './defensive-plan/defensive-plan';
+import { PreBurstWindowsComponent } from './burst-windows/burst-windows';
 import {
   BurstWindowVm,
   buildCdPlan, buildDefensivePlan, buildBurstWindows,
@@ -30,10 +24,9 @@ import {
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-pre-fight',
   imports: [
-    ReactiveFormsModule, MatFormFieldModule, MatSelectModule,
-    MatButtonModule, MatCardModule, MatChipsModule, MatDividerModule, MatIconModule,
-    LoadingSpinnerComponent, CalloutComponent, GameIconComponent, GearSectionComponent,
-    DecimalPipe, FormatDurationPipe, FormatDamagePipe, FormatSpecPipe,
+    ReactiveFormsModule, MatFormFieldModule, MatSelectModule, MatCardModule,
+    LoadingSpinnerComponent, GearSectionComponent, FormatSpecPipe,
+    CooldownPlanComponent, DefensivePlanComponent, PreBurstWindowsComponent,
   ],
   templateUrl: './pre-fight.html',
 })
@@ -60,14 +53,6 @@ export class PreFightComponent implements OnInit {
   protected readonly cdPlan = computed(() => buildCdPlan(this.rulebook(), this.bench()));
   protected readonly defensivePlan = computed(() => buildDefensivePlan(this.rulebook(), this.bench()));
   protected readonly burstWindows = computed<BurstWindowVm[]>(() => buildBurstWindows(this.rulebook(), this.bench()));
-
-  protected readonly showMap = computed(() => !!this.panel.positions());
-
-  protected openMap(bw: BurstWindowVm): void {
-    const label = bw.cds.map(c => c.name).join(', ') || 'Burst window';
-    const spellIds = bw.cds.map(c => c.spellId).filter((id): id is number => id != null);
-    this.panel.openAt(bw.startS, { kind: 'boss' }, label, spellIds);
-  }
 
   async ngOnInit(): Promise<void> {
     this.loading.set(true);

@@ -1,0 +1,81 @@
+<div class="bg-[var(--surface)] border border-[var(--border)] rounded-[10px] overflow-hidden">
+  <!-- Header -->
+  <div class="px-[18px] pt-[15px] pb-[13px]">
+    <div class="text-[17px] font-semibold text-[var(--text)]">Burst windows</div>
+    <div class="text-xs text-[var(--muted)] mt-0.5">When top parsers stack cooldowns. Bar length shows each window's damage relative to the biggest.</div>
+  </div>
+
+  <!-- Stat blocks -->
+  <div class="flex gap-9 px-[18px] pt-1 pb-4">
+    @if (avgDurationS()) {
+      <div>
+        <div class="font-mono text-[24px] font-semibold text-[var(--text)] leading-none tabular-nums">{{ avgDurationS() | formatDuration }}</div>
+        <div class="text-[11px] text-[var(--muted)] mt-[5px] uppercase tracking-[0.6px]">Avg kill time</div>
+      </div>
+    }
+    <div>
+      <div class="font-mono text-[24px] font-semibold text-[var(--text)] leading-none tabular-nums">{{ windows().length }}</div>
+      <div class="text-[11px] text-[var(--muted)] mt-[5px] uppercase tracking-[0.6px]">Burst windows</div>
+    </div>
+  </div>
+
+  <!-- Timeline rail -->
+  @if (windows().length) {
+    <div class="px-[18px] pb-2.5">
+      <div class="relative h-[34px] bg-[var(--surface-alt)] rounded-[6px]">
+        @for (w of windows(); track w.startS; let i = $index) {
+          <button
+            type="button"
+            [class]="badgeClass(i)"
+            [style.left.%]="leftPct(w)"
+            [attr.aria-label]="'Select window ' + (i + 1)"
+            [attr.aria-pressed]="i === sel()"
+            (click)="selectBurst(i)">
+            <span [class]="dotClass(i)"></span>
+          </button>
+        }
+      </div>
+      <div class="flex justify-between font-mono text-[10px] text-[var(--border)] mt-1.5 px-0.5 tabular-nums">
+        @for (t of timeTicks(); track $index) {
+          <span>{{ t | formatDuration }}</span>
+        }
+      </div>
+    </div>
+
+    <!-- Selected window header + position bar -->
+    @if (selected(); as s) {
+      <div class="mx-[18px] mt-1.5 mb-4 bg-[var(--bg)] border border-[var(--border)] border-t-2 border-t-[var(--gold)] rounded-b-[8px] px-[15px] py-[13px]">
+        <div class="flex items-center gap-[9px] flex-wrap mb-[11px]">
+          <span class="w-2 h-2 rounded-full bg-[var(--gold)] shrink-0"></span>
+          <span class="text-[14px] font-semibold text-[var(--text)] tabular-nums">Window {{ sel() + 1 }} &middot; {{ s.startS | formatDuration }} - {{ s.endS | formatDuration }}</span>
+          <div class="flex gap-[5px] ml-1 flex-wrap">
+            @for (cd of s.cds; track cd.name) {
+              <span class="inline-flex items-center bg-[var(--surface-alt)] border border-[var(--border)] rounded-[5px] px-1.5 py-0.5 text-[11px] text-[var(--muted)] whitespace-nowrap">
+                @if (cd.spellId) {
+                  <wl-game-icon [id]="cd.spellId" [name]="cd.name"></wl-game-icon>
+                } @else {
+                  {{ cd.name }}
+                }
+              </span>
+            }
+          </div>
+          <div class="ml-auto flex items-center gap-1.5">
+            @if (showMap()) {
+              <button class="shrink-0" mat-icon-button aria-label="Open positioning map" (click)="openMap()">
+                <mat-icon class="text-[18px]">my_location</mat-icon>
+              </button>
+            }
+            @if (s.dmg) {
+              <span class="font-mono text-[13px] font-semibold text-[var(--gold)] tabular-nums">{{ s.dmg | formatDamage }}</span>
+            }
+          </div>
+        </div>
+
+        <!-- Position bar: window damage relative to the biggest window -->
+        <div class="h-1.5 bg-[var(--bg)] border border-[var(--border)] rounded-[3px] overflow-hidden">
+          <div class="h-full bg-[var(--gold)] opacity-55 rounded-[3px]" [style.width.%]="(s.dmgShare ?? 0) * 100"></div>
+        </div>
+      </div>
+    }
+  }
+</div>

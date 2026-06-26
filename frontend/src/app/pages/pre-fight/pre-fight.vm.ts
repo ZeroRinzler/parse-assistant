@@ -26,6 +26,7 @@ export interface DefPlanItem {
   uses: number | null;
   firstCastS: number | null;
   windowsS: number[];
+  holds: Array<{ castIndex: number; targetS: number }>;
   rule: string | null;
 }
 
@@ -35,6 +36,8 @@ export interface BurstWindowVm {
   cds: Array<{ name: string; spellId: number | null }>;
   aoe: boolean;
   dmg: number | null;
+  /** Damage relative to the biggest window in the fight, 0-1. Drives the position bar. */
+  dmgShare: number | null;
 }
 
 /**
@@ -81,15 +84,21 @@ export function buildDefensivePlan(rulebook: Rulebook | null, bench: EncounterBe
       .filter(w => w.defensive_name === def.name)
       .map(w => w.time_s)
       .sort((a, c) => a - c);
+    const holds = b?.majority_hold && b.hold_targets
+      ? Object.entries(b.hold_targets)
+          .sort((a, c) => Number(a[0]) - Number(c[0]))
+          .map(([idx, h]) => ({ castIndex: Number(idx), targetS: h.target_s }))
+      : [];
     return {
       name: def.name,
       spellId: def.spell_id ?? null,
       uses: b?.avg_uses ?? null,
       firstCastS: b?.avg_first_cast_s ?? null,
       windowsS,
+      holds,
       rule: def.usage_rule ?? null,
     };
-  }).filter(d => d.uses != null || d.firstCastS != null || d.windowsS.length || d.rule);
+  }).filter(d => d.uses != null || d.firstCastS != null || d.windowsS.length || d.holds.length || d.rule);
 }
 
 /** Map cooldown/defensive names (used as keys in burst windows) to spell ids. */
@@ -102,11 +111,14 @@ function spellIdByName(rulebook: Rulebook | null): Record<string, number> {
 
 export function buildBurstWindows(rulebook: Rulebook | null, bench: EncounterBench | null): BurstWindowVm[] {
   const map = spellIdByName(rulebook);
-  return (bench?.burst_windows ?? []).map(bw => ({
+  const raw = bench?.burst_windows ?? [];
+  const maxDmg = Math.max(0, ...raw.map(bw => bw.dmg_avg ?? 0));
+  return raw.map(bw => ({
     startS: bw.time_s,
     endS: bw.time_s + bw.window_length_s,
     cds: (bw.common_cds ?? []).map(n => ({ name: n, spellId: map[n] ?? null })),
     aoe: bw.avg_targets >= 2,
     dmg: bw.dmg_avg,
+    dmgShare: maxDmg > 0 && bw.dmg_avg != null ? bw.dmg_avg / maxDmg : null,
   }));
 }

@@ -92,6 +92,18 @@ describe('buildDefensivePlan', () => {
     expect(plan[0].windowsS).toEqual([30, 90]);
   });
 
+  it('surfaces defensive hold targets ordered by cast index when the majority holds', () => {
+    const rb = rulebook({ defensives: [{ name: 'Cloak', spell_id: CLOAK_OF_SHADOWS, cooldown: 120 }] });
+    const targets = {
+      '3': { target_s: 64, stddev_s: 2, count: 8, total_samples: 10 },
+      '1': { target_s: 18, stddev_s: 1, count: 9, total_samples: 10 },
+    };
+    const held = buildDefensivePlan(rb, bench({ perDefensive: { Cloak: { majority_hold: true, hold_targets: targets } } }));
+    const onCd = buildDefensivePlan(rb, bench({ perDefensive: { Cloak: { majority_hold: false, hold_targets: targets } } }));
+    expect(held[0].holds).toEqual([{ castIndex: 1, targetS: 18 }, { castIndex: 3, targetS: 64 }]);
+    expect(onCd[0].holds).toEqual([]);
+  });
+
   it('returns an empty plan when the rulebook has no defensives', () => {
     expect(buildDefensivePlan(rulebook(), bench())).toEqual([]);
   });
@@ -179,6 +191,16 @@ describe('buildBurstWindows', () => {
   it('treats a single-target window as non-AoE', () => {
     const bk = bench({ burstWindows: [{ time_s: 0, window_length_s: 8, dmg_avg: 1, dmg_min: 0, dmg_max: 2, dmg_stddev: 0, common_cds: [], avg_targets: 1, ability_breakdown: [] }] });
     expect(buildBurstWindows(rulebook(), bk)[0].aoe).toBe(false);
+  });
+
+  it('scores each window damage relative to the biggest window', () => {
+    const bk = bench({ burstWindows: [
+      { time_s: 0, window_length_s: 10, dmg_avg: 2000, dmg_min: 0, dmg_max: 0, dmg_stddev: 0, common_cds: [], avg_targets: 1, ability_breakdown: [] },
+      { time_s: 30, window_length_s: 10, dmg_avg: 500, dmg_min: 0, dmg_max: 0, dmg_stddev: 0, common_cds: [], avg_targets: 1, ability_breakdown: [] },
+    ] });
+    const [a, b] = buildBurstWindows(rulebook(), bk);
+    expect(a.dmgShare).toBe(1);
+    expect(b.dmgShare).toBe(0.25);
   });
 });
 
