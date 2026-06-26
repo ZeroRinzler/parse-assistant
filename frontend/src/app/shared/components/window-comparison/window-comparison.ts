@@ -1,24 +1,11 @@
 import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
-import { RangeRow } from '../range-chart/range-chart';
 import { GameIconComponent } from '../game-icon/game-icon';
 import { CompactAbilityRowComponent } from '../compact-ability-row/compact-ability-row';
 import { FormatDurationPipe } from '../../pipes/format-duration-pipe';
 import { FormatDamagePipe } from '../../pipes/format-damage-pipe';
-
-export type WindowStatus = 'good' | 'warn' | 'bad' | 'muted';
-
-export interface ComparisonWindow {
-  timeStartS: number;
-  timeEndS: number;
-  spellIds: number[];
-  labels: string[];
-  status: WindowStatus;
-  statusIcon: string;
-  overview: RangeRow;
-  detailRows: RangeRow[];
-}
+import { RangeRow, WindowStatus, ComparisonWindow } from '../../../core/models/window-comparison.models';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,

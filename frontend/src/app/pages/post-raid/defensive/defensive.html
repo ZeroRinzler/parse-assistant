@@ -1,0 +1,25 @@
+<!-- Per-defensive findings -->
+@if (findingRows().length || onPlan().length) {
+  <wl-finding-table class="mt-6 block"
+    title="Defensives"
+    subtitle="How your defensive cooldowns compare to top parses."
+    [rows]="findingRows()"
+    [onPlan]="onPlan()"
+    [showMap]="showMap()"
+    (openMap)="onFindingMap($event)">
+  </wl-finding-table>
+}
+
+<!-- Defensive windows: when top parsers use each defensive and how much damage they absorbed -->
+@if (windows().length > 0) {
+  <wl-window-comparison
+    [windows]="windows()"
+    [higherIsBetter]="false"
+    [fightDuration]="fightDuration()"
+    [showCasts]="false"
+    [showMap]="showMap()"
+    title="Defensive Windows"
+    subtitle="Each bar is the damage taken while the defensive was active, as a share of your total damage taken this fight - lower is better."
+    (openMap)="onOpenMap($event)">
+  </wl-window-comparison>
+}

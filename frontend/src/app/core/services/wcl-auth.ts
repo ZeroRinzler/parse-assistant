@@ -17,6 +17,21 @@ const TOKEN_URL = 'https://www.warcraftlogs.com/oauth/token';
 const CLIENT_ID = 'a21cf850-4cf8-4591-b3e5-906aba0da145';
 const CLIENT_SECRET = 'ZYBFec16gC0CfwaunQjSAwUCQwEXTKOFo5JkwSze';
 
+/**
+ * The client-credentials pair. In the browser there is no `process`, so it always
+ * uses the embedded (intentionally public) secret. The Node ingestion sets
+ * `WCL_CLIENT_ID`/`WCL_CLIENT_SECRET` (server-side GHA secrets) which take precedence -
+ * the same env vars the old ingest client used. Read via `globalThis` so the app
+ * bundle needs no Node types and `process` never appears in browser code.
+ */
+function clientCredentials(): { id: string; secret: string } {
+  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
+  return {
+    id: env?.['WCL_CLIENT_ID'] || CLIENT_ID,
+    secret: env?.['WCL_CLIENT_SECRET'] || CLIENT_SECRET,
+  };
+}
+
 interface TokenResponse {
   access_token: string;
   expires_in?: number;
@@ -43,10 +58,11 @@ export class WclAuthService {
   }
 
   private async _fetchToken(): Promise<string> {
+    const { id, secret } = clientCredentials();
     const params = new URLSearchParams({
       grant_type: 'client_credentials',
-      client_id: CLIENT_ID,
-      client_secret: CLIENT_SECRET,
+      client_id: id,
+      client_secret: secret,
     });
     let data: TokenResponse;
     try {

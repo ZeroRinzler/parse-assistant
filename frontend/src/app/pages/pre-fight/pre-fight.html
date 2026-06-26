@@ -34,29 +34,19 @@
     }
   </mat-card>
 
-  @if (loadingBrief()) {
-    <wl-loading-spinner message="Loading brief…"></wl-loading-spinner>
-  }
-
-  @if (selectedEncId() && !loadingBrief()) {
-    <!-- Gear: unified card via shared wl-gear-section (bench-only mode since no player gear here) -->
-    @if (gearStats()) {
-      <wl-gear-section [topGear]="gearStats()"></wl-gear-section>
-    }
+  @if (selectedEncId()) {
+    <!-- Gear consensus (bench-only mode: no player selection) -->
+    <wl-gear [spec]="selectedSpec()" [encounterId]="selectedEncId()"></wl-gear>
 
     <!-- Cooldown plan -->
-    @if (cdPlan().length) {
-      <wl-cooldown-plan [items]="cdPlan()"></wl-cooldown-plan>
-    }
+    <wl-rotation-cd-plan [spec]="selectedSpec()" [encounterId]="selectedEncId()"></wl-rotation-cd-plan>
 
     <!-- Defensive plan -->
-    @if (defensivePlan().length) {
-      <wl-defensive-plan [items]="defensivePlan()"></wl-defensive-plan>
-    }
+    <wl-defensive-plan [spec]="selectedSpec()" [encounterId]="selectedEncId()"></wl-defensive-plan>
 
-    <!-- Burst windows -->
-    @if (bench()) {
-      <wl-pre-burst-windows [windows]="burstWindows()" [avgDurationS]="bench()!.avg_duration_s"></wl-pre-burst-windows>
-    }
+    <!-- Burst windows (bench-only) -->
+    <wl-burst-windows [spec]="selectedSpec()" [encounterId]="selectedEncId()" (openMap)="onOpenMap($event)"></wl-burst-windows>
   }
+
+  <wl-map-panel></wl-map-panel>
 </div>

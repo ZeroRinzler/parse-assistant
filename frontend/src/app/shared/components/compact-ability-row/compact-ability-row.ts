@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { GameIconComponent } from '../game-icon/game-icon';
 import { FormatDamagePipe } from '../../pipes/format-damage-pipe';
-import { RangeRow } from '../range-chart/range-chart';
+import { RangeRow } from '../../../core/models/window-comparison.models';
 
 /** Severity state a row can be in; the template maps it to a badge-* class. */
 export type RowStatus = 'success' | 'warning' | 'critical' | 'muted';

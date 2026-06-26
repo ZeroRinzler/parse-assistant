@@ -1,17 +1,16 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { NgOptimizedImage } from '@angular/common';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { IconCacheService } from '../../../core/services/icon-cache';
 
 export type GameIconKind = 'spell' | 'item';
 
 /**
  * Renders a WoW spell or item as an icon + name that links to Wowhead.
  *
- * Spell icon art comes from the `IconCacheService` (seeded from a report's
- * `masterData.abilities`). Items are not in that cache, so callers pass the
- * icon filename and name explicitly (e.g. from WCL combatant-info gear). When
- * no icon is available the name still renders as a plain Wowhead link.
+ * Inputs-only leaf: callers pass the icon filename and display name explicitly
+ * (feature services resolve them from the report's `masterData.abilities` or the
+ * ingest-baked slice data). When no icon is supplied the name still renders as a
+ * plain Wowhead link.
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -32,22 +31,20 @@ export type GameIconKind = 'spell' | 'item';
   `,
 })
 export class GameIconComponent {
-  private readonly iconCache = inject(IconCacheService);
-
   readonly id = input.required<number>();
   readonly kind = input<GameIconKind>('spell');
-  /** Explicit display name; falls back to the icon cache, then a generic label. */
+  /** Explicit display name; falls back to a generic label when empty. */
   readonly name = input<string>('');
-  /** Explicit icon filename for items, which are not in the spell icon cache. */
+  /** Explicit icon filename (without extension); no art renders when empty. */
   readonly icon = input<string>('');
 
   protected readonly iconUrl = computed(() => {
-    const file = this.icon() || this.iconCache.get(this.id())?.icon || '';
+    const file = this.icon();
     return file ? `https://wow.zamimg.com/images/wow/icons/small/${file}.jpg` : null;
   });
 
   protected readonly displayName = computed(() =>
-    this.name() || this.iconCache.get(this.id())?.name || `${this.kind() === 'item' ? 'Item' : 'Spell'} ${this.id()}`);
+    this.name() || `${this.kind() === 'item' ? 'Item' : 'Spell'} ${this.id()}`);
 
   protected readonly wowheadUrl = computed(() => `https://www.wowhead.com/${this.kind()}=${this.id()}`);
 }

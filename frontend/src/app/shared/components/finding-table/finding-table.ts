@@ -1,7 +1,6 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
-import { PositioningPanelService } from '../../../core/services/positioning-panel';
 import { GameIconComponent } from '../game-icon/game-icon';
 import { FormatDurationPipe } from '../../pipes/format-duration-pipe';
 import type { FindingRow, OnPlanChip } from './finding-table.utils';
@@ -23,13 +22,13 @@ export class FindingTableComponent {
   readonly subtitle = input<string>('');
   readonly rows = input.required<FindingRow[]>();
   readonly onPlan = input<OnPlanChip[]>([]);
+  /** Whether timed cooldown rows show an "open map" button (the page owns the map). */
+  readonly showMap = input<boolean>(false);
+  /** Emitted when a timed finding's map button is clicked; the page forwards it. */
+  readonly openMap = output<FindingRow>();
 
-  private readonly panel = inject(PositioningPanelService);
-  /** Timed cooldown rows can open the positioning map once positions are loaded. */
-  protected readonly showMap = computed(() => !!this.panel.positions());
-
-  protected openMap(row: FindingRow): void {
+  protected onOpenMap(row: FindingRow): void {
     if (row.timestampMs == null || !row.name) return;
-    this.panel.openAt(row.timestampMs / 1000, { kind: 'boss' }, row.name);
+    this.openMap.emit(row);
   }
 }

@@ -8,7 +8,14 @@
  * parse-sample.models.ts / bench.models.ts).
  */
 
-import type { WclGearItem } from '../../../src/app/core/services/wcl-mappers.ts';
+/** One gear slot from a ranking's combatant info (ingest-local WCL response shape). */
+export interface WclGearItem {
+  id?: number | string;
+  name?: string;
+  icon?: string;
+  permanentEnchant?: number | string;
+  permanentEnchantName?: string;
+}
 
 export interface WclRateLimitData {
   limitPerHour?: number;

@@ -1,8 +1,8 @@
 /**
  * warcraft-learner - shared CLI helpers
  *
- * Pure Node, no dependencies. Used by ingest-parses.ts, build-rulebook.ts, and scrape-guides.ts so
- * the JSON I/O, spec discovery, and interactive prompt code lives in one place.
+ * Pure Node, no dependencies. Used by the ingestion orchestrator, build-rulebook.ts, and
+ * scrape-guides.ts so the JSON I/O, spec discovery, and interactive prompt code lives in one place.
  */
 
 import fs from 'fs';

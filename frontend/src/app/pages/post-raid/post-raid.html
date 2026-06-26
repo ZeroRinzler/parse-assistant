@@ -53,7 +53,46 @@
       <wl-loading-spinner [message]="loadingMsg()"></wl-loading-spinner>
     }
 
-    @if (result() && !loadingAnalysis()) {
-      <wl-analysis-result [data]="result()!" [topGear]="topGear()"></wl-analysis-result>
+    @if (ready() && !loadingAnalysis()) {
+      <div class="flex flex-col gap-6">
+        <wl-rotation
+          [spec]="spec()"
+          [encounterId]="selectedEncounterId()"
+          [reportCode]="reportCode()"
+          [fightId]="selectedFightId()!"
+          [playerId]="selectedPlayerId()!">
+        </wl-rotation>
+
+        <wl-burst-windows
+          [spec]="spec()"
+          [encounterId]="selectedEncounterId()"
+          [report]="reportCode()"
+          [fight]="selectedFightId()!"
+          [player]="selectedPlayerId()!"
+          [showMap]="mapReady()"
+          (openMap)="onOpenMap($event)">
+        </wl-burst-windows>
+
+        <wl-defensive
+          [spec]="spec()"
+          [encounterId]="selectedEncounterId()"
+          [report]="reportCode()"
+          [fight]="selectedFightId()!"
+          [player]="selectedPlayerId()!"
+          [fightDuration]="selectedFightDuration()"
+          [showMap]="mapReady()"
+          (openMap)="onDefensiveOpenMap($event)">
+        </wl-defensive>
+
+        <wl-gear
+          [spec]="spec()"
+          [encounterId]="selectedEncounterId()"
+          [report]="reportCode()"
+          [fight]="selectedFightId()!"
+          [player]="selectedPlayerId()!">
+        </wl-gear>
+      </div>
     }
+
+    <wl-map-panel></wl-map-panel>
 </div>

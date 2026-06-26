@@ -1,27 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { extractGear, mapRankings, filterEncounters, groupEncountersByZone, protectedEncounterIds, parseEnchantResults, SPEC_TO_WCL } from './wcl-mappers.ts';
+import { mapRankings, filterEncounters, groupEncountersByZone, protectedEncounterIds, SPEC_TO_WCL } from './wcl-mappers.ts';
 import type { WclRawRanking, WclExpansion, IngestEncounter } from './models/wcl.models.ts';
-
-describe('extractGear', () => {
-  it('reads trinkets from slots 12/13 and enchants from permanentEnchant (string ids)', () => {
-    const gear = [] as NonNullable<WclRawRanking['gear']>;
-    gear[2] = { id: 50, name: 'Ring', permanentEnchant: '200' } as never; // enchant id arrives as a string
-    gear[12] = { id: 100, name: 'Trinket 1' } as never;
-    gear[13] = { id: 101, name: 'Trinket 2' } as never;
-
-    const { trinkets, enchants } = extractGear({ gear });
-    expect(trinkets).toEqual([
-      { slot: 12, id: 100, name: 'Trinket 1' },
-      { slot: 13, id: 101, name: 'Trinket 2' },
-    ]);
-    // permanentEnchantName is never populated by WCL -> name left blank for later backfill.
-    expect(enchants).toEqual([{ slot: 2, id: 200, name: '' }]);
-  });
-
-  it('returns empty arrays for missing gear', () => {
-    expect(extractGear({})).toEqual({ trinkets: [], enchants: [] });
-  });
-});
 
 describe('mapRankings', () => {
   const raw: WclRawRanking[] = [
@@ -120,14 +99,6 @@ describe('protectedEncounterIds', () => {
 
   it('returns an empty set when there are no expansions', () => {
     expect(protectedEncounterIds([]).size).toBe(0);
-  });
-});
-
-describe('parseEnchantResults', () => {
-  it('keeps only ids that resolved to a non-empty trimmed name', () => {
-    const gameData = { e200: { id: 200, name: '  Enchant A  ' }, e201: null, e202: { id: 202, name: '' } };
-    const names = parseEnchantResults(gameData, [200, 201, 202]);
-    expect([...names.entries()]).toEqual([[200, 'Enchant A']]);
   });
 });
 

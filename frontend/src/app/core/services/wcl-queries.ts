@@ -13,7 +13,6 @@
 export interface ReportQueryVars { code: string }
 export interface ReportAbilitiesQueryVars { code: string }
 export interface PlayerDetailsQueryVars { code: string; fightIDs: number[] }
-export interface FightsQueryVars { code: string }
 export interface EventsQueryVars {
   code: string;
   fightIDs: number[];
@@ -24,8 +23,8 @@ export interface EventsQueryVars {
   includeResources?: boolean;
   hostilityType?: 'Friendlies' | 'Enemies';
 }
-export interface CharQueryVars { name: string; serverSlug: string; serverRegion: string }
 export interface CombatantInfoQueryVars { code: string; fightIDs: number[]; sourceID: number }
+export interface RankingsQueryVars { encounterID: number; className: string; specName: string }
 
 // ---------------------------------------------------------------------------
 // Query strings
@@ -50,9 +49,6 @@ query($code:String!,$fightIDs:[Int]!){
   reportData{report(code:$code){playerDetails(fightIDs:$fightIDs)}}
 }`;
 
-export const FIGHTS_Q = `
-query($code:String!){reportData{report(code:$code){fights(killType:All){id}}}}`;
-
 export const EVENTS_Q = `
 query($code:String!,$fightIDs:[Int]!,$dataType:EventDataType,$sourceID:Int,$startTime:Float,$endTime:Float,$includeResources:Boolean,$hostilityType:HostilityType){
   reportData{report(code:$code){
@@ -61,11 +57,15 @@ query($code:String!,$fightIDs:[Int]!,$dataType:EventDataType,$sourceID:Int,$star
   }}
 }`;
 
-export const CHAR_Q = `
-query($name:String!,$serverSlug:String!,$serverRegion:String!){
-  characterData{character(name:$name,serverSlug:$serverSlug,serverRegion:$serverRegion){
-    name classID
-    recentReports(limit:5){data{code startTime}}
+/**
+ * Top DPS parses for an encounter + spec. `characterRankings` returns a JSON blob
+ * (string or object) carrying each parse's report code + fight id + player name -
+ * enough for the burst transform to refetch and recompute the bench live.
+ */
+export const RANKINGS_Q = `
+query($encounterID:Int!,$className:String!,$specName:String!){
+  worldData{encounter(id:$encounterID){
+    characterRankings(className:$className,specName:$specName,metric:dps)
   }}
 }`;
 

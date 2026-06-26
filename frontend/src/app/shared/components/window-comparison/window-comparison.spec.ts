@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { WindowComparisonComponent, ComparisonWindow, WindowStatus } from './window-comparison';
-import { RangeRow } from '../range-chart/range-chart';
+import { WindowComparisonComponent } from './window-comparison';
+import { ComparisonWindow, WindowStatus, RangeRow } from '../../../core/models/window-comparison.models';
 import { mountVm } from '../../../../testing/component-harness';
 
 function win(overview: Partial<RangeRow>, status: WindowStatus = 'good'): ComparisonWindow {

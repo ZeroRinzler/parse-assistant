@@ -14,44 +14,48 @@ change detection per-`TestBed` through the `mountVm` harness, so no global setup
 file is needed.
 
 ```bash
-npm test            # run the whole suite (ng test -> Vitest)
-npm run test:watch  # watch mode
+npm test            # ng test (Vitest) + scripts Vitest + scripts typecheck
+npm run test:watch  # watch mode for the frontend suite
 ```
 
-The framework-free suites (everything under `src/app/core/analysis/**` and the
-builders) are plain TypeScript and can also be run directly with
-`npx vitest run src/app/core src/testing` for a fast inner loop.
+`npm test` runs three things in sequence:
 
-> Note: the `@angular/build:unit-test` builder requires Node `>= 22.22.3`
-> (Angular CLI's floor). On older patch releases `ng test` refuses to start;
-> bump Node to run the full suite.
+1. `ng test` - the frontend specs under `src/**` (TestBed-backed; needs the Angular builder).
+2. `vitest run --config vitest.scripts.config.ts` - the ingestion specs under `scripts/ingest/**`.
+3. `tsc -p tsconfig.scripts.json --noEmit` - typechecks the Node scripts.
 
-## Architecture: functional core, imperative shell
+> The `src/**` specs cannot be run with a bare `npx vitest` - they need the
+> `@angular/build:unit-test` builder to set up the Angular TestBed environment.
+> Use `ng test` for those. The `scripts/**` specs are plain Node Vitest.
 
-The CPU-bound analysis is a set of **pure functions** under
-`src/app/core/analysis/`, with no Angular, no async, no I/O:
+> Note: the builder requires Node `>= 22.22.3` (Angular CLI's floor).
 
-| Module | What it owns |
+## Architecture: functional core, imperative shell (per slice)
+
+There is no central analysis module. Each **vertical slice**
+(`pages/post-raid/{rotation,burst-windows,defensive,gear,map}/`) owns its math as
+**named, pure, total functions colocated in its own `*.service.ts` and
+`*-transform.service.ts`** - no Angular, no async, no I/O. The service classes are
+thin imperative shells that fetch and call those pure functions. This is the same
+functional-core / imperative-shell split as before, now per use case and
+self-contained (each slice reimplements what it needs rather than importing shared
+analysis; ingestion runs these same slices, so there is no second copy to keep in sync).
+
+So every slice has two kinds of spec, colocated next to the code:
+
+| Spec | What it covers |
 |---|---|
-| `bench-stats.ts` | The statistical atoms (`isOutlierAbove`, `expectedUses`, ...) |
-| `rule-engine.ts` | `cast_without_prior` / `hold_cooldown_for_anchor` evaluation |
-| `cooldown-analysis.ts` | Lost casts, opener delay, BL alignment, gaps, efficiency |
-| `defensive-analysis.ts` | Buff-window-centric defensive findings |
-| `burst-windows.ts` | Player damage mapped onto top-parse windows |
-| `damage-taken.ts` | Damage-taken-by-ability aggregation |
-| `compute-analysis.ts` | `computeAnalysis` - composes the above (the worker entry) |
+| `*-transform.service.spec.ts` | the slice's bench math (clustering / aggregation) as pure fns, **plus** an end-to-end pass through the `*TransformService` with a fake `WclApiService` |
+| `*.service.spec.ts` | the `*FeatureService`'s pure view-model fns (table-driven), **plus** an end-to-end pass with a fake `*_DATA_SOURCE` (and a fake `WclApiService` where the slice fetches the player log) |
 
-The **imperative shell** stays thin and is the only part that touches Angular:
+Ingestion runs these very `*TransformService`s headlessly (it has no separate analysis
+copy), so the only specs under `scripts/ingest/**` cover the discovery helpers it still
+owns: `wcl-fetchers.spec.ts`, `wcl-mappers.spec.ts`, `code-hash.spec.ts`, and
+`signature.spec.ts`.
 
-- `analysis.worker.ts` - calls `computeAnalysis` off the main thread.
-- `core/analysis/run-analysis.ts` - `runAnalysis(src, compute, args)` holds the
-  fetch sequencing, depending only on the `AnalysisDataSource` seam
-  (`analysis-data-source.ts`), not on Angular services.
-- `services/analysis-engine.ts` - adapts the WCL/encounter services to
-  `AnalysisDataSource` and owns the worker plumbing.
-
-This means the rule math is tested with plain data (no `TestBed`, no mocks) and
-the fetch orchestration is tested with a `vi.fn()`-backed fake data source.
+A pure function gets a focused table-driven test; the service end-to-end test
+asserts the assembled view-model from canned inputs - no network, no `TestBed`
+service graph.
 
 ## The fluent builders (`src/testing/`)
 
@@ -67,7 +71,7 @@ const buffs = Events.start().applyBuff(BLOODLUST, '0:15').build();
 ```
 
 - Times are `"m:ss"` strings; with `FIGHT_START = 0` they map straight onto the
-  fight-relative milliseconds the engine sees.
+  fight-relative milliseconds the slices see.
 - Defaults: the player is actor `1`, the boss is `2`. `damageTaken(...)` reverses
   them. `positioned(x, y, deg)` takes plain yards/degrees and encodes the WCL
   wire units (hundredths of a yard, milliradians, `resourceActor`).
@@ -83,34 +87,66 @@ const bk = bench({ perCd: { 'Shadow Blades': { avg_first_cast_s: 3, stddev_first
 const rb = rulebook({ cooldowns: [{ name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 180 }] });
 ```
 
+The remaining ingestion specs (discovery helpers) use plain inline fakes and fixtures -
+there is no separate ingest builder toolkit.
+
 ## Conventions: tests as documentation
 
-- **Colocate** specs next to the unit (`bench-stats.spec.ts` beside `bench-stats.ts`).
-- `describe` names the unit: `'isOutlierAbove'`, `'evaluateRules / cast_without_prior'`.
+- **Colocate** specs next to the unit (`burst.service.spec.ts` beside `burst.service.ts`).
+- `describe` names the unit: `'burstWindowStatus'`, `'findParseWindows'`.
 - `it` is a behavior sentence, no "should": `it('flags a value more than 2 sigma above the mean')`.
-- For rule tests, put the **rule definition and the events that trigger it in the
-  same `it` body**, and pair every "triggers" case with a "does not trigger at
+- For rule/threshold tests, pair every "triggers" case with a "does not trigger at
   the boundary" case. Boundary comparisons are strict: a value exactly at
   `mean + 2*stddev` is **not** an outlier.
 
-## Statistical testing
+## Testing the pure functions
 
-Every bench comparison is one named predicate in `bench-stats.ts`, tested as pure
-arithmetic - no events, no rulebook:
+Every calculated field is a named pure function in the slice's service file,
+tested as data-in / data-out - no events, no `TestBed`:
 
 ```ts
-// mean 10, stddev 2, 2 sigma -> threshold 14
-expect(isOutlierAbove(15, 10, 2)).toBe(true);
-expect(isOutlierAbove(14, 10, 2)).toBe(false); // exactly at the threshold
+// burst.service.spec.ts - the window status glyph
+expect(burstWindowStatus(650, 1000, 800, 100, false)).toEqual({ status: 'bad', icon: 'error' });
+expect(burstWindowStatus(1000, 1000, 800, 100, false)).toEqual({ status: 'good', icon: 'check_circle' });
 ```
 
-The cooldown/defensive analyses call these atoms, so a higher-level test only
-needs to assert that the right finding appears for a given bench fixture.
+The transform's clustering is tested the same way (`findParseWindows`,
+`clusterParseWindows`), and the feature service's bucketing / row-building fns as
+table-driven cases.
 
-## Signal view-models
+## End-to-end through a service (fake client)
 
-Read `computed()` signals directly via `mountVm` (no DOM assertions, no
-`detectChanges` - so `ngOnInit`/`ngOnChanges` network code never runs):
+The live WCL path is unreachable from CI, so the transform/feature services are
+driven with a fake `WclApiService` (canned rankings + report + `Events`-built
+streams). This exercises the whole slice pipeline in-process:
+
+```ts
+TestBed.configureTestingModule({
+  providers: [
+    { provide: WclApiService, useValue: wclFake as unknown as WclApiService },
+    { provide: DataFileApiService, useValue: filesFake as unknown as DataFileApiService },
+  ],
+});
+const bench = await TestBed.inject(BurstTransformService).getBurstBench('SubtletyRogue', 1);
+expect(bench!.windows[0].common_cds).toContain('Shadow Blades');
+```
+
+For a `*FeatureService` that reads a `*_DATA_SOURCE`, provide a fake source:
+
+```ts
+const source = { getBurstBench: () => Promise.resolve(benchFixture) };
+TestBed.configureTestingModule({ providers: [
+  { provide: BURST_DATA_SOURCE, useValue: source },
+  { provide: WclApiService, useValue: wclFake as unknown as WclApiService },
+] });
+const view = await TestBed.inject(BurstFeatureService).loadPlayerView('SubtletyRogue', 1, 'rep', 1, 10);
+expect(view.windows[0].overview.playerPct).toBe(950);
+```
+
+## Signal view-models in leaves
+
+Read presentational leaves' `computed()` signals directly via `mountVm` (no DOM
+assertions, no `detectChanges`):
 
 ```ts
 import { mountVm } from 'src/testing/component-harness';
@@ -121,60 +157,6 @@ expect((vm['overviewMax'] as () => number)()).toBe(300);
 
 `mountVm` configures a zoneless `TestBed`, applies each `input.required` via
 `setInput`, and returns the instance. Pass stub providers as the third argument
-for components that inject services doing I/O.
-
-### Injection-heavy pages: extract a `.vm.ts`
-
-`mountVm` fits components whose state is driven by `input()`. The page
-components (`post-raid`, `pre-fight`) instead inject ~8 services in their
-constructor and load state through async WCL fetches, so mounting them just to
-read a `computed()` would mean stubbing the whole service graph. For these, the
-**pure view-model derivations live in a sibling `*.vm.ts`** (e.g.
-`pre-fight.vm.ts`, `post-raid.vm.ts`): plain functions from data models
-(`Rulebook`, `EncounterBench`, `CharacterGear`, ...) to the row shapes the
-template renders. The component's `computed()`s become one-line wrappers:
-
-```ts
-// pre-fight.ts
-protected readonly cdPlan = computed(() => buildCdPlan(this.rulebook(), this.bench()));
-```
-
-```ts
-// pre-fight.vm.spec.ts - no TestBed, no service stubs
-const rb = rulebook({ cooldowns: [{ name: 'Burst', spell_id: SHADOW_BLADES, cooldown: 90, align_with_bloodlust: true }] });
-expect(buildCdPlan(rb, bench({ perCd: { Burst: { bl_pct: 80 } } }))[0].bloodlustPct).toBe(80);
-```
-
-This is the same functional-core/imperative-shell split as the analysis engine:
-the derivation logic is tested as pure data-in/data-out, and the component is
-left as a thin wrapper that wires signals to those functions.
-
-## Before & after
-
-The σ-thresholds used to be inline expressions repeated across the monolith:
-
-```ts
-// before - analysis-core.ts (one of several copies)
-if (firstS > b.avg_first_cast_s + 2 * sdF) { /* push warning */ }
-```
-
-Now the comparison has a single named definition and a focused test:
-
-```ts
-// after - bench-stats.ts
-export function isOutlierAbove(value: number, mean: number, stddev: number, sigmas = 2): boolean {
-  return value > mean + sigmas * stddev;
-}
-```
-
-```ts
-// after - cooldown-analysis.spec.ts (reads like the requirement)
-it('warns when the opener is later than the top-parse mean + 2 sigma', () => {
-  const bk = bench({ perCd: { 'Shadow Blades': { avg_first_cast_s: 3, stddev_first_cast_s: 1 } } });
-  const casts = Events.cast(SHADOW_BLADES, '0:10').cast(SHADOW_BLADES, '3:10').build();
-
-  const result = analyzeCooldowns('Rogue', 'Sub', 0, parseClock('5:00'), casts, [], cds, [], bk);
-
-  expect(result.findings.find((f) => f.category === 'cooldown_delay')?.severity).toBe('warning');
-});
-```
+for components that inject a service. Feature components are thin (they delegate
+to one `*FeatureService` in an `effect`), so their logic is covered by the
+service spec rather than by mounting the component.

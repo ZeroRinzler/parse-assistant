@@ -13,11 +13,25 @@ import { provideApollo } from 'apollo-angular';
 import { HttpLink } from 'apollo-angular/http';
 import { InMemoryCache } from '@apollo/client';
 import { routes } from './app.routes';
-
-// Single source of truth for the WCL GraphQL endpoint (also referenced by WclApiService).
-// The browser authenticates with the client-credentials grant, so it targets the
-// `/client` endpoint (the `/user` endpoint is only for user-token PKCE flows).
-export const WCL_API_URL = 'https://www.warcraftlogs.com/api/v2/client';
+import { WCL_TRANSPORT, WCL_API_URL } from './core/services/wcl-transport';
+import { ApolloWclTransport } from './core/services/apollo-wcl-transport';
+import { DATA_FILE_TRANSPORT, HttpDataFileTransport } from './core/services/data-file-transport';
+import { provideDataSource } from './core/data-source/provide-data-source';
+import { BURST_DATA_SOURCE } from './pages/post-raid/burst-windows/burst-data-source';
+import { BurstDataFileService } from './pages/post-raid/burst-windows/burst-data-file.service';
+import { BurstTransformService } from './pages/post-raid/burst-windows/burst-transform.service';
+import { ROTATION_DATA_SOURCE } from './pages/post-raid/rotation/rotation-data-source';
+import { RotationDataFileService } from './pages/post-raid/rotation/rotation-data-file.service';
+import { RotationTransformService } from './pages/post-raid/rotation/rotation-transform.service';
+import { DEFENSIVE_DATA_SOURCE } from './pages/post-raid/defensive/defensive-data-source';
+import { DefensiveDataFileService } from './pages/post-raid/defensive/defensive-data-file.service';
+import { DefensiveTransformService } from './pages/post-raid/defensive/defensive-transform.service';
+import { GEAR_DATA_SOURCE } from './pages/post-raid/gear/gear-data-source';
+import { GearDataFileService } from './pages/post-raid/gear/gear-data-file.service';
+import { GearTransformService } from './pages/post-raid/gear/gear-transform.service';
+import { MAP_DATA_SOURCE } from './pages/post-raid/map/map-data-source';
+import { MapDataFileService } from './pages/post-raid/map/map-data-file.service';
+import { MapTransformService } from './pages/post-raid/map/map-transform.service';
 
 const GITHUB_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
   <path d="M12 0C5.37 0 0 5.373 0 12c0 5.303 3.438 9.8 8.205 11.387.6.113.82-.258.82-.577
@@ -48,5 +62,16 @@ export const appConfig: ApplicationConfig = {
       iconRegistry.setDefaultFontSetClass('material-symbols-outlined');
       iconRegistry.addSvgIconLiteral('github', sanitizer.bypassSecurityTrustHtml(GITHUB_SVG));
     }),
+    // WCL GraphQL transport: apollo-angular in the browser (the Node ingestion binds a
+    // plain-fetch transport instead, since apollo-angular does not run headless).
+    { provide: WCL_TRANSPORT, useExisting: ApolloWclTransport },
+    // Data-file transport: HTTP read-only in the browser (Node ingestion binds a fs read+write one).
+    { provide: DATA_FILE_TRANSPORT, useExisting: HttpDataFileTransport },
+    // Vertical-slice data sources: file reader in prod, live transform under the dev flag.
+    provideDataSource(BURST_DATA_SOURCE, BurstDataFileService, BurstTransformService),
+    provideDataSource(ROTATION_DATA_SOURCE, RotationDataFileService, RotationTransformService),
+    provideDataSource(DEFENSIVE_DATA_SOURCE, DefensiveDataFileService, DefensiveTransformService),
+    provideDataSource(GEAR_DATA_SOURCE, GearDataFileService, GearTransformService),
+    provideDataSource(MAP_DATA_SOURCE, MapDataFileService, MapTransformService),
   ],
 };

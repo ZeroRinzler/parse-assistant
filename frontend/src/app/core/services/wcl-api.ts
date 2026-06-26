@@ -1,68 +1,65 @@
 import { Injectable, inject } from '@angular/core';
-import { firstValueFrom } from 'rxjs';
-import { Apollo, gql } from 'apollo-angular';
-import { ServerError, CombinedGraphQLErrors, type FetchPolicy, type OperationVariables } from '@apollo/client';
 import { WclAuthService } from './wcl-auth';
-import { WclReport, WclAbility, CharacterInfo, CharacterGear, WclEvent } from '../models/wcl.models';
-import { logWarn } from '../log';
+import { WCL_TRANSPORT, WCL_INGEST_MODE, WclTransportError } from './wcl-transport';
 import {
-  REPORT_Q, REPORT_ABILITIES_Q, PLAYER_DETAILS_Q, FIGHTS_Q, EVENTS_Q,
-  CHAR_Q, COMBATANT_INFO_Q, buildGearNamesQuery,
+  WclReport, WclAbility, WclEvent,
+  PlayerDetailGroups, WclRawRanking, WclCombatantInfo,
+} from '../models/wcl.models';
+import {
+  REPORT_Q, REPORT_ABILITIES_Q, PLAYER_DETAILS_Q, EVENTS_Q,
+  COMBATANT_INFO_Q, RANKINGS_Q, buildGearNamesQuery,
   ReportQueryVars, ReportAbilitiesQueryVars, PlayerDetailsQueryVars,
-  FightsQueryVars, EventsQueryVars, CharQueryVars, CombatantInfoQueryVars,
+  EventsQueryVars, CombatantInfoQueryVars, RankingsQueryVars,
 } from './wcl-queries';
-import {
-  buildSpecMap, extractGear, talentKeyFromTree, decodeHtmlEntities,
-  WclRankEntry, PlayerDetailGroups,
-} from './wcl-mappers';
 
-/** A CombatantInfo event carries gear + talentTree, keyed by sourceID. */
-interface CombatantInfoEvent {
-  sourceID?: number;
-  gear?: WclRankEntry['gear'];
-  talentTree?: Array<{ nodeID?: number }>;
-}
+/** WCL spec folder name -> [WCL className, WCL specName] for the rankings query. */
+const SPEC_TO_WCL: Record<string, [string, string]> = {
+  RetributionPaladin: ['Paladin', 'Retribution'], HolyPaladin: ['Paladin', 'Holy'], ProtectionPaladin: ['Paladin', 'Protection'],
+  FireMage: ['Mage', 'Fire'], ArcaneMage: ['Mage', 'Arcane'], FrostMage: ['Mage', 'Frost'],
+  HavocDemonHunter: ['DemonHunter', 'Havoc'], VengeanceDemonHunter: ['DemonHunter', 'Vengeance'],
+  FuryWarrior: ['Warrior', 'Fury'], ArmsWarrior: ['Warrior', 'Arms'], ProtectionWarrior: ['Warrior', 'Protection'],
+  UnholyDeathKnight: ['DeathKnight', 'Unholy'], FrostDeathKnight: ['DeathKnight', 'Frost'], BloodDeathKnight: ['DeathKnight', 'Blood'],
+  BalanceDruid: ['Druid', 'Balance'], FeralDruid: ['Druid', 'Feral'], GuardianDruid: ['Druid', 'Guardian'], RestorationDruid: ['Druid', 'Restoration'],
+  BeastMasteryHunter: ['Hunter', 'BeastMastery'], MarksmanshipHunter: ['Hunter', 'Marksmanship'], SurvivalHunter: ['Hunter', 'Survival'],
+  BrewmasterMonk: ['Monk', 'Brewmaster'], WindwalkerMonk: ['Monk', 'Windwalker'], MistweaverMonk: ['Monk', 'Mistweaver'],
+  DisciplinePriest: ['Priest', 'Discipline'], HolyPriest: ['Priest', 'Holy'], ShadowPriest: ['Priest', 'Shadow'],
+  AssassinationRogue: ['Rogue', 'Assassination'], OutlawRogue: ['Rogue', 'Outlaw'], SubtletyRogue: ['Rogue', 'Subtlety'],
+  ElementalShaman: ['Shaman', 'Elemental'], EnhancementShaman: ['Shaman', 'Enhancement'], RestorationShaman: ['Shaman', 'Restoration'],
+  AfflictionWarlock: ['Warlock', 'Affliction'], DemonologyWarlock: ['Warlock', 'Demonology'], DestructionWarlock: ['Warlock', 'Destruction'],
+  DevastationEvoker: ['Evoker', 'Devastation'], PreservationEvoker: ['Evoker', 'Preservation'], AugmentationEvoker: ['Evoker', 'Augmentation'],
+};
 
 @Injectable({ providedIn: 'root' })
 export class WclApiService {
   private readonly auth = inject(WclAuthService);
-  private readonly apollo = inject(Apollo);
+  private readonly transport = inject(WCL_TRANSPORT);
+  // In ingestion the otherwise per-pull report/event reads are cached so the 5
+  // transforms share one fetch per stream; the browser keeps them network-only.
+  private readonly liveFetchPolicy: 'cache-first' | 'network-only' =
+    inject(WCL_INGEST_MODE) ? 'cache-first' : 'network-only';
 
   /**
-   * Runs a GraphQL query against WCL via Apollo. The client-credentials bearer token is
-   * attached per request through Apollo's operation context (it is renewed on expiry, so
-   * it must not be baked into the link). `fetchPolicy` defaults to `cache-first` to
-   * leverage Apollo's in-memory cache; callers that must always see fresh data (report
-   * polling, large event fetches) pass `network-only`.
+   * Runs a GraphQL query against WCL through the injected transport (Apollo in the
+   * browser, plain fetch in Node ingestion). The client-credentials bearer token is
+   * fetched here and passed per request (it is renewed on expiry). `fetchPolicy`
+   * defaults to `cache-first` to dedupe repeat reads within a session; callers that
+   * must always see fresh data (report polling, large event fetches) pass `network-only`.
+   * On a 401 the cached token is dropped so the next request re-authenticates.
    */
   async query<TData = unknown>(
-    gqlString: string, variables: object = {}, fetchPolicy: FetchPolicy = 'cache-first',
+    gqlString: string, variables: object = {}, fetchPolicy: 'cache-first' | 'network-only' = 'cache-first',
   ): Promise<TData> {
     const token = await this.auth.getToken();
     try {
-      const result = await firstValueFrom(this.apollo.query<TData, OperationVariables>({
-        query: gql(gqlString),
-        variables: variables as OperationVariables,
-        fetchPolicy,
-        context: { headers: { Authorization: `Bearer ${token}` } },
-      }));
-      return result.data as TData;
+      return await this.transport.query<TData>(gqlString, variables, token, fetchPolicy === 'cache-first');
     } catch (error) {
-      // apollo-angular maps a non-2xx HTTP response to ServerError (with statusCode).
-      if (ServerError.is(error)) {
-        if (error.statusCode === 401) {
-          // Token was rejected (e.g. expired early or the secret was rotated); drop the
-          // cached token so the next request fetches a fresh one.
-          this.auth.invalidate();
-          throw new Error('WCL API error (401) - token rejected.');
-        }
-        throw new Error(`WCL API error (${error.statusCode})`);
+      if (error instanceof WclTransportError && error.status === 401) {
+        // Token was rejected (e.g. expired early or the secret was rotated); drop the
+        // cached token so the next request fetches a fresh one.
+        this.auth.invalidate();
+        throw new Error('WCL API error (401) - token rejected.');
       }
-      // A 200 response carrying a top-level `errors` array surfaces as CombinedGraphQLErrors.
-      if (CombinedGraphQLErrors.is(error)) {
-        throw new Error(error.errors[0]?.message || 'WCL GraphQL error');
-      }
-      throw error;
+      throw error instanceof WclTransportError ? new Error(error.message) : error;
     }
   }
 
@@ -70,7 +67,7 @@ export class WclApiService {
     const vars: ReportQueryVars = { code };
     // network-only: the report is re-polled to detect new pulls, so it must never
     // be served from cache (a cache hit would silently hide newly-recorded fights).
-    const result = await this.query<{ reportData: { report: WclReport } }>(REPORT_Q, vars, 'network-only');
+    const result = await this.query<{ reportData: { report: WclReport } }>(REPORT_Q, vars, this.liveFetchPolicy);
     return result.reportData.report;
   }
 
@@ -83,12 +80,13 @@ export class WclApiService {
     return result?.reportData?.report?.masterData?.abilities ?? [];
   }
 
-  async getPlayerDetails(code: string, fightId: number): Promise<Record<number | string, string>> {
+  /** Raw `playerDetails` groups (dps / healers / tanks / unknown). Consumers map to spec. */
+  async getPlayerDetails(code: string, fightId: number): Promise<PlayerDetailGroups> {
     const vars: PlayerDetailsQueryVars = { code, fightIDs: [fightId] };
     const result = await this.query<{ reportData: { report: { playerDetails: { data: { playerDetails: PlayerDetailGroups } } } } }>(
       PLAYER_DETAILS_Q, vars,
     );
-    return buildSpecMap(result.reportData.report.playerDetails.data.playerDetails);
+    return result.reportData.report.playerDetails.data.playerDetails;
   }
 
   async getAllEvents(
@@ -106,7 +104,7 @@ export class WclApiService {
       // network-only: event pages are large and per-pull; caching them wastes memory
       // and risks serving stale data on re-analysis.
       const result = await this.query<{ reportData: { report: { events: { data: WclEvent[]; nextPageTimestamp?: number } } } }>(
-        EVENTS_Q, vars, 'network-only',
+        EVENTS_Q, vars, this.liveFetchPolicy,
       );
       const page = result.reportData.report.events;
       events.push(...(page.data ?? []));
@@ -117,88 +115,48 @@ export class WclApiService {
   }
 
   /**
-   * Fetch the analyzed player's gear, trinkets, enchants, and talent key from the
-   * current combat log's CombatantInfo event - not from historical ranked kills.
-   * This ensures data is always available (every pull records combatant info)
-   * regardless of whether the player has a ranked kill on the encounter.
+   * Raw CombatantInfo event for one player actor in a fight (gear + talentTree).
+   * Returns null when the log carries no combatant info for the player. Consumers
+   * extract gear / talents and resolve names (see `getGameNames`).
    */
-  async getCombatantGear(code: string, fightId: number, playerId: number, spec?: string): Promise<CharacterGear> {
+  async getCombatantInfo(code: string, fightId: number, playerId: number): Promise<WclCombatantInfo | null> {
     const vars: CombatantInfoQueryVars = { code, fightIDs: [fightId], sourceID: playerId };
-    const result = await this.query<{ reportData: { report: { events: { data: CombatantInfoEvent[] } } } }>(
+    const result = await this.query<{ reportData: { report: { events: { data: WclCombatantInfo[] } } } }>(
       COMBATANT_INFO_Q, vars,
     );
     const events = result?.reportData?.report?.events?.data ?? [];
-    const event = events.find(e => e.sourceID === playerId) ?? events[0];
-
-    if (!event?.gear?.length) {
-      return { found: false, message: 'No combatant info in this log.' };
-    }
-
-    const { trinkets, enchants } = extractGear(event as WclRankEntry);
-    const talent_key = talentKeyFromTree(event.talentTree);
-
-    // Resolve item and enchant names in a single batched gameData query.
-    const itemIds = [...new Set(trinkets.filter(t => t.id).map(t => t.id))];
-    const enchantIds = [...new Set(enchants.filter(e => e.id).map(e => e.id))];
-    if (itemIds.length || enchantIds.length) {
-      let nameData: Record<string, { id: number; name: string }> = {};
-      try {
-        const nameResult = await this.query<{ gameData: Record<string, { id: number; name: string }> }>(
-          buildGearNamesQuery(itemIds, enchantIds),
-        );
-        nameData = nameResult?.gameData ?? {};
-      } catch (err) {
-        logWarn('getCombatantGear: name resolution failed', err);
-      }
-      for (const trinket of trinkets) {
-        if (!trinket.name && trinket.id) {
-          trinket.name = decodeHtmlEntities(nameData[`i${trinket.id}`]?.name ?? '');
-        }
-      }
-      for (const enchant of enchants) {
-        if (!enchant.name && enchant.id) {
-          enchant.name = decodeHtmlEntities(nameData[`e${enchant.id}`]?.name ?? '');
-        }
-      }
-    }
-
-    return { found: true, spec, source_report: code, talent_key, trinkets, enchants };
+    return events.find(event => event.sourceID === playerId) ?? events[0] ?? null;
   }
 
-  async getCharacter(name: string, serverSlug: string, serverRegion: string): Promise<CharacterInfo> {
-    const vars: CharQueryVars = { name, serverSlug, serverRegion };
-    const result = await this.query<{ characterData: { character: { name: string; classID: number; recentReports: { data: Array<{ code: string }> } } } }>(
-      CHAR_Q, vars,
+  /**
+   * Resolve item + enchant names by ID in one batched gameData round-trip. Returns
+   * the raw aliased map (`i<itemId>` / `e<enchantId>` -> { id, name }); names may
+   * carry HTML entities, so consumers decode them.
+   */
+  async getGameNames(itemIds: number[], enchantIds: number[]): Promise<Record<string, { id: number; name: string }>> {
+    if (!itemIds.length && !enchantIds.length) return {};
+    const result = await this.query<{ gameData: Record<string, { id: number; name: string }> }>(
+      buildGearNamesQuery(itemIds, enchantIds),
     );
-    const character = result?.characterData?.character;
-    if (!character) throw new Error(`Character not found: ${name}-${serverSlug} (${serverRegion})`);
+    return result?.gameData ?? {};
+  }
 
-    let spec: string | null = null;
-    let sourceReport: string | null = null;
-    const reports = character.recentReports?.data ?? [];
-    if (!reports.length) throw new Error('No recent WCL reports found for this character.');
-    sourceReport = reports[0].code;
-
-    const characterNameLower = character.name.toLowerCase();
-    for (const report of reports.slice(0, 3)) {
-      try {
-        const fightsVars: FightsQueryVars = { code: report.code };
-        const fightsData = await this.query<{ reportData: { report: { fights: Array<{ id: number }> } } }>(
-          FIGHTS_Q, fightsVars,
-        );
-        const fights = fightsData.reportData.report.fights ?? [];
-        if (!fights.length) continue;
-        const specMap = await this.getPlayerDetails(report.code, fights[0].id);
-        // playerDetails carries both `id -> spec` and `name_${id} -> name`; match by name.
-        const nameKey = Object.keys(specMap).find(
-          key => key.startsWith('name_') && specMap[key].toLowerCase() === characterNameLower,
-        );
-        const playerId = nameKey?.slice('name_'.length);
-        if (playerId && specMap[playerId]) { spec = specMap[playerId]; sourceReport = report.code; break; }
-      } catch (err) {
-        logWarn('getCharacter: spec resolution failed for report ' + report.code, err);
-      }
-    }
-    return { name: character.name, spec, server: serverSlug, region: serverRegion, source_report: sourceReport };
+  /**
+   * Raw top-DPS rankings for an encounter + spec. `characterRankings` comes back as
+   * a JSON blob (string or object) - both forms are handled. Returns `[]` for an
+   * unknown spec. Consumers map these to fetchable `ParseRanking` rows.
+   */
+  async getRankings(spec: string, encounterId: number): Promise<WclRawRanking[]> {
+    const mapping = SPEC_TO_WCL[spec];
+    if (!mapping) return [];
+    const [className, specName] = mapping;
+    const vars: RankingsQueryVars = { encounterID: encounterId, className, specName };
+    const result = await this.query<{ worldData: { encounter: { characterRankings: string | { rankings: WclRawRanking[] } } } }>(
+      RANKINGS_Q, vars,
+    );
+    const raw = result?.worldData?.encounter?.characterRankings;
+    if (!raw) return [];
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) as { rankings?: WclRawRanking[] } : raw;
+    return parsed.rankings ?? [];
   }
 }

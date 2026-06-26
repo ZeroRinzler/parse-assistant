@@ -1,38 +1,42 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal, computed } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
 import { MatCardModule } from '@angular/material/card';
-import { GearSectionComponent } from '../post-raid/gear-section/gear-section';
-import { EncounterService } from '../../core/services/encounter';
-import { PositioningPanelService } from '../../core/services/positioning-panel';
-import { SpecEntry, EncounterEntry, EncounterBench } from '../../core/models/encounter.models';
-import { Rulebook } from '../../core/models/rulebook.models';
+import { DataFileApiService } from '../../core/services/data-file-api';
+import { SpecEntry, EncounterEntry } from '../../core/models/encounter.models';
 import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner/loading-spinner';
 import { FormatSpecPipe } from '../../shared/pipes/format-spec-pipe';
-import { CooldownPlanComponent } from './cooldown-plan/cooldown-plan';
-import { DefensivePlanComponent } from './defensive-plan/defensive-plan';
-import { PreBurstWindowsComponent } from './burst-windows/burst-windows';
-import {
-  BurstWindowVm,
-  buildCdPlan, buildDefensivePlan, buildBurstWindows,
-} from './pre-fight.vm';
+import { RotationCdPlanComponent } from '../post-raid/rotation/rotation-cd-plan';
+import { DefensivePlanComponent } from '../post-raid/defensive/defensive-plan';
+import { BurstWindowsComponent } from '../post-raid/burst-windows/burst-windows';
+import { GearComponent } from '../post-raid/gear/gear';
+import { MapPanelComponent } from '../post-raid/map/map-panel';
+import { MapFeatureService, MapAnchor } from '../post-raid/map/map.service';
 
+/**
+ * Pre-fight gear/plan page shell. It owns only spec + encounter selection and URL
+ * sync - no domain analysis. Each feature card reads its own bench-only slice from
+ * the swappable data source: the cooldown + defensive plans, the bench burst windows,
+ * and the gear consensus. The map renders top-parse trails; opening it from a card's
+ * `openMap` output is forwarded to the `MapFeatureService`.
+ */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-pre-fight',
   imports: [
     ReactiveFormsModule, MatFormFieldModule, MatSelectModule, MatCardModule,
-    LoadingSpinnerComponent, GearSectionComponent, FormatSpecPipe,
-    CooldownPlanComponent, DefensivePlanComponent, PreBurstWindowsComponent,
+    LoadingSpinnerComponent, FormatSpecPipe,
+    RotationCdPlanComponent, DefensivePlanComponent, BurstWindowsComponent,
+    GearComponent, MapPanelComponent,
   ],
   templateUrl: './pre-fight.html',
 })
 export class PreFightComponent implements OnInit {
-  private readonly encounterSvc = inject(EncounterService);
-  private readonly panel = inject(PositioningPanelService);
+  private readonly files = inject(DataFileApiService);
+  private readonly mapFeature = inject(MapFeatureService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
 
@@ -43,21 +47,17 @@ export class PreFightComponent implements OnInit {
   protected readonly encounters = signal<EncounterEntry[]>([]);
   protected readonly selectedSpec = toSignal(this.specControl.valueChanges, { initialValue: this.specControl.value });
   protected readonly selectedEncId = toSignal(this.encControl.valueChanges, { initialValue: this.encControl.value });
-  protected readonly bench = signal<EncounterBench | null>(null);
-  protected readonly rulebook = signal<Rulebook | null>(null);
   protected readonly loading = signal(false);
-  protected readonly loadingBrief = signal(false);
   protected readonly error = signal('');
-  protected readonly gearStats = computed(() => this.bench()?.gear ?? null);
 
-  protected readonly cdPlan = computed(() => buildCdPlan(this.rulebook(), this.bench()));
-  protected readonly defensivePlan = computed(() => buildDefensivePlan(this.rulebook(), this.bench()));
-  protected readonly burstWindows = computed<BurstWindowVm[]>(() => buildBurstWindows(this.rulebook(), this.bench()));
+  protected onOpenMap(anchor: MapAnchor): void {
+    this.mapFeature.openAt(anchor);
+  }
 
   async ngOnInit(): Promise<void> {
     this.loading.set(true);
     try {
-      const specs = await this.encounterSvc.getSpecs();
+      const specs = await this.files.getSpecs();
       this.specs.set(specs);
       if (specs.length) this.specControl.enable({ emitEvent: false });
     } finally {
@@ -81,9 +81,7 @@ export class PreFightComponent implements OnInit {
   protected async onSpecChange(): Promise<void> {
     const spec = this.specControl.value;
     this.router.navigate([], { queryParams: { spec: spec || null, encounter: null }, replaceUrl: true });
-    this.bench.set(null);
-    this.rulebook.set(null);
-    this.panel.clear();
+    this.mapFeature.clear();
     this.encControl.setValue(0, { emitEvent: false });
     this.encControl.disable({ emitEvent: false });
     this.encounters.set([]);
@@ -92,9 +90,9 @@ export class PreFightComponent implements OnInit {
   }
 
   private async _onSpecSelected(spec: string): Promise<void> {
-    const enc = await this.encounterSvc.getEncounters(spec);
-    this.encounters.set(enc);
-    if (enc.length) {
+    const enc = await this.files.getEncounters(spec);
+    this.encounters.set(enc.filter(entry => entry.sample_count > 0));
+    if (this.encounters().length) {
       this.encControl.enable({ emitEvent: false });
     } else {
       this.encControl.disable({ emitEvent: false });
@@ -105,25 +103,9 @@ export class PreFightComponent implements OnInit {
     const encId = this.encControl.value;
     const spec = this.specControl.value;
     this.router.navigate([], { queryParams: { spec: spec || null, encounter: encId || null }, replaceUrl: true });
-    this.bench.set(null);
-    this.rulebook.set(null);
-    this.panel.clear();
+    this.mapFeature.clear();
     if (!encId || !spec) return;
-
-    this.loadingBrief.set(true);
-    try {
-      const [benchData, rulebookData, positions] = await Promise.all([
-        this.encounterSvc.getBench(spec, encId),
-        this.encounterSvc.getRulebook(spec),
-        this.encounterSvc.getPositions(spec, encId),
-      ]);
-      this.bench.set(benchData);
-      this.rulebook.set(rulebookData);
-      this.panel.setContext(positions, null);
-    } catch (err) {
-      this.error.set(err instanceof Error ? err.message : 'Failed to load encounter data.');
-    } finally {
-      this.loadingBrief.set(false);
-    }
+    // Load the top-parse position trails for the map (bench-only, no player log).
+    void this.mapFeature.loadBench(spec, encId);
   }
 }

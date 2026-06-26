@@ -14,40 +14,61 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { WclApiService } from '../../core/services/wcl-api';
-import { AnalysisService } from '../../core/services/analysis';
-import { EncounterService } from '../../core/services/encounter';
-import { IconCacheService } from '../../core/services/icon-cache';
-import { PositioningPanelService } from '../../core/services/positioning-panel';
-import { MapContextService } from '../../core/services/map-context';
 import { LiveReportSyncService, POLL_INTERVAL_MS } from '../../core/services/live-report-sync';
-import { WclFight, WclPlayer, WclReport } from '../../core/models/wcl.models';
-import { EncounterGearStats } from '../../core/models/encounter.models';
-import { AnalysisResult } from '../../core/models/analysis.models';
+import { WclFight, WclPlayer, WclReport, PlayerDetailGroups } from '../../core/models/wcl.models';
 import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner/loading-spinner';
-import { AnalysisResultComponent } from './analysis-result/analysis-result';
+import { RotationComponent } from './rotation/rotation';
+import { BurstWindowsComponent } from './burst-windows/burst-windows';
+import { DefensiveComponent } from './defensive/defensive';
+import { GearComponent } from './gear/gear';
+import { MapPanelComponent } from './map/map-panel';
+import { MapFeatureService, MapAnchor } from './map/map.service';
 import { FormatDurationPipe } from '../../shared/pipes/format-duration-pipe';
 import { FormatSpecPipe } from '../../shared/pipes/format-spec-pipe';
 import { logWarn } from '../../core/log';
 import { extractCode, buildFights, buildPlayers, visiblePlayersOf, pickPlayerId, pickLivePlayerId } from './post-raid.vm';
 
+/**
+ * Resolve the selected player's spec from a raw `playerDetails` response: across
+ * the dps / healers / tanks / unknown roles, find the player by id and build
+ * `<spec><class>` with spaces stripped (e.g. "Subtlety" + "Rogue" -> "SubtletyRogue").
+ * Returns '' when the player is not found or has no spec/class.
+ */
+export function specOf(groups: PlayerDetailGroups, playerId: number): string {
+  for (const role of ['dps', 'healers', 'tanks', 'unknown']) {
+    for (const player of (groups[role] ?? [])) {
+      if (player.id !== playerId) continue;
+      const className = (player.type ?? '').replace(/ /g, '');
+      const spec = ((player.specs ?? [])[0]?.spec ?? '').replace(/ /g, '');
+      return spec && className ? spec + className : '';
+    }
+  }
+  return '';
+}
+
+/**
+ * Post-raid analyzer page shell. It owns only selection (report / fight / player),
+ * live polling, and URL sync - no domain analysis. It resolves the minimal context
+ * (spec + encounter + the player log selection) and composes the feature cards, each
+ * of which fetches and computes its own slice. The map is a normal feature: the page
+ * renders `<wl-map-panel>` and forwards each card's `openMap` output to the
+ * `MapFeatureService`.
+ */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-post-raid',
   imports: [
     ReactiveFormsModule, MatFormFieldModule, MatInputModule, MatSelectModule,
     MatButtonModule, MatCardModule, MatSlideToggleModule,
-    LoadingSpinnerComponent, AnalysisResultComponent,
+    LoadingSpinnerComponent, RotationComponent, BurstWindowsComponent,
+    DefensiveComponent, GearComponent, MapPanelComponent,
     FormatDurationPipe, FormatSpecPipe,
   ],
   templateUrl: './post-raid.html',
 })
 export class PostRaidComponent implements OnInit {
   private readonly wclApi = inject(WclApiService);
-  private readonly analysisSvc = inject(AnalysisService);
-  private readonly encounterSvc = inject(EncounterService);
-  private readonly icons = inject(IconCacheService);
-  private readonly panel = inject(PositioningPanelService);
-  private readonly mapCtx = inject(MapContextService);
+  private readonly mapFeature = inject(MapFeatureService);
   private readonly liveSync = inject(LiveReportSyncService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
@@ -68,24 +89,48 @@ export class PostRaidComponent implements OnInit {
   protected readonly selectedFightId = toSignal(this.fightControl.valueChanges, { initialValue: this.fightControl.value });
   protected readonly selectedPlayerId = toSignal(this.playerControl.valueChanges, { initialValue: this.playerControl.value });
   protected readonly liveSyncEnabled = toSignal(this.liveControl.valueChanges, { initialValue: this.liveControl.value });
-  protected readonly result = signal<AnalysisResult | null>(null);
-  protected readonly topGear = signal<EncounterGearStats | null>(null);
+
+  /** Resolved spec of the selected player; drives every feature card. Empty until resolved. */
+  protected readonly spec = signal('');
 
   /** Current report code, driven by loadReport(). Used by the polling pipeline. */
   protected readonly reportCode = signal('');
 
-  private _masterAbilities: { gameID: number; name: string; icon: string }[] = [];
   private _enemies: { id: number; name: string; gameID: number }[] = [];
-  /** Incremented on each analyzePlayer() call to cancel stale gear fetches. */
-  private _gearFetchNonce = 0;
 
   protected readonly visiblePlayers = computed(() =>
     visiblePlayersOf(this.fights(), this.players(), this.selectedFightId()));
 
+  /** Encounter id of the selected fight, passed to every feature card. */
+  protected readonly selectedEncounterId = computed(() =>
+    this.fights().find(f => f.id === this.selectedFightId())?.encounterID ?? 0);
+
+  /** Duration of the selected fight, for the defensive window time axis. */
+  protected readonly selectedFightDuration = computed(() =>
+    this.fights().find(f => f.id === this.selectedFightId())?.duration_s ?? 0);
+
+  /** The cards render once a spec, fight, player and encounter are all resolved. */
+  protected readonly ready = computed(() =>
+    !!this.spec() && !!this.reportCode() && !!this.selectedFightId() && !!this.selectedPlayerId() && !!this.selectedEncounterId());
+
+  /** Map is available once the map feature has loaded top-parse positions for this fight. */
+  protected mapReady(): boolean { return this.mapFeature.ready(); }
+
+  /** A feature card asked to open the map; the page forwards it to the map feature. */
+  protected onOpenMap(anchor: MapAnchor): void {
+    this.mapFeature.openAt(anchor);
+  }
+
+  /** Defensive cards carry a reference enemy gameID; convert it to a MapAnchor reference. */
+  protected onDefensiveOpenMap(anchor: { timeS: number; label: string; spellIds: number[]; refGameId: number | null }): void {
+    this.mapFeature.openAt({
+      timeS: anchor.timeS, label: anchor.label, spellIds: anchor.spellIds,
+      reference: anchor.refGameId != null ? { kind: 'enemy', gameId: anchor.refGameId } : { kind: 'boss' },
+    });
+  }
+
   // Declarative polling pipeline. Must live in a field initializer so that
   // toObservable() and takeUntilDestroyed() run inside the injection context.
-  // switchMap tears down the previous poll stream whenever live/reportCode changes.
-  // exhaustMap drops concurrent poll attempts while one is in flight.
   private readonly _pollingSub = combineLatest([
     toObservable(this.liveSyncEnabled),
     toObservable(this.reportCode),
@@ -132,8 +177,8 @@ export class PostRaidComponent implements OnInit {
     this.loadingReport.set(true);
     this.fights.set([]);
     this.players.set([]);
-    this.result.set(null);
-    this.panel.clear();
+    this.spec.set('');
+    this.mapFeature.clear();
 
     try {
       this.loadingMsg.set('Fetching report from WCL…');
@@ -147,7 +192,7 @@ export class PostRaidComponent implements OnInit {
       // Set reportCode last - this activates the polling pipeline if liveSync is on.
       this.reportCode.set(code);
       this._syncUrl();
-      await this.analyzePlayer();
+      await this.resolveSelection();
     } catch (err) {
       this.error.set(err instanceof Error ? err.message : 'Failed to load report.');
     } finally {
@@ -155,18 +200,14 @@ export class PostRaidComponent implements OnInit {
     }
   }
 
-  /** Project a freshly fetched report into fight/player state and seed icon art. */
+  /** Project a freshly fetched report into fight/player state. */
   private _applyReport(report: WclReport): void {
     this.fights.set(buildFights(report.fights));
     this.players.set(buildPlayers(report.masterData?.actors));
-    this._masterAbilities = report.masterData?.abilities ?? [];
     this._enemies = report.masterData?.enemies ?? [];
-    if (report.masterData?.abilities) this.icons.seed(report.masterData.abilities);
   }
 
   protected onLiveToggle(): void {
-    // liveControl change propagates to liveSyncEnabled signal, which the
-    // polling pipeline reacts to automatically via combineLatest.
     this._syncUrl();
   }
 
@@ -181,20 +222,17 @@ export class PostRaidComponent implements OnInit {
       if (!latest) { this.status.set('No boss pulls found.'); return; }
 
       // Cheap-diff: latest pull unchanged and already analyzed - skip re-analysis.
-      if (this.selectedFightId() === latest.id && this.result()) {
+      if (this.selectedFightId() === latest.id && this.ready()) {
         this.status.set(`Last updated ${new Date().toLocaleTimeString()} · Polling every ${POLL_INTERVAL_MS / 1000}s`);
         return;
       }
 
       const currentName = this.players().find(player => player.id === this.selectedPlayerId())?.name ?? null;
       const visible = visiblePlayersOf(this.fights(), this.players(), latest.id);
-      // emitEvent:true keeps selectedFightId/selectedPlayerId signals in sync;
-      // change handlers guard themselves with liveSyncEnabled() and won't fire from (selectionChange)
-      // since that only triggers from user interaction, not programmatic setValue.
       this.fightControl.setValue(latest.id);
       this.playerControl.setValue(pickLivePlayerId(visible, currentName));
       this._syncUrl();
-      await this.analyzePlayer();
+      await this.resolveSelection();
       this.status.set(`Updated ${new Date().toLocaleTimeString()} · ${latest.name}`);
     } catch (err) {
       this.error.set(err instanceof Error ? err.message : 'Poll failed.');
@@ -205,55 +243,40 @@ export class PostRaidComponent implements OnInit {
     if (this.liveSyncEnabled()) return;
     this._applyAutoPlayer(null);
     this._syncUrl();
-    await this.analyzePlayer();
+    await this.resolveSelection();
   }
 
   protected async onPlayerChange(): Promise<void> {
     if (this.liveSyncEnabled()) return;
     this._syncUrl();
-    await this.analyzePlayer();
+    await this.resolveSelection();
   }
 
-  protected async analyzePlayer(): Promise<void> {
+  /**
+   * Resolve the spec for the selected player and prepare the map context. The feature
+   * cards self-load from their `spec`/`encounterId`/selection inputs; this only does
+   * the cross-cutting work a shell legitimately owns (spec resolution + map prepare).
+   */
+  protected async resolveSelection(): Promise<void> {
     this.error.set('');
     const fightId = this.selectedFightId();
     const playerId = this.selectedPlayerId();
+    this.spec.set('');
+    this.mapFeature.clear();
     if (!fightId || !playerId) return;
 
-    const nonce = ++this._gearFetchNonce;
     this.loadingAnalysis.set(true);
-    this.result.set(null);
-    this.topGear.set(null);
-    this.panel.clear();
-    this.loadingMsg.set('Fetching events…');
+    this.loadingMsg.set('Resolving spec…');
     try {
-      const data = await this.analysisSvc.analyze(this.reportCode(), fightId, playerId, this.fights(), this._masterAbilities);
-      this.result.set(data);
+      const groups = await this.wclApi.getPlayerDetails(this.reportCode(), fightId);
+      const spec = specOf(groups, playerId);
+      if (!spec) { this.error.set('Could not resolve the selected player\'s spec.'); return; }
+      this.spec.set(spec);
+
       const fight = this.fights().find(f => f.id === fightId);
-      if (fight) void this.mapCtx.prepare(this.reportCode(), fight, playerId, data.spec, this._enemies);
-
-      if (fight?.encounterID) {
-        // Bench gear is static JSON already fetched by the analysis pipeline,
-        // so this getBench call hits the browser cache.
-        this.encounterSvc.getBench(data.spec, fight.encounterID).then(bench => {
-          if (nonce === this._gearFetchNonce && bench) this.topGear.set(bench.gear);
-        });
-
-        // Read the player's gear, trinkets, enchants, and talents from the current
-        // log's CombatantInfo - always available regardless of ranked-kill status.
-        const player = this.players().find(p => p.id === playerId);
-        if (player) {
-          this.wclApi.getCombatantGear(this.reportCode(), fightId, playerId, data.spec)
-            .then(gearData => {
-              if (nonce === this._gearFetchNonce && gearData.found) {
-                this.result.update(r => r ? { ...r, player_gear: gearData } : r);
-              }
-            })
-            .catch(err => logWarn('analyzePlayer: fetch combatant gear', err));
-        }
-      }
+      if (fight) void this.mapFeature.prepare(this.reportCode(), fight, playerId, spec, this._enemies);
     } catch (err) {
-      this.error.set(err instanceof Error ? err.message : 'Analysis failed.');
+      this.error.set(err instanceof Error ? err.message : 'Failed to resolve selection.');
     } finally {
       this.loadingAnalysis.set(false);
     }

@@ -23,6 +23,8 @@ export interface FindingRow {
   severity: 'critical' | 'warning';
   name?: string;
   spellId?: number | null;
+  /** Icon filename (no extension) for `wl-game-icon`; empty renders name-only. */
+  icon?: string;
   timestampMs?: number | null;
   chip?: string;
   what?: string;
@@ -34,12 +36,14 @@ export interface FindingRow {
 export interface OnPlanChip {
   name: string;
   spellId: number | null;
+  icon?: string;
 }
 
 /** One collapsed spell entry: a cooldown / defensive and the findings it gathered. */
 export interface FindingEntry {
   name: string;
   spellId: number | null;
+  icon?: string;
   hasIssue: boolean;
   hasCritical: boolean;
   metaItems: string[];
@@ -56,6 +60,7 @@ export function rowsFromEntries(entries: FindingEntry[], catLabel: Record<string
         severity: f.severity === 'critical' ? 'critical' : 'warning',
         name: entry.name,
         spellId: entry.spellId,
+        icon: entry.icon,
         timestampMs: f.timestamp_ms ?? null,
         chip: catLabel[f.category],
         measured: f.measured ?? { value: '-' },
@@ -68,7 +73,7 @@ export function rowsFromEntries(entries: FindingEntry[], catLabel: Record<string
 
 /** Cooldowns without any issue become "on plan" chips. */
 export function onPlanFromEntries(entries: FindingEntry[]): OnPlanChip[] {
-  return entries.filter(e => !e.hasIssue).map(e => ({ name: e.name, spellId: e.spellId }));
+  return entries.filter(e => !e.hasIssue).map(e => ({ name: e.name, spellId: e.spellId, icon: e.icon }));
 }
 
 /** Grouping of a cooldown/defensive's findings before they collapse into a `FindingEntry`. */
@@ -77,6 +82,8 @@ interface FindingBucket { issues: AnalysisFinding[]; holds: AnalysisFinding[]; s
 export interface BucketOptions {
   /** Resolves a cooldown/defensive name to its spell id for icon rendering. */
   spellId: (name: string) => number | null;
+  /** Resolves a cooldown/defensive name to its icon filename (no extension). */
+  icon?: (name: string) => string;
   /**
    * When set, findings with category `rule_violation` or no `cd_name` are peeled
    * off into the returned `ruleFindings` instead of being bucketed (offensive view).
@@ -126,6 +133,7 @@ export function bucketFindings(
     return {
       name,
       spellId: options.spellId(name),
+      icon: options.icon?.(name) ?? '',
       hasCritical,
       hasIssue,
       metaItems,

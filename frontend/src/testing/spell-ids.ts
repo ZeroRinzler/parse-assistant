@@ -8,7 +8,7 @@
  * as long as builders and rulebook fixtures agree.
  *
  * The Bloodlust family IDs are the real ones the engine recognizes
- * (`BLOODLUST_IDS` in `core/analysis/format.ts`); everything else is a
+ * (`BLOODLUST_IDS` in the rotation slice); everything else is a
  * convenient real-ish Subtlety Rogue value used only as a label.
  */
 

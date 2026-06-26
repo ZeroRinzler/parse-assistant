@@ -37,14 +37,14 @@ These are hard rules for all Angular code. The `angular-developer` skill (`.clau
 - **Use an external `templateUrl` file for any component beyond a trivial handful of elements.** Inline `template:` strings are only for tiny (roughly <10-line) markup. A table row, a card, or anything with multiple `@if`/`@for` branches gets its own `.html` file next to the `.ts` (CLAUDE's inline-template note is for genuinely small components; readability wins for anything larger).
 - **All formatting goes through Angular pipes**, never ad-hoc string building in component TS. Durations -> `FormatDurationPipe` (`formatDuration`), compact damage -> `FormatDamagePipe` (`formatDamage`), decimals -> the built-in `DecimalPipe` (`number`), spec names -> `FormatSpecPipe`. View-model `computed()`s should expose **raw numeric values**; the template formats them. Add a new shared pipe under `shared/pipes/` rather than formatting inline.
 - Time windows are rendered as a `m:ss - m:ss` range (start to end), matching the live/post pages.
-- **Spells and items render through the shared `wl-game-icon` component** (`shared/components/game-icon`), never ad-hoc text or `<img>`. Spell art comes from the `IconCacheService` (seeded from a report's `masterData.abilities`); item art is passed explicitly via the `icon` input (from WCL combatant-info gear). Pages with no report context (e.g. `/pre`) have no seed source, so spell names render without art there until a report is loaded.
+- **Spells and items render through the shared `wl-game-icon` component** (`shared/components/game-icon`), never ad-hoc text or `<img>`. It is an **inputs-only leaf**: callers pass `[icon]` (the zamimg filename, no extension) and `[name]` explicitly - feature services resolve them from the report's `masterData.abilities` or the ingest-baked slice data. There is no global icon cache. Pages with no report context (e.g. `/pre`) pass names without an icon, so spell names render as Wowhead links without art there.
 - **`wl-game-icon` already renders both the icon and the name** (as a Wowhead link). Never place a separate `{{ label }}`/name `<span>` next to a `wl-game-icon` for the same spell/item - that double-prints the name. Render `<wl-game-icon [id]="...">` alone; use a plain `<span>` label **only** as the fallback when there is no `spellId`/`id` to give the icon component.
 
 ### API service conventions
 
 - **`get*` verb for all network methods.** Never `fetch*`, noun-first (e.g. `charLookup`), or other inconsistent prefixes. Examples: `getReport`, `getUserCharacters`, `getCharacter`, `getCharGear`.
 - **GraphQL query strings live in `core/services/wcl-queries.ts` only.** Never inline a query string inside a method. Each query must have a companion `*Vars` interface (e.g. `ReportQueryVars { code: string }`). Never use `Record<string, unknown>` as the variables type - use the typed interface.
-- **Response-to-model mapping lives in `core/services/wcl-mappers.ts`.** Pure functions with no Angular/HTTP dependencies. The transport service (`wcl-api.ts`) calls `query(...)` and then a mapper - it does not contain domain logic.
+- **Response-to-model mapping lives in the consuming slice/shell, not the transport.** `wcl-api.ts` is pass-through: it calls `query(...)` and returns the raw WCL shape (typed in `core/models/wcl.models.ts`). Each slice/shell colocates the small pure projection it needs (e.g. `toParseRankings`, `extractGear`, `specOf`). There is no runtime `wcl-mappers.ts`.
 - **No silent error swallowing.** Any `catch` on a best-effort operation must call `logWarn(context, err)` from `core/log.ts` before discarding the error. This applies to `.catch(() => {})`, empty `catch {}` blocks, and any fallback that silently substitutes a default. The best-effort fallback itself is fine (e.g. returning `[]`); the silence is not.
 - **No single-letter identifiers for non-trivial values.** `d`, `fd`, `p`, `r`, `e` as local variable names are banned where the value has semantic content. Name by content: `result`, `fightsData`, `enchantData`, `queryParams`, `reportParam`. Short lambda params (`f`, `c`) in obvious inline callbacks (e.g. `.find(f => f.id === id)`) are acceptable.
 
@@ -89,15 +89,17 @@ warcraft-learner/
 │   │   │   ├── pre-fight/      # Pre-fight gear check (/pre)
 │   │   │   └── live/           # Live analysis - polls for new pulls (/live)
 │   │   └── core/
-│   │       ├── services/
-│   │       │   ├── analysis-engine.ts     # Orchestrates fetch + worker dispatch
+│   │       ├── services/                  # The two runtime API services + plumbing
+│   │       │   ├── wcl-api.ts             # WCL transport (raw events/report/rankings, cached, pass-through)
+│   │       │   ├── data-file-api.ts       # Pass-through reader of data/specs/** (incl. getSlice)
 │   │       │   ├── live-report-sync.ts    # Polling timer / visibility service
-│   │       │   ├── encounter.ts           # Loads static JSON bench/rulebook files
-│   │       │   ├── wcl-api.ts             # WCL transport (thin: query + mappers)
 │   │       │   ├── wcl-queries.ts         # GraphQL strings + typed *Vars interfaces
-│   │       │   ├── wcl-mappers.ts         # Pure response-to-model mapping functions
 │   │       │   └── wcl-auth.ts            # Client-credentials token (embedded secret)
+│   │       ├── data-source/               # provide-data-source.ts (file/live DI swap)
 │   │       └── models/                    # TypeScript interfaces
+│   │   # Each card under pages/post-raid/{rotation,burst-windows,defensive,gear,map}/ is a
+│   │   # self-contained slice: *-data-source.ts (token) + *-data-file.service.ts +
+│   │   # *-transform.service.ts + *.service.ts (feature shell) + component. /pre reuses them.
 │   ├── public/
 │   │   └── data/specs/         # Static data files - served as assets
 │   │       ├── index.json              # Spec manifest: [{spec, encounter_count}] (generated by ingestion)
@@ -105,24 +107,22 @@ warcraft-learner/
 │   │           ├── rulebook.json       # AI-generated rulebook
 │   │           ├── guides.json         # Guide list with scraped content
 │   │           ├── encounters.json     # Index: [{id, name, sample_count}]
-│   │           ├── encounters/
-│   │           │   └── {enc_id}.json  # Pre-computed bench data
-│   │           ├── parse_samples/
-│   │           │   └── {enc_id}.json  # Raw parse samples
+│   │           ├── {slice}/             # Per-slice tailored file: {burst,rotation,defensive,gear}/{enc_id}.json
 │   │           └── positions/
 │   │               └── {enc_id}.json  # Top-parse position timelines (map feature)
 │   └── scripts/                # Node.js CLI tools (TypeScript, run via tsx; no server needed)
-│       ├── ingest-parses.ts    # Ingestion CLI entry / orchestrator (< 200 lines)
-│       ├── ingest/                  # Ingestion ETL modules + colocated *.spec.ts tests
-│       │   ├── wcl-client.ts        # Extract: WCL transport (OAuth, query, rate limit, paginated events)
-│       │   ├── wcl-queries.ts       # Extract: GraphQL query strings + *Vars interfaces
-│       │   ├── wcl-mappers.ts       # Extract: pure response→model mappers + spec map
-│       │   ├── wcl-fetchers.ts      # Extract: high-level get* fetchers (encounters, rankings, parse events, enchants)
-│       │   ├── analysis/            # Transform: pure analysis (stats, burst/defensive windows, positions,
-│       │   │                        #   cooldowns, defensives, gear, bench, parse-analysis)
-│       │   ├── storage.ts           # Load: all data/specs/** file IO
-│       │   ├── models/              # *.models.ts: wcl, bench, parse-sample type shapes
-│       │   └── testing/             # scripts-local test toolkit (events/spell-ids/clock/samples)
+│       ├── ingest/                  # Ingestion orchestrator + discovery-only modules + colocated *.spec.ts tests
+│       │   ├── orchestrator.ts      # Entry: boots Angular runtime, drives the 5 transform services, writes tailored files
+│       │   ├── angular-runtime.ts   # Boots jsdom + Angular TestBed injector; provides Node transports; returns transform services + WclApiService + DataFileApiService
+│       │   ├── node-wcl-transport.ts        # FetchWclTransport - plain fetch GraphQL, in-run cache
+│       │   ├── node-data-file-transport.ts  # FsDataFileTransport - fs read/write/list
+│       │   ├── code-hash.ts         # Hash of the transform source files (signature-skip)
+│       │   ├── signature.ts         # source_signature compute/compare (signature-skip)
+│       │   ├── wcl-fetchers.ts      # Discovery: getEncounters (worldData + rankings liveness probe)
+│       │   ├── wcl-client.ts        # Discovery: WclQueryClient interface + EventFetchOptions + BudgetExceededError
+│       │   ├── wcl-queries.ts       # Discovery: RATE_LIMIT_QUERY, ENCOUNTERS_QUERY, RANKINGS_QUERY (+ RankingsQueryVars)
+│       │   ├── wcl-mappers.ts       # Discovery: SPEC_TO_WCL, mapRankings, filterEncounters, groupEncountersByZone, exclude patterns
+│       │   └── models/              # wcl.models.ts: the ingest WCL shapes
 │       ├── build-rulebook.ts   # Rulebook management (build prompt, save AI output)
 │       └── scrape-guides.ts    # Re-scrape all guides (default); add one via --spec/--url
 ├── prompts/
@@ -145,54 +145,104 @@ warcraft-learner/
 |---|---|
 | `npm start` | Angular dev server on http://localhost:4200 |
 | `npm run build` | Production build to `../static/angular/` |
-| `npm run ingest` | Ingest top WCL parses (interactive, or `--spec Name --all`); needs `WCL_CLIENT_ID`/`WCL_CLIENT_SECRET` |
+| `npm run ingest` | Run the ingestion orchestrator (`scripts/ingest/orchestrator.ts`), which drives the Angular transform services headlessly (all rulebook specs by default, or `--spec Name` for one); needs `WCL_CLIENT_ID`/`WCL_CLIENT_SECRET` |
 | `npm run scrape` | Re-scrape all existing guides (default); `--spec Name --url URL` to add and scrape one |
 | `npm run rulebook` | Manage rulebooks (build AI prompt, save AI JSON output) |
 
-The CLI scripts are TypeScript run via `tsx` (e.g. `tsx --tsconfig tsconfig.scripts.json scripts/ingest-parses.ts`), not `.mjs`/`node`. `WCL_CLIENT_ID`/`WCL_CLIENT_SECRET` come from the [Warcraft Logs API clients](https://www.warcraftlogs.com/api/clients/) page and are only used server-side (GHA secrets), never in the browser. No Anthropic API key is needed - rulebook generation is a copy-prompt / paste-back flow that works with any LLM.
+The CLI scripts are TypeScript run via `tsx` (e.g. `tsx --tsconfig tsconfig.scripts.json scripts/ingest/orchestrator.ts`), not `.mjs`/`node`. `WCL_CLIENT_ID`/`WCL_CLIENT_SECRET` come from the [Warcraft Logs API clients](https://www.warcraftlogs.com/api/clients/) page and are only used server-side (GHA secrets), never in the browser. No Anthropic API key is needed - rulebook generation is a copy-prompt / paste-back flow that works with any LLM.
+
+## Architecture: layers & rules (vertical-slice target)
+
+The app is built as **per-use-case vertical slices** (map / burst / rotation / defensive / gear). Each slice is independent and follows the same shape; the **Burst** slice (`pages/post-raid/burst-windows/`) is the reference implementation. All new work must follow these layer rules.
+
+The data path is two symmetric pipelines that meet at the static data files:
+
+```
+INGEST (Node)                                        RUNTIME (browser)
+WclApi (read, pass-through)                          WclApiService (read, pass-through, cached)
+   -> *TransformService (the only transform)            DataFileApiService (read, pass-through)
+   -> DataFileApi (write)  ->  data/specs/**  ->         -> *DataSource (DI token, dev-flag swap)
+                                                         -> *FeatureService (runtime shell)
+                                                         -> *Component -> page shell -> leaves
+```
+
+```mermaid
+flowchart LR
+  subgraph Ingest["INGEST (Node, scripts/ingest)"]
+    direction TB
+    IW["WclApi (read)"] --> IT["*TransformService (reshape + cluster)"]
+    IT --> ID["DataFileApi (write)"]
+  end
+
+  ID --> DATA[("data/specs/**<br/>tailored slice files +<br/>encounters / positions / rulebook")]
+
+  subgraph Runtime["RUNTIME (browser, Angular)"]
+    direction TB
+    WCL["WclApiService<br/>(raw WCL, cached)"]
+    DFA["DataFileApiService<br/>(raw file reads)"]
+
+    subgraph Slice["each slice (rotation / burst / defensive / gear / map)"]
+      direction TB
+      TOK{{"*_DATA_SOURCE token<br/>(dev-flag swap)"}}
+      DFS["*DataFileService<br/>(prod: reads tailored file)"]
+      TRS["*TransformService<br/>(dev: computes live)"]
+      FS["*FeatureService<br/>(shell + colocated pure fns)"]
+      CMP["*Component"]
+      DFS -. "useLiveTransform=false" .-> TOK
+      TRS -. "useLiveTransform=true" .-> TOK
+      TOK --> FS
+      FS --> CMP
+    end
+
+    DFA --> DFS
+    WCL --> TRS
+    WCL --> FS
+    CMP --> PAGE["page shell<br/>(post-raid / pre-fight)"]
+    PAGE --> LEAF["input/output leaves<br/>(game-icon, window-comparison, ...)"]
+  end
+
+  DATA --> DFA
+```
+
+Reading the runtime graph: in production each slice's `*_DATA_SOURCE` resolves to its `*DataFileService` (reads the ingest-baked tailored file); under the `useLiveTransform` dev flag it resolves to the `*TransformService`, which recomputes the same bench live from WCL (no ingestion). Either way the `*FeatureService` reads that bench plus the player's own log (cached `WclApiService`) and produces the view-model; the page shell only resolves selection and composes cards.
+
+**Layer rules (hard):**
+
+- **Pass-through API services - exactly two at runtime.** `WclApiService` (raw WCL events/report/rankings/combatant-info/player-details) and `DataFileApiService` (raw static-file reads). They do **no** remapping or aggregation: bytes in, typed bytes out. Every response projection (rankings -> `ParseRanking`, combatant info -> `CharacterGear`, player details -> spec) is a small pure function colocated in the consuming slice/shell, not in the transport. There is no `wcl-mappers.ts` on the runtime side.
+- **Self-contained services - import ONLY the two API services (or the slice `*DataSource` token) + models + `logWarn`.** Both the `*TransformService` and the `*FeatureService` follow this: no importing of outside analysis, mappers, or UI components. Each **reimplements/owns** its math as named, pure, **total** functions (returns `0`/`null`/`[]` for empty input, never throws; optional findings return `T | null`), **exported from and colocated in that service's own `*.service.ts`**, with no Angular/`inject()`/IO. Self-containment over sharing: the transform owns its own math and pulls nothing from outside analysis or mappers (ingestion runs this very service, so there is no second implementation to keep aligned). Data shapes a service needs (view-model rows like `ComparisonWindow`/`RangeRow`, ranking rows like `ParseRanking`) live in `core/models`, never in a component or mapper file. Tested directly in `*.service.spec.ts`. Cross-slice **presentational** derivations may still live under `shared/` (e.g. `shared/gear/gear-comparison.ts`). (No separate `*.vm.ts` file; the older `pre-fight.vm.ts` / `post-raid.vm.ts` are legacy and may stay.)
+- **`*TransformService` - one per use case, self-contained.** Reimplements its own derivation (its colocated pure functions) to build a slice's prepared data from the two API services - it does NOT import the ingest analysis. Selectable at runtime under the dev flag to compute the prepared data live (no ingestion). Ingestion runs this **very same** `*TransformService` headlessly (booted through the Angular injector in `scripts/ingest/orchestrator.ts`) to write the slice's tailored file (`data/specs/{spec}/burst/{enc}.json`, denormalized + ready to render); ingest and the dev-flag live mode are the same implementation, not just the same shape.
+- **`*DataSource` interface + `*_DATA_SOURCE` InjectionToken - the swap point.** Two impls per slice: `*DataFileService` (reads the tailored file - production) and `*TransformService` (computes live - no-ingestion dev). The provider helper `core/data-source/provide-data-source.ts` binds one impl per `environment.useLiveTransform`. This is the ONLY place the data source differs.
+- **`*FeatureService` - the runtime shell, one per feature component.** Injects its `*DataSource` token + the cached `WclApiService` (the player's chosen log), calls the pure transform functions colocated in its `*.service.ts`, and exposes signals. It contains **no arithmetic** and no other domain service.
+- **Feature components - inject exactly one service: their `*FeatureService`.** No reaching sideways into `PositioningPanelService`, `IconCacheService`, etc. Spell/item art is the ingest-baked `icon`+`name` passed as inputs to `wl-game-icon`. Cross-feature actions (e.g. "open map") are an `output()` the page wires.
+- **Page shells - zero domain services.** They read `report`/`fight`/`player` from the route and compose feature components, passing selection as inputs. Framework tokens (`ActivatedRoute`, `Router`) do not count.
+- **Presentational leaves - inputs/outputs only.** `game-icon`, `compact-ability-row`, `window-comparison`, `range-chart`, `callout`, `loading-spinner`. No services beyond framework tokens.
+
+**Migration status:** the post-raid and pre-fight pages are fully converted - every card (rotation / burst / defensive / gear / map) is a self-contained slice, and the legacy runtime pipeline (`AnalysisService`/`AnalysisEngineService`, the analysis Web Worker, `core/analysis/*`, `MapContextService`, the global `PositioningPanelService`, `EncounterService`) has been **deleted**. `DataFileApiService` is the single static-file reader. The generic `encounters/{enc}.json` bench file and `DataFileApiService.getBench` are gone: each per-slice `*TransformService` computes its tailored file directly from WCL, and ingestion runs those same services to write them (no generic bench is reshaped). `IconCacheService` and the runtime `wcl-mappers.ts` have both been removed: `wl-game-icon` is inputs-only, and each slice/shell owns the small WCL-response projection it needs (the ingest side keeps only a slim discovery `scripts/ingest/wcl-mappers.ts` for rankings/encounter filtering).
 
 ## Key flows
 
-### Analysis fetch/compute boundary (intentional design)
+### Player analysis (client-side, per-slice feature services)
 
-WCL event fetching runs on the **main thread** through the `AnalysisDataSource` seam (`core/analysis/analysis-data-source.ts`). The analysis Web Worker (`core/services/analysis.worker.ts`) receives only fully-assembled, already-fetched `AnalysisInput` and runs the pure `computeAnalysis()` function - it has no Angular DI, no `HttpClient`, and no network access.
+The legacy monolith (`AnalysisService`/`AnalysisEngineService`, the `computeAnalysis()` Web Worker, and the `core/analysis/*` modules) has been **removed**. Each card is now a self-contained vertical slice (see "Architecture: layers & rules"); the post-raid page (`post-raid.ts`) is a shell that resolves selection and composes the feature cards.
 
-**Do not move fetching into the worker.** The seam was deliberately designed to keep the worker pure and to make the fetch-side testable without `TestBed`. Moving fetching in would require reimplementing auth/token handling with raw `fetch` inside the worker - a large, risky redesign with no functional benefit for this app's payload sizes.
-
-### Player analysis (client-side, `analysis-engine.ts`)
-1. Accepts a WCL report code + fight ID + player actor ID.
-2. Fetches `playerDetails` to resolve spec (`SubtletyRogue`) - the reliable source since the Midnight `actor.subType` change (see WCL API quirks).
-3. Fetches `Casts`, `Buffs`, `DamageDone`, and `DamageTaken` events directly from WCL (client-credentials token).
-4. Loads static bench data from `/data/specs/{spec}/encounters/{enc_id}.json` and rulebook from `/data/specs/{spec}/rulebook.json`.
-5. `analysis-engine.ts` checks per offensive cooldown:
-   - **Lost casts** - `expected = 1 + floor(fight_duration / cd_cooldown)` vs actual.
-   - **Bloodlust alignment** - flags major CDs whose BL-window cast timing is >2σ from top-parse average. Falls back to binary in/out-of-window check.
-   - **First-cast delay** - flags opener CDs whose first cast is >2σ later than `avg_first_cast_s`. Always runs when a bench entry exists.
-   - **Held past reset** - gap between casts >2σ above `avg_gap_s`. Skipped when `avg_gap_s` is null (CD legitimately single-cast across all top parses).
-   - **Hold suggestions** - cast index where ≥40% of top parsers delay >8s past on-cooldown time; fires if player casts >σ before median hold time.
-   - **Cast efficiency** - player downtime (gaps above p90 of top-parse inter-cast gaps) vs top-parse average.
-   - **Success** - emitted when a CD has zero issues.
-6. **Rule engine** - evaluates `rules[]` entries with a machine-readable `condition`. Two kinds:
-   - `cast_without_prior` - spell cast without a required companion within `window_s`.
-   - `hold_cooldown_for_anchor` - spell(s) used within `hold_window_s` before an anchor spell.
-   Rule findings include a `details.remedy` field (the rule's `action` text) shown as a coaching callout.
-7. **Defensive analysis** mirrors offensive: `_analyzeDefensiveFindings` produces lost/held/hold-suggestion findings per defensive. Defensive windows are **buff-window-centric** - each window = when the defensive was actually active (apply→remove), compared against top-parse averages.
-8. Response sections: **Needs Improvement** (critical/warning), **Timing Suggestions** (info/hold_suggestion), **Doing Well** (success).
-9. **Burst Windows** card shows top recurring damage windows from top parses (CD-cast-centric, variable length). **Defensive Windows** shows when top parsers used each defensive and how much damage they mitigated.
-10. Ability icons come from `masterData.abilities` in the WCL report response - the only reliable source since WCL removed `gameData.spell()`.
-11. **Gear comparison** - after analysis completes, `post-raid.ts` fetches the selected player's gear via `getCharGear(player.name, player.server, reportRegion, encounterID)`. The report region (added to `REPORT_Q` as `region{slug}`) is shared by all players in the log, so gear lookup works for any raider - not just the logged-in account's own characters. Falls back gracefully (bench-only view) when the character has no ranked kills for the encounter.
+1. The shell accepts a WCL report code + fight ID + player actor ID, fetches the report, and resolves spec from `playerDetails` (the reliable source since the Midnight `actor.subType` change - see WCL API quirks). It passes `spec`/`encounterId`/`report`/`fight`/`player` as inputs to each feature card; it does no domain analysis itself.
+2. Each `*FeatureService` reads its prepared bench via its `*DataSource` (the tailored file in prod, or the live `*TransformService` under `useLiveTransform`) and fetches the player's own log (`Casts`/`Buffs`/`DamageDone`/`DamageTaken`) via the cached `WclApiService`, then computes its slice with its colocated pure functions:
+   - **Rotation** (`rotation.service.ts`) - per offensive cooldown: lost casts (`expected = 1 + floor(fight_duration / cd_cooldown)`), bloodlust alignment (>2σ), first-cast delay (>2σ), held-past-reset (>2σ above `avg_gap_s`, skipped when null), hold suggestions (≥40% of top parsers delay >8s), cast efficiency (downtime vs p90), and success. Plus the **rule engine** (`cast_without_prior`, `hold_cooldown_for_anchor`) and the per-cooldown comparison table. Findings split into **Needs Improvement** / **Timing Suggestions** / **Doing Well**.
+   - **Defensive** (`defensive.service.ts`) - lost/held/hold-suggestion findings per defensive plus buff-window-centric **Defensive Windows** (apply→remove, damage taken vs top parses).
+   - **Burst** (`burst.service.ts`) - **Burst Windows**: top recurring CD-cast-centric damage windows, with the player's window damage computed from their own log.
+   - **Gear** (`gear.service.ts`) - the player's combatant-info gear (talents/trinkets/enchants) vs the bench; bench-only on `/pre`.
+   - **Map** (`map.service.ts`) - `MapFeatureService` owns the positioning panel state (replacing the old global `PositioningPanelService`); other cards emit an `openMap` output the page forwards to it.
+3. Ability art is resolved from the report's `masterData.abilities` (and seeded into the small `IconCacheService` for the shared `wl-finding-table`), since WCL removed `gameData.spell()`.
 
 ### Ingestion (`npm run ingest`)
-Runs `frontend/scripts/ingest-parses.ts` (orchestrator; ETL modules under `scripts/ingest/`). Also runs as the `ingest-parses.yml` GHA hourly (cron `23 * * * *`) and on manual `workflow_dispatch`. The same hourly workflow runs `npm run scrape` first to keep guide content fresh, then ingestion.
+Runs `frontend/scripts/ingest/orchestrator.ts`, which boots a headless Angular runtime (`scripts/ingest/angular-runtime.ts`: jsdom + Angular TestBed injector wired to the Node WCL + data-file transports) and drives the SAME five `*TransformService`s the browser uses, persisting through the SAME `DataFileApiService` (Node filesystem transport). There is no separate Node analysis pipeline. Also runs as the `ingest-parses.yml` GHA hourly (cron `23 * * * *`) and on manual `workflow_dispatch`. The same hourly workflow runs `npm run scrape` first to keep guide content fresh, then ingestion.
 
-1. Authenticates to WCL with client credentials (from `WCL_CLIENT_ID`/`WCL_CLIENT_SECRET` environment variables - server-side secret, only used in GHA, never in the browser).
-2. Queries `characterRankings` for each boss to find top 10 parses.
-3. Fetches `Casts`, `Buffs`, `DamageDone`, `DamageTaken` per parse.
-4. Computes per-parse: CD timing summaries, `burst_windows` (CD-cast-centric), `defensive_windows` (buff-window-centric), talent key, trinkets, enchants.
-5. Writes raw samples → `parse_samples/{enc_id}.json`.
-6. Aggregates across parses → `encounters/{enc_id}.json` (bench file: per-CD thresholds, clustered burst/defensive windows, gear aggregates).
-7. Writes per-parse position timelines (ranked player + notable enemies, resampled) → `positions/{enc_id}.json` for the positioning map. Requires `includeResources`/`hostilityType` event fetches (see WCL API quirks).
-8. Updates `encounters.json` index.
+1. Boots the Angular runtime and authenticates to WCL with client credentials (from `WCL_CLIENT_ID`/`WCL_CLIENT_SECRET` environment variables - server-side secret, only used in GHA, never in the browser).
+2. Discovers the specs that have a `rulebook.json` and the current live encounters (`getEncounters`: `worldData` discovery + a cheap rankings liveness probe).
+3. Per encounter: asserts remaining WCL budget, fetches rankings (cheap), computes a code+ranking `source_signature` (an analogue of the old INGEST_HASH, hashing the transform source files + the parse set), and **skips** the encounter when the signature matches the stored stamp.
+4. Otherwise runs the five transform services (`burst`/`rotation`/`defensive`/`gear`/`map`) under bounded concurrency. Each fetches the parses it needs (`Casts`/`Buffs`/`DamageDone`/`DamageTaken`, plus `includeResources`/`hostilityType` events for positions) via the shared cached `WclApiService` and computes its slice.
+5. Writes the stamped per-slice tailored files (`{spec}/{burst,rotation,defensive,gear}/{enc_id}.json`) and per-parse position timelines (`positions/{enc_id}.json`).
+6. Rebuilds the `{spec}/encounters.json` and top-level `index.json` indexes, then prunes stale encounters.
 
 GHA commits `frontend/public/data/specs/**`, which triggers `deploy-pages.yml` to rebuild and redeploy.
 
@@ -205,7 +255,7 @@ GHA commits `frontend/public/data/specs/**`, which triggers `deploy-pages.yml` t
 
 For Claude: trigger via the `mcp__github__actions_run_trigger` tool on the current feature branch, wait for the run to complete, then `git pull`.
 
-> **Keep data shapes in sync.** The bench/sample shape that ingestion writes lives in `scripts/ingest/models/*.models.ts` (`wcl.models.ts`, `bench.models.ts`, `parse-sample.models.ts`) and is mirrored in the frontend consumers - `core/models/analysis.models.ts`, `core/models/encounter.models.ts`, `core/services/analysis-core.ts` - and documented in the **Data models** section below. **Whenever you change what ingestion emits (add/remove/rename a field), check and update all of these together, plus the rulebook skill + schema** (`prompts/rulebook_skill.md`, `prompts/rulebook.schema.json`) since ingestion consumes the rulebook (`duration`, `spell_id`s). Dropping a feature end-to-end means removing it from ingestion **and** every consumer above. Already-committed JSON under `data/specs/**` keeps stale fields until the next re-ingest - harmless, since consumers ignore unknown fields.
+> **Keep data shapes in sync.** Because ingestion runs the very same `*TransformService`s the browser uses, the tailored slice shapes are defined in exactly one place - each slice's `*Bench` interface (its `*-data-source.ts`) plus the relevant `core/models/*` - and ingestion writes precisely those, so the slice shapes stay in sync automatically. Changing a slice's `*Bench`/model therefore updates runtime and ingest at once (one implementation). You still keep the rulebook skill + schema in sync (`prompts/rulebook_skill.md`, `prompts/rulebook.schema.json`) since the transforms consume the rulebook (`duration`, `spell_id`s), and the indexes (`index.json`, `{spec}/encounters.json`) and `positions/{enc}.json` documented in the **Data models** section below. Already-committed JSON under `data/specs/**` keeps stale fields until the next re-ingest - harmless, since consumers ignore unknown fields.
 
 ### Rulebook management (`npm run rulebook` / `npm run scrape`)
 No web UI for rulebook management. Everything is CLI.
@@ -220,7 +270,7 @@ Entirely client-side. No backend calls.
 
 1. User enters a character name/server/region (or WCL character URL).
 2. `wcl-api.ts` queries `characterData.character.encounterRankings(includeCombatantInfo: true)` directly on WCL for the selected encounter - extracts gear, talents from the player's most recent ranked kill.
-3. Bench data (talent distributions, trinket usage, enchant usage) loaded from static `/data/specs/{spec}/encounters/{enc_id}.json`.
+3. Bench data (talent distributions, trinket usage, enchant usage) loaded from the static per-slice gear tailored file `/data/specs/{spec}/gear/{enc_id}.json`.
 4. A unified gear card rendered client-side (shared `wl-gear-section` in bench-only mode):
    - **Talents** - compares player's `v2:` talent fingerprint against top-parse distribution.
    - **Trinkets** - per-slot (12 = Trinket 1, 13 = Trinket 2) comparison.
@@ -234,7 +284,7 @@ Encounters loaded from `/data/specs/{spec}/encounters.json` (static file). Filte
 ## Data models
 
 ### `index.json` (`frontend/public/data/specs/index.json`)
-Spec manifest written by `ingest-parses.ts` `writeSpecIndex()` at the end of each spec ingestion. Rebuilt by scanning all spec folders on disk - safe to run sharded (one spec at a time). Consumed by `EncounterService.getSpecs()` to populate the spec dropdown on `/pre`.
+Spec manifest rebuilt by the orchestrator (`scripts/ingest/orchestrator.ts` `rebuildSpecIndex`) by scanning each spec's `encounters.json` on disk - safe to run sharded (one spec at a time). Consumed by `DataFileApiService.getSpecs()` to populate the spec dropdown on `/pre`.
 
 | field | notes |
 |---|---|
@@ -255,26 +305,10 @@ Spec manifest written by `ingest-parses.ts` `writeSpecIndex()` at the end of eac
 AI-generated rulebook. Extra top-level fields added on save: `guide_count`, `saved_at`.
 
 ### `positions/{enc_id}.json`
-Per-parse position timelines for the positioning map (written by `ingest-parses.ts` `buildParsePositions`/`savePositions`; consumed by `core/services/positioning-core.ts` + `core/models/positioning.models.ts`). Top-level: `{spec, encounter_id, encounter_name, interval_s, sample_count, parses[]}`. Each parse: `{report_code, fight_id, player_name, duration_s, interval_s, player: PosRow[], enemies: [{game_id, name, is_boss, samples: PosRow[]}]}`. A `PosRow` is `[t_s, x, y, facing|null, mapID|null]` with **raw** WCL units (x/y in hundredths of a yard, facing in milliradians) - the frontend scales them. Enemies are keyed by `game_id` so the same boss/add matches across parses; `is_boss` = the enemy with the highest `maxHitPoints`.
+Per-parse position timelines for the positioning map (written by `MapTransformService.getMapData` run headlessly by `scripts/ingest/orchestrator.ts`; consumed by `core/services/positioning-core.ts` + `core/models/positioning.models.ts`). Top-level: `{spec, encounter_id, encounter_name, interval_s, sample_count, parses[]}`. Each parse: `{report_code, fight_id, player_name, duration_s, interval_s, player: PosRow[], enemies: [{game_id, name, is_boss, samples: PosRow[]}]}`. A `PosRow` is `[t_s, x, y, facing|null, mapID|null]` with **raw** WCL units (x/y in hundredths of a yard, facing in milliradians) - the frontend scales them. Enemies are keyed by `game_id` so the same boss/add matches across parses; `is_boss` = the enemy with the highest `maxHitPoints`.
 
-### `parse_samples/{enc_id}.json`
-List of raw parse samples. Source of truth for bench files.
-
-| Field | Level | Notes |
-|---|---|---|
-| `fight_duration_s` | top-level | Fight length in seconds |
-| `cast_efficiency_pct` | top-level | % of fight time actively casting |
-| `cast_gap_list_ms` | top-level | Sorted inter-cast gaps - used to derive p90 downtime threshold |
-| `cooldowns[].cast_times_s` | per-CD | Cast timestamps relative to fight start |
-| `cooldowns[].bl_offset_s` | per-CD | Seconds between BL-window cast and BL start |
-| `cooldowns[].bl_aligned` | per-CD | Whether this parse cast the CD inside BL window |
-| `cooldowns[].hold_windows` | per-CD | `{cast_index, expected_s, actual_s, hold_amount_s}` for casts delayed >8s |
-| `cooldowns[].cast_pattern` | per-CD | `"hold"` or `"on_cooldown"` |
-| `burst_windows` | top-level | Variable-count, variable-length windows anchored to CD cast times |
-| `defensive_windows` | top-level | Per-defensive buff windows with absolute `window_damage` (taken) + `pct_of_total` |
-| `talent_key` | top-level | `v2:`-prefixed sorted talent node IDs (Midnight format) |
-| `trinkets` | top-level | `{slot, id, name}` for slots 12 and 13 |
-| `enchants` | top-level | `{slot, id, name}` for all enchanted slots |
+### Raw parse samples (no longer persisted)
+Raw per-parse samples are no longer written to disk (the old `parse_samples/{enc_id}.json` file is gone). The transform services compute each slice directly from WCL in-memory during ingestion, so there is no intermediate sample file.
 
 ### Rulebook JSON schema
 
@@ -347,13 +381,13 @@ Non-obvious things that have caused bugs - read before touching gear extraction 
 
 | Quirk | Detail |
 |---|---|
-| **`actor.subType` changed in Midnight** | Now returns class-only (`Rogue`). Use `playerDetails(fightIDs:[...])` to get full spec info. `_build_spec_map()` in `analysis-engine.ts` handles the conversion. |
+| **`actor.subType` changed in Midnight** | Now returns class-only (`Rogue`). Use `playerDetails(fightIDs:[...])` to get full spec info. `WclApiService.getPlayerDetails` (via `buildSpecMap`) handles the conversion; the post-raid shell resolves spec from it. |
 | **Gear array is positionally indexed** | WCL returns gear as a bare array; the array index (0-based) IS the slot number. No `slot` field. |
 | **Weapon slots shifted in Midnight** | Gear array has 17 entries (0-16). Weapons at index 15 (MH) and 16 (OH). Index 14 is Back/Cloak. |
 | **Trinket slots are 12 and 13** | Confirmed from `encounterRankings` responses. |
-| **`permanentEnchant` is a string** | Numeric ID returned as string. `permanentEnchantName` is never populated. Enchant names resolved via `gameData.enchant(id)` in `ingest-parses.ts`. |
+| **`permanentEnchant` is a string** | Numeric ID returned as string. `permanentEnchantName` is never populated. Enchant names resolved via `gameData.enchant(id)` in the gear transform service. |
 | **Two incompatible talent formats** | `characterRankings` → old format (`{talentID, points}` list) → `v1:` key. `encounterRankings` → Midnight format (nested `nodeId` dict) → `v2:` key. ID spaces are incompatible; cannot compare directly. |
-| **Solving the talent format problem** | `ingest-parses.ts` fires a parallel `encounterRankings` query per ranked player to get the `v2:` talent key, overwriting the `v1:` key from `characterRankings`. |
+| **Solving the talent format problem** | The gear/rotation transform services fire a parallel `encounterRankings` query per ranked player to get the `v2:` talent key, overwriting the `v1:` key from `characterRankings`. |
 | **`server.region` may be a string** | In `characterRankings` JSON blob, `server.region` is sometimes `"EU"` (string) rather than `{slug: "eu"}`. Handle both forms. |
 | **`gameData.spell()` was removed** | Spell icons and names must come from `masterData.abilities` in the report response. |
 | **Event positions need `includeResources: true`** | The default `events` response carries no coordinates. Passing `includeResources: true` attaches the actor's resource snapshot, which includes position. Adds bandwidth, so it is off by default and only requested by the positioning feature. |
@@ -367,7 +401,7 @@ Non-obvious things that have caused bugs - read before touching gear extraction 
 | API | Auth | Where used |
 |---|---|---|
 | Warcraft Logs v2 (GraphQL, `/api/v2/client`) | Client credentials (browser; embedded secret, see "Browser auth model") | Report events, character rankings, gear lookup |
-| Warcraft Logs v2 (GraphQL, `/api/v2/client`) | Client credentials (CLI/GHA only, never browser) | `ingest-parses.ts` parse fetching |
+| Warcraft Logs v2 (GraphQL, `/api/v2/client`) | Client credentials (CLI/GHA only, never browser) | The transform services fetching parses (via the shared `WclApiService` under the Node transport, driven by `scripts/ingest/orchestrator.ts`) |
 
 ## Analysis thresholds
 
@@ -386,7 +420,7 @@ Non-obvious things that have caused bugs - read before touching gear extraction 
 | Comparison table (uses/min) | `top_stddev_uses_per_min` per CD | ±0.05 |
 | Comparison table (first cast) | `top_stddev_first_cast_s` per CD | ±3s |
 
-### Burst window definition (`ingest-parses.ts` → `findBurstWindows` / `clusterBurstWindows`)
+### Burst window definition (`burst-windows/burst-transform.service.ts` → `findBurstWindows` / `clusterBurstWindows`)
 
 **Per-parse**:
 1. Build candidate windows from CD cast times × CD durations (from rulebook `duration`).
@@ -403,7 +437,7 @@ Non-obvious things that have caused bugs - read before touching gear extraction 
 4. `window_length_s` = mean of member window lengths.
 5. Emits **absolute damage** stats (`dmg_avg`/`dmg_min`/`dmg_max`/`dmg_stddev`, per-ability `avg_damage`/`min_damage`/`max_damage`) - **not** percentages. The player vs top-parse comparison and the Burst/Defensive Windows cards compare raw damage so the numbers stay meaningful on progression (a wipe's short fight-total would otherwise inflate every window's share).
 
-### Defensive window definition (`ingest-parses.ts` → `findDefensiveWindows` / `clusterDefensiveWindows`)
+### Defensive window definition (`defensive/defensive-transform.service.ts` → `findDefensiveWindows` / `clusterDefensiveWindows`)
 
 **Per-parse**:
 1. For each defensive in rulebook, find buff apply/remove pairs matching its `spell_id`.

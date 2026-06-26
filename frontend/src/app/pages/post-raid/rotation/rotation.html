@@ -1,0 +1,147 @@
+<!-- Rotation rules -->
+@if (ruleRows().length) {
+  <div class="mt-2 bg-[var(--surface)] border border-[var(--border)] rounded-[10px] overflow-hidden">
+    <div class="grid grid-cols-[20px_minmax(0,1fr)_96px_200px] gap-[14px] px-4 pt-3 pb-2 items-baseline">
+      <div></div>
+      <div>
+        <div class="text-[17px] font-semibold text-[var(--text)]">Rotation Rules</div>
+        <div class="text-xs text-[var(--muted)] mt-0.5">Spec rotation rules you broke during the fight.</div>
+      </div>
+      <div class="text-[10px] uppercase tracking-widest text-[var(--border)] tabular-nums text-right">Measured</div>
+      <div class="text-[10px] uppercase tracking-widest text-[var(--border)] pl-[14px]">Fix</div>
+    </div>
+    @for (row of ruleRows(); track $index) {
+      <div class="grid grid-cols-[20px_minmax(0,1fr)_96px_200px] gap-[14px] px-4 py-[10px] items-center border-t border-[var(--border)]">
+        <div class="flex items-center justify-center">
+          <mat-icon class="!text-[18px] !w-[18px] !h-[18px] !leading-[18px]"
+            [class.badge-critical]="row.severity === 'critical'"
+            [class.badge-warning]="row.severity === 'warning'">
+            {{ row.severity === 'critical' ? 'error' : 'warning_amber' }}
+          </mat-icon>
+        </div>
+        <div class="min-w-0"><span class="text-sm text-[var(--text)] leading-[1.35]">{{ row.what }}</span></div>
+        <div class="text-right leading-[1.1]"
+          [class.badge-critical]="row.severity === 'critical'"
+          [class.badge-warning]="row.severity === 'warning'">
+          <div class="text-[15px] font-bold tabular-nums">{{ row.measured.value }}</div>
+          @if (row.measured.unit) {
+            <div class="text-[10px] opacity-60 mt-px tabular-nums">{{ row.measured.unit }}</div>
+          }
+        </div>
+        <div class="text-[13px] text-[var(--muted)] leading-[1.45] border-l border-[var(--border)] pl-[14px]">{{ row.fix }}</div>
+      </div>
+    }
+  </div>
+}
+
+<!-- Offensive cooldowns -->
+<div class="mt-6 bg-[var(--surface)] border border-[var(--border)] rounded-[10px] overflow-hidden">
+  <div class="grid grid-cols-[20px_minmax(0,1fr)_96px_200px] gap-[14px] px-4 pt-3 pb-2 items-baseline">
+    <div></div>
+    <div>
+      <div class="text-[17px] font-semibold text-[var(--text)]">Offensives</div>
+      <div class="text-xs text-[var(--muted)] mt-0.5">How your offensive cooldowns compare to top parses.</div>
+    </div>
+    <div class="text-[10px] uppercase tracking-widest text-[var(--border)] tabular-nums text-right">Measured</div>
+    <div class="text-[10px] uppercase tracking-widest text-[var(--border)] pl-[14px]">Fix</div>
+  </div>
+
+  @for (row of offensiveRows(); track $index) {
+    <div class="grid grid-cols-[20px_minmax(0,1fr)_96px_200px] gap-[14px] px-4 py-[10px] items-center border-t border-[var(--border)]">
+      <div class="flex items-center justify-center">
+        <mat-icon class="!text-[18px] !w-[18px] !h-[18px] !leading-[18px]"
+          [class.badge-critical]="row.severity === 'critical'"
+          [class.badge-warning]="row.severity === 'warning'">
+          {{ row.severity === 'critical' ? 'error' : 'warning_amber' }}
+        </mat-icon>
+      </div>
+      <div class="min-w-0">
+        <div class="flex items-center gap-[7px] flex-wrap">
+          @if (row.spellId) {
+            <wl-game-icon [id]="row.spellId" [icon]="iconOf(row.spellId)" [name]="nameOf(row.spellId, row.name || '')"></wl-game-icon>
+          } @else {
+            <span class="inline-block bg-[var(--surface-alt)] border border-dashed border-[var(--border)] rounded w-[19px] h-[19px] shrink-0"></span>
+            <span class="text-sm text-[var(--text)]">{{ row.name }}</span>
+          }
+          @if (row.timestampMs != null) {
+            <span class="text-[11px] text-[var(--accent)] tabular-nums">{{ row.timestampMs / 1000 | formatDuration }}</span>
+          }
+          @if (row.chip) {
+            @if (row.severity === 'critical') {
+              <span class="text-[10px] rounded-sm px-[5px] tabular-nums text-[var(--critical)] bg-[var(--critical)]/10 border border-[var(--critical)]/25">{{ row.chip }}</span>
+            } @else {
+              <span class="text-[10px] rounded-sm px-[5px] tabular-nums text-[var(--warning)] bg-[var(--warning)]/10 border border-[var(--warning)]/25">{{ row.chip }}</span>
+            }
+          }
+        </div>
+      </div>
+      <div class="text-right leading-[1.1]"
+        [class.badge-critical]="row.severity === 'critical'"
+        [class.badge-warning]="row.severity === 'warning'">
+        <div class="text-[15px] font-bold tabular-nums">{{ row.measured.value }}</div>
+        @if (row.measured.unit) {
+          <div class="text-[10px] opacity-60 mt-px tabular-nums">{{ row.measured.unit }}</div>
+        }
+      </div>
+      <div class="text-[13px] text-[var(--muted)] leading-[1.45] border-l border-[var(--border)] pl-[14px]">{{ row.fix }}</div>
+    </div>
+  }
+
+  @if (!offensiveRows().length && !onPlan().length) {
+    <div class="flex items-center gap-2 border-t border-[var(--border)] px-4 py-3 text-[13px] badge-success">
+      <mat-icon class="!text-[18px] !w-[18px] !h-[18px] !leading-[18px] badge-success">check_circle</mat-icon>
+      <span>No issues detected.</span>
+    </div>
+  }
+
+  @if (onPlan().length) {
+    <div class="flex items-center gap-2 flex-wrap border-t border-[var(--border)] px-4 py-[10px]">
+      <span class="text-[10px] uppercase tracking-widest text-[var(--success)] mr-0.5">On plan</span>
+      @for (chip of onPlan(); track chip.name) {
+        <span class="inline-flex items-center gap-[6px] bg-[var(--success)]/[0.06] border border-[var(--success)]/25 rounded-[20px] py-[3px] pr-[11px] pl-[7px]">
+          @if (chip.spellId) {
+            <wl-game-icon [id]="chip.spellId" [icon]="iconOf(chip.spellId)" [name]="nameOf(chip.spellId, chip.name)"></wl-game-icon>
+          } @else {
+            <span class="inline-block bg-[var(--surface-alt)] border border-dashed border-[var(--border)] rounded w-[16px] h-[16px] shrink-0"></span>
+            <span class="text-[13px] text-[var(--muted)]">{{ chip.name }}</span>
+          }
+          <mat-icon class="!text-[14px] !w-[14px] !h-[14px] !leading-[14px] badge-success">check_circle</mat-icon>
+        </span>
+      }
+    </div>
+  }
+</div>
+
+<!-- Per-cooldown comparison: uses/min + first cast vs top parse -->
+@if (comparison().length) {
+  <div class="mt-6 bg-[var(--surface)] border border-[var(--border)] rounded-[10px] overflow-hidden">
+    <div class="px-4 pt-3 pb-2">
+      <div class="text-[17px] font-semibold text-[var(--text)]">Cooldown comparison</div>
+      <div class="text-xs text-[var(--muted)] mt-0.5">Your usage rate and opener timing next to the top-parse average.</div>
+    </div>
+    <div class="grid grid-cols-[minmax(0,1fr)_120px_120px] gap-[14px] px-4 pb-[7px]">
+      <div></div>
+      <div class="text-[10px] uppercase tracking-widest text-[var(--border)] text-right tabular-nums">Uses / min</div>
+      <div class="text-[10px] uppercase tracking-widest text-[var(--border)] text-right tabular-nums">First cast</div>
+    </div>
+    @for (entry of comparison(); track entry.cd_name) {
+      <div class="grid grid-cols-[minmax(0,1fr)_120px_120px] gap-[14px] px-4 py-[10px] items-center border-t border-[var(--border)]">
+        <div class="min-w-0 flex items-center gap-[7px]">
+          @if (entry.spell_id) {
+            <wl-game-icon [id]="entry.spell_id" [icon]="iconOf(entry.spell_id)" [name]="nameOf(entry.spell_id, entry.cd_name)"></wl-game-icon>
+          } @else {
+            <span class="text-sm text-[var(--text)]">{{ entry.cd_name }}</span>
+          }
+        </div>
+        <div class="text-right leading-[1.15] tabular-nums">
+          <div class="text-[14px] font-semibold text-[var(--text)]">{{ (entry.player_uses_per_min ?? 0) | number:'1.0-2' }}</div>
+          <div class="text-[10px] text-[var(--muted)] mt-px">top {{ (entry.top_avg_uses_per_min ?? 0) | number:'1.0-2' }}</div>
+        </div>
+        <div class="text-right leading-[1.15] tabular-nums">
+          <div class="text-[14px] font-semibold text-[var(--text)]">{{ entry.player_first_cast_s != null ? (entry.player_first_cast_s | formatDuration) : '-' }}</div>
+          <div class="text-[10px] text-[var(--muted)] mt-px">top {{ (entry.top_avg_first_cast_s ?? 0) | formatDuration }}</div>
+        </div>
+      </div>
+    }
+  </div>
+}
