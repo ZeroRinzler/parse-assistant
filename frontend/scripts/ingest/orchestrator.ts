@@ -31,6 +31,7 @@ import {
 } from './wcl-client.ts';
 import { RATE_LIMIT_QUERY } from './wcl-queries.ts';
 import { computeCodeHash } from './code-hash.ts';
+import { orderSpecsByDataAscending, orderEncountersByMissingFirst } from './ordering.ts';
 import {
   encounterSignature, readStoredSignature, signatureMatches, stampSignature,
   type SignatureRanking,
@@ -229,8 +230,17 @@ async function ingestSpec(
     return false;
   }
 
+  // Process never-ingested encounters first so a partial spec fills its remaining bosses
+  // before re-checking the ones already done (disk-only signal, zero WCL budget).
+  const presentIds = new Set(
+    (await runtime.dataFile.listSliceFiles(spec, 'burst'))
+      .filter(file => file.endsWith('.json'))
+      .map(file => parseInt(file))
+      .filter(id => Number.isFinite(id)),
+  );
+
   try {
-    for (const encounter of encounters) {
+    for (const encounter of orderEncountersByMissingFirst(encounters, presentIds)) {
       await client.assertBudget(POINTS_MARGIN);
 
       const rankings = await rankingSignatureRows(runtime, spec, encounter.id);
@@ -317,15 +327,23 @@ async function main(): Promise<void> {
     console.log(`Targeting spec: ${opts.spec}`);
   } else {
     const onDisk = await runtime.dataFile.listSpecs();
-    specs = [];
-    for (const spec of onDisk.sort()) {
-      if (await runtime.dataFile.getRulebook(spec)) specs.push(spec);
+    const withRulebook: string[] = [];
+    for (const spec of onDisk) {
+      if (await runtime.dataFile.getRulebook(spec)) withRulebook.push(spec);
     }
-    if (!specs.length) {
+    if (!withRulebook.length) {
       console.log('No known specs (no rulebook.json found). Nothing to do.');
       return;
     }
-    console.log(`Specs: ${specs.join(', ')}`);
+    // Order specs with the least on-disk data first (disk-only count, zero WCL budget) so a
+    // budget-bounded run fills never-ingested specs before refreshing populated ones.
+    const entries = await Promise.all(withRulebook.map(async spec => ({
+      spec,
+      dataCount: (await runtime.dataFile.listSliceFiles(spec, 'burst'))
+        .filter(file => file.endsWith('.json')).length,
+    })));
+    specs = orderSpecsByDataAscending(entries);
+    console.log(`Specs (least-data first): ${specs.join(', ')}`);
   }
 
   for (const spec of specs) {
