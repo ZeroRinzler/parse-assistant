@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { talentKeyFromTree, decodeHtmlEntities, iconFile, buildSpecMap, mapUserCharacters, extractGear } from './wcl-mappers';
+import { talentKeyFromTree, decodeHtmlEntities, iconFile, buildSpecMap, extractGear } from './wcl-mappers';
 
 describe('talentKeyFromTree', () => {
   it('returns empty string for undefined input', () => {
@@ -113,24 +113,6 @@ describe('buildSpecMap', () => {
 
   it('handles an empty groups object gracefully', () => {
     expect(buildSpecMap({})).toEqual({});
-  });
-});
-
-describe('mapUserCharacters', () => {
-  it('maps id, name, serverSlug, serverRegion from nested WCL shape', () => {
-    const raw = [{ id: 7, name: 'Thrall', server: { slug: 'area-52', region: { slug: 'us' } } }];
-    expect(mapUserCharacters(raw)).toEqual([
-      { id: 7, name: 'Thrall', serverSlug: 'area-52', serverRegion: 'us' },
-    ]);
-  });
-
-  it('returns empty serverRegion when server.region is null', () => {
-    const raw = [{ id: 8, name: 'X', server: { slug: 'test', region: null as unknown as { slug: string } } }];
-    expect(mapUserCharacters(raw)[0].serverRegion).toBe('');
-  });
-
-  it('maps an empty array to an empty array', () => {
-    expect(mapUserCharacters([])).toEqual([]);
   });
 });
 

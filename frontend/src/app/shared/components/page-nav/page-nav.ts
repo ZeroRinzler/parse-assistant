@@ -9,8 +9,6 @@ import { MatListModule } from '@angular/material/list';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
-import { MatDividerModule } from '@angular/material/divider';
-import { WclAuthService } from '../../../core/services/wcl-auth';
 
 const GITHUB_URL = 'https://github.com/gpolcode/warcraft-learner';
 const MOBILE_QUERY = '(max-width: 600px)';
@@ -20,13 +18,12 @@ const MOBILE_QUERY = '(max-width: 600px)';
   selector: 'wl-page-nav',
   imports: [
     RouterLink, RouterLinkActive, MatToolbarModule, MatSidenavModule, MatListModule,
-    MatButtonModule, MatIconModule, MatMenuModule, MatDividerModule,
+    MatButtonModule, MatIconModule, MatMenuModule,
   ],
   templateUrl: './page-nav.html',
   host: { class: 'flex flex-col h-[100dvh]' },
 })
 export class PageNavComponent {
-  protected readonly auth = inject(WclAuthService);
   protected readonly githubUrl = GITHUB_URL;
   private readonly breakpoints = inject(BreakpointObserver);
 
@@ -64,13 +61,5 @@ export class PageNavComponent {
     } else {
       this.desktopOpen.set(opened);
     }
-  }
-
-  protected signIn(): void {
-    this.auth.login();
-  }
-
-  protected signOut(): void {
-    this.auth.logout();
   }
 }

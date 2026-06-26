@@ -5,7 +5,7 @@
  * They belong here and not inside the transport service so the API contract
  * can evolve independently of the application models.
  */
-import type { CharacterGear, WclUserCharacter } from '../models/wcl.models';
+import type { CharacterGear } from '../models/wcl.models';
 
 // ---------------------------------------------------------------------------
 // Internal WCL response shapes (not part of the application model)
@@ -70,18 +70,6 @@ export function buildSpecMap(groups: PlayerDetailGroups): Record<number | string
     }
   }
   return map;
-}
-
-/** Map raw WCL character list entries to the application `WclUserCharacter` model. */
-export function mapUserCharacters(
-  raw: Array<{ id: number; name: string; server: { slug: string; region: { slug: string } } }>,
-): WclUserCharacter[] {
-  return raw.map(character => ({
-    id: character.id,
-    name: character.name,
-    serverSlug: character.server?.slug ?? '',
-    serverRegion: character.server?.region?.slug ?? '',
-  }));
 }
 
 /** Extract trinkets and enchants from a ranking's combatant info. */

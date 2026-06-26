@@ -1,6 +1,15 @@
 # warcraft-learner
 
-A web-based diagnostic tool for Mythic WoW raiders: it evaluates Warcraft Logs combat data against AI-generated, spec-specific rulebooks and delivers coaching-style feedback benchmarked against top parses. The app is a **fully static Angular SPA** on GitHub Pages - no backend, all analysis client-side, WCL queried directly from the browser via PKCE OAuth2.
+A web-based diagnostic tool for Mythic WoW raiders: it evaluates Warcraft Logs combat data against AI-generated, spec-specific rulebooks and delivers coaching-style feedback benchmarked against top parses. The app is a **fully static Angular SPA** on GitHub Pages - no backend, all analysis client-side, WCL queried directly from the browser with an OAuth2 client-credentials token (no user login).
+
+## Browser auth model (intentional embedded secret)
+
+The browser authenticates to WCL with the **client-credentials** grant against `/api/v2/client`, using a client id + secret **hardcoded in `core/services/wcl-auth.ts`** (and therefore shipped, public, in the static JS bundle). This is a deliberate trade-off, not a leak to fix:
+
+- The token only reads the same **public** WCL report data the app always read; there is no private data behind it and no user-specific budget to lose. The app never required user-scoped access.
+- The **only** risk is someone extracting the secret and draining the app's shared hourly rate-limit budget. Mitigation is manual: regenerate the secret at `warcraftlogs.com/api/clients/` and redeploy. WCL exposes **no API to rotate a client secret**, so this cannot be automated.
+- There is **no login UI, callback route, or PKCE flow** anymore. `WclAuthService.getToken()` fetches and caches the token silently. Consequently the `userData.currentUser` "your own characters" convenience was removed end-to-end (a client token has no current user); users always supply a report code or character name.
+- This is independent of the **ingestion** client credentials (`WCL_CLIENT_ID`/`WCL_CLIENT_SECRET`), which remain server-side-only GHA secrets used by the CLI - see below.
 
 ## Branding & naming
 
@@ -28,7 +37,7 @@ These are hard rules for all Angular code. The `angular-developer` skill (`.clau
 - **Use an external `templateUrl` file for any component beyond a trivial handful of elements.** Inline `template:` strings are only for tiny (roughly <10-line) markup. A table row, a card, or anything with multiple `@if`/`@for` branches gets its own `.html` file next to the `.ts` (CLAUDE's inline-template note is for genuinely small components; readability wins for anything larger).
 - **All formatting goes through Angular pipes**, never ad-hoc string building in component TS. Durations -> `FormatDurationPipe` (`formatDuration`), compact damage -> `FormatDamagePipe` (`formatDamage`), decimals -> the built-in `DecimalPipe` (`number`), spec names -> `FormatSpecPipe`. View-model `computed()`s should expose **raw numeric values**; the template formats them. Add a new shared pipe under `shared/pipes/` rather than formatting inline.
 - Time windows are rendered as a `m:ss - m:ss` range (start to end), matching the live/post pages.
-- **Spells and items render through the shared `wl-game-icon` component** (`shared/components/game-icon`), never ad-hoc text or `<img>`. Spell art comes from the `IconCacheService` (seeded from a report's `masterData.abilities`); item art is passed explicitly via the `icon` input (from WCL combatant-info gear). Pages with no report context (e.g. `/pre`) opportunistically seed the cache from the logged-in user's most recent report (best-effort; names render without art if unavailable).
+- **Spells and items render through the shared `wl-game-icon` component** (`shared/components/game-icon`), never ad-hoc text or `<img>`. Spell art comes from the `IconCacheService` (seeded from a report's `masterData.abilities`); item art is passed explicitly via the `icon` input (from WCL combatant-info gear). Pages with no report context (e.g. `/pre`) have no seed source, so spell names render without art there until a report is loaded.
 - **`wl-game-icon` already renders both the icon and the name** (as a Wowhead link). Never place a separate `{{ label }}`/name `<span>` next to a `wl-game-icon` for the same spell/item - that double-prints the name. Render `<wl-game-icon [id]="...">` alone; use a plain `<span>` label **only** as the fallback when there is no `spellId`/`id` to give the icon component.
 
 ### API service conventions
@@ -78,8 +87,7 @@ warcraft-learner/
 │   │   ├── pages/
 │   │   │   ├── post-raid/      # Main player analyzer (/)
 │   │   │   ├── pre-fight/      # Pre-fight gear check (/pre)
-│   │   │   ├── live/           # Live analysis - polls for new pulls (/live)
-│   │   │   └── callback/       # OAuth2 PKCE callback (/callback)
+│   │   │   └── live/           # Live analysis - polls for new pulls (/live)
 │   │   └── core/
 │   │       ├── services/
 │   │       │   ├── analysis-engine.ts     # Orchestrates fetch + worker dispatch
@@ -88,7 +96,7 @@ warcraft-learner/
 │   │       │   ├── wcl-api.ts             # WCL transport (thin: query + mappers)
 │   │       │   ├── wcl-queries.ts         # GraphQL strings + typed *Vars interfaces
 │   │       │   ├── wcl-mappers.ts         # Pure response-to-model mapping functions
-│   │       │   └── wcl-auth.ts            # PKCE OAuth2 flow
+│   │       │   └── wcl-auth.ts            # Client-credentials token (embedded secret)
 │   │       └── models/                    # TypeScript interfaces
 │   ├── public/
 │   │   └── data/specs/         # Static data files - served as assets
@@ -154,7 +162,7 @@ WCL event fetching runs on the **main thread** through the `AnalysisDataSource` 
 ### Player analysis (client-side, `analysis-engine.ts`)
 1. Accepts a WCL report code + fight ID + player actor ID.
 2. Fetches `playerDetails` to resolve spec (`SubtletyRogue`) - the reliable source since the Midnight `actor.subType` change (see WCL API quirks).
-3. Fetches `Casts`, `Buffs`, `DamageDone`, and `DamageTaken` events directly from WCL (PKCE token).
+3. Fetches `Casts`, `Buffs`, `DamageDone`, and `DamageTaken` events directly from WCL (client-credentials token).
 4. Loads static bench data from `/data/specs/{spec}/encounters/{enc_id}.json` and rulebook from `/data/specs/{spec}/rulebook.json`.
 5. `analysis-engine.ts` checks per offensive cooldown:
    - **Lost casts** - `expected = 1 + floor(fight_duration / cd_cooldown)` vs actual.
@@ -358,7 +366,7 @@ Non-obvious things that have caused bugs - read before touching gear extraction 
 
 | API | Auth | Where used |
 |---|---|---|
-| Warcraft Logs v2 (GraphQL, `/api/v2/user`) | PKCE OAuth2 (browser) | Report events, character rankings, gear lookup |
+| Warcraft Logs v2 (GraphQL, `/api/v2/client`) | Client credentials (browser; embedded secret, see "Browser auth model") | Report events, character rankings, gear lookup |
 | Warcraft Logs v2 (GraphQL, `/api/v2/client`) | Client credentials (CLI/GHA only, never browser) | `ingest-parses.ts` parse fetching |
 
 ## Analysis thresholds

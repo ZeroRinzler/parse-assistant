@@ -13,7 +13,6 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
-import { WclAuthService } from '../../core/services/wcl-auth';
 import { WclApiService } from '../../core/services/wcl-api';
 import { AnalysisService } from '../../core/services/analysis';
 import { EncounterService } from '../../core/services/encounter';
@@ -21,7 +20,7 @@ import { IconCacheService } from '../../core/services/icon-cache';
 import { PositioningPanelService } from '../../core/services/positioning-panel';
 import { MapContextService } from '../../core/services/map-context';
 import { LiveReportSyncService, POLL_INTERVAL_MS } from '../../core/services/live-report-sync';
-import { WclFight, WclPlayer, WclReport, WclUserCharacter } from '../../core/models/wcl.models';
+import { WclFight, WclPlayer, WclReport } from '../../core/models/wcl.models';
 import { EncounterGearStats } from '../../core/models/encounter.models';
 import { AnalysisResult } from '../../core/models/analysis.models';
 import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner/loading-spinner';
@@ -43,7 +42,6 @@ import { extractCode, buildFights, buildPlayers, visiblePlayersOf, pickPlayerId,
   templateUrl: './post-raid.html',
 })
 export class PostRaidComponent implements OnInit {
-  private readonly auth = inject(WclAuthService);
   private readonly wclApi = inject(WclApiService);
   private readonly analysisSvc = inject(AnalysisService);
   private readonly encounterSvc = inject(EncounterService);
@@ -78,7 +76,6 @@ export class PostRaidComponent implements OnInit {
 
   private _masterAbilities: { gameID: number; name: string; icon: string }[] = [];
   private _enemies: { id: number; name: string; gameID: number }[] = [];
-  private _userChars: WclUserCharacter[] = [];
   /** Incremented on each analyzePlayer() call to cancel stale gear fetches. */
   private _gearFetchNonce = 0;
 
@@ -139,19 +136,9 @@ export class PostRaidComponent implements OnInit {
     this.panel.clear();
 
     try {
-      if (!this.auth.isLoggedIn()) {
-        throw new Error('Sign in with WCL to load reports.');
-      }
       this.loadingMsg.set('Fetching report from WCL…');
       const code = extractCode(url);
-      const [report, userChars] = await Promise.all([
-        this.wclApi.getReport(code),
-        this.wclApi.getUserCharacters().catch(err => {
-          logWarn('loadReport: fetch user characters', err);
-          return [] as WclUserCharacter[];
-        }),
-      ]);
-      this._userChars = userChars;
+      const report = await this.wclApi.getReport(code);
       this._applyReport(report);
 
       const lastFight = this.fights()[this.fights().length - 1];
@@ -205,7 +192,7 @@ export class PostRaidComponent implements OnInit {
       // change handlers guard themselves with liveSyncEnabled() and won't fire from (selectionChange)
       // since that only triggers from user interaction, not programmatic setValue.
       this.fightControl.setValue(latest.id);
-      this.playerControl.setValue(pickLivePlayerId(visible, currentName, this._userChars));
+      this.playerControl.setValue(pickLivePlayerId(visible, currentName));
       this._syncUrl();
       await this.analyzePlayer();
       this.status.set(`Updated ${new Date().toLocaleTimeString()} · ${latest.name}`);
@@ -273,7 +260,7 @@ export class PostRaidComponent implements OnInit {
   }
 
   private _applyAutoPlayer(autoPlayer: number | null): void {
-    this.playerControl.setValue(pickPlayerId(this.visiblePlayers(), this._userChars, autoPlayer));
+    this.playerControl.setValue(pickPlayerId(this.visiblePlayers(), autoPlayer));
   }
 
   private _syncUrl(): void {

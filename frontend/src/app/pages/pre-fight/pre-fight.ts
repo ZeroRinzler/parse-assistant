@@ -11,14 +11,10 @@ import { MatChipsModule } from '@angular/material/chips';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatIconModule } from '@angular/material/icon';
 import { GearSectionComponent } from '../post-raid/gear-section/gear-section';
-import { WclAuthService } from '../../core/services/wcl-auth';
-import { WclApiService } from '../../core/services/wcl-api';
-import { logWarn } from '../../core/log';
 import { EncounterService } from '../../core/services/encounter';
 import { PositioningPanelService } from '../../core/services/positioning-panel';
 import { SpecEntry, EncounterEntry, EncounterBench } from '../../core/models/encounter.models';
 import { Rulebook } from '../../core/models/rulebook.models';
-import { IconCacheService } from '../../core/services/icon-cache';
 import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner/loading-spinner';
 import { CalloutComponent } from '../../shared/components/callout/callout';
 import { GameIconComponent } from '../../shared/components/game-icon/game-icon';
@@ -42,9 +38,6 @@ import {
   templateUrl: './pre-fight.html',
 })
 export class PreFightComponent implements OnInit {
-  private readonly auth = inject(WclAuthService);
-  private readonly wclApi = inject(WclApiService);
-  private readonly icons = inject(IconCacheService);
   private readonly encounterSvc = inject(EncounterService);
   private readonly panel = inject(PositioningPanelService);
   private readonly route = inject(ActivatedRoute);
@@ -98,12 +91,6 @@ export class PreFightComponent implements OnInit {
         await this.onEncChange();
       }
     }
-
-    // Opportunistically seed spell icons from the user's most recent report so
-    // CD/burst cards show artwork. Best-effort - no login required for the page.
-    if (this.auth.isLoggedIn()) {
-      void this._tryIconSeed();
-    }
   }
 
   protected async onSpecChange(): Promise<void> {
@@ -154,18 +141,4 @@ export class PreFightComponent implements OnInit {
       this.loadingBrief.set(false);
     }
   }
-
-  /** Seed spell icons from the logged-in user's most recent report. Best-effort. */
-  private async _tryIconSeed(): Promise<void> {
-    try {
-      const chars = await this.wclApi.getUserCharacters();
-      if (!chars.length) return;
-      const info = await this.wclApi.getCharacter(chars[0].name, chars[0].serverSlug, chars[0].serverRegion);
-      if (info.source_report) {
-        const abilities = await this.wclApi.getReportAbilities(info.source_report);
-        this.icons.seed(abilities);
-      }
-    } catch (err) { logWarn('pre-fight: icon seed from recent report', err); }
-  }
-
 }

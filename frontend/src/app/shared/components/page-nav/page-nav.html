@@ -17,22 +17,10 @@
 
   <span class="flex-1"></span>
 
-  <button mat-icon-button [matMenuTriggerFor]="userMenu" aria-label="Account menu">
-    <mat-icon>account_circle</mat-icon>
+  <button mat-icon-button [matMenuTriggerFor]="userMenu" aria-label="More options">
+    <mat-icon>more_vert</mat-icon>
   </button>
   <mat-menu #userMenu="matMenu">
-    @if (auth.isLoggedIn()) {
-      <button mat-menu-item (click)="signOut()">
-        <mat-icon>logout</mat-icon>
-        <span>Sign out</span>
-      </button>
-    } @else {
-      <button mat-menu-item (click)="signIn()">
-        <mat-icon>login</mat-icon>
-        <span>Sign in</span>
-      </button>
-    }
-    <mat-divider />
     <a mat-menu-item [href]="githubUrl" target="_blank" rel="noopener noreferrer">
       <mat-icon svgIcon="github"></mat-icon>
       <span>View on GitHub</span>

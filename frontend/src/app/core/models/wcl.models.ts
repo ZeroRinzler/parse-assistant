@@ -70,10 +70,3 @@ export interface CharacterGear {
   enchants?: Array<{ slot: number; id: number; name: string }>;
   message?: string;
 }
-
-export interface WclUserCharacter {
-  id: number;
-  name: string;
-  serverSlug: string;
-  serverRegion: string;
-}

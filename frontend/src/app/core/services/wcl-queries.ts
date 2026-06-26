@@ -61,8 +61,6 @@ query($code:String!,$fightIDs:[Int]!,$dataType:EventDataType,$sourceID:Int,$star
   }}
 }`;
 
-export const USER_CHARS_Q = `{userData{currentUser{characters{id name server{slug region{slug}}}}}}`;
-
 export const CHAR_Q = `
 query($name:String!,$serverSlug:String!,$serverRegion:String!){
   characterData{character(name:$name,serverSlug:$serverSlug,serverRegion:$serverRegion){

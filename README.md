@@ -23,7 +23,7 @@ npm install
 npm start   # Angular dev server on http://localhost:4200
 ```
 
-The app is a fully static Angular SPA. It talks directly to the Warcraft Logs API from the browser via OAuth2 PKCE; there is no backend.
+The app is a fully static Angular SPA. It talks directly to the Warcraft Logs API from the browser using an OAuth2 client-credentials token (no user login); there is no backend.
 
 ## Documentation
 

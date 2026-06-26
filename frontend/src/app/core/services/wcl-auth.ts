@@ -1,95 +1,75 @@
-import { Injectable, inject, signal, computed } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 
-const CLIENT_ID = 'a1ff2833-d873-4e41-9965-eea3f622586f';
-const AUTH_URL = 'https://www.warcraftlogs.com/oauth/authorize';
 const TOKEN_URL = 'https://www.warcraftlogs.com/oauth/token';
+
+// WCL OAuth client used for the browser's client-credentials grant.
+//
+// INTENTIONAL SECRET EXPOSURE: this secret ships inside the static JS bundle and is
+// therefore public. That is a deliberate design choice. The client-credentials token
+// only grants access to the same public WCL report data the previous PKCE login flow
+// already read - there is no private data behind it and no per-user budget to lose.
+// The sole risk is that someone extracts the secret and drains our shared hourly
+// rate-limit budget. Mitigation is manual: regenerate the secret at
+// warcraftlogs.com/api/clients/ and redeploy (WCL exposes no API to rotate a secret,
+// so this cannot be automated). See the project notes on this trade-off.
+const CLIENT_ID = 'a21cf850-4cf8-4591-b3e5-906aba0da145';
+const CLIENT_SECRET = 'ZYBFec16gC0CfwaunQjSAwUCQwEXTKOFo5JkwSze';
+
+interface TokenResponse {
+  access_token: string;
+  expires_in?: number;
+}
 
 @Injectable({ providedIn: 'root' })
 export class WclAuthService {
   private readonly http = inject(HttpClient);
-  private readonly _token = signal<string | null>(this._loadToken());
-  readonly isLoggedIn = computed(() => this._token() !== null);
+  private _token: string | null = null;
+  private _expiry = 0;
+  private _inFlight: Promise<string> | null = null;
 
-  private _loadToken(): string | null {
-    const tok = localStorage.getItem('wcl_token');
-    const exp = parseInt(localStorage.getItem('wcl_token_expiry') || '0', 10);
-    return tok && Date.now() < exp - 60_000 ? tok : null;
+  /**
+   * Returns a valid WCL access token, fetching a fresh one via the client-credentials
+   * grant when the cached token is missing or within 60s of expiry. Concurrent callers
+   * share a single in-flight request. There is no user login: the token authenticates
+   * the app itself, so it is acquired silently on first use and renewed transparently.
+   */
+  async getToken(): Promise<string> {
+    if (this._token && Date.now() < this._expiry - 60_000) return this._token;
+    if (this._inFlight) return this._inFlight;
+    this._inFlight = this._fetchToken().finally(() => { this._inFlight = null; });
+    return this._inFlight;
   }
 
-  getToken(): string | null {
-    return this._token();
-  }
-
-  async login(): Promise<void> {
-    const verifier = this._generateVerifier();
-    const challenge = await this._generateChallenge(verifier);
-    sessionStorage.setItem('wcl_code_verifier', verifier);
-    sessionStorage.setItem('wcl_return_path', window.location.href);
+  private async _fetchToken(): Promise<string> {
     const params = new URLSearchParams({
+      grant_type: 'client_credentials',
       client_id: CLIENT_ID,
-      redirect_uri: this._redirectUri(),
-      response_type: 'code',
-      code_challenge: challenge,
-      code_challenge_method: 'S256',
+      client_secret: CLIENT_SECRET,
     });
-    window.location.href = `${AUTH_URL}?${params}`;
-  }
-
-  async exchangeCode(code: string): Promise<void> {
-    const verifier = sessionStorage.getItem('wcl_code_verifier');
-    if (!verifier) throw new Error('No code verifier - auth flow was not started in this browser tab');
-    const params = new URLSearchParams({
-      grant_type: 'authorization_code',
-      client_id: CLIENT_ID,
-      code,
-      redirect_uri: this._redirectUri(),
-      code_verifier: verifier,
-    });
-    let data: { access_token: string; expires_in?: number };
+    let data: TokenResponse;
     try {
-      data = await firstValueFrom(this.http.post<{ access_token: string; expires_in?: number }>(
+      data = await firstValueFrom(this.http.post<TokenResponse>(
         TOKEN_URL,
         params.toString(),
         { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
       ));
-    } catch (e) {
-      const status = e instanceof HttpErrorResponse ? e.status : 0;
-      const detail = e instanceof HttpErrorResponse
-        ? (typeof e.error === 'string' ? e.error : JSON.stringify(e.error))
+    } catch (err) {
+      const status = err instanceof HttpErrorResponse ? err.status : 0;
+      const detail = err instanceof HttpErrorResponse
+        ? (typeof err.error === 'string' ? err.error : JSON.stringify(err.error))
         : '';
-      throw new Error(`WCL token exchange failed (${status}): ${detail}`);
+      throw new Error(`WCL token request failed (${status}): ${detail}`);
     }
-    localStorage.setItem('wcl_token', data.access_token);
-    localStorage.setItem('wcl_token_expiry', String(Date.now() + (data.expires_in || 3600) * 1000));
-    sessionStorage.removeItem('wcl_code_verifier');
-    this._token.set(data.access_token);
+    this._token = data.access_token;
+    this._expiry = Date.now() + (data.expires_in || 3600) * 1000;
+    return this._token;
   }
 
-  logout(): void {
-    localStorage.removeItem('wcl_token');
-    localStorage.removeItem('wcl_token_expiry');
-    this._token.set(null);
-  }
-
-  private _redirectUri(): string {
-    return new URL('callback', document.baseURI).href;
-  }
-
-  private _generateVerifier(): string {
-    const b = new Uint8Array(32);
-    crypto.getRandomValues(b);
-    return this._b64url(b.buffer);
-  }
-
-  private async _generateChallenge(verifier: string): Promise<string> {
-    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
-    return this._b64url(buf);
-  }
-
-  private _b64url(buf: ArrayBuffer): string {
-    return btoa(String.fromCharCode(...new Uint8Array(buf)))
-      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  /** Drop the cached token so the next request fetches a fresh one (e.g. after a 401). */
+  invalidate(): void {
+    this._token = null;
+    this._expiry = 0;
   }
 }

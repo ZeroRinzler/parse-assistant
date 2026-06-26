@@ -1,7 +1,4 @@
 <wl-page-nav>
-  @if (!isLoggedIn() && !isCallbackRoute()) {
-    <wl-auth-banner />
-  }
   <router-outlet />
 </wl-page-nav>
 @defer (when panel.open()) {

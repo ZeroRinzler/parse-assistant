@@ -7,7 +7,7 @@
  * report's actors into player rows, filtering players to the selected fight, and
  * choosing which player to auto-select - live here and are tested directly.
  */
-import { WclFight, WclPlayer, WclReport, WclUserCharacter } from '../../core/models/wcl.models';
+import { WclFight, WclPlayer, WclReport } from '../../core/models/wcl.models';
 
 /** Pull a report code out of a WCL report URL, or pass through a bare code. */
 export function extractCode(url: string): string {
@@ -54,20 +54,13 @@ export function visiblePlayersOf(
 }
 
 /**
- * Choose which player to auto-select. The logged-in user's own character always
- * wins; otherwise honor an explicit (URL) choice; otherwise fall back to the
- * first visible player. Returns null when there is nobody to pick.
+ * Choose which player to auto-select: honor an explicit (URL) choice, otherwise
+ * fall back to the first visible player. Returns null when there is nobody to pick.
  */
 export function pickPlayerId(
   visiblePlayers: WclPlayer[],
-  userChars: WclUserCharacter[],
   autoPlayer: number | null,
 ): number | null {
-  if (userChars.length) {
-    const names = new Set(userChars.map(c => c.name.toLowerCase()));
-    const match = visiblePlayers.find(p => names.has(p.name.toLowerCase()));
-    if (match) return match.id;
-  }
   if (autoPlayer) return autoPlayer;
   return visiblePlayers[0]?.id ?? null;
 }
@@ -77,13 +70,12 @@ export function pickPlayerId(
  *
  * If the currently selected player is visible in the new pull (matched by name,
  * case-insensitively), keep them - this lets you watch a raidmate and have the
- * selection persist pull-to-pull. If they are absent, fall back to the logged-in
- * user character, then the first visible player.
+ * selection persist pull-to-pull. If they are absent, fall back to the first
+ * visible player.
  */
 export function pickLivePlayerId(
   visiblePlayers: WclPlayer[],
   currentPlayerName: string | null,
-  userChars: WclUserCharacter[],
 ): number | null {
   if (currentPlayerName) {
     const sticky = visiblePlayers.find(
@@ -91,5 +83,5 @@ export function pickLivePlayerId(
     );
     if (sticky) return sticky.id;
   }
-  return pickPlayerId(visiblePlayers, userChars, null);
+  return pickPlayerId(visiblePlayers, null);
 }

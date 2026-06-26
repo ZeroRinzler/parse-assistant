@@ -1,40 +1,16 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject } from '@angular/core';
-import { Router, RouterOutlet, NavigationEnd } from '@angular/router';
-import { toSignal } from '@angular/core/rxjs-interop';
-import { filter, map } from 'rxjs';
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { RouterOutlet } from '@angular/router';
 import { PageNavComponent } from './shared/components/page-nav/page-nav';
-import { AuthBannerComponent } from './shared/components/auth-banner/auth-banner';
 import { PositioningPanelComponent } from './shared/components/positioning-panel/positioning-panel';
-import { WclAuthService } from './core/services/wcl-auth';
-import { WclApiService } from './core/services/wcl-api';
-import { logWarn } from './core/log';
 import { PositioningPanelService } from './core/services/positioning-panel';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-root',
-  imports: [RouterOutlet, PageNavComponent, AuthBannerComponent, PositioningPanelComponent],
+  imports: [RouterOutlet, PageNavComponent, PositioningPanelComponent],
   templateUrl: './app.html',
   host: { class: 'block' },
 })
-export class App implements OnInit {
-  private readonly auth = inject(WclAuthService);
-  private readonly wclApi = inject(WclApiService);
-  private readonly router = inject(Router);
+export class App {
   protected readonly panel = inject(PositioningPanelService);
-
-  protected readonly isLoggedIn = this.auth.isLoggedIn;
-  protected readonly isCallbackRoute = toSignal(
-    this.router.events.pipe(
-      filter(e => e instanceof NavigationEnd),
-      map(() => this.router.url.startsWith('/callback')),
-    ),
-    { initialValue: this.router.url.startsWith('/callback') },
-  );
-
-  ngOnInit(): void {
-    if (this.auth.isLoggedIn()) {
-      this.wclApi.getUserCharacters().catch(err => logWarn('app init: prefetch user characters', err));
-    }
-  }
 }

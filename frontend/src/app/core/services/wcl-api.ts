@@ -3,16 +3,16 @@ import { firstValueFrom } from 'rxjs';
 import { Apollo, gql } from 'apollo-angular';
 import { ServerError, CombinedGraphQLErrors, type FetchPolicy, type OperationVariables } from '@apollo/client';
 import { WclAuthService } from './wcl-auth';
-import { WclReport, WclAbility, CharacterInfo, CharacterGear, WclUserCharacter, WclEvent } from '../models/wcl.models';
+import { WclReport, WclAbility, CharacterInfo, CharacterGear, WclEvent } from '../models/wcl.models';
 import { logWarn } from '../log';
 import {
   REPORT_Q, REPORT_ABILITIES_Q, PLAYER_DETAILS_Q, FIGHTS_Q, EVENTS_Q,
-  USER_CHARS_Q, CHAR_Q, COMBATANT_INFO_Q, buildGearNamesQuery,
+  CHAR_Q, COMBATANT_INFO_Q, buildGearNamesQuery,
   ReportQueryVars, ReportAbilitiesQueryVars, PlayerDetailsQueryVars,
   FightsQueryVars, EventsQueryVars, CharQueryVars, CombatantInfoQueryVars,
 } from './wcl-queries';
 import {
-  buildSpecMap, mapUserCharacters, extractGear, talentKeyFromTree, decodeHtmlEntities,
+  buildSpecMap, extractGear, talentKeyFromTree, decodeHtmlEntities,
   WclRankEntry, PlayerDetailGroups,
 } from './wcl-mappers';
 
@@ -29,20 +29,16 @@ export class WclApiService {
   private readonly apollo = inject(Apollo);
 
   /**
-   * Runs a GraphQL query against WCL via Apollo. The PKCE bearer token is attached
-   * per request through Apollo's operation context (it changes on re-auth, so it must
-   * not be baked into the link). `fetchPolicy` defaults to `cache-first` to leverage
-   * Apollo's in-memory cache; callers that must always see fresh data (report polling,
-   * large event fetches) pass `network-only`.
+   * Runs a GraphQL query against WCL via Apollo. The client-credentials bearer token is
+   * attached per request through Apollo's operation context (it is renewed on expiry, so
+   * it must not be baked into the link). `fetchPolicy` defaults to `cache-first` to
+   * leverage Apollo's in-memory cache; callers that must always see fresh data (report
+   * polling, large event fetches) pass `network-only`.
    */
   async query<TData = unknown>(
     gqlString: string, variables: object = {}, fetchPolicy: FetchPolicy = 'cache-first',
   ): Promise<TData> {
-    const token = this.auth.getToken();
-    if (!token) {
-      this.auth.logout();
-      throw new Error('Not logged in to WCL - click "Sign In" to authorize.');
-    }
+    const token = await this.auth.getToken();
     try {
       const result = await firstValueFrom(this.apollo.query<TData, OperationVariables>({
         query: gql(gqlString),
@@ -55,8 +51,10 @@ export class WclApiService {
       // apollo-angular maps a non-2xx HTTP response to ServerError (with statusCode).
       if (ServerError.is(error)) {
         if (error.statusCode === 401) {
-          this.auth.logout();
-          throw new Error('WCL session expired - sign in again.');
+          // Token was rejected (e.g. expired early or the secret was rotated); drop the
+          // cached token so the next request fetches a fresh one.
+          this.auth.invalidate();
+          throw new Error('WCL API error (401) - token rejected.');
         }
         throw new Error(`WCL API error (${error.statusCode})`);
       }
@@ -165,13 +163,6 @@ export class WclApiService {
     }
 
     return { found: true, spec, source_report: code, talent_key, trinkets, enchants };
-  }
-
-  async getUserCharacters(): Promise<WclUserCharacter[]> {
-    const result = await this.query<{ userData: { currentUser: { characters: Array<{ id: number; name: string; server: { slug: string; region: { slug: string } } }> } } }>(
-      USER_CHARS_Q,
-    );
-    return mapUserCharacters(result?.userData?.currentUser?.characters ?? []);
   }
 
   async getCharacter(name: string, serverSlug: string, serverRegion: string): Promise<CharacterInfo> {

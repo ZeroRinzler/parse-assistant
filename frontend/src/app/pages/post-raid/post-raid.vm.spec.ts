@@ -1,15 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { extractCode, buildFights, buildPlayers, visiblePlayersOf, pickPlayerId, pickLivePlayerId } from './post-raid.vm';
-import { WclFight, WclPlayer, WclReport, WclUserCharacter } from '../../core/models/wcl.models';
+import { WclFight, WclPlayer, WclReport } from '../../core/models/wcl.models';
 
 function fight(p: Partial<WclFight>): WclFight {
   return { id: 0, name: '', startTime: 0, endTime: 0, kill: false, encounterID: 0, attempt: 0, duration_s: 0, friendlyPlayers: [], ...p };
 }
 function player(p: Partial<WclPlayer>): WclPlayer {
   return { id: 0, name: '', spec: '', server: '', ...p };
-}
-function userChar(name: string): WclUserCharacter {
-  return { id: 1, name, serverSlug: 'area-52', serverRegion: 'us' };
 }
 
 describe('extractCode', () => {
@@ -85,24 +82,16 @@ describe('visiblePlayersOf', () => {
 describe('pickPlayerId', () => {
   const players = [player({ id: 1, name: 'Anya' }), player({ id: 2, name: 'Bram' })];
 
-  it('prefers the logged-in user\'s character over a URL choice', () => {
-    expect(pickPlayerId(players, [userChar('Bram')], 1)).toBe(2);
-  });
-
-  it('matches the user character case-insensitively', () => {
-    expect(pickPlayerId(players, [userChar('bram')], null)).toBe(2);
-  });
-
-  it('honors an explicit auto-player when no user character is present', () => {
-    expect(pickPlayerId(players, [], 1)).toBe(1);
+  it('honors an explicit auto-player', () => {
+    expect(pickPlayerId(players, 1)).toBe(1);
   });
 
   it('falls back to the first visible player', () => {
-    expect(pickPlayerId(players, [userChar('Nobody')], null)).toBe(1);
+    expect(pickPlayerId(players, null)).toBe(1);
   });
 
   it('returns null when there is nobody to pick', () => {
-    expect(pickPlayerId([], [], null)).toBeNull();
+    expect(pickPlayerId([], null)).toBeNull();
   });
 });
 
@@ -110,23 +99,19 @@ describe('pickLivePlayerId', () => {
   const players = [player({ id: 1, name: 'Anya' }), player({ id: 2, name: 'Bram' }), player({ id: 3, name: 'Cera' })];
 
   it('keeps the currently selected player when they appear in the new pull', () => {
-    expect(pickLivePlayerId(players, 'Bram', [])).toBe(2);
+    expect(pickLivePlayerId(players, 'Bram')).toBe(2);
   });
 
   it('matches the current player name case-insensitively', () => {
-    expect(pickLivePlayerId(players, 'bram', [])).toBe(2);
+    expect(pickLivePlayerId(players, 'bram')).toBe(2);
   });
 
-  it('falls back to the logged-in user character when the selected player is absent', () => {
+  it('falls back to the first visible player when the selected player is absent', () => {
     const newPlayers = [player({ id: 2, name: 'Bram' }), player({ id: 3, name: 'Cera' })];
-    expect(pickLivePlayerId(newPlayers, 'Anya', [userChar('Cera')])).toBe(3);
+    expect(pickLivePlayerId(newPlayers, 'Anya')).toBe(2);
   });
 
-  it('falls back to first visible player when neither sticky nor user char matches', () => {
-    expect(pickLivePlayerId(players, 'Nobody', [userChar('Ghost')])).toBe(1);
-  });
-
-  it('falls back through pickPlayerId when currentPlayerName is null', () => {
-    expect(pickLivePlayerId(players, null, [userChar('Cera')])).toBe(3);
+  it('falls back to the first visible player when currentPlayerName is null', () => {
+    expect(pickLivePlayerId(players, null)).toBe(1);
   });
 });
