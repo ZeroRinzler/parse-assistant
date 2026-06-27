@@ -1,14 +1,9 @@
 name: Ingest Parse Samples
 
 on:
-  schedule:
-    # GitHub drops/deprioritizes scheduled events under load and ignores the exact
-    # minute, so a single hourly fire only lands ~1 in 3 hours here. We fire three
-    # times an hour (every 20 min) to raise the odds at least one run lands per hour.
-    # Runs are serialized by the concurrency group below, and because one productive
-    # run drains the WCL hourly point budget, any extra fire in the same hour early-exits
-    # cheaply, so no spec starves when a run is delayed or skipped.
-    - cron: '7,27,47 * * * *'
+  # Hourly scheduling is driven by an EXTERNAL scheduler (cron-job.org) that calls the
+  # workflow_dispatch REST API once an hour. GitHub's own schedule: cron was removed - it
+  # dropped most fires under load (3 fires in 7 hours observed) and ignores the set minute.
   workflow_dispatch:
 
 concurrency:

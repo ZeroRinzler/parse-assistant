@@ -141,7 +141,7 @@ warcraft-learner/
 │   └── rulebook_skill.md       # LLM prompt template for rulebook generation
 ├── .github/workflows/
 │   ├── deploy-pages.yml         # Build Angular --base-href /warcraft-learner/ → GitHub Pages (push to main)
-│   ├── ingest-parses.yml        # Hourly (cron 23 * * * *) + manual: runs `npm run scrape` then `npm run ingest`, commits data/specs/**
+│   ├── ingest-parses.yml        # Hourly via an external cron-job.org workflow_dispatch trigger (GitHub's own schedule cron was too unreliable) + manual: runs `npm run scrape` then `npm run ingest`, commits data/specs/**
 │   ├── pr-preview.yml           # Per-PR preview deploy
 │   ├── pr-preview-cleanup.yml   # Tear down preview when PR closes
 │   └── test.yml                 # CI: lint + tests
