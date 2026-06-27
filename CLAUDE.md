@@ -67,28 +67,24 @@ These are the general Angular/TypeScript best practices for the app. The mechani
 
 ## URL routing
 
-All state is persisted in URL query parameters. Every navigable state must be linkable and bookmarkable.
+Selection is **not** persisted in the URL and pages do **not** auto-run from query params. This is a
+deliberate anti-abuse measure: because the browser holds the WCL client-credentials secret and shares one
+account-level rate-limit budget with ingestion, a crawler following a shared `?report=...` deep-link used
+to auto-run a full (expensive) analysis on load and drain that budget. Removing URL-driven loading closes
+that vector. Sticky state lives in localStorage instead (`core/services/selection-store.ts`): the
+post-raid player **name** and the pre-fight **spec**. Everything else is re-entered.
 
 ### Player page (`/`)
-| Param | Description |
-|---|---|
-| `report` | WCL report code (e.g. `grBQ3vTHXAtPa4JK`) |
-| `fight` | Fight actor ID |
-| `player` | Player actor ID |
-
-Example: `/?report=grBQ3vTHXAtPa4JK&fight=1&player=10`
-
-If all three params are present on load, the page auto-fetches and runs analysis immediately.
+A report is loaded only by an explicit **Analyze** action (or Enter) on a **validated** report reference -
+a full WCL report URL or a bare 16-character report code (`isValidReportCode` in `post-raid.vm.ts`). The
+Analyze button stays disabled, and **no** WCL request fires, until the input is a valid code. There is no
+report/fight/player query param and nothing auto-loads on page open. The sticky player name re-selects the
+same character once a log loads.
 
 ### Pre-fight page (`/pre`)
-Spec + encounter selector; all data is static (ingested bench data), no character or log required.
-
-| Param | Description |
-|---|---|
-| `spec` | WCL spec name (e.g. `SubtletyRogue`) |
-| `encounter` | Encounter ID |
-
-Example: `/pre?spec=SubtletyRogue&encounter=3144`
+Spec + encounter selector; all data is static (ingested bench data), no character or log required. There
+is no `spec`/`encounter` query param. The last spec is restored from localStorage; the encounter is
+re-selected each visit.
 
 ## Architecture
 

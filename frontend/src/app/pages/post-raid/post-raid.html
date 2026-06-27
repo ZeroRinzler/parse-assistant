@@ -3,7 +3,11 @@
       <mat-form-field appearance="outline" class="w-full">
         <mat-label>Warcraft Logs Report URL or Code</mat-label>
         <input matInput [formControl]="reportControl" placeholder="https://www.warcraftlogs.com/reports/AbCdEfGh…"
-               (input)="onReportChange()" (keydown.enter)="loadReport()" />
+               (keydown.enter)="loadReport()" (paste)="onPaste()" />
+        <!-- Unconditional: the validator only ever raises `invalidReportCode`, and Material shows
+             this only while the field is in its error state. Wrapping it in `@if` would leave the
+             field red with no message (the MAT_ERROR content-query misses the conditional child). -->
+        <mat-error>Paste a Warcraft Logs report URL or a 16-character report code.</mat-error>
       </mat-form-field>
 
       <mat-slide-toggle [formControl]="liveControl" (change)="onLiveToggle()" class="mt-2">

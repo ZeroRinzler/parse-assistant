@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractCode, buildFights, buildPlayers, visiblePlayersOf, pickPlayerId, pickLivePlayerId } from './post-raid.vm';
+import { extractCode, isValidReportCode, buildFights, buildPlayers, visiblePlayersOf, pickPlayerId, pickLivePlayerId } from './post-raid.vm';
 import { WclFight, WclPlayer, WclReport } from '../../core/models/wcl.models';
 
 function fight(p: Partial<WclFight>): WclFight {
@@ -16,6 +16,30 @@ describe('extractCode', () => {
 
   it('passes a bare code through, trimmed', () => {
     expect(extractCode('  grBQ3vTHXAtPa4JK  ')).toBe('grBQ3vTHXAtPa4JK');
+  });
+});
+
+describe('isValidReportCode', () => {
+  it('accepts a 16-character alphanumeric report code', () => {
+    expect(isValidReportCode('grBQ3vTHXAtPa4JK')).toBe(true);
+  });
+
+  it('rejects an empty string', () => {
+    expect(isValidReportCode('')).toBe(false);
+  });
+
+  it('rejects arbitrary non-code text', () => {
+    expect(isValidReportCode('hello')).toBe(false);
+    expect(isValidReportCode('not a code at all')).toBe(false);
+  });
+
+  it('rejects a code of the wrong length', () => {
+    expect(isValidReportCode('grBQ3vTHXAtPa4J')).toBe(false);  // 15 chars
+    expect(isValidReportCode('grBQ3vTHXAtPa4JKK')).toBe(false); // 17 chars
+  });
+
+  it('rejects a 16-character string containing non-alphanumeric characters', () => {
+    expect(isValidReportCode('grBQ3vTHXAtPa4J-')).toBe(false);
   });
 });
 

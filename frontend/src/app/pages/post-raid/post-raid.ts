@@ -1,10 +1,9 @@
 import {
-  ChangeDetectionStrategy, Component, OnInit,
+  ChangeDetectionStrategy, Component,
   inject, signal, computed,
 } from '@angular/core';
 import { toObservable, toSignal, takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { ActivatedRoute, Router } from '@angular/router';
-import { FormControl, ReactiveFormsModule } from '@angular/forms';
+import { AbstractControl, FormControl, ReactiveFormsModule, ValidationErrors } from '@angular/forms';
 import { EMPTY, combineLatest, from, merge, of } from 'rxjs';
 import { distinctUntilChanged, exhaustMap, map, switchMap, tap } from 'rxjs/operators';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -28,7 +27,19 @@ import { MapFeatureService, MapAnchor } from './map/map.service';
 import { FormatDurationPipe } from '../../shared/pipes/format-duration-pipe';
 import { FormatSpecPipe } from '../../shared/pipes/format-spec-pipe';
 import { SelectionStore } from '../../core/services/selection-store';
-import { extractCode, buildFights, buildPlayers, visiblePlayersOf, pickPlayerId, pickLivePlayerId } from './post-raid.vm';
+import { extractCode, isValidReportCode, buildFights, buildPlayers, visiblePlayersOf, pickLivePlayerId } from './post-raid.vm';
+
+/**
+ * Reactive-form validator for the report field: valid only when the input resolves to a
+ * real 16-char WCL report code (a bare code or one inside a report URL). This keeps the
+ * Analyze button disabled - and no WCL request firing - until the input is a usable log
+ * reference, so typing junk never spends rate-limit budget.
+ */
+function reportCodeValidator(control: AbstractControl): ValidationErrors | null {
+  const value = ((control.value as string | null) ?? '').trim();
+  if (!value) return null; // empty is not an error (no red field); the button is disabled separately
+  return isValidReportCode(extractCode(value)) ? null : { invalidReportCode: true };
+}
 
 /**
  * Resolve the selected player's spec from a raw `playerDetails` response: across
@@ -49,12 +60,16 @@ export function specOf(groups: PlayerDetailGroups, playerId: number): string {
 }
 
 /**
- * Post-raid analyzer page shell. It owns only selection (report / fight / player),
- * live polling, and URL sync - no domain analysis. It resolves the minimal context
- * (spec + encounter + the player log selection) and composes the feature cards, each
- * of which fetches and computes its own slice. The map is a normal feature: the page
- * renders `<wl-map-panel>` and forwards each card's `openMap` output to the
- * `MapFeatureService`.
+ * Post-raid analyzer page shell. It owns only selection (report / fight / player) and
+ * live polling - no domain analysis. It resolves the minimal context (spec + encounter +
+ * the player log selection) and composes the feature cards, each of which fetches and
+ * computes its own slice. The map is a normal feature: the page renders `<wl-map-panel>`
+ * and forwards each card's `openMap` output to the `MapFeatureService`.
+ *
+ * Selection is NOT mirrored to the URL: a report is loaded only by an explicit Analyze
+ * action on a validated code, never auto-run from a query param. This stops crawlers
+ * following a shared link from spending the shared WCL rate-limit budget. The sticky
+ * player NAME (localStorage) is the only persisted selection.
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -68,16 +83,14 @@ export function specOf(groups: PlayerDetailGroups, playerId: number): string {
   ],
   templateUrl: './post-raid.html',
 })
-export class PostRaidComponent implements OnInit {
+export class PostRaidComponent {
   private readonly wclApi = inject(WclApiService);
   private readonly mapFeature = inject(MapFeatureService);
   private readonly liveMode = inject(LiveModeState);
   private readonly liveSync = inject(LiveReportSyncService);
-  private readonly route = inject(ActivatedRoute);
-  private readonly router = inject(Router);
   private readonly selectionStore = inject(SelectionStore);
 
-  protected readonly reportControl = new FormControl('', { nonNullable: true });
+  protected readonly reportControl = new FormControl('', { nonNullable: true, validators: [reportCodeValidator] });
   protected readonly fightControl = new FormControl<number | null>(null);
   protected readonly playerControl = new FormControl<number | null>(null);
   protected readonly liveControl = new FormControl(false, { nonNullable: true });
@@ -154,32 +167,22 @@ export class PostRaidComponent implements OnInit {
     takeUntilDestroyed(),
   ).subscribe();
 
-  ngOnInit(): void {
-    const params = this.route.snapshot.queryParamMap;
-    if (params.get('live') === '1') this.liveControl.setValue(true);
-    // Live sync flips report/event reads to network-only; otherwise a saved report is read
-    // cache-first (fetched once, re-selection is free).
-    this.liveMode.active.set(this.liveControl.value);
-    const reportParam = params.get('report');
-    if (reportParam) {
-      this.reportControl.setValue(reportParam);
-      void this.loadReport(
-        params.get('fight')  ? parseInt(params.get('fight')!,  10) : null,
-        params.get('player') ? parseInt(params.get('player')!, 10) : null,
-      );
-    }
-    // No report is auto-loaded from storage: only the sticky player NAME is persisted, and
-    // it is applied (by `_applyAutoPlayer`) whenever a log is loaded - not by reopening a log.
+  protected onPaste(): void {
+    // The pasted text is committed to the control after this event fires; defer a tick so
+    // loadReport() reads the updated value, then load it (loadReport validates first, so a
+    // pasted non-code never reaches WCL).
+    setTimeout(() => void this.loadReport());
   }
 
-  protected async onReportChange(): Promise<void> {
-    await this.loadReport();
-  }
-
-  protected async loadReport(autoFight: number | null = null, autoPlayer: number | null = null): Promise<void> {
+  protected async loadReport(): Promise<void> {
     this.error.set('');
-    const url = this.reportControl.value.trim();
-    if (!url) return;
+    const code = extractCode(this.reportControl.value.trim());
+    // Guard before any network call: an invalid code never reaches WCL. The Analyze button
+    // is already disabled while invalid; this also covers the Enter-key path.
+    if (!isValidReportCode(code)) {
+      if (code) this.error.set('Enter a valid Warcraft Logs report URL or 16-character report code.');
+      return;
+    }
     // Setting reportCode to '' stops any active poll before the fetch completes.
     this.reportCode.set('');
 
@@ -191,16 +194,15 @@ export class PostRaidComponent implements OnInit {
 
     try {
       this.loadingMsg.set('Fetching report from WCL…');
-      const code = extractCode(url);
       const report = await this.wclApi.getReport(code);
       this._applyReport(report);
 
       const lastFight = this.fights()[this.fights().length - 1];
-      this.fightControl.setValue(autoFight ?? lastFight?.id ?? null);
-      this._applyAutoPlayer(autoPlayer);
+      this.fightControl.setValue(lastFight?.id ?? null);
+      this._applyAutoPlayer();
       // Set reportCode last - this activates the polling pipeline if liveSync is on.
       this.reportCode.set(code);
-      this._syncUrl();
+      this._persistPlayerName();
       await this.resolveSelection();
     } catch (err) {
       this.error.set(err instanceof Error ? err.message : 'Failed to load report.');
@@ -218,7 +220,6 @@ export class PostRaidComponent implements OnInit {
 
   protected onLiveToggle(): void {
     this.liveMode.active.set(this.liveControl.value);
-    this._syncUrl();
   }
 
   private async _pollOnce(): Promise<void> {
@@ -241,7 +242,7 @@ export class PostRaidComponent implements OnInit {
       const visible = visiblePlayersOf(this.fights(), this.players(), latest.id);
       this.fightControl.setValue(latest.id);
       this.playerControl.setValue(pickLivePlayerId(visible, currentName));
-      this._syncUrl();
+      this._persistPlayerName();
       await this.resolveSelection();
       this.status.set(`Updated ${new Date().toLocaleTimeString()} · ${latest.name}`);
     } catch (err) {
@@ -251,14 +252,14 @@ export class PostRaidComponent implements OnInit {
 
   protected async onFightChange(): Promise<void> {
     if (this.liveSyncEnabled()) return;
-    this._applyAutoPlayer(null);
-    this._syncUrl();
+    this._applyAutoPlayer();
+    this._persistPlayerName();
     await this.resolveSelection();
   }
 
   protected async onPlayerChange(): Promise<void> {
     if (this.liveSyncEnabled()) return;
-    this._syncUrl();
+    this._persistPlayerName();
     await this.resolveSelection();
   }
 
@@ -292,26 +293,17 @@ export class PostRaidComponent implements OnInit {
     }
   }
 
-  private _applyAutoPlayer(autoPlayer: number | null): void {
-    // An explicit actor id (URL param) wins; otherwise stick to the saved player name so the
-    // same character stays selected across fights and logs (ids are not stable across reports).
-    if (autoPlayer) {
-      this.playerControl.setValue(pickPlayerId(this.visiblePlayers(), autoPlayer));
-      return;
-    }
+  private _applyAutoPlayer(): void {
+    // Stick to the saved player name so the same character stays selected across fights and
+    // logs (actor ids are not stable across reports).
     const stickyName = this.selectionStore.loadPostRaid()?.playerName ?? null;
     this.playerControl.setValue(pickLivePlayerId(this.visiblePlayers(), stickyName));
   }
 
-  private _syncUrl(): void {
-    const queryParams: Record<string, string> = {};
-    if (this.reportCode()) queryParams['report'] = this.reportCode();
-    if (this.selectedFightId()) queryParams['fight'] = String(this.selectedFightId());
-    if (this.selectedPlayerId()) queryParams['player'] = String(this.selectedPlayerId());
-    if (this.liveSyncEnabled()) queryParams['live'] = '1';
-    this.router.navigate([], { queryParams, replaceUrl: true });
+  private _persistPlayerName(): void {
     // Persist only the player NAME, and only when one resolves - never clobber the sticky
-    // value with null while nothing is selected (e.g. mid report switch).
+    // value with null while nothing is selected (e.g. mid report switch). Selection is not
+    // mirrored to the URL (see the class doc): this localStorage value is the only sticky state.
     const playerName = this.players().find(player => player.id === this.selectedPlayerId())?.name ?? null;
     if (playerName) this.selectionStore.savePostRaid({ playerName });
   }

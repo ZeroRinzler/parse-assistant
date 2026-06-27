@@ -16,6 +16,15 @@ export function extractCode(url: string): string {
 }
 
 /**
+ * A WCL report code is exactly 16 alphanumeric characters. Validating the extracted
+ * code before any network call keeps junk input (or a crawled `?report=garbage` link)
+ * from reaching WCL and wasting the shared rate-limit budget.
+ */
+export function isValidReportCode(code: string): boolean {
+  return /^[a-zA-Z0-9]{16}$/.test(code);
+}
+
+/**
  * Project the report's fights into encounter pulls: drop trash fights, order by
  * start time, and number each boss's attempts (1, 2, 3 ...) with a derived
  * duration in seconds.
