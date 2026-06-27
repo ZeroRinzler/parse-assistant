@@ -10,6 +10,8 @@ import { RangeRow, ComparisonWindow } from '../../../core/models/window-comparis
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-window-comparison',
+  // Angular custom elements default to display:inline; block keeps the card full-width.
+  host: { class: 'block' },
   imports: [MatIconModule, MatButtonModule, GameIconComponent, CompactAbilityRowComponent, FormatDurationPipe, FormatDamagePipe],
   templateUrl: './window-comparison.html',
 })

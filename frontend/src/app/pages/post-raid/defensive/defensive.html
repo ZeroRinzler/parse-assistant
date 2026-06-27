@@ -1,6 +1,6 @@
 <!-- Per-defensive findings -->
 @if (findingRows().length || onPlan().length) {
-  <wl-finding-table class="mt-6 block"
+  <wl-finding-table
     title="Defensives"
     subtitle="Defensive cooldowns vs top parses."
     [rows]="findingRows()"
@@ -13,6 +13,7 @@
 <!-- Defensive windows: when top parsers use each defensive and how much damage they absorbed -->
 @if (windows().length > 0) {
   <wl-window-comparison
+    [class.mt-6]="findingRows().length > 0 || onPlan().length > 0"
     [windows]="windows()"
     [higherIsBetter]="false"
     [fightDuration]="fightDuration()"
