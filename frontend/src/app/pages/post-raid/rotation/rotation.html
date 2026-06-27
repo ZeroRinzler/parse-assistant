@@ -111,37 +111,3 @@
     </div>
   }
 </div>
-
-<!-- Per-cooldown comparison: uses/min + first cast vs top parse -->
-@if (comparison().length) {
-  <div class="mt-6 bg-[var(--surface)] border border-[var(--border)] rounded-[10px] overflow-hidden">
-    <div class="px-4 pt-3 pb-2">
-      <div class="text-[17px] font-semibold text-[var(--text)]">Cooldown comparison</div>
-      <div class="text-xs text-[var(--muted)] mt-0.5">Your usage rate and opener timing next to the top-parse average.</div>
-    </div>
-    <div class="grid grid-cols-[minmax(0,1fr)_120px_120px] gap-[14px] px-4 pb-[7px]">
-      <div></div>
-      <div class="text-[10px] uppercase tracking-widest text-[var(--border)] text-right tabular-nums">Uses / min</div>
-      <div class="text-[10px] uppercase tracking-widest text-[var(--border)] text-right tabular-nums">First cast</div>
-    </div>
-    @for (entry of comparison(); track entry.cd_name) {
-      <div class="grid grid-cols-[minmax(0,1fr)_120px_120px] gap-[14px] px-4 py-[10px] items-center border-t border-[var(--border)]">
-        <div class="min-w-0 flex items-center gap-[7px]">
-          @if (entry.spell_id; as spellId) {
-            <wl-game-icon [id]="spellId" [icon]="entry.icon" [name]="entry.cd_name"></wl-game-icon>
-          } @else {
-            <span class="text-sm text-[var(--text)]">{{ entry.cd_name }}</span>
-          }
-        </div>
-        <div class="text-right leading-[1.15] tabular-nums">
-          <div class="text-[14px] font-semibold text-[var(--text)]">{{ (entry.player_uses_per_min ?? 0) | number:'1.0-2' }}</div>
-          <div class="text-[10px] text-[var(--muted)] mt-px">top {{ (entry.top_avg_uses_per_min ?? 0) | number:'1.0-2' }}</div>
-        </div>
-        <div class="text-right leading-[1.15] tabular-nums">
-          <div class="text-[14px] font-semibold text-[var(--text)]">{{ entry.player_first_cast_s != null ? (entry.player_first_cast_s | formatDuration) : '-' }}</div>
-          <div class="text-[10px] text-[var(--muted)] mt-px">top {{ (entry.top_avg_first_cast_s ?? 0) | formatDuration }}</div>
-        </div>
-      </div>
-    }
-  </div>
-}

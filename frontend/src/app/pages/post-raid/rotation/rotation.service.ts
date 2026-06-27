@@ -18,7 +18,7 @@
  */
 import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
-import { AnalysisFinding, ComparisonEntry } from '../../../core/models/analysis.models';
+import { AnalysisFinding } from '../../../core/models/analysis.models';
 import { PerCdBenchmark, UsesPerMin } from '../../../core/models/encounter.models';
 import {
   RulebookCooldown, RulebookRule,
@@ -76,7 +76,6 @@ export interface RotationPlayerView {
   ruleRows: RotationFindingRow[];
   offensiveRows: RotationFindingRow[];
   onPlan: RotationOnPlanChip[];
-  comparison: ComparisonEntry[];
 }
 
 /* ----------------------------- statistical predicates ----------------------------- */
@@ -444,40 +443,6 @@ export function bucketRotationFindings(
   return { ruleRows, offensiveRows, onPlan };
 }
 
-/* ----------------------------- comparison table ----------------------------- */
-
-/** Per-cooldown comparison rows: player uses/min and first cast vs top parse. */
-export function buildComparisonTable(
-  fStart: number, fEnd: number, castEvents: WclEvent[],
-  cooldowns: RulebookCooldown[], bench: RotationBench,
-): ComparisonEntry[] {
-  const fightDurMin = (fEnd - fStart) / 1000 / 60;
-  const perCdBench = bench.per_cd_benchmarks ?? {};
-  const rows: ComparisonEntry[] = [];
-  for (const cd of cooldowns) {
-    const cdBench = perCdBench[cd.name];
-    if (!cdBench) continue;
-    const cdCasts = castEvents
-      .filter(event => event.type === 'cast' && event.abilityGameID === cd.spell_id && event.timestamp >= fStart && event.timestamp <= fEnd)
-      .sort((a, b) => a.timestamp - b.timestamp);
-    const playerUses = cdCasts.length;
-    const playerFirst = playerUses ? Math.round(((cdCasts[0].timestamp - fStart) / 1000) * 10) / 10 : undefined;
-    rows.push({
-      cd_name: cd.name,
-      spell_id: cd.spell_id,
-      icon: bench.ability_icons[cd.spell_id].icon,
-      player_uses: playerUses,
-      player_uses_per_min: fightDurMin > 0 ? Math.round((playerUses / fightDurMin) * 100) / 100 : 0,
-      top_avg_uses_per_min: cdBench.uses_per_min.avg,
-      top_stddev_uses_per_min: cdBench.uses_per_min.stddev,
-      player_first_cast_s: playerFirst,
-      top_avg_first_cast_s: cdBench.avg_first_cast_s,
-      top_stddev_first_cast_s: cdBench.stddev_first_cast_s,
-    });
-  }
-  return rows;
-}
-
 /* ----------------------------- pre-fight cooldown plan ----------------------------- */
 
 /** Bench-only cooldown game plan rows, ordered by opener priority. */
@@ -521,12 +486,12 @@ export class RotationFeatureService {
   /**
    * Post-raid: fetch the player's own log (report master abilities for icons +
    * Casts/Buffs), read the prepared rotation bench, and produce the offensive
-   * findings + comparison rows. Returns an empty view when bench is absent.
+   * findings. Returns an empty view when bench is absent.
    */
   async loadPlayerView(
     spec: string, encounterId: number, reportCode: string, fightId: number, playerId: number,
   ): Promise<RotationPlayerView> {
-    const empty: RotationPlayerView = { ruleRows: [], offensiveRows: [], onPlan: [], comparison: [] };
+    const empty: RotationPlayerView = { ruleRows: [], offensiveRows: [], onPlan: [] };
     const bench = await this.source.getRotationBench(spec, encounterId);
     if (!bench) return empty;
 
@@ -544,8 +509,7 @@ export class RotationFeatureService {
         fight.startTime, fight.endTime, casts, buffs, bench.major_cooldowns, bench.rules, bench,
       );
       const { ruleRows, offensiveRows, onPlan } = bucketRotationFindings(findings, bench.cd_spell_ids, bench.ability_icons);
-      const comparison = buildComparisonTable(fight.startTime, fight.endTime, casts, bench.major_cooldowns, bench);
-      return { ruleRows, offensiveRows, onPlan, comparison };
+      return { ruleRows, offensiveRows, onPlan };
     } catch (err) {
       logWarn(`RotationFeatureService.loadPlayerView ${reportCode}:${fightId}`, err);
       return empty;

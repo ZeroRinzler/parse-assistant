@@ -94,22 +94,6 @@ export interface AnalysisResult {
   defensive_findings?: AnalysisFinding[];
   top_defensive_windows?: BurstWindow[];
   player_defensive_windows?: PlayerBurstWindow[];
-  comparison_table?: ComparisonEntry[];
   /** Player's own gear from their most recent ranked kill of this encounter. */
   player_gear?: CharacterGear;
-}
-
-export interface ComparisonEntry {
-  cd_name: string;
-  spell_id?: number;
-  /** Baked icon filename for `wl-game-icon` (empty string when there is no art). */
-  icon: string;
-  player_uses?: number;
-  top_uses?: number;
-  player_uses_per_min?: number;
-  top_avg_uses_per_min?: number;
-  top_stddev_uses_per_min?: number;
-  player_first_cast_s?: number;
-  top_avg_first_cast_s?: number;
-  top_stddev_first_cast_s?: number;
 }

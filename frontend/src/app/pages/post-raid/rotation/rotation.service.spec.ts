@@ -10,7 +10,7 @@ import {
   isOutlierAbove, isCriticallyBelow, benchExpectedUses, closestToZero, castEfficiencyPct,
   fmtClock, sortBySeverity,
   evaluateCastWithoutPrior, evaluateHoldForAnchor, evaluateRules, buildCastTimes,
-  analyzeRotationFindings, bucketRotationFindings, buildComparisonTable, buildCdPlan,
+  analyzeRotationFindings, bucketRotationFindings, buildCdPlan,
 } from './rotation.service';
 
 function cast(spellId: number, atS: number): WclEvent {
@@ -182,19 +182,6 @@ describe('bucketRotationFindings', () => {
   });
 });
 
-describe('buildComparisonTable', () => {
-  it('produces player uses/min and first cast next to the top parse', () => {
-    const casts = [cast(121471, 5), cast(121471, 95)];
-    const rows = buildComparisonTable(0, 120_000, casts, bench().major_cooldowns, bench());
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({
-      cd_name: 'Shadow Blades', spell_id: 121471, player_uses: 2,
-      player_first_cast_s: 5, top_avg_first_cast_s: 5, top_avg_uses_per_min: 1,
-    });
-    expect(rows[0].player_uses_per_min).toBeCloseTo(1, 1);
-  });
-});
-
 describe('buildCdPlan', () => {
   const abilities = { 1856: { icon: 'vanish', name: 'Vanish' }, 121471: { icon: 'sb', name: 'Shadow Blades' } };
   it('orders by opener priority and surfaces holds for majority-hold cds', () => {
@@ -231,10 +218,10 @@ describe('RotationFeatureService', () => {
   it('returns an empty player view when bench is absent', async () => {
     const service = withSource(null);
     const view = await service.loadPlayerView('SubtletyRogue', 1, 'rX', 1, 10);
-    expect(view).toEqual({ ruleRows: [], offensiveRows: [], onPlan: [], comparison: [] });
+    expect(view).toEqual({ ruleRows: [], offensiveRows: [], onPlan: [] });
   });
 
-  it('computes player findings + comparison from the player log', async () => {
+  it('computes player findings from the player log', async () => {
     const wcl = {
       getReport: async () => ({
         title: 't', fights: [{ id: 1, name: 'Boss', startTime: 0, endTime: 120_000 }],
@@ -246,9 +233,6 @@ describe('RotationFeatureService', () => {
     const single = bench({ per_cd_benchmarks: { 'Shadow Blades': cdBench({ uses_per_min: { avg: 0.5, stddev: 0.1, min: 0.4, max: 0.6 } }) } });
     const service = withSource(single, wcl);
     const view = await service.loadPlayerView('SubtletyRogue', 1, 'rX', 1, 10);
-    expect(view.comparison).toHaveLength(1);
-    expect(view.comparison[0].player_uses).toBe(1);
-    expect(view.comparison[0].icon).toBe('sb');
     expect(view.onPlan).toEqual([{ name: 'Shadow Blades', spellId: 121471, icon: 'sb' }]);
   });
 
