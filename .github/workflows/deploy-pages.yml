@@ -41,8 +41,8 @@ jobs:
         run: npm run build -- --base-href /warcraft-learner/
         working-directory: frontend
 
-      - name: Write SPA deep-link 404 redirect (see .github/spa-404.html)
-        run: cp .github/spa-404.html static/angular/browser/404.html
+      - name: Copy 404 fallback for SPA routing
+        run: cp static/angular/browser/index.html static/angular/browser/404.html
 
       - name: Deploy to gh-pages branch
         uses: JamesIves/github-pages-deploy-action@v4
