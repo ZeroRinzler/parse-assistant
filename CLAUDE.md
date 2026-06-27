@@ -327,15 +327,6 @@ Runs `frontend/scripts/ingest/orchestrator.ts`, which boots a headless Angular r
 
 GHA commits `frontend/public/data/specs/**`, which triggers `deploy-pages.yml` to rebuild and redeploy.
 
-**Ingesting spec data from a branch (preferred over local ingestion - no local WCL credentials needed).** The ingest workflow can run on any branch via manual trigger:
-
-1. Push the branch to GitHub (rulebook changes, new spec dirs, etc.).
-2. **Actions -> Ingest Parse Samples -> Run workflow**, select the branch.
-3. Optionally set a specific spec name, or leave blank to ingest all specs that have a `rulebook.json`.
-4. Run. The workflow commits updated `frontend/public/data/specs/**` directly to that branch; `git pull` to get the files.
-
-For Claude: trigger via the `mcp__github__actions_run_trigger` tool on the current feature branch, wait for the run to complete, then `git pull`.
-
 > **Keep data shapes in sync.** Because ingestion runs the very same `*TransformService`s the browser uses, the tailored slice shapes are defined in exactly one place - each slice's `*Bench` interface (its `*-data-source.ts`) plus the relevant `core/models/*` - and ingestion writes precisely those, so the slice shapes stay in sync automatically. Changing a slice's `*Bench`/model therefore updates runtime and ingest at once (one implementation). You still keep the rulebook skill + schema in sync (`prompts/rulebook_skill.md`, `prompts/rulebook.schema.json`) since the transforms consume the rulebook (`duration`, `spell_id`s), and the indexes (`index.json`, `{spec}/encounters.json`) and `positions/{enc}.json` documented in the **Data models** section below. Already-committed JSON under `data/specs/**` keeps stale fields until the next re-ingest - harmless, since consumers ignore unknown fields.
 
 ### Rulebook management (`npm run rulebook` / `npm run scrape`)

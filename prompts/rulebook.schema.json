@@ -52,7 +52,7 @@
         },
         "spell_id": {
           "type": "integer",
-          "description": "WoW spell ID - REQUIRED. Prioritize the Active Ability Cast ID rather than a passive Aura, Classic WoW ID, or Talent Node ID. Verify at wowhead.com/spell=<id>. If genuinely unsure, supply your best guess and note it in usage_rule."
+          "description": "WoW spell ID - REQUIRED. Prioritize the Active Ability Cast ID rather than a passive Aura, Classic WoW ID, or Talent Node ID. Verify at wowhead.com/spell=<id>. If genuinely unsure, supply your best guess and record the uncertainty in id_note - NEVER in usage_rule, which is shown to users as coaching copy."
         },
         "cooldown": {
           "type": "number",
@@ -76,6 +76,10 @@
         "usage_rule": {
           "type": "string",
           "description": "One sentence: when and how to use this cooldown."
+        },
+        "id_note": {
+          "type": "string",
+          "description": "Optional. Internal maintainer note for any spell-ID uncertainty (e.g. 'best guess for the Midnight X cast, verify on Wowhead'). NEVER shown to users and not read by any analysis - put verification/best-guess notes here instead of in usage_rule."
         },
         "talent_gated": {
           "type": "boolean",
@@ -109,6 +113,10 @@
         "usage_rule": {
           "type": "string",
           "description": "One sentence: when/why to press this button."
+        },
+        "id_note": {
+          "type": "string",
+          "description": "Optional. Internal maintainer note for any spell-ID uncertainty (e.g. 'best guess for the Midnight X cast, verify on Wowhead'). NEVER shown to users and not read by any analysis - put verification/best-guess notes here instead of in usage_rule."
         },
         "talent_gated": {
           "type": "boolean",
