@@ -66,12 +66,44 @@ describe('findParseWindows', () => {
     const windows = findParseWindows([damage(279043, 12, 30), damage(1, 200, 1000)], 0, timings, [], new Map());
     expect(windows).toHaveLength(0);
   });
+
+  it('marks an ability with no matching cast event as passive', () => {
+    // Damage from a proc variant whose name is never cast (only Shadow Blades was cast).
+    const names = new Map([[121471, 'Shadow Blades'], [279043, 'Eviscerate (Ancient Arts)']]);
+    const timings = cdTimings([cast(121471, 10)], cooldowns, 0);
+    const windows = findParseWindows([damage(279043, 12, 1000)], 0, timings, [cast(121471, 10)], names);
+    expect(windows[0].ability_breakdown[0]).toMatchObject({ spell_id: 279043, is_passive: true });
+  });
+
+  it('marks an actively cast ability as not passive', () => {
+    // Shadow Blades both cast and dealing damage under the same name -> active.
+    const names = new Map([[121471, 'Shadow Blades']]);
+    const timings = cdTimings([cast(121471, 10)], cooldowns, 0);
+    const windows = findParseWindows([damage(121471, 12, 1000)], 0, timings, [cast(121471, 10)], names);
+    expect(windows[0].ability_breakdown[0]).toMatchObject({ spell_id: 121471, is_passive: false });
+  });
+
+  it('excludes a hit exactly on the window end (half-open)', () => {
+    // Window is 10s..30s; a hit at exactly 30s falls outside, matching the player side.
+    const timings = cdTimings([cast(121471, 10)], cooldowns, 0);
+    const windows = findParseWindows([damage(279043, 12, 1000), damage(555, 30, 1000)], 0, timings, [], new Map());
+    expect(windows).toHaveLength(1);
+    expect(windows[0].window_damage).toBe(1000);
+    expect(windows[0].ability_breakdown.map(ability => ability.spell_id)).not.toContain(555);
+  });
+
+  it('includes a hit just inside the window end', () => {
+    const timings = cdTimings([cast(121471, 10)], cooldowns, 0);
+    const windows = findParseWindows([damage(279043, 12, 1000), damage(555, 29.999, 1000)], 0, timings, [], new Map());
+    expect(windows[0].window_damage).toBe(2000);
+    expect(windows[0].ability_breakdown.map(ability => ability.spell_id)).toContain(555);
+  });
 });
 
 describe('clusterParseWindows', () => {
-  const window = (timeS: number): ParseWindow => ({
+  const window = (timeS: number, isPassive = false): ParseWindow => ({
     time_s: timeS, window_length_s: 20, window_damage: 1000, active_cds: ['Shadow Blades'],
-    ability_breakdown: [{ spell_id: 279043, damage: 600, casts: 2 }],
+    ability_breakdown: [{ spell_id: 279043, damage: 600, casts: 2, is_passive: isPassive }],
   });
 
   it('emits a cluster present in enough parses, with common cds + ability stats', () => {
@@ -84,6 +116,14 @@ describe('clusterParseWindows', () => {
   it('drops a cluster below the min-sample fraction', () => {
     // 1 window out of 10 samples is below max(2, 10*0.35).
     expect(clusterParseWindows([window(10)], 10)).toHaveLength(0);
+  });
+
+  it('marks a clustered ability passive only when every member never cast it', () => {
+    expect(clusterParseWindows([window(10, true), window(11, true)], 2)[0].ability_breakdown[0])
+      .toMatchObject({ is_passive: true });
+    // One member did cast it -> the clustered ability is not passive.
+    expect(clusterParseWindows([window(10, true), window(11, false)], 2)[0].ability_breakdown[0])
+      .toMatchObject({ is_passive: false });
   });
 });
 

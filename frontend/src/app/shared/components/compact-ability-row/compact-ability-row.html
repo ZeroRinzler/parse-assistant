@@ -41,14 +41,19 @@
     </span>
 
     @if (showCasts() && !hidePlayer()) {
-      <span class="md:hidden font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">Casts</span>
-      <span class="shrink-0 md:order-2 w-auto md:w-[7.5rem] text-center tabular-nums text-xs rounded px-2 py-0.5 border border-current"
-            [class.badge-success]="castsStatus() === 'success'"
-            [class.badge-warning]="castsStatus() === 'warning'"
-            [class.badge-critical]="castsStatus() === 'critical'"
-            [class.badge-muted]="castsStatus() === 'muted'">
-        {{ row().playerCasts ?? 0 }}<span class="text-[var(--muted)]"> / {{ row().topCasts ?? '-' }}</span>
-      </span>
+      @if (isPassive()) {
+        <!-- Passive ability (proc/auto/pet damage): no cast count, just a muted tag. -->
+        <span class="shrink-0 md:order-2 w-auto md:w-[7.5rem] text-center text-xs rounded px-2 py-0.5 border border-current badge-muted">passive</span>
+      } @else {
+        <span class="md:hidden font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">Casts</span>
+        <span class="shrink-0 md:order-2 w-auto md:w-[7.5rem] text-center tabular-nums text-xs rounded px-2 py-0.5 border border-current"
+              [class.badge-success]="castsStatus() === 'success'"
+              [class.badge-warning]="castsStatus() === 'warning'"
+              [class.badge-critical]="castsStatus() === 'critical'"
+              [class.badge-muted]="castsStatus() === 'muted'">
+          {{ row().playerCasts ?? 0 }}<span class="text-[var(--muted)]"> / {{ row().topCasts ?? '-' }}</span>
+        </span>
+      }
     }
   </div>
 </div>

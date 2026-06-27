@@ -87,6 +87,7 @@ export function burstDetailRows(
     topMax: ability.max_damage,
     playerCasts: playerByAbility[ability.spell_id]?.casts ?? null,
     topCasts: ability.avg_casts ?? null,
+    passive: ability.is_passive ?? false,
   }));
 }
 

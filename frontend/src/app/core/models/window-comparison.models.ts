@@ -19,6 +19,9 @@ export interface RangeRow {
   // Cast counts for the sorted-impact table (burst windows only). Null when unavailable.
   playerCasts?: number | null;
   topCasts?: number | null;
+  // Burst windows only: the ability is passive (never cast), so the casts cell shows
+  // a muted "passive" tag instead of a count.
+  passive?: boolean;
 }
 
 /** A spell rendered in a window header chip: id + its baked icon + name. */

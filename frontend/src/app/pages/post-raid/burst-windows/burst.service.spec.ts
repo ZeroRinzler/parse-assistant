@@ -78,6 +78,19 @@ describe('buildBurstView', () => {
     expect(view.anchors[0]).toEqual({ timeS: 10, label: 'Shadow Blades', spells: [{ id: 121471, icon: 'sb', name: 'Shadow Blades' }] });
   });
 
+  it('flags a detail row passive when the bench ability is passive', () => {
+    const passiveWindow: BurstWindow = {
+      ...window,
+      ability_breakdown: [
+        { spell_id: 279043, avg_damage: 600, min_damage: 400, max_damage: 800, count: 5, avg_casts: 0, is_passive: true },
+      ],
+    };
+    const view = buildBurstView([passiveWindow], [], 300, {}, abilities, true);
+    expect(view.windows[0].detailRows[0].passive).toBe(true);
+    // The default (non-passive) bench ability stays passive=false.
+    expect(buildBurstView([window], [], 300, {}, abilities, true).windows[0].detailRows[0].passive).toBe(false);
+  });
+
   it('mutes and drops player data for a window the fight never reached', () => {
     const view = buildBurstView([window], [], 5, {}, abilities);
     expect(view.windows[0].status).toBe('muted');

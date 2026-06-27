@@ -76,4 +76,14 @@ describe('CompactAbilityRowComponent casts badge', () => {
     const vm = mount(row({ playerCasts: 2, topCasts: null }));
     expect((vm['castsStatus'] as () => string)()).toBe('muted');
   });
+
+  it('reports passive when the row is passive', () => {
+    const vm = mount(row({ passive: true, playerCasts: 0, topCasts: 0 }));
+    expect((vm['isPassive'] as () => boolean)()).toBe(true);
+  });
+
+  it('is not passive for an ordinary cast row', () => {
+    const vm = mount(row({ playerCasts: 2, topCasts: 3 }));
+    expect((vm['isPassive'] as () => boolean)()).toBe(false);
+  });
 });

@@ -30,6 +30,12 @@ export interface AbilityBreakdown {
   count: number;
   /** Top-parse average cast count per window. Burst windows only; absent on defensives. */
   avg_casts?: number;
+  /**
+   * Burst windows only: true when no top parse ever cast this ability (passive/proc,
+   * auto-attack, or pet damage), so the UI shows a "passive" tag instead of a cast
+   * count. Absent (treated as false) on defensives and on pre-`is_passive` baked files.
+   */
+  is_passive?: boolean;
 }
 
 export interface BurstWindow {

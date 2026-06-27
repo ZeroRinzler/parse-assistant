@@ -102,7 +102,7 @@ export interface ParseWindow {
   window_length_s: number;
   window_damage: number;
   active_cds: string[];
-  ability_breakdown: { spell_id: number; damage: number; casts: number }[];
+  ability_breakdown: { spell_id: number; damage: number; casts: number; is_passive: boolean }[];
 }
 
 /**
@@ -147,11 +147,17 @@ export function findParseWindows(
   }
 
   const nameOf = (spellId: number): string => abilityNames.get(spellId) ?? `Spell ${spellId}`;
+  // Parse-global set of every ability name that was ever cast. An ability whose
+  // name never appears here is passive (proc/auto/pet damage), as opposed to an
+  // active ability that merely had no cast inside a given window.
+  const castNamesInParse = new Set(castRows.map(([, abilityId]) => nameOf(abilityId)));
   const windows: ParseWindow[] = [];
   for (const window of merged) {
     const startMs = fightStartMs + window.startS * 1000;
     const endMs = fightStartMs + window.endS * 1000;
-    const windowHits = hits.filter(hit => hit[0] >= startMs && hit[0] <= endMs);
+    // Half-open window end (< endMs) to match findPlayerBurstWindows, so a hit/cast
+    // exactly on the boundary is attributed identically on the bench and player sides.
+    const windowHits = hits.filter(hit => hit[0] >= startMs && hit[0] < endMs);
     const windowDmg = windowHits.reduce((sum, hit) => sum + hit[1], 0);
     if (!windowDmg || windowDmg / total < minPct) continue;
 
@@ -160,12 +166,17 @@ export function findParseWindows(
 
     const castsByName = new Map<string, number>();
     for (const [timestamp, abilityId] of castRows) {
-      if (timestamp >= startMs && timestamp <= endMs) castsByName.set(nameOf(abilityId), (castsByName.get(nameOf(abilityId)) ?? 0) + 1);
+      if (timestamp >= startMs && timestamp < endMs) castsByName.set(nameOf(abilityId), (castsByName.get(nameOf(abilityId)) ?? 0) + 1);
     }
 
     const ability_breakdown = [...byAbility.entries()]
       .sort((a, b) => b[1] - a[1]).slice(0, 6)
-      .map(([spell_id, dmg]) => ({ spell_id, damage: dmg, casts: castsByName.get(nameOf(spell_id)) ?? 0 }));
+      .map(([spell_id, dmg]) => ({
+        spell_id,
+        damage: dmg,
+        casts: castsByName.get(nameOf(spell_id)) ?? 0,
+        is_passive: !castNamesInParse.has(nameOf(spell_id)),
+      }));
 
     windows.push({
       time_s: round(window.startS),
@@ -187,14 +198,17 @@ export function clusterParseWindows(windows: ParseWindow[], sampleCount: number,
 
     const abilityDamage = new Map<number, number[]>();
     const abilityCasts = new Map<number, number[]>();
+    const abilityPassive = new Map<number, boolean[]>();
     for (const member of cluster) {
       for (const ability of member.ability_breakdown) {
         if (!abilityDamage.has(ability.spell_id)) {
           abilityDamage.set(ability.spell_id, []);
           abilityCasts.set(ability.spell_id, []);
+          abilityPassive.set(ability.spell_id, []);
         }
         abilityDamage.get(ability.spell_id)!.push(ability.damage);
         abilityCasts.get(ability.spell_id)!.push(ability.casts);
+        abilityPassive.get(ability.spell_id)!.push(ability.is_passive);
       }
     }
     const ability_breakdown = [...abilityDamage.entries()]
@@ -206,6 +220,8 @@ export function clusterParseWindows(windows: ParseWindow[], sampleCount: number,
         max_damage: Math.round(Math.max(...list)),
         count: list.length,
         avg_casts: Math.round(mean(abilityCasts.get(spell_id) ?? []) ?? 0),
+        // Passive only when no member parse ever cast it (every observation passive).
+        is_passive: (abilityPassive.get(spell_id) ?? []).every(Boolean),
       }))
       .sort((a, b) => b.avg_damage - a.avg_damage)
       .slice(0, 6);
