@@ -12,23 +12,7 @@ import {
   ReportQueryVars, ReportAbilitiesQueryVars, PlayerDetailsQueryVars,
   EventsQueryVars, CombatantInfoQueryVars, RankingsQueryVars,
 } from './wcl-queries';
-
-/** WCL spec folder name -> [WCL className, WCL specName] for the rankings query. */
-const SPEC_TO_WCL: Record<string, [string, string]> = {
-  RetributionPaladin: ['Paladin', 'Retribution'], HolyPaladin: ['Paladin', 'Holy'], ProtectionPaladin: ['Paladin', 'Protection'],
-  FireMage: ['Mage', 'Fire'], ArcaneMage: ['Mage', 'Arcane'], FrostMage: ['Mage', 'Frost'],
-  HavocDemonHunter: ['DemonHunter', 'Havoc'], VengeanceDemonHunter: ['DemonHunter', 'Vengeance'],
-  FuryWarrior: ['Warrior', 'Fury'], ArmsWarrior: ['Warrior', 'Arms'], ProtectionWarrior: ['Warrior', 'Protection'],
-  UnholyDeathKnight: ['DeathKnight', 'Unholy'], FrostDeathKnight: ['DeathKnight', 'Frost'], BloodDeathKnight: ['DeathKnight', 'Blood'],
-  BalanceDruid: ['Druid', 'Balance'], FeralDruid: ['Druid', 'Feral'], GuardianDruid: ['Druid', 'Guardian'], RestorationDruid: ['Druid', 'Restoration'],
-  BeastMasteryHunter: ['Hunter', 'BeastMastery'], MarksmanshipHunter: ['Hunter', 'Marksmanship'], SurvivalHunter: ['Hunter', 'Survival'],
-  BrewmasterMonk: ['Monk', 'Brewmaster'], WindwalkerMonk: ['Monk', 'Windwalker'], MistweaverMonk: ['Monk', 'Mistweaver'],
-  DisciplinePriest: ['Priest', 'Discipline'], HolyPriest: ['Priest', 'Holy'], ShadowPriest: ['Priest', 'Shadow'],
-  AssassinationRogue: ['Rogue', 'Assassination'], OutlawRogue: ['Rogue', 'Outlaw'], SubtletyRogue: ['Rogue', 'Subtlety'],
-  ElementalShaman: ['Shaman', 'Elemental'], EnhancementShaman: ['Shaman', 'Enhancement'], RestorationShaman: ['Shaman', 'Restoration'],
-  AfflictionWarlock: ['Warlock', 'Affliction'], DemonologyWarlock: ['Warlock', 'Demonology'], DestructionWarlock: ['Warlock', 'Destruction'],
-  DevastationEvoker: ['Evoker', 'Devastation'], PreservationEvoker: ['Evoker', 'Preservation'], AugmentationEvoker: ['Evoker', 'Augmentation'],
-};
+import { SPEC_META } from '../spec-meta';
 
 @Injectable({ providedIn: 'root' })
 export class WclApiService {
@@ -178,10 +162,9 @@ export class WclApiService {
    * unknown spec. Consumers map these to fetchable `ParseRanking` rows.
    */
   async getRankings(spec: string, encounterId: number): Promise<WclRawRanking[]> {
-    const mapping = SPEC_TO_WCL[spec];
-    if (!mapping) return [];
-    const [className, specName] = mapping;
-    const vars: RankingsQueryVars = { encounterID: encounterId, className, specName };
+    const meta = SPEC_META[spec];
+    if (!meta) return [];
+    const vars: RankingsQueryVars = { encounterID: encounterId, className: meta.className, specName: meta.specName };
     const result = await this.query<{ worldData: { encounter: { characterRankings: string | { rankings: WclRawRanking[] } } } }>(
       RANKINGS_Q, vars,
     );

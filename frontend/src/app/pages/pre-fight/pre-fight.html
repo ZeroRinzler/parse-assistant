@@ -10,23 +10,76 @@
     } @else if (specs().length === 0) {
       <p class="text-[13px] text-[var(--muted)]">No spec data available.</p>
     } @else {
-      <mat-form-field appearance="outline" class="w-full">
-        <mat-label>Spec</mat-label>
-        <mat-select [formControl]="specControl" (selectionChange)="onSpecChange()">
-          <mat-option value="">- select spec -</mat-option>
-          @for (s of specs(); track s.spec) {
-            <mat-option [value]="s.spec">{{ s.spec | formatSpec }} ({{ s.encounter_count }} encounters)</mat-option>
-          }
-        </mat-select>
-      </mat-form-field>
+      <div class="flex flex-wrap gap-[14px]">
+        <mat-form-field appearance="outline" class="flex-[1_1_200px]">
+          <mat-label>Class</mat-label>
+          <mat-select [formControl]="classControl" (selectionChange)="onClassChange()">
+            <mat-select-trigger>
+              @if (selectedClass(); as cn) {
+                <span class="flex items-center gap-2">
+                  <wl-art-icon [src]="cn | classIcon" [alt]="cn | formatSpec"></wl-art-icon>
+                  <span>{{ cn | formatSpec }}</span>
+                </span>
+              }
+            </mat-select-trigger>
+            <mat-option value="">- select class -</mat-option>
+            @for (c of classes(); track c.className) {
+              <mat-option [value]="c.className">
+                <span class="flex items-center gap-2">
+                  <wl-art-icon [src]="c.className | classIcon" [alt]="c.classLabel"></wl-art-icon>
+                  <span>{{ c.classLabel }}</span>
+                </span>
+              </mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+
+        @if (selectedClass()) {
+          <mat-form-field appearance="outline" class="flex-[1_1_200px]">
+            <mat-label>Spec</mat-label>
+            <mat-select [formControl]="specControl" (selectionChange)="onSpecChange()">
+              <mat-select-trigger>
+                @if (selectedSpec(); as sp) {
+                  <span class="flex items-center gap-2">
+                    <wl-art-icon [src]="sp | specIcon" [alt]="sp | formatSpec"></wl-art-icon>
+                    <span>{{ sp | formatSpec }}</span>
+                  </span>
+                }
+              </mat-select-trigger>
+              <mat-option value="">- select spec -</mat-option>
+              @for (m of specsForSelectedClass(); track m.spec) {
+                <mat-option [value]="m.spec">
+                  <span class="flex items-center gap-2">
+                    <wl-art-icon [src]="m.spec | specIcon" [alt]="m.specLabel"></wl-art-icon>
+                    <span>{{ m.specLabel }}</span>
+                  </span>
+                </mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+        }
+      </div>
 
       @if (encounters().length > 0 || selectedSpec()) {
         <mat-form-field appearance="outline" class="mt-3 w-full">
           <mat-label>Encounter</mat-label>
           <mat-select [formControl]="encControl" (selectionChange)="onEncChange()">
+            <mat-select-trigger>
+              @if (selectedEncounter(); as enc) {
+                <span class="flex items-center gap-2">
+                  <wl-art-icon [src]="enc.id | bossIcon" [alt]="enc.name"></wl-art-icon>
+                  <span class="truncate">{{ enc.name }}</span>
+                </span>
+              }
+            </mat-select-trigger>
             <mat-option [value]="0">- select encounter -</mat-option>
             @for (e of encounters(); track e.id) {
-              <mat-option [value]="e.id">{{ e.name }} ({{ e.sample_count }} parses)</mat-option>
+              <mat-option [value]="e.id">
+                <span class="flex items-center gap-2">
+                  <wl-art-icon [src]="e.id | bossIcon" [alt]="e.name"></wl-art-icon>
+                  <span class="truncate">{{ e.name }}</span>
+                </span>
+              </mat-option>
             }
           </mat-select>
         </mat-form-field>

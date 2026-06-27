@@ -22,9 +22,20 @@
                             [class.pointer-events-none]="liveSyncEnabled()">
               <mat-label>Fight</mat-label>
               <mat-select [formControl]="fightControl" (selectionChange)="onFightChange()">
+                <mat-select-trigger>
+                  @if (selectedFight(); as sf) {
+                    <span class="flex items-center gap-2">
+                      <wl-art-icon [src]="sf.encounterID | bossIcon" [alt]="sf.name"></wl-art-icon>
+                      <span class="truncate">{{ sf.name }} - {{ sf.kill ? 'Kill' : 'Wipe #' + sf.attempt }} - {{ sf.duration_s | formatDuration }}</span>
+                    </span>
+                  }
+                </mat-select-trigger>
                 @for (f of fights(); track f.id) {
                   <mat-option [value]="f.id">
-                    {{ f.name }} - {{ f.kill ? 'Kill' : 'Wipe #' + f.attempt }} - {{ f.duration_s | formatDuration }}
+                    <span class="flex items-center gap-2">
+                      <wl-art-icon [src]="f.encounterID | bossIcon" [alt]="f.name"></wl-art-icon>
+                      <span class="truncate">{{ f.name }} - {{ f.kill ? 'Kill' : 'Wipe #' + f.attempt }} - {{ f.duration_s | formatDuration }}</span>
+                    </span>
                   </mat-option>
                 }
               </mat-select>
@@ -33,8 +44,29 @@
             <mat-form-field appearance="outline" class="flex-[1_1_200px]">
               <mat-label>Player</mat-label>
               <mat-select [formControl]="playerControl" (selectionChange)="onPlayerChange()">
+                <mat-select-trigger>
+                  @if (selectedPlayer(); as sp) {
+                    <span class="flex items-center gap-2">
+                      @if (playerSpecs()[sp.id]; as specFolder) {
+                        <wl-art-icon [src]="specFolder | specIcon" [alt]="specFolder | formatSpec"></wl-art-icon>
+                      } @else {
+                        <wl-art-icon [src]="sp.spec | classIcon" [alt]="sp.spec"></wl-art-icon>
+                      }
+                      <span class="truncate">{{ sp.name }}</span>
+                    </span>
+                  }
+                </mat-select-trigger>
                 @for (p of visiblePlayers(); track p.id) {
-                  <mat-option [value]="p.id">{{ p.name }} - {{ p.spec | formatSpec }}</mat-option>
+                  <mat-option [value]="p.id">
+                    <span class="flex items-center gap-2">
+                      @if (playerSpecs()[p.id]; as specFolder) {
+                        <wl-art-icon [src]="specFolder | specIcon" [alt]="specFolder | formatSpec"></wl-art-icon>
+                      } @else {
+                        <wl-art-icon [src]="p.spec | classIcon" [alt]="p.spec"></wl-art-icon>
+                      }
+                      <span class="truncate">{{ p.name }}</span>
+                    </span>
+                  </mat-option>
                 }
               </mat-select>
             </mat-form-field>

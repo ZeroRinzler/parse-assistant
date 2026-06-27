@@ -8,7 +8,12 @@ import { DataFileApiService } from '../../core/services/data-file-api';
 import { SelectionStore } from '../../core/services/selection-store';
 import { SpecEntry, EncounterEntry } from '../../core/models/encounter.models';
 import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner/loading-spinner';
+import { ArtIconComponent } from '../../shared/components/art-icon/art-icon';
 import { FormatSpecPipe } from '../../shared/pipes/format-spec-pipe';
+import { ClassIconPipe } from '../../shared/pipes/class-icon-pipe';
+import { SpecIconPipe } from '../../shared/pipes/spec-icon-pipe';
+import { BossIconPipe } from '../../shared/pipes/boss-icon-pipe';
+import { classList, specsForClass, specMetaOf } from '../../core/spec-meta';
 import { RotationCdPlanComponent } from '../post-raid/rotation/rotation-cd-plan';
 import { DefensivePlanComponent } from '../post-raid/defensive/defensive-plan';
 import { BurstWindowsComponent } from '../post-raid/burst-windows/burst-windows';
@@ -31,7 +36,8 @@ import { MapFeatureService, MapAnchor } from '../post-raid/map/map.service';
   selector: 'wl-pre-fight',
   imports: [
     ReactiveFormsModule, MatFormFieldModule, MatSelectModule, MatCardModule,
-    LoadingSpinnerComponent, FormatSpecPipe,
+    LoadingSpinnerComponent, ArtIconComponent,
+    FormatSpecPipe, ClassIconPipe, SpecIconPipe, BossIconPipe,
     RotationCdPlanComponent, DefensivePlanComponent, BurstWindowsComponent,
     GearComponent, MapPanelComponent,
   ],
@@ -42,13 +48,29 @@ export class PreFightComponent implements OnInit {
   private readonly mapFeature = inject(MapFeatureService);
   private readonly selectionStore = inject(SelectionStore);
 
-  protected readonly specControl = new FormControl('', { nonNullable: true });
+  // Class is chosen first; the spec select stays disabled until a class is picked, mirroring
+  // how the encounter select gates on the spec.
+  protected readonly classControl = new FormControl('', { nonNullable: true });
+  protected readonly specControl = new FormControl<string>({ value: '', disabled: true }, { nonNullable: true });
   protected readonly encControl = new FormControl<number>({ value: 0, disabled: true }, { nonNullable: true });
 
   protected readonly specs = signal<SpecEntry[]>([]);
   protected readonly encounters = signal<EncounterEntry[]>([]);
+  protected readonly selectedClass = toSignal(this.classControl.valueChanges, { initialValue: this.classControl.value });
   protected readonly selectedSpec = toSignal(this.specControl.valueChanges, { initialValue: this.specControl.value });
   protected readonly selectedEncId = toSignal(this.encControl.valueChanges, { initialValue: this.encControl.value });
+
+  // Only classes that actually have ingested specs appear in the Class dropdown.
+  protected readonly classes = computed(() => {
+    const available = this.specs().map(entry => entry.spec);
+    return classList().filter(cls => specsForClass(cls.className, available).length > 0);
+  });
+  // Specs belonging to the chosen class, restricted to those with ingested data.
+  protected readonly specsForSelectedClass = computed(() =>
+    specsForClass(this.selectedClass(), this.specs().map(entry => entry.spec)));
+  // The selected encounter row, so the select trigger can render its boss icon + name.
+  protected readonly selectedEncounter = computed(() =>
+    this.encounters().find(entry => entry.id === this.selectedEncId()));
   protected readonly loading = signal(false);
   protected readonly error = signal('');
   // The burst-window positioning button lights up once the top-parse trails have loaded.
@@ -63,17 +85,36 @@ export class PreFightComponent implements OnInit {
     try {
       const specs = await this.files.getSpecs();
       this.specs.set(specs);
-      if (specs.length) this.specControl.enable({ emitEvent: false });
+      if (this.classes().length) this.classControl.enable({ emitEvent: false });
     } finally {
       this.loading.set(false);
     }
 
     // Restore the last spec from localStorage (the only persisted pre-fight selection); the
-    // encounter is always re-selected.
+    // class is derived from it (not stored), and the encounter is always re-selected.
     const autoSpec = this.selectionStore.loadPreFight()?.spec ?? '';
-    if (autoSpec && this.specs().some(specEntry => specEntry.spec === autoSpec)) {
+    const meta = specMetaOf(autoSpec);
+    if (autoSpec && meta && this.specs().some(specEntry => specEntry.spec === autoSpec)) {
+      this.classControl.setValue(meta.className);
+      this.specControl.enable({ emitEvent: false });
       this.specControl.setValue(autoSpec);
       await this._onSpecSelected(autoSpec);
+    }
+  }
+
+  protected onClassChange(): void {
+    // A new class invalidates the spec, encounter, map, and persisted spec selection.
+    this.specControl.setValue('', { emitEvent: false });
+    this.selectionStore.savePreFight({ spec: null });
+    this.mapFeature.clear();
+    this.encControl.setValue(0, { emitEvent: false });
+    this.encControl.disable({ emitEvent: false });
+    this.encounters.set([]);
+    const available = this.specs().map(entry => entry.spec);
+    if (specsForClass(this.classControl.value, available).length) {
+      this.specControl.enable({ emitEvent: false });
+    } else {
+      this.specControl.disable({ emitEvent: false });
     }
   }
 
