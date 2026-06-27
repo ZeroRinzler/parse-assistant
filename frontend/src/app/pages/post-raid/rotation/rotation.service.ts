@@ -355,8 +355,10 @@ export function analyzeRotationFindings(
       const effPct = castEfficiencyPct(totalDtS, fightDurS);
       const severity: Severity = isCriticallyBelow(effPct, topE, topSD) ? 'critical' : 'warning';
       findings.push({ severity, category: 'cast_efficiency',
+        label: 'Cast efficiency below top parses',
         measured: { value: `${effPct.toFixed(1)}%`, unit: `top ${topE.toFixed(0)}%` },
-        message: `Cast efficiency: ${effPct.toFixed(1)}% (Top average ${topE.toFixed(0)}%) - ${totalDtS.toFixed(1)}s in gaps.` });
+        message: `Cast efficiency: ${effPct.toFixed(1)}% (Top average ${topE.toFixed(0)}%) - ${totalDtS.toFixed(1)}s in gaps.`,
+        details: { remedy: `Fill the gaps - ${totalDtS.toFixed(1)}s spent not casting. Top parsers average ${topE.toFixed(0)}% cast efficiency.` } });
     }
   }
 

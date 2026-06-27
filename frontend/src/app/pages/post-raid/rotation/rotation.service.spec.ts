@@ -153,6 +153,15 @@ describe('analyzeRotationFindings', () => {
     const findings = analyzeRotationFindings(0, 120_000, casts, buffs, bench().major_cooldowns, [], bench());
     expect(findings.some(f => f.category === 'cooldown_delay')).toBe(true);
   });
+
+  it('gives the cast-efficiency finding a label and a remedy so the row is not blank', () => {
+    const casts = [cast(121471, 6), cast(121471, 12)];
+    const findings = analyzeRotationFindings(0, 120_000, casts, [], bench().major_cooldowns, [], bench());
+    const efficiency = findings.find(f => f.category === 'cast_efficiency');
+    expect(efficiency).toBeDefined();
+    expect(efficiency!.label).toBeTruthy();
+    expect(efficiency!.details?.remedy).toBeTruthy();
+  });
 });
 
 describe('bucketRotationFindings', () => {
