@@ -1,0 +1,15 @@
+<!-- Mobile clamps to 2 lines until expanded; md:line-clamp-none keeps desktop unclamped. -->
+<div #content class="md:line-clamp-none" [class.line-clamp-2]="!expanded()"><ng-content /></div>
+
+<!-- Toggle renders only when the clamped text actually overflows (rendering it conditionally avoids a
+     display-utility clash between `hidden` and `inline-flex`); md:hidden keeps it off desktop. -->
+@if (overflowing()) {
+  <button
+    type="button"
+    class="md:hidden mt-1.5 inline-flex items-center gap-0.5 text-[11.5px] text-[var(--accent)]"
+    [attr.aria-expanded]="expanded()"
+    (click)="toggle()">
+    {{ expanded() ? 'Show less' : 'Show more' }}
+    <mat-icon class="!text-[16px] !w-[16px] !h-[16px] !leading-[16px]">{{ expanded() ? 'expand_less' : 'expand_more' }}</mat-icon>
+  </button>
+}

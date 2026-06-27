@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { GameIconComponent } from '../../../shared/components/game-icon/game-icon';
+import { CollapsibleTextComponent } from '../../../shared/components/collapsible-text/collapsible-text';
 import { slotName, statusIcon } from '../../../shared/gear/gear-comparison';
 import { GearFeatureService, GearComparisonView, emptyGearView } from './gear.service';
 
@@ -16,7 +17,7 @@ import { GearFeatureService, GearComparisonView, emptyGearView } from './gear.se
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-gear',
-  imports: [MatIconModule, GameIconComponent],
+  imports: [MatIconModule, GameIconComponent, CollapsibleTextComponent],
   templateUrl: './gear.html',
 })
 export class GearComponent {

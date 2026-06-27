@@ -1,4 +1,4 @@
-<div class="mx-auto flex max-w-[860px] flex-col gap-4 px-4 pt-6 pb-12">
+<div class="mx-auto flex max-w-[860px] flex-col gap-4 px-3 md:px-4 pt-6 pb-12">
   @if (error()) {
     <div class="rounded-lg border border-[var(--critical)]/30 bg-[var(--critical)]/10 px-4 py-3.5 text-[13px] text-[var(--critical)]">{{ error() }}</div>
   }
@@ -45,7 +45,7 @@
     <wl-defensive-plan [spec]="selectedSpec()" [encounterId]="selectedEncId()"></wl-defensive-plan>
 
     <!-- Burst windows (bench-only) -->
-    <wl-burst-windows [spec]="selectedSpec()" [encounterId]="selectedEncId()" (openMap)="onOpenMap($event)"></wl-burst-windows>
+    <wl-burst-windows [spec]="selectedSpec()" [encounterId]="selectedEncId()" [showMap]="mapReady()" (openMap)="onOpenMap($event)"></wl-burst-windows>
   }
 
   <wl-map-panel></wl-map-panel>

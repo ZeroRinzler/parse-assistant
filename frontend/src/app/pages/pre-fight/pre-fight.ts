@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -51,6 +51,8 @@ export class PreFightComponent implements OnInit {
   protected readonly selectedEncId = toSignal(this.encControl.valueChanges, { initialValue: this.encControl.value });
   protected readonly loading = signal(false);
   protected readonly error = signal('');
+  // The burst-window positioning button lights up once the top-parse trails have loaded.
+  protected readonly mapReady = computed(() => this.mapFeature.ready());
 
   protected onOpenMap(anchor: MapAnchor): void {
     this.mapFeature.openAt(anchor);

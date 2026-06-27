@@ -1,18 +1,18 @@
 <!-- Rotation rules -->
 @if (ruleRows().length) {
   <div class="mt-2 bg-[var(--surface)] border border-[var(--border)] rounded-[10px] overflow-hidden">
-    <div class="grid grid-cols-[20px_minmax(0,1fr)_96px_200px] gap-[14px] px-4 pt-3 pb-2 items-baseline">
-      <div></div>
+    <div class="px-4 pt-3 pb-2 md:grid md:grid-cols-[20px_minmax(0,1fr)_96px_200px] md:gap-[14px] md:items-baseline">
+      <div class="hidden md:block"></div>
       <div>
         <div class="text-[17px] font-semibold text-[var(--text)]">Rotation Rules</div>
         <div class="text-xs text-[var(--muted)] mt-0.5">Spec rotation rules you broke during the fight.</div>
       </div>
-      <div class="text-[10px] uppercase tracking-widest text-[var(--border)] tabular-nums text-right">Measured</div>
-      <div class="text-[10px] uppercase tracking-widest text-[var(--border)] pl-[14px]">Fix</div>
+      <div class="hidden md:block text-[10px] uppercase tracking-widest text-[var(--border)] tabular-nums text-right">Measured</div>
+      <div class="hidden md:block text-[10px] uppercase tracking-widest text-[var(--border)] pl-[14px]">Fix</div>
     </div>
     @for (row of ruleRows(); track $index) {
-      <div class="grid grid-cols-[20px_minmax(0,1fr)_96px_200px] gap-[14px] px-4 py-[10px] items-center border-t border-[var(--border)]">
-        <div class="flex items-center justify-center">
+      <div class="grid grid-cols-[20px_minmax(0,1fr)] md:grid-cols-[20px_minmax(0,1fr)_96px_200px] gap-x-[14px] gap-y-2 md:gap-y-0 px-4 py-[10px] items-start md:items-center border-t border-[var(--border)]">
+        <div class="flex items-center justify-center self-start md:self-center">
           <mat-icon class="!text-[18px] !w-[18px] !h-[18px] !leading-[18px]"
             [class.badge-critical]="row.severity === 'critical'"
             [class.badge-warning]="row.severity === 'warning'">
@@ -20,15 +20,19 @@
           </mat-icon>
         </div>
         <div class="min-w-0"><span class="text-sm text-[var(--text)] leading-[1.35]">{{ row.what }}</span></div>
-        <div class="text-right leading-[1.1]"
+        <div class="col-start-2 md:col-auto flex items-baseline gap-2 md:block text-left md:text-right leading-[1.1]"
           [class.badge-critical]="row.severity === 'critical'"
           [class.badge-warning]="row.severity === 'warning'">
+          <span class="md:hidden font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">Measured</span>
           <div class="text-[15px] font-bold tabular-nums">{{ row.measured.value }}</div>
           @if (row.measured.unit) {
-            <div class="text-[10px] opacity-60 mt-px tabular-nums">{{ row.measured.unit }}</div>
+            <div class="text-[12px] text-[var(--muted)] md:text-inherit md:text-[10px] md:opacity-60 md:mt-px tabular-nums">{{ row.measured.unit }}</div>
           }
         </div>
-        <div class="text-[13px] text-[var(--muted)] leading-[1.45] border-l border-[var(--border)] pl-[14px]">{{ row.fix }}</div>
+        <div class="col-start-2 md:col-auto text-[13px] text-[var(--muted)] leading-[1.45] border-t md:border-t-0 md:border-l border-[var(--border)] pt-2 md:pt-0 pl-0 md:pl-[14px]">
+          <span class="md:hidden block font-mono text-[10px] uppercase tracking-wider text-[var(--muted)] mb-1">Fix</span>
+          <wl-collapsible-text>{{ row.fix }}</wl-collapsible-text>
+        </div>
       </div>
     }
   </div>
@@ -36,19 +40,19 @@
 
 <!-- Offensive cooldowns -->
 <div class="mt-6 bg-[var(--surface)] border border-[var(--border)] rounded-[10px] overflow-hidden">
-  <div class="grid grid-cols-[20px_minmax(0,1fr)_96px_200px] gap-[14px] px-4 pt-3 pb-2 items-baseline">
-    <div></div>
+  <div class="px-4 pt-3 pb-2 md:grid md:grid-cols-[20px_minmax(0,1fr)_96px_200px] md:gap-[14px] md:items-baseline">
+    <div class="hidden md:block"></div>
     <div>
       <div class="text-[17px] font-semibold text-[var(--text)]">Offensives</div>
       <div class="text-xs text-[var(--muted)] mt-0.5">How your offensive cooldowns compare to top parses.</div>
     </div>
-    <div class="text-[10px] uppercase tracking-widest text-[var(--border)] tabular-nums text-right">Measured</div>
-    <div class="text-[10px] uppercase tracking-widest text-[var(--border)] pl-[14px]">Fix</div>
+    <div class="hidden md:block text-[10px] uppercase tracking-widest text-[var(--border)] tabular-nums text-right">Measured</div>
+    <div class="hidden md:block text-[10px] uppercase tracking-widest text-[var(--border)] pl-[14px]">Fix</div>
   </div>
 
   @for (row of offensiveRows(); track $index) {
-    <div class="grid grid-cols-[20px_minmax(0,1fr)_96px_200px] gap-[14px] px-4 py-[10px] items-center border-t border-[var(--border)]">
-      <div class="flex items-center justify-center">
+    <div class="grid grid-cols-[20px_minmax(0,1fr)] md:grid-cols-[20px_minmax(0,1fr)_96px_200px] gap-x-[14px] gap-y-2 md:gap-y-0 px-4 py-[10px] items-start md:items-center border-t border-[var(--border)]">
+      <div class="flex items-center justify-center self-start md:self-center">
         <mat-icon class="!text-[18px] !w-[18px] !h-[18px] !leading-[18px]"
           [class.badge-critical]="row.severity === 'critical'"
           [class.badge-warning]="row.severity === 'warning'">
@@ -75,15 +79,19 @@
           }
         </div>
       </div>
-      <div class="text-right leading-[1.1]"
+      <div class="col-start-2 md:col-auto flex items-baseline gap-2 md:block text-left md:text-right leading-[1.1]"
         [class.badge-critical]="row.severity === 'critical'"
         [class.badge-warning]="row.severity === 'warning'">
+        <span class="md:hidden font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">Measured</span>
         <div class="text-[15px] font-bold tabular-nums">{{ row.measured.value }}</div>
         @if (row.measured.unit) {
-          <div class="text-[10px] opacity-60 mt-px tabular-nums">{{ row.measured.unit }}</div>
+          <div class="text-[12px] text-[var(--muted)] md:text-inherit md:text-[10px] md:opacity-60 md:mt-px tabular-nums">{{ row.measured.unit }}</div>
         }
       </div>
-      <div class="text-[13px] text-[var(--muted)] leading-[1.45] border-l border-[var(--border)] pl-[14px]">{{ row.fix }}</div>
+      <div class="col-start-2 md:col-auto text-[13px] text-[var(--muted)] leading-[1.45] border-t md:border-t-0 md:border-l border-[var(--border)] pt-2 md:pt-0 pl-0 md:pl-[14px]">
+        <span class="md:hidden block font-mono text-[10px] uppercase tracking-wider text-[var(--muted)] mb-1">Fix</span>
+        <wl-collapsible-text>{{ row.fix }}</wl-collapsible-text>
+      </div>
     </div>
   }
 

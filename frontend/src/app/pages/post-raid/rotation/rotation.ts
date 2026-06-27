@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, effect, inject, input, signal } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { GameIconComponent } from '../../../shared/components/game-icon/game-icon';
+import { CollapsibleTextComponent } from '../../../shared/components/collapsible-text/collapsible-text';
 import { FormatDurationPipe } from '../../../shared/pipes/format-duration-pipe';
 import {
   RotationFeatureService, RotationFindingRow, RotationOnPlanChip,
@@ -18,7 +19,7 @@ import {
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-rotation',
-  imports: [MatIconModule, GameIconComponent, FormatDurationPipe],
+  imports: [MatIconModule, GameIconComponent, CollapsibleTextComponent, FormatDurationPipe],
   templateUrl: './rotation.html',
 })
 export class RotationComponent {

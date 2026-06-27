@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, input, output } from '@angular/core
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { GameIconComponent } from '../game-icon/game-icon';
+import { CollapsibleTextComponent } from '../collapsible-text/collapsible-text';
 import { FormatDurationPipe } from '../../pipes/format-duration-pipe';
 import type { FindingRow, OnPlanChip } from './finding-table.utils';
 
@@ -14,7 +15,7 @@ export { rowsFromEntries, onPlanFromEntries, bucketFindings, CAT_LABEL } from '.
   selector: 'wl-finding-table',
   // Angular custom elements default to display:inline; block keeps the card full-width.
   host: { class: 'block' },
-  imports: [MatIconModule, MatButtonModule, GameIconComponent, FormatDurationPipe],
+  imports: [MatIconModule, MatButtonModule, GameIconComponent, CollapsibleTextComponent, FormatDurationPipe],
   templateUrl: './finding-table.html',
 })
 export class FindingTableComponent {

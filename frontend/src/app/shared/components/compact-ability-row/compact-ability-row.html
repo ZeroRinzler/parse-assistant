@@ -1,41 +1,54 @@
 <!--
-  Sorted-impact table row. Column widths (flex-1 / w-[7.5rem] / w-[9rem] / w-[9rem]) mirror the
-  header row in window-comparison.html so the two stay aligned.
+  Sorted-impact table row.
+  Desktop (md+): one flex row of 4 columns (flex-1 / w-[7.5rem] / w-[9rem] / w-[9rem]) that mirror the
+  header row in window-comparison.html so the two stay aligned. The two wrapper divs use `md:contents`
+  so their children are promoted into this single flex row at md, and `md:order-*` restores the
+  name / casts / top-avg / gap column order.
+  Mobile: the wrappers become two stacked lines - name + gap on top, then top-avg + casts with inline
+  labels - so nothing overflows a phone width.
 -->
-<div class="flex items-center gap-3 px-4 py-1.5 min-w-0">
-  <div class="flex-1 min-w-0 overflow-hidden">
-    @if (row().spellId; as spellId) {
-      <wl-game-icon [id]="spellId" [icon]="row().icon" [name]="row().label"></wl-game-icon>
-    } @else {
-      <span class="truncate text-sm">{{ row().label }}</span>
+<div class="md:flex md:items-center md:gap-3 px-4 py-1.5 min-w-0 border-t md:border-t-0 border-[var(--border)]">
+
+  <!-- Line 1 (mobile): name + gap. Promoted to columns 1 and 4 at md. -->
+  <div class="flex items-baseline gap-2 min-w-0 md:contents">
+    <div class="flex-1 min-w-0 overflow-hidden md:order-1">
+      @if (row().spellId; as spellId) {
+        <wl-game-icon [id]="spellId" [icon]="row().icon" [name]="row().label"></wl-game-icon>
+      } @else {
+        <span class="truncate text-sm">{{ row().label }}</span>
+      }
+    </div>
+
+    @if (!hidePlayer()) {
+      <span class="shrink-0 md:order-4 md:w-[9rem] text-right tabular-nums text-xs font-semibold"
+            [class.badge-success]="gapStatus() === 'success'"
+            [class.badge-warning]="gapStatus() === 'warning'"
+            [class.badge-critical]="gapStatus() === 'critical'"
+            [class.badge-muted]="gapStatus() === 'muted'">
+        @if (row().playerPct == null) {
+          missed
+        } @else {
+          {{ gapSign() }}{{ gapMagnitude() | formatDamage }}
+        }
+      </span>
     }
   </div>
 
-  @if (showCasts() && !hidePlayer()) {
-    <span class="w-[7.5rem] shrink-0 justify-self-center text-center tabular-nums text-xs rounded px-2 py-0.5 border border-current"
-          [class.badge-success]="castsStatus() === 'success'"
-          [class.badge-warning]="castsStatus() === 'warning'"
-          [class.badge-critical]="castsStatus() === 'critical'"
-          [class.badge-muted]="castsStatus() === 'muted'">
-      {{ row().playerCasts ?? 0 }}<span class="text-[var(--muted)]"> / {{ row().topCasts ?? '-' }}</span>
+  <!-- Line 2 (mobile): top avg + casts with inline labels. Promoted to columns 3 and 2 at md. -->
+  <div class="flex items-baseline flex-wrap gap-x-1.5 gap-y-1 mt-1.5 md:mt-0 md:contents">
+    <span class="shrink-0 mr-2 md:mr-0 md:order-3 md:w-[9rem] md:text-right tabular-nums text-xs text-[var(--muted)]">
+      <span class="md:hidden font-mono text-[10px] uppercase tracking-wider">Top avg </span>{{ row().topAvg | formatDamage }}
     </span>
-  }
 
-  <span class="w-[9rem] shrink-0 text-right tabular-nums text-xs text-[var(--muted)]">
-    {{ row().topAvg | formatDamage }}
-  </span>
-
-  @if (!hidePlayer()) {
-    <span class="w-[9rem] shrink-0 text-right tabular-nums text-xs font-semibold"
-          [class.badge-success]="gapStatus() === 'success'"
-          [class.badge-warning]="gapStatus() === 'warning'"
-          [class.badge-critical]="gapStatus() === 'critical'"
-          [class.badge-muted]="gapStatus() === 'muted'">
-      @if (row().playerPct == null) {
-        missed
-      } @else {
-        {{ gapSign() }}{{ gapMagnitude() | formatDamage }}
-      }
-    </span>
-  }
+    @if (showCasts() && !hidePlayer()) {
+      <span class="md:hidden font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">Casts</span>
+      <span class="shrink-0 md:order-2 w-auto md:w-[7.5rem] text-center tabular-nums text-xs rounded px-2 py-0.5 border border-current"
+            [class.badge-success]="castsStatus() === 'success'"
+            [class.badge-warning]="castsStatus() === 'warning'"
+            [class.badge-critical]="castsStatus() === 'critical'"
+            [class.badge-muted]="castsStatus() === 'muted'">
+        {{ row().playerCasts ?? 0 }}<span class="text-[var(--muted)]"> / {{ row().topCasts ?? '-' }}</span>
+      </span>
+    }
+  </div>
 </div>

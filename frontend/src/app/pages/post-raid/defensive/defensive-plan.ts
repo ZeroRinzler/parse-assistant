@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, effect, inject, input, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { GameIconComponent } from '../../../shared/components/game-icon/game-icon';
+import { CollapsibleTextComponent } from '../../../shared/components/collapsible-text/collapsible-text';
 import { FormatDurationPipe } from '../../../shared/pipes/format-duration-pipe';
 import { DefensiveFeatureService, DefensivePlanRow } from './defensive.service';
 
@@ -14,7 +15,7 @@ import { DefensiveFeatureService, DefensivePlanRow } from './defensive.service';
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-defensive-plan',
-  imports: [DecimalPipe, GameIconComponent, FormatDurationPipe],
+  imports: [DecimalPipe, GameIconComponent, CollapsibleTextComponent, FormatDurationPipe],
   templateUrl: './defensive-plan.html',
 })
 export class DefensivePlanComponent {
