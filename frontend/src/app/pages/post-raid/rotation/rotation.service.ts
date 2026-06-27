@@ -254,7 +254,7 @@ export function analyzeRotationFindings(
 
     if (!cdBench) {
       if (actual > 0) findings.push({ severity: 'success', category: 'cooldown_usage', cd_name: cdName,
-        message: `${cdName} - ${actual} cast(s) (no bench data for this encounter).` });
+        message: `${cdName}: ${actual} casts (no bench data).` });
       continue;
     }
 
@@ -263,13 +263,13 @@ export function analyzeRotationFindings(
     if (actual === 0 && expected >= 1) {
       cdIssues.push({ severity: 'critical', category: 'lost_cooldown', cd_name: cdName,
         measured: { value: `0 / ${expected}`, unit: 'cast(s)' },
-        message: `${cdName} was never used. Top parsers average ~${expected} cast(s) on a ${fmtClock(fightDurS)} fight.`,
-        details: { remedy: `Use ${cdName} - top parsers average ~${expected} cast(s) on a fight this length.` } });
+        message: `${cdName} unused. Expected ${expected} on a ${fmtClock(fightDurS)} fight.`,
+        details: { remedy: `Use ${cdName} ${expected}x this fight.` } });
     } else if (actual > 0 && actual < floor) {
       cdIssues.push({ severity: 'critical', category: 'lost_cooldown', cd_name: cdName,
         measured: { value: `${actual} / ${expected}`, unit: 'cast(s)' },
-        message: `${cdName} - ${actual} casts; top parsers average ~${expected} on a fight this length. Lost ${floor - actual} use(s).`,
-        details: { remedy: `Fit ${floor - actual} more use(s) of ${cdName} by pressing it sooner after each reset.` } });
+        message: `${cdName}: ${actual} casts, expected ${expected}. ${floor - actual} lost.`,
+        details: { remedy: `Press ${cdName} ${floor - actual}x more - sooner off cooldown.` } });
     }
 
     if (cdCasts.length) {
@@ -278,8 +278,8 @@ export function analyzeRotationFindings(
         severity: 'warning', category: 'cooldown_delay', cd_name: cdName,
         timestamp_ms: rel(cdCasts[0].timestamp),
         measured: { value: `+${(firstS - cdBench.avg_first_cast_s).toFixed(0)}s`, unit: `top ${fmtClock(cdBench.avg_first_cast_s)}` },
-        message: `${cdName} opener at ${fmtClock(firstS)} - ${(firstS - cdBench.avg_first_cast_s).toFixed(0)}s later than top parsers (${fmtClock(cdBench.avg_first_cast_s)} avg ±${cdBench.stddev_first_cast_s.toFixed(0)}s).`,
-        details: { remedy: `Use ${cdName} earlier in the opener.` } });
+        message: `${cdName} opened at ${fmtClock(firstS)}, ${(firstS - cdBench.avg_first_cast_s).toFixed(0)}s late. Top: ${fmtClock(cdBench.avg_first_cast_s)}.`,
+        details: { remedy: `Open with ${cdName} earlier.` } });
     }
 
     let blAligned = false;
@@ -303,8 +303,8 @@ export function analyzeRotationFindings(
           cdIssues.push({ severity: 'warning', category: 'cooldown_alignment', cd_name: cdName,
             timestamp_ms: rel(blWin[0].timestamp),
             measured: { value: dir, unit: 'in BL' },
-            message: `${cdName} used ${dir} in the BL window vs top parsers.`,
-            details: { remedy: `Adjust ${cdName} timing within the Bloodlust window to match top parsers.` } });
+            message: `${cdName} ${dir} in the Bloodlust window.`,
+            details: { remedy: `Tighten ${cdName} to the Bloodlust window.` } });
         }
       }
     }
@@ -315,8 +315,8 @@ export function analyzeRotationFindings(
         cdIssues.push({ severity: 'warning', category: 'cooldown_delay', cd_name: cdName,
           timestamp_ms: rel(cdCasts[i].timestamp),
           measured: { value: `${gap.toFixed(0)}s`, unit: `avg ${cdBench.avg_gap_s.toFixed(0)}s` },
-          message: `${cdName} at ${fmtClock(rel(cdCasts[i].timestamp) / 1000)}: ${gap.toFixed(0)}s gap vs top-parse avg ${cdBench.avg_gap_s.toFixed(0)}s ±${cdBench.stddev_gap_s.toFixed(0)}s.`,
-          details: { remedy: `Press ${cdName} sooner - top parsers average ${cdBench.avg_gap_s.toFixed(0)}s between uses.` } });
+          message: `${cdName} at ${fmtClock(rel(cdCasts[i].timestamp) / 1000)}: ${gap.toFixed(0)}s gap, top ${cdBench.avg_gap_s.toFixed(0)}s.`,
+          details: { remedy: `Press ${cdName} sooner - top gap ${cdBench.avg_gap_s.toFixed(0)}s.` } });
       }
     }
 
@@ -329,8 +329,8 @@ export function analyzeRotationFindings(
         if (playerT < target.target_s - target.stddev_s) cdSugg.push({ severity: 'info', category: 'hold_suggestion',
           timestamp_ms: rel(cdCasts[index].timestamp),
           measured: { value: fmtClock(playerT), unit: `top ~${fmtClock(target.target_s)}` },
-          message: `${cdName} cast ${idxStr} at ${fmtClock(playerT)} - ${target.count}/${target.total_samples} top parsers hold until ~${fmtClock(target.target_s)}.`,
-          details: { remedy: `Consider holding ${cdName} until ~${fmtClock(target.target_s)}.`, cd_name: cdName } });
+          message: `${cdName} cast ${idxStr} at ${fmtClock(playerT)}. ${target.count}/${target.total_samples} top parses hold to ${fmtClock(target.target_s)}.`,
+          details: { remedy: `Hold ${cdName} to ${fmtClock(target.target_s)}.`, cd_name: cdName } });
       }
     }
 
@@ -355,10 +355,10 @@ export function analyzeRotationFindings(
       const effPct = castEfficiencyPct(totalDtS, fightDurS);
       const severity: Severity = isCriticallyBelow(effPct, topE, topSD) ? 'critical' : 'warning';
       findings.push({ severity, category: 'cast_efficiency',
-        label: 'Cast efficiency below top parses',
+        label: 'Low cast efficiency',
         measured: { value: `${effPct.toFixed(1)}%`, unit: `top ${topE.toFixed(0)}%` },
-        message: `Cast efficiency: ${effPct.toFixed(1)}% (Top average ${topE.toFixed(0)}%) - ${totalDtS.toFixed(1)}s in gaps.`,
-        details: { remedy: `Fill the gaps - ${totalDtS.toFixed(1)}s spent not casting. Top parsers average ${topE.toFixed(0)}% cast efficiency.` } });
+        message: `${effPct.toFixed(1)}% cast efficiency, ${totalDtS.toFixed(1)}s idle. Top: ${topE.toFixed(0)}%.`,
+        details: { remedy: `Fill ${totalDtS.toFixed(1)}s of gaps. Top: ${topE.toFixed(0)}%.` } });
     }
   }
 
@@ -373,7 +373,7 @@ const CAT_LABEL: Record<string, string> = {
   cooldown_delay: 'held',
   cooldown_alignment: 'BL miss',
   cast_efficiency: 'downtime',
-  hold_suggestion: 'hold tip',
+  hold_suggestion: 'hold',
 };
 
 interface FindingBucket { issues: AnalysisFinding[]; holds: AnalysisFinding[]; }

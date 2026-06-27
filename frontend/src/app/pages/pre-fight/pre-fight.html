@@ -8,7 +8,7 @@
     @if (loading()) {
       <wl-loading-spinner message="Loading specs…"></wl-loading-spinner>
     } @else if (specs().length === 0) {
-      <p class="text-[13px] text-[var(--muted)]">No spec data ingested yet. Run <code>npm run ingest</code> to populate encounter data.</p>
+      <p class="text-[13px] text-[var(--muted)]">No spec data available.</p>
     } @else {
       <mat-form-field appearance="outline" class="w-full">
         <mat-label>Spec</mat-label>

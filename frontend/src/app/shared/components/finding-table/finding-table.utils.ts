@@ -6,7 +6,7 @@ export const CAT_LABEL: Record<string, string> = {
   cooldown_delay: 'held',
   cooldown_alignment: 'BL miss',
   cast_efficiency: 'downtime',
-  hold_suggestion: 'hold tip',
+  hold_suggestion: 'hold',
 };
 
 /** The prominent "Measured" cell: a value over its unit (e.g. "1 / 15" + "cast(s)"). */
@@ -131,7 +131,7 @@ export function bucketFindings(
       const label = CAT_LABEL[finding.category];
       if (label && !metaItems.includes(label)) metaItems.push(label);
     }
-    if (bucket.holds.length) metaItems.push(`${bucket.holds.length} hold tip${bucket.holds.length > 1 ? 's' : ''}`);
+    if (bucket.holds.length) metaItems.push(`${bucket.holds.length} hold${bucket.holds.length > 1 ? 's' : ''}`);
     return {
       name,
       spellId: options.spellId(name),

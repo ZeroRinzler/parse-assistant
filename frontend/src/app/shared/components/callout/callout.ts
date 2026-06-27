@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
 
 /**
  * Small info callout - accent left border on a tinted surface. Used for coaching
- * remedies ("Consider holding ...") and other inline notes so they read the same
+ * remedies ("Hold X to 3:20") and other inline notes so they read the same
  * everywhere. Spacing (margins) is left to the caller via class bindings.
  */
 @Component({

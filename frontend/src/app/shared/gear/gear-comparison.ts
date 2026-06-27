@@ -78,7 +78,7 @@ export function buildEnchantRows(gear: CharacterGear | null, stats: EncounterGea
           note: `Apply ${topName}` });
       } else if (top && top.pct >= 40) {
         rows.push({ slotName: name, status: 'info', name: 'Not enchanted', topPct: top.pct,
-          note: `${top.pct}% of top parsers use ${topName}` });
+          note: `${top.pct}% run ${topName}` });
       }
       continue;
     }
@@ -86,10 +86,10 @@ export function buildEnchantRows(gear: CharacterGear | null, stats: EncounterGea
     const playerUsagePct = topEnch[slot]?.find(e => e.id === player.id)?.pct ?? null;
     if (top && player.id === top.id) {
       rows.push({ slotName: name, status: 'ok', name: playerName, topPct: top.pct,
-        note: `Matches top parsers (${top.pct}%)` });
+        note: `${top.pct}% run this` });
     } else if (top) {
       rows.push({ slotName: name, status: 'info', name: playerName, topPct: playerUsagePct,
-        note: `Top parsers use ${topName} (${top.pct}%)` });
+        note: `${top.pct}% run ${topName}` });
     } else {
       rows.push({ slotName: name, status: 'ok', name: playerName, topPct: null, note: null });
     }
@@ -116,17 +116,17 @@ export function buildTalentBuilds(stats: EncounterGearStats | null, playerKey: s
 
 export function talentStatusOf(topStats: EncounterGearStats | null, playerKey: string): { status: GearStatus; note: string } {
   const builds = topStats?.talent_builds ?? [];
-  if (!builds.length) return { status: 'unknown', note: 'No talent data yet.' };
+  if (!builds.length) return { status: 'unknown', note: 'No talent data.' };
   const topPct = builds[0]?.pct ?? 0;
   // No comparable player build (not ranked here, or format mismatch): just
   // present the consensus build positively rather than flagging it.
   if (!playerKey || playerKey.split(':')[0] !== (builds[0]?.key ?? '').split(':')[0]) {
-    return { status: 'ok', note: `Most common build used by ${topPct}% of top parsers` };
+    return { status: 'ok', note: `${topPct}% run this build` };
   }
   if (builds.some(b => b.key === playerKey)) {
-    return { status: 'ok', note: 'On a top-parse build' };
+    return { status: 'ok', note: 'Standard build.' };
   }
-  return { status: 'warn', note: `Your build differs - most common used by ${topPct}% of top parsers` };
+  return { status: 'warn', note: `Off-meta build. ${topPct}% run the standard one.` };
 }
 
 /**
@@ -195,7 +195,7 @@ export function buildTrinketRows(gear: CharacterGear | null, stats: EncounterGea
     if (!player) {
       // No player item; surface the top recommendation as an info prompt.
       rows.push({ slotLabel: label, id: top.id, name: top.name, icon: '',
-        status: 'info', topPct: top.pct, note: `${top.pct}% of top parsers use this trinket` });
+        status: 'info', topPct: top.pct, note: `${top.pct}% run this trinket` });
       continue;
     }
 
@@ -208,7 +208,7 @@ export function buildTrinketRows(gear: CharacterGear | null, stats: EncounterGea
     } else if (top) {
       rows.push({ slotLabel: label, id: player.id, name: player.name, icon: player.icon ?? '',
         status: 'info', topPct: playerUsagePct,
-        note: `Switch to ${top.name} - ${top.pct}% of top parsers` });
+        note: `Switch to ${top.name} (${top.pct}%)` });
     } else {
       // No bench data for this slot; player item is acceptable.
       rows.push({ slotLabel: label, id: player.id, name: player.name, icon: player.icon ?? '',

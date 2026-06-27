@@ -111,3 +111,20 @@ body {
 
 /* finding-table: faint critical wash behind a critical finding row. */
 .row-critical { background-color: color-mix(in srgb, var(--critical) 4%, transparent); }
+
+/* "On plan" markers: quiet neutral tags for cooldowns/gear that need no fix.
+ * Deliberately understated - a plain surface tag in muted text, no success-green
+ * fill and no check-circle glyph - so a clean result reads as calm rather than a
+ * celebratory badge. Applied statically across the finding-table, rotation, and
+ * gear cards so every "nothing to fix here" state looks the same. */
+.chip-onplan {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background-color: var(--surface-alt);
+  color: var(--muted);
+  font-size: 13px;
+}

@@ -43,7 +43,7 @@ describe('bucketFindings', () => {
     expect(entries[0].name).toBe('Feint');
     expect(entries[0].hasIssue).toBe(true);
     expect(entries[0].hasCritical).toBe(false);
-    expect(entries[0].metaItems).toContain('1 hold tip');
+    expect(entries[0].metaItems).toContain('1 hold');
   });
 
   it('routes rule_violation to ruleFindings when collectRules is true', () => {
@@ -91,14 +91,14 @@ describe('bucketFindings', () => {
     expect(entries[0].metaItems[0]).toBe('held');
   });
 
-  it('pluralizes hold tip label when there are multiple hold suggestions', () => {
+  it('pluralizes the hold label when there are multiple hold suggestions', () => {
     const findings: AnalysisFinding[] = [
       { severity: 'info', category: 'hold_suggestion', message: 'tip 1', details: { cd_name: 'Feint' } },
       { severity: 'info', category: 'hold_suggestion', message: 'tip 2', details: { cd_name: 'Feint' } },
     ];
     const { entries } = bucketFindings(findings, { spellId, icon });
 
-    expect(entries[0].metaItems).toContain('2 hold tips');
+    expect(entries[0].metaItems).toContain('2 holds');
   });
 
   it('returns empty entries and ruleFindings for empty input', () => {

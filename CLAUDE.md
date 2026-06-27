@@ -25,6 +25,19 @@ The browser authenticates to WCL with the **client-credentials** grant against `
 
 - **Never use em-dashes (U+2014) or en-dashes (U+2013)** anywhere - not in docs, code comments, commit messages, UI copy, or generated output. Also avoid the Unicode minus (U+2212). Use a plain ASCII hyphen (`-`) for ranges and parenthetical asides, or rephrase. This applies to every file in the repo and any text the tooling emits.
 
+### UI copy voice (terse expert analyst)
+
+All user-facing copy - finding messages, remedies, card subtitles, empty states, microcopy - is written for a logs-literate Mythic raider. It reads like a peer raid lead, not an encouraging coaching bot. This is enforced by convention (no linter), so apply it whenever you add or edit any string a user sees. The reference implementations are the finding messages in `rotation.service.ts` / `defensive.service.ts` and the gear notes in `shared/gear/gear-comparison.ts`.
+
+- **State the fact, then the fix.** Findings are `message` (what happened) + `details.remedy` (one imperative action). Keep each to one short clause. `"Shadow Blades: 2 casts, expected 4. 2 lost."` then `"Press Shadow Blades 2x more - sooner off cooldown."`
+- **No hedging or false optionality.** Never `Consider ...`, `you might want to`, `try to`, `~` before a benchmark, or `should`. Give the call: `"Hold Vanish to 3:20."`, not `"Consider holding Vanish until ~3:20."`
+- **No statistics clutter in prose.** Never put `±stddev`, `avg`, or parenthetical variance into a sentence. Round the number and name the target plainly: `"... 4s late. Top: 0:08."` The exact thresholds still live in the bench math; the copy just reports the outcome.
+- **Drop the repeated appeal-to-authority tail.** Do not end every line with `... than top parsers` / `... of top parsers use X`. Say it once, compactly: `"80% run this trinket"`, `"Top: 91%"`. Card subtitles follow the short `"<thing> vs top parses"` form (e.g. `"Offensive cooldowns vs top parses."`), never `"How your X compares to top parses."`
+- **State facts, not praise.** A clean result is `"Standard build."` / `"On plan"`, never `"Matches top parsers"` / `"On a top-parse build"` / a celebratory tone. Empty states are neutral (`"Nothing flagged."`, `"No talent data."`) - never `"No issues detected!"` and never the optimistic `"... yet."` that implies the system is still filling in.
+- **No decorative glyphs or emoji in copy.** No `✓`/`✗`/`⚠`/emoji as inline text; use words (`Kill` / `Wipe #3`) or a themed `mat-icon` where a glyph is genuinely needed.
+- **Active voice, present tense, lower-case after the colon.** `"Cloak first used at 1:12"`, not `"Cloak of Shadows was first deployed at ..."`. Avoid filler verbs like `Deploy`, `leverage`, `utilize` - prefer `Use`, `Press`, `Hold`, `Open with`.
+- **"On plan" success states are quiet.** Use the neutral `.chip-onplan` tag (defined in `styles.scss`), not a green pill with a `check_circle`. A correct result should read as calm, not celebrated.
+
 ## Frontend conventions
 
 These are hard rules for all Angular code. The `angular-developer` skill (`.claude/skills/angular-developer`) captures the broader Angular/TypeScript best practices - use it when building or refactoring components.

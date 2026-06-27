@@ -50,7 +50,7 @@ export interface GearComparisonView {
 export function emptyGearView(): GearComparisonView {
   return {
     comparison: false,
-    talentBuilds: [], talentStatus: { status: 'unknown', note: 'No talent data yet.' },
+    talentBuilds: [], talentStatus: { status: 'unknown', note: 'No talent data.' },
     trinketRows: [], trinketStatus: 'ok', benchTrinketRows: [],
     enchantRows: [], enchantStatus: 'ok', benchEnchantRows: [],
   };

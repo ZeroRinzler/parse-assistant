@@ -24,7 +24,7 @@ export class DefensivePlanComponent {
   readonly spec = input.required<string>();
   readonly encounterId = input.required<number>();
   readonly title = input('Defensive plan');
-  readonly subtitle = input('When top parsers use defensives, and how often, on this fight.');
+  readonly subtitle = input('Defensive usage across top parses.');
 
   private readonly _items = signal<DefensivePlanRow[]>([]);
   protected readonly items = this._items.asReadonly();

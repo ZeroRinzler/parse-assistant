@@ -156,7 +156,7 @@ describe('buildTrinketRows', () => {
     expect(rows[1]).toMatchObject({
       slotLabel: 'Trinket 2',
       status: 'info',
-      note: 'Switch to Gaze of the Alnseer - 80% of top parsers',
+      note: 'Switch to Gaze of the Alnseer (80%)',
     });
   });
 
@@ -170,8 +170,8 @@ describe('buildTrinketRows', () => {
       }),
       benchStats,
     );
-    expect(rows[0]).toMatchObject({ status: 'info', note: "Switch to Algeth'ar Puzzle Box - 50% of top parsers" });
-    expect(rows[1]).toMatchObject({ status: 'info', note: 'Switch to Gaze of the Alnseer - 80% of top parsers' });
+    expect(rows[0]).toMatchObject({ status: 'info', note: "Switch to Algeth'ar Puzzle Box (50%)" });
+    expect(rows[1]).toMatchObject({ status: 'info', note: 'Switch to Gaze of the Alnseer (80%)' });
   });
 
   it('surfaces the top recommendation when the player has no trinket in a slot', () => {
@@ -185,7 +185,7 @@ describe('buildTrinketRows', () => {
       slotLabel: 'Trinket 2',
       id: 249343,
       status: 'info',
-      note: '80% of top parsers use this trinket',
+      note: '80% run this trinket',
     });
   });
 

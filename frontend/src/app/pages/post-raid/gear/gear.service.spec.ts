@@ -73,7 +73,7 @@ describe('emptyGearView', () => {
   it('is a bench-off view with no rows', () => {
     expect(emptyGearView()).toEqual({
       comparison: false,
-      talentBuilds: [], talentStatus: { status: 'unknown', note: 'No talent data yet.' },
+      talentBuilds: [], talentStatus: { status: 'unknown', note: 'No talent data.' },
       trinketRows: [], trinketStatus: 'ok', benchTrinketRows: [],
       enchantRows: [], enchantStatus: 'ok', benchEnchantRows: [],
     });

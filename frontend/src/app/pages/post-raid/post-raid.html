@@ -11,7 +11,7 @@
       </mat-form-field>
 
       <mat-slide-toggle [formControl]="liveControl" (change)="onLiveToggle()" class="mt-2">
-        Live sync (auto-follow latest pull)
+        Live sync (follow latest pull)
       </mat-slide-toggle>
 
       @if (fights().length) {
@@ -24,7 +24,7 @@
               <mat-select [formControl]="fightControl" (selectionChange)="onFightChange()">
                 @for (f of fights(); track f.id) {
                   <mat-option [value]="f.id">
-                    {{ f.name }} [{{ f.kill ? '✓' : '✗ #' + f.attempt }}] {{ f.duration_s | formatDuration }}
+                    {{ f.name }} - {{ f.kill ? 'Kill' : 'Wipe #' + f.attempt }} - {{ f.duration_s | formatDuration }}
                   </mat-option>
                 }
               </mat-select>
@@ -50,7 +50,7 @@
     }
 
     @if (error()) {
-      <div class="mb-4 rounded-lg border border-[var(--critical)]/30 bg-[var(--critical)]/10 px-4 py-3.5 text-[13px] text-[var(--critical)]">⚠ {{ error() }}</div>
+      <div class="mb-4 rounded-lg border border-[var(--critical)]/30 bg-[var(--critical)]/10 px-4 py-3.5 text-[13px] text-[var(--critical)]">{{ error() }}</div>
     }
 
     @if (loadingReport() || loadingAnalysis()) {
