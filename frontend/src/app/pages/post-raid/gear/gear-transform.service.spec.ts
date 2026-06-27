@@ -43,28 +43,32 @@ describe('talentKeyFromTree', () => {
 });
 
 describe('toParseGear', () => {
-  it('reduces a found CharacterGear to its talent/trinket/enchant fingerprint', () => {
+  const ranking = { player: 'Ann', report_code: 'rep1', fight_id: 3 };
+
+  it('reduces a found CharacterGear to its fingerprint tagged with the parse identity', () => {
     const gear: CharacterGear = {
       found: true, talent_key: 'v2:1,2',
       trinkets: [{ slot: 12, id: 100, name: 'A', icon: 'inv_a' }],
       enchants: [{ slot: 15, id: 8041, name: 'Sophic' }],
     };
-    expect(toParseGear(gear)).toEqual({
+    expect(toParseGear(gear, ranking)).toEqual({
       talent_key: 'v2:1,2',
       trinkets: [{ slot: 12, id: 100, name: 'A', icon: 'inv_a' }],
       enchants: [{ slot: 15, id: 8041, name: 'Sophic' }],
+      report_code: 'rep1', fight_id: 3, player_name: 'Ann',
     });
   });
 
   it('returns null for absent gear', () => {
-    expect(toParseGear(null)).toBeNull();
-    expect(toParseGear({ found: false })).toBeNull();
+    expect(toParseGear(null, ranking)).toBeNull();
+    expect(toParseGear({ found: false }, ranking)).toBeNull();
   });
 });
 
 describe('aggregateParseGear', () => {
   const parse = (overrides: Partial<ParseGear>): ParseGear => ({
-    talent_key: 'v2:1,2', trinkets: [], enchants: [], ...overrides,
+    talent_key: 'v2:1,2', trinkets: [], enchants: [],
+    report_code: 'rep', fight_id: 1, player_name: 'P', ...overrides,
   });
 
   it('rolls talent builds, trinkets per slot, and enchants into pct distributions', () => {
@@ -100,6 +104,16 @@ describe('aggregateParseGear', () => {
 
   it('returns empty aggregates for no parses', () => {
     expect(aggregateParseGear([])).toEqual({ talent_builds: [], trinkets: {}, enchants: {} });
+  });
+
+  it('records the first-seen parse identity so a build can link to an example parse', () => {
+    const stats = aggregateParseGear([
+      parse({ talent_key: 'v2:A', report_code: 'rep1', fight_id: 3, player_name: 'Ann' }),
+      parse({ talent_key: 'v2:A', report_code: 'rep2', fight_id: 7, player_name: 'Bob' }),
+    ]);
+    expect(stats.talent_builds[0]).toMatchObject({
+      key: 'v2:A', report_code: 'rep1', fight_id: 3, player_name: 'Ann',
+    });
   });
 });
 
@@ -144,7 +158,9 @@ describe('GearTransformService (live, in-browser)', () => {
     expect(bench).not.toBeNull();
     expect(bench!.sample_count).toBe(2);
     expect(bench!.encounter_name).toBe('Boss');
-    expect(bench!.talent_builds[0]).toMatchObject({ key: 'v2:65', pct: 100 });
+    expect(bench!.talent_builds[0]).toMatchObject({
+      key: 'v2:65', pct: 100, report_code: 'r1', fight_id: 1, player_name: 'P1',
+    });
     expect(bench!.trinkets[12]).toEqual([{ id: 100, name: 'A', icon: 't', pct: 100 }]);
     expect(bench!.enchants[15]).toEqual([{ id: 8041, name: 'Soph', pct: 100 }]);
   });

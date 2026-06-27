@@ -103,20 +103,33 @@ export function talentKeyFromTree(tree: { nodeID?: number }[] | undefined): stri
   return 'v2:' + ids.sort().join(',');
 }
 
-/** One top parse reduced to just its gear fingerprint (or null when unavailable). */
+/**
+ * One top parse reduced to just its gear fingerprint (or null when unavailable).
+ * The parse identity (`report_code`/`fight_id`/`player_name`) rides along so each
+ * bench talent build can link back to an example parse running it.
+ */
 export interface ParseGear {
   talent_key: string;
   trinkets: { slot: number; id: number; name: string; icon: string }[];
   enchants: { slot: number; id: number; name: string }[];
+  report_code: string;
+  fight_id: number;
+  player_name: string;
 }
 
-/** Reduce a fetched `CharacterGear` to the fields the gear aggregation needs. */
-export function toParseGear(gear: CharacterGear | null): ParseGear | null {
+/**
+ * Reduce a fetched `CharacterGear` to the fields the gear aggregation needs, tagged
+ * with the parse identity from its `ranking` (so a build can link to an example parse).
+ */
+export function toParseGear(gear: CharacterGear | null, ranking: ParseRanking): ParseGear | null {
   if (!gear?.found) return null;
   return {
     talent_key: gear.talent_key ?? '',
     trinkets: (gear.trinkets ?? []).map(trinket => ({ slot: trinket.slot, id: trinket.id, name: trinket.name, icon: trinket.icon ?? '' })),
     enchants: (gear.enchants ?? []).map(enchant => ({ slot: enchant.slot, id: enchant.id, name: enchant.name })),
+    report_code: ranking.report_code,
+    fight_id: ranking.fight_id,
+    player_name: ranking.player,
   };
 }
 
@@ -128,7 +141,7 @@ export function aggregateParseGear(parses: ParseGear[]): EncounterGearStats {
   const total = parses.length;
 
   const talentCounter = new Map<string, number>();
-  const talentExample = new Map<string, { report_code?: string; fight_id?: number; player_name?: string }>();
+  const talentExample = new Map<string, { report_code: string; fight_id: number; player_name: string }>();
   const trinketCounters = new Map<number, Map<number, number>>();
   const trinketNames = new Map<number, string>();
   const trinketIcons = new Map<number, string>();
@@ -138,7 +151,13 @@ export function aggregateParseGear(parses: ParseGear[]): EncounterGearStats {
   for (const parse of parses) {
     if (parse.talent_key) {
       talentCounter.set(parse.talent_key, (talentCounter.get(parse.talent_key) ?? 0) + 1);
-      if (!talentExample.has(parse.talent_key)) talentExample.set(parse.talent_key, {});
+      if (!talentExample.has(parse.talent_key)) {
+        talentExample.set(parse.talent_key, {
+          report_code: parse.report_code,
+          fight_id: parse.fight_id,
+          player_name: parse.player_name,
+        });
+      }
     }
 
     for (const trinket of parse.trinkets) {
@@ -256,7 +275,7 @@ export class GearTransformService implements GearDataSource {
         found: true, spec, source_report: ranking.report_code,
         talent_key: talentKeyFromTree(event.talentTree), trinkets, enchants,
       };
-      const gear = toParseGear(characterGear);
+      const gear = toParseGear(characterGear, ranking);
       if (!gear) return null;
       return { gear, encounterName: fight.name ?? '' };
     } catch (err) {
