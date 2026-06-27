@@ -22,6 +22,9 @@ import { DefensiveBench, DefensiveDataSource, DefensivePlanMeta } from './defens
 
 /** How many top parses to sample (matches the ingest bench). */
 const TOP_PARSE_COUNT = 10;
+// Over-fetch so a private/unfetchable top parse can be backfilled by the
+// next-best one; the break in the loop caps actual fetches at TOP_PARSE_COUNT.
+const CANDIDATE_POOL_COUNT = TOP_PARSE_COUNT * 2;
 /** Min cluster size as a fraction of samples to surface a defensive window. */
 const CLUSTER_MIN_FRAC = 0.35;
 /** "At least this share of member parses" - ability inclusion in a cluster. */
@@ -405,7 +408,7 @@ export class DefensiveTransformService implements DefensiveDataSource {
     const defensives = rulebook?.defensives ?? [];
     if (!defensives.length) return null;
 
-    const rankings = toParseRankings(await this.wclApi.getRankings(spec, encounterId), TOP_PARSE_COUNT);
+    const rankings = toParseRankings(await this.wclApi.getRankings(spec, encounterId), CANDIDATE_POOL_COUNT);
     if (!rankings.length) return null;
 
     const allWindows: ParseDefWindow[] = [];
@@ -419,6 +422,7 @@ export class DefensiveTransformService implements DefensiveDataSource {
       perParseSummaries.push(parse.summaries);
       encounterName ||= parse.encounterName;
       sampleCount += 1;
+      if (sampleCount >= TOP_PARSE_COUNT) break;
     }
     if (!sampleCount) return null;
 

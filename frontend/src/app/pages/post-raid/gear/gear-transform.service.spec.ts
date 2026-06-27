@@ -149,6 +149,29 @@ describe('GearTransformService (live, in-browser)', () => {
     expect(bench!.enchants[15]).toEqual([{ id: 8041, name: 'Soph', pct: 100 }]);
   });
 
+  it('backfills past a private (unfetchable) top parse to keep the sample count full', async () => {
+    const candidates = Array.from({ length: 11 }, (_, i) => ({ name: `P${i + 1}`, report: { code: `r${i + 1}`, fightID: i + 1 } }));
+    const backfillWcl = {
+      ...wclFake,
+      getRankings: async () => candidates,
+      getReport: async (code: string) => {
+        if (code === 'r5') throw new Error('You do not have permission to view this report.');
+        const idx = Number(code.slice(1));
+        return reportFor(idx * 10, `P${idx}`, idx);
+      },
+      getCombatantInfo: async () => combatantInfo(10),
+    };
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: WclApiService, useValue: backfillWcl as unknown as WclApiService },
+        { provide: DataFileApiService, useValue: {} as unknown as DataFileApiService },
+      ],
+    });
+    const bench = await TestBed.inject(GearTransformService).getGearBench('SubtletyRogue', 1);
+    // 11 candidates, one private: the 11th backfills the skipped parse to a full 10.
+    expect(bench!.sample_count).toBe(10);
+  });
+
   it('returns null when there are no rankings', async () => {
     TestBed.configureTestingModule({
       providers: [

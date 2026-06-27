@@ -29,6 +29,9 @@ import { MapData, MapDataSource } from './map-data-source';
 
 /** How many top parses to sample (matches the ingest bench). */
 const TOP_PARSE_COUNT = 10;
+// Over-fetch so a private/unfetchable top parse can be backfilled by the
+// next-best one; the break in the loop caps actual fetches at TOP_PARSE_COUNT.
+const CANDIDATE_POOL_COUNT = TOP_PARSE_COUNT * 2;
 /** Fixed resample cadence, seconds (mirrors ingest `POSITIONS_INTERVAL_S`). */
 export const POSITIONS_INTERVAL_S = 1.5;
 /** Keep the boss plus this many most-active enemies. */
@@ -182,7 +185,7 @@ export class MapTransformService implements MapDataSource {
   private readonly dataFiles = inject(DataFileApiService);
 
   async getMapData(spec: string, encounterId: number): Promise<MapData | null> {
-    const rankings = toParseRankings(await this.wclApi.getRankings(spec, encounterId), TOP_PARSE_COUNT);
+    const rankings = toParseRankings(await this.wclApi.getRankings(spec, encounterId), CANDIDATE_POOL_COUNT);
     if (!rankings.length) return null;
 
     const parses: ParsePositions[] = [];
@@ -192,6 +195,7 @@ export class MapTransformService implements MapDataSource {
       if (!parse) continue;
       parses.push(parse.positions);
       encounterName ||= parse.encounterName;
+      if (parses.length >= TOP_PARSE_COUNT) break;
     }
     if (!parses.length) return null;
 

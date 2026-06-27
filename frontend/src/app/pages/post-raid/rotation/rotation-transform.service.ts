@@ -21,6 +21,9 @@ import { RotationBench, RotationDataSource } from './rotation-data-source';
 
 /** How many top parses to sample (matches the ingest bench). */
 const TOP_PARSE_COUNT = 10;
+// Over-fetch so a private/unfetchable top parse can be backfilled by the
+// next-best one; the break in the loop caps actual fetches at TOP_PARSE_COUNT.
+const CANDIDATE_POOL_COUNT = TOP_PARSE_COUNT * 2;
 /** Bloodlust / Heroism / Time Warp / etc. - any of these starts a "BL window". */
 const BLOODLUST_IDS = new Set([2825, 32182, 80353, 90355, 264667, 390386]);
 /** BL window: a CD counts as aligned if cast 30s before to 55s after BL start. */
@@ -279,7 +282,7 @@ export class RotationTransformService implements RotationDataSource {
     const defensives = rulebook?.defensives ?? [];
     const rules = rulebook?.rules ?? [];
 
-    const rankings = toParseRankings(await this.wclApi.getRankings(spec, encounterId), TOP_PARSE_COUNT);
+    const rankings = toParseRankings(await this.wclApi.getRankings(spec, encounterId), CANDIDATE_POOL_COUNT);
     if (!rankings.length) return null;
 
     const perParse: CdSummary[][] = [];
@@ -293,6 +296,7 @@ export class RotationTransformService implements RotationDataSource {
       gapLists.push(parse.gapListMs);
       durations.push(parse.durationS);
       encounterName ||= parse.encounterName;
+      if (perParse.length >= TOP_PARSE_COUNT) break;
     }
     if (!perParse.length) return null;
 

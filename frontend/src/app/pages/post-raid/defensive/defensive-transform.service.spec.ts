@@ -190,6 +190,28 @@ describe('DefensiveTransformService (live, in-browser)', () => {
     expect(bench!.ability_icons[700]).toEqual({ icon: 'hit', name: 'Boss Hit' });
   });
 
+  it('backfills past a private (unfetchable) top parse to keep the sample count full', async () => {
+    const candidates = Array.from({ length: 11 }, (_, i) => ({ name: `P${i + 1}`, report: { code: `r${i + 1}`, fightID: i + 1 } }));
+    const backfillWcl = {
+      ...wclFake,
+      getRankings: async () => candidates,
+      getReport: async (code: string) => {
+        if (code === 'r5') throw new Error('You do not have permission to view this report.');
+        const idx = Number(code.slice(1));
+        return reportFor(idx * 10, `P${idx}`, idx);
+      },
+    };
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: WclApiService, useValue: backfillWcl as unknown as WclApiService },
+        { provide: DataFileApiService, useValue: filesFake as unknown as DataFileApiService },
+      ],
+    });
+    const bench = await TestBed.inject(DefensiveTransformService).getDefensiveBench('SubtletyRogue', 1);
+    // 11 candidates, one private: the 11th backfills the skipped parse to a full 10.
+    expect(bench!.sample_count).toBe(10);
+  });
+
   it('returns null when the spec has no rulebook defensives', async () => {
     TestBed.configureTestingModule({
       providers: [

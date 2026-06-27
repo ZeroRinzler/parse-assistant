@@ -20,6 +20,9 @@ import { BurstBench, BurstDataSource } from './burst-data-source';
 
 /** How many top parses to sample (matches the ingest bench). */
 const TOP_PARSE_COUNT = 10;
+// Over-fetch so a private/unfetchable top parse can be backfilled by the
+// next-best one; the break in the loop caps actual fetches at TOP_PARSE_COUNT.
+const CANDIDATE_POOL_COUNT = TOP_PARSE_COUNT * 2;
 /** A window must carry at least this share of fight damage to count. */
 const SIGNIFICANCE_PCT = 0.03;
 /** Min cluster size as a fraction of samples to surface a window. */
@@ -242,7 +245,7 @@ export class BurstTransformService implements BurstDataSource {
     if (!cooldowns.length) return null;
     const defensives = rulebook?.defensives ?? [];
 
-    const rankings = toParseRankings(await this.wclApi.getRankings(spec, encounterId), TOP_PARSE_COUNT);
+    const rankings = toParseRankings(await this.wclApi.getRankings(spec, encounterId), CANDIDATE_POOL_COUNT);
     if (!rankings.length) return null;
 
     const allWindows: ParseWindow[] = [];
@@ -254,6 +257,7 @@ export class BurstTransformService implements BurstDataSource {
       allWindows.push(...parse.windows);
       encounterName ||= parse.encounterName;
       sampleCount += 1;
+      if (sampleCount >= TOP_PARSE_COUNT) break;
     }
     if (!sampleCount) return null;
 

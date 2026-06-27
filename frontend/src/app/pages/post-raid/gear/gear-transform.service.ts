@@ -18,6 +18,9 @@ import { GearBench, GearDataSource } from './gear-data-source';
 
 /** How many top parses to sample (matches the ingest bench). */
 const TOP_PARSE_COUNT = 10;
+// Over-fetch so a private/unfetchable top parse can be backfilled by the
+// next-best one; the break in the loop caps actual fetches at TOP_PARSE_COUNT.
+const CANDIDATE_POOL_COUNT = TOP_PARSE_COUNT * 2;
 /** Trinket slots, per the WCL gear quirks. */
 const TRINKET_SLOTS = [12, 13] as const;
 /** Keep at most this many talent builds / trinkets / enchants per slot. */
@@ -194,7 +197,7 @@ export class GearTransformService implements GearDataSource {
   private readonly wclApi = inject(WclApiService);
 
   async getGearBench(spec: string, encounterId: number): Promise<GearBench | null> {
-    const rankings = toParseRankings(await this.wclApi.getRankings(spec, encounterId), TOP_PARSE_COUNT);
+    const rankings = toParseRankings(await this.wclApi.getRankings(spec, encounterId), CANDIDATE_POOL_COUNT);
     if (!rankings.length) return null;
 
     const parses: ParseGear[] = [];
@@ -204,6 +207,7 @@ export class GearTransformService implements GearDataSource {
       if (!fetched) continue;
       parses.push(fetched.gear);
       encounterName ||= fetched.encounterName;
+      if (parses.length >= TOP_PARSE_COUNT) break;
     }
     if (!parses.length) return null;
 
