@@ -15,6 +15,11 @@ export interface BurstBench {
   windows: BurstWindow[];
   /** Cooldown / defensive name -> spell id, for the window header icons. */
   cd_spell_ids: Record<string, number>;
+  /**
+   * Baked spell-id -> {icon, name}, complete over every cd_spell_ids id and every
+   * window ability so `wl-game-icon` renders without a report on `/pre`.
+   */
+  ability_icons: Record<number, { icon: string; name: string }>;
 }
 
 /**

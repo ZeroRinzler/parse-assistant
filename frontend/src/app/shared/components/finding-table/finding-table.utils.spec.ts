@@ -3,6 +3,7 @@ import { bucketFindings, rowsFromEntries, onPlanFromEntries, CAT_LABEL, FindingE
 import { AnalysisFinding } from '../../../core/models/analysis.models';
 
 const spellId = (_name: string) => null;
+const icon = (_name: string) => '';
 
 const f = (
   severity: AnalysisFinding['severity'],
@@ -20,7 +21,7 @@ const f = (
 describe('bucketFindings', () => {
   it('groups critical issue under its cooldown name', () => {
     const finding = f('critical', 'lost_cooldown', 'Shadow Blades');
-    const { entries } = bucketFindings([finding], { spellId });
+    const { entries } = bucketFindings([finding], { spellId, icon });
 
     expect(entries).toHaveLength(1);
     expect(entries[0].name).toBe('Shadow Blades');
@@ -36,7 +37,7 @@ describe('bucketFindings', () => {
       message: 'hold tip',
       details: { cd_name: 'Feint' },
     };
-    const { entries } = bucketFindings([finding], { spellId });
+    const { entries } = bucketFindings([finding], { spellId, icon });
 
     expect(entries).toHaveLength(1);
     expect(entries[0].name).toBe('Feint');
@@ -47,7 +48,7 @@ describe('bucketFindings', () => {
 
   it('routes rule_violation to ruleFindings when collectRules is true', () => {
     const finding = f('warning', 'rule_violation');
-    const { entries, ruleFindings } = bucketFindings([finding], { spellId, collectRules: true });
+    const { entries, ruleFindings } = bucketFindings([finding], { spellId, icon, collectRules: true });
 
     expect(entries).toHaveLength(0);
     expect(ruleFindings).toHaveLength(1);
@@ -55,7 +56,7 @@ describe('bucketFindings', () => {
 
   it('keeps rule_violation in entries when collectRules is false', () => {
     const finding: AnalysisFinding = f('warning', 'rule_violation', 'Shadow Blades');
-    const { entries } = bucketFindings([finding], { spellId, collectRules: false });
+    const { entries } = bucketFindings([finding], { spellId, icon, collectRules: false });
 
     expect(entries).toHaveLength(1);
     expect(entries[0].name).toBe('Shadow Blades');
@@ -63,7 +64,7 @@ describe('bucketFindings', () => {
 
   it('finding without cd_name goes to ruleFindings when collectRules is true', () => {
     const finding = f('critical', 'cast_efficiency');
-    const { entries, ruleFindings } = bucketFindings([finding], { spellId, collectRules: true });
+    const { entries, ruleFindings } = bucketFindings([finding], { spellId, icon, collectRules: true });
 
     expect(ruleFindings).toHaveLength(1);
     expect(entries).toHaveLength(0);
@@ -71,7 +72,7 @@ describe('bucketFindings', () => {
 
   it('success finding with cd_name creates an entry with hasIssue=false', () => {
     const finding = f('success', 'cooldown_usage', 'Shadow Blades');
-    const { entries } = bucketFindings([finding], { spellId });
+    const { entries } = bucketFindings([finding], { spellId, icon });
 
     expect(entries).toHaveLength(1);
     expect(entries[0].name).toBe('Shadow Blades');
@@ -84,7 +85,7 @@ describe('bucketFindings', () => {
       f('warning', 'cooldown_delay', 'Shadow Blades'),
       f('warning', 'cooldown_delay', 'Shadow Blades'),
     ];
-    const { entries } = bucketFindings(findings, { spellId });
+    const { entries } = bucketFindings(findings, { spellId, icon });
 
     expect(entries[0].metaItems).toHaveLength(1);
     expect(entries[0].metaItems[0]).toBe('held');
@@ -95,20 +96,20 @@ describe('bucketFindings', () => {
       { severity: 'info', category: 'hold_suggestion', message: 'tip 1', details: { cd_name: 'Feint' } },
       { severity: 'info', category: 'hold_suggestion', message: 'tip 2', details: { cd_name: 'Feint' } },
     ];
-    const { entries } = bucketFindings(findings, { spellId });
+    const { entries } = bucketFindings(findings, { spellId, icon });
 
     expect(entries[0].metaItems).toContain('2 hold tips');
   });
 
   it('returns empty entries and ruleFindings for empty input', () => {
-    const { entries, ruleFindings } = bucketFindings([], { spellId });
+    const { entries, ruleFindings } = bucketFindings([], { spellId, icon });
     expect(entries).toHaveLength(0);
     expect(ruleFindings).toHaveLength(0);
   });
 
   it('silently skips a finding with no cd_name when collectRules is false (no ghost "undefined" entry)', () => {
     const finding = f('warning', 'cast_efficiency'); // no cd_name
-    const { entries, ruleFindings } = bucketFindings([finding], { spellId, collectRules: false });
+    const { entries, ruleFindings } = bucketFindings([finding], { spellId, icon, collectRules: false });
     expect(entries).toHaveLength(0);
     expect(ruleFindings).toHaveLength(0);
   });
@@ -118,6 +119,7 @@ describe('rowsFromEntries', () => {
   const issueEntry: FindingEntry = {
     name: 'Shadow Blades',
     spellId: 121471,
+    icon: '',
     hasIssue: true,
     hasCritical: true,
     metaItems: ['lost cast'],
@@ -129,6 +131,7 @@ describe('rowsFromEntries', () => {
   const onPlanEntry: FindingEntry = {
     name: 'Vanish',
     spellId: null,
+    icon: '',
     hasIssue: false,
     hasCritical: false,
     metaItems: [],
@@ -149,7 +152,7 @@ describe('rowsFromEntries', () => {
 
   it('uses a dash placeholder when finding.measured is absent', () => {
     const entry: FindingEntry = {
-      name: 'Shadow Blades', spellId: null, hasIssue: true, hasCritical: false,
+      name: 'Shadow Blades', spellId: null, icon: '', hasIssue: true, hasCritical: false,
       metaItems: [], findings: [{ severity: 'warning', category: 'rule_violation', message: 'bad' }],
     };
     const rows = rowsFromEntries([entry], CAT_LABEL);
@@ -173,17 +176,17 @@ describe('rowsFromEntries', () => {
 describe('onPlanFromEntries', () => {
   it('returns only entries with hasIssue=false', () => {
     const entries: FindingEntry[] = [
-      { name: 'Shadow Blades', spellId: 121471, hasIssue: true,  hasCritical: true,  metaItems: [], findings: [] },
-      { name: 'Vanish',        spellId: 1856,   hasIssue: false, hasCritical: false, metaItems: [], findings: [] },
+      { name: 'Shadow Blades', spellId: 121471, icon: '', hasIssue: true,  hasCritical: true,  metaItems: [], findings: [] },
+      { name: 'Vanish',        spellId: 1856,   icon: '', hasIssue: false, hasCritical: false, metaItems: [], findings: [] },
     ];
     const chips = onPlanFromEntries(entries);
     expect(chips).toHaveLength(1);
-    expect(chips[0]).toEqual({ name: 'Vanish', spellId: 1856 });
+    expect(chips[0]).toEqual({ name: 'Vanish', spellId: 1856, icon: '' });
   });
 
   it('returns empty array when all entries have issues', () => {
     const entries: FindingEntry[] = [
-      { name: 'Shadow Blades', spellId: null, hasIssue: true, hasCritical: false, metaItems: [], findings: [] },
+      { name: 'Shadow Blades', spellId: null, icon: '', hasIssue: true, hasCritical: false, metaItems: [], findings: [] },
     ];
     expect(onPlanFromEntries(entries)).toHaveLength(0);
   });

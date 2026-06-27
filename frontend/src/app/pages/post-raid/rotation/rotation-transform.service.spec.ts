@@ -133,6 +133,9 @@ const wclFake = {
   getReport: async (code: string) => (code === 'r1' ? reportFor(10, 'P1', 1) : reportFor(20, 'P2', 2)),
   getAllEvents: async (_code: string, _fightId: number, dataType: string) =>
     dataType === 'Casts' ? [cast(121471, 5), cast(99, 8)] : [buff(2825, 6)],
+  // Resolves a real icon + name for every requested spell id (gameData.ability).
+  getAbilities: async (ids: number[]) =>
+    Object.fromEntries(ids.map(id => [id, { icon: 'sb', name: 'Shadow Blades' }])),
 };
 const filesFake = {
   getRulebook: async () => ({

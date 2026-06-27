@@ -21,6 +21,7 @@ import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner
 import { RotationComponent } from './rotation/rotation';
 import { BurstWindowsComponent } from './burst-windows/burst-windows';
 import { DefensiveComponent } from './defensive/defensive';
+import { DefensiveMapAnchor } from './defensive/defensive.service';
 import { GearComponent } from './gear/gear';
 import { MapPanelComponent } from './map/map-panel';
 import { MapFeatureService, MapAnchor } from './map/map.service';
@@ -125,9 +126,9 @@ export class PostRaidComponent implements OnInit {
   }
 
   /** Defensive cards carry a reference enemy gameID; convert it to a MapAnchor reference. */
-  protected onDefensiveOpenMap(anchor: { timeS: number; label: string; spellIds: number[]; refGameId: number | null }): void {
+  protected onDefensiveOpenMap(anchor: DefensiveMapAnchor): void {
     this.mapFeature.openAt({
-      timeS: anchor.timeS, label: anchor.label, spellIds: anchor.spellIds,
+      timeS: anchor.timeS, label: anchor.label, spells: anchor.spells,
       reference: anchor.refGameId != null ? { kind: 'enemy', gameId: anchor.refGameId } : { kind: 'boss' },
     });
   }

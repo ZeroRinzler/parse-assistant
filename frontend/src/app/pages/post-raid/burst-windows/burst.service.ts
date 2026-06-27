@@ -10,18 +10,18 @@ import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { BurstWindow, PlayerBurstWindow } from '../../../core/models/analysis.models';
 import { WclEvent } from '../../../core/models/wcl.models';
-import { ComparisonWindow, WindowStatus, RangeRow } from '../../../core/models/window-comparison.models';
+import { ComparisonWindow, WindowStatus, RangeRow, WindowSpell } from '../../../core/models/window-comparison.models';
 import { logWarn } from '../../../core/log';
 import { BURST_DATA_SOURCE } from './burst-data-source';
 
-/** Spell id -> display info, baked from the report's master abilities (AnalysisResult.ability_icons). */
+/** Spell id -> baked icon + name, complete over every spell the card renders. */
 export type AbilityIcons = Record<number, { icon: string; name: string }>;
 
 /** Anchor for opening the positioning map on a burst window (emitted as an output). */
 export interface BurstMapAnchor {
   timeS: number;
   label: string;
-  spellIds: number[];
+  spells: WindowSpell[];
 }
 
 /** The burst card view-model: one ComparisonWindow + one map anchor per top window. */
@@ -73,13 +73,14 @@ export function splitCommonCds(
 export function burstDetailRows(
   abilityBreakdown: BurstWindow['ability_breakdown'],
   playerWindow: PlayerBurstWindow | null,
-  nameOf: (spellId: number) => string,
+  abilities: AbilityIcons,
 ): RangeRow[] {
   const playerByAbility: Record<number, { damage: number; casts?: number }> = {};
   for (const ability of playerWindow?.ability_breakdown ?? []) playerByAbility[ability.spell_id] = ability;
   return abilityBreakdown.map(ability => ({
     spellId: ability.spell_id,
-    label: nameOf(ability.spell_id),
+    label: abilities[ability.spell_id].name,
+    icon: abilities[ability.spell_id].icon,
     playerPct: playerByAbility[ability.spell_id]?.damage ?? null,
     topAvg: ability.avg_damage,
     topMin: ability.min_damage,
@@ -89,13 +90,19 @@ export function burstDetailRows(
   }));
 }
 
+/** Header chips for a window: each known cooldown with its baked icon + name. */
+function windowSpells(spellIds: number[], abilities: AbilityIcons): WindowSpell[] {
+  return spellIds.map(id => ({ id, icon: abilities[id].icon, name: abilities[id].name }));
+}
+
 /** Map anchor for a window: when to seek and which cooldowns to highlight. */
-export function burstMapAnchor(window: BurstWindow, cdSpellIds: Record<string, number>): BurstMapAnchor {
+export function burstMapAnchor(window: BurstWindow, cdSpellIds: Record<string, number>, abilities: AbilityIcons): BurstMapAnchor {
   const cds = window.common_cds ?? [];
+  const spellIds = cds.map(name => cdSpellIds[name]).filter((id): id is number => !!id);
   return {
     timeS: window.time_s,
     label: cds.join(', ') || 'Burst window',
-    spellIds: cds.map(name => cdSpellIds[name]).filter((id): id is number => !!id),
+    spells: windowSpells(spellIds, abilities),
   };
 }
 
@@ -109,7 +116,7 @@ export function buildBurstView(
   playerWindows: PlayerBurstWindow[],
   fightDurationS: number,
   cdSpellIds: Record<string, number>,
-  nameOf: (spellId: number) => string,
+  abilities: AbilityIcons,
   benchOnly = false,
 ): BurstView {
   const windows: ComparisonWindow[] = [];
@@ -123,14 +130,14 @@ export function buildBurstView(
     windows.push({
       timeStartS: window.time_s,
       timeEndS: window.time_s + window.window_length_s,
-      spellIds,
+      spells: windowSpells(spellIds, abilities),
       labels,
       status,
       statusIcon: icon,
-      overview: { label: '', playerPct: playerDamage, topAvg: window.dmg_avg, topMin: window.dmg_min, topMax: window.dmg_max },
-      detailRows: burstDetailRows(window.ability_breakdown, playerWindow, nameOf),
+      overview: { label: '', icon: '', playerPct: playerDamage, topAvg: window.dmg_avg, topMin: window.dmg_min, topMax: window.dmg_max },
+      detailRows: burstDetailRows(window.ability_breakdown, playerWindow, abilities),
     });
-    anchors.push(burstMapAnchor(window, cdSpellIds));
+    anchors.push(burstMapAnchor(window, cdSpellIds, abilities));
   });
   return { windows, anchors };
 }
@@ -210,8 +217,9 @@ export class BurstFeatureService {
     try {
       const report = await this.wclApi.getReport(reportCode);
       const fight = report.fights.find(entry => entry.id === fightId);
-      if (!fight) return buildBurstView(bench.windows, [], Number.POSITIVE_INFINITY, bench.cd_spell_ids, spellId => `Spell ${spellId}`, true);
+      if (!fight) return buildBurstView(bench.windows, [], Number.POSITIVE_INFINITY, bench.cd_spell_ids, bench.ability_icons, true);
 
+      // Names only, to attribute the player's casts by ability name in each window.
       const abilityNames = new Map<number, string>();
       for (const ability of report.masterData?.abilities ?? []) abilityNames.set(ability.gameID, ability.name);
 
@@ -221,11 +229,10 @@ export class BurstFeatureService {
       ]);
       const playerWindows = findPlayerBurstWindows(bench.windows, damage, casts, fight.startTime, abilityNames);
       const fightDurationS = (fight.endTime - fight.startTime) / 1000;
-      const nameOf = (spellId: number): string => abilityNames.get(spellId) ?? `Spell ${spellId}`;
-      return buildBurstView(bench.windows, playerWindows, fightDurationS, bench.cd_spell_ids, nameOf);
+      return buildBurstView(bench.windows, playerWindows, fightDurationS, bench.cd_spell_ids, bench.ability_icons);
     } catch (err) {
       logWarn(`BurstFeatureService.loadPlayerView ${reportCode}:${fightId}`, err);
-      return buildBurstView(bench.windows, [], Number.POSITIVE_INFINITY, bench.cd_spell_ids, spellId => `Spell ${spellId}`, true);
+      return buildBurstView(bench.windows, [], Number.POSITIVE_INFINITY, bench.cd_spell_ids, bench.ability_icons, true);
     }
   }
 
@@ -233,6 +240,6 @@ export class BurstFeatureService {
   async loadBenchView(spec: string, encounterId: number): Promise<BurstView> {
     const bench = await this.source.getBurstBench(spec, encounterId);
     if (!bench) return { windows: [], anchors: [] };
-    return buildBurstView(bench.windows, [], Number.POSITIVE_INFINITY, bench.cd_spell_ids, spellId => `Spell ${spellId}`, true);
+    return buildBurstView(bench.windows, [], Number.POSITIVE_INFINITY, bench.cd_spell_ids, bench.ability_icons, true);
   }
 }

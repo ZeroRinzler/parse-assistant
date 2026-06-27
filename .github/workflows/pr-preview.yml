@@ -38,8 +38,8 @@ jobs:
         run: npm run build -- --base-href /warcraft-learner/pr-${{ github.event.pull_request.number }}/
         working-directory: frontend
 
-      - name: Copy 404 fallback for SPA routing
-        run: cp static/angular/browser/index.html static/angular/browser/404.html
+      - name: Write SPA deep-link 404 redirect (see .github/spa-404.html)
+        run: cp .github/spa-404.html static/angular/browser/404.html
 
       - name: Create GitHub deployment
         id: create-deployment

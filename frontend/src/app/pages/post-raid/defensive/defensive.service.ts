@@ -19,17 +19,20 @@ import {
   AnalysisFinding, BurstWindow, PlayerBurstWindow, PlayerDefensive,
 } from '../../../core/models/analysis.models';
 import { PerDefensiveBenchmark } from '../../../core/models/encounter.models';
-import { ComparisonWindow, WindowStatus, RangeRow } from '../../../core/models/window-comparison.models';
+import { ComparisonWindow, WindowStatus, RangeRow, WindowSpell } from '../../../core/models/window-comparison.models';
 import { logWarn } from '../../../core/log';
 import {
   DEFENSIVE_DATA_SOURCE, DefensiveBench, DefensivePlanMeta, BakedAbility,
 } from './defensive-data-source';
 
+/** Spell id -> baked icon + name, complete over every spell the card renders. */
+type AbilityIcons = Record<number, BakedAbility>;
+
 /** Anchor for opening the positioning map on a defensive window (emitted as an output). */
 export interface DefensiveMapAnchor {
   timeS: number;
   label: string;
-  spellIds: number[];
+  spells: WindowSpell[];
   refGameId: number | null;
 }
 
@@ -48,6 +51,8 @@ export interface DefensiveView {
 export interface DefensivePlanRow {
   name: string;
   spellId: number | null;
+  /** Baked icon filename for `wl-game-icon` (empty string when there is no art). */
+  icon: string;
   uses: number | null;
   firstCastS: number | null;
   windowsS: number[];
@@ -270,13 +275,14 @@ export function defensiveWindowStatus(
 export function defensiveDetailRows(
   abilityBreakdown: BurstWindow['ability_breakdown'],
   playerWindow: PlayerBurstWindow | null,
-  nameOf: (spellId: number) => string,
+  abilities: AbilityIcons,
 ): RangeRow[] {
   const playerByAbility: Record<number, { damage: number }> = {};
   for (const ability of playerWindow?.ability_breakdown ?? []) playerByAbility[ability.spell_id] = ability;
   return abilityBreakdown.map(ability => ({
     spellId: ability.spell_id,
-    label: nameOf(ability.spell_id),
+    label: abilities[ability.spell_id].name,
+    icon: abilities[ability.spell_id].icon,
     playerPct: playerByAbility[ability.spell_id]?.damage ?? null,
     topAvg: ability.avg_damage,
     topMin: ability.min_damage,
@@ -284,13 +290,18 @@ export function defensiveDetailRows(
   }));
 }
 
+/** Header chip for a window's defensive spell, with its baked icon + name. */
+function windowSpells(spellId: number | null | undefined, abilities: AbilityIcons): WindowSpell[] {
+  return spellId != null ? [{ id: spellId, icon: abilities[spellId].icon, name: abilities[spellId].name }] : [];
+}
+
 /** Map anchor for a defensive window: when to seek, label, defensive spell, and the dominant enemy. */
-export function defensiveMapAnchor(window: BurstWindow): DefensiveMapAnchor {
+export function defensiveMapAnchor(window: BurstWindow, abilities: AbilityIcons): DefensiveMapAnchor {
   const label = window.defensive_name ?? window.common_defensives?.[0] ?? 'Defensive';
   return {
     timeS: window.time_s,
     label,
-    spellIds: window.spell_id != null ? [window.spell_id] : [],
+    spells: windowSpells(window.spell_id, abilities),
     refGameId: window.ref_game_id ?? null,
   };
 }
@@ -304,7 +315,7 @@ export function buildDefensiveWindows(
   topWindows: BurstWindow[],
   playerWindows: PlayerBurstWindow[],
   fightDurationS: number,
-  nameOf: (spellId: number) => string,
+  abilities: AbilityIcons,
 ): { windows: ComparisonWindow[]; anchors: DefensiveMapAnchor[] } {
   const windows: ComparisonWindow[] = [];
   const anchors: DefensiveMapAnchor[] = [];
@@ -314,19 +325,18 @@ export function buildDefensiveWindows(
     const playerDamage = playerWindow?.window_damage ?? null;
     const { status, icon } = defensiveWindowStatus(playerDamage, window.dmg_avg, window.dmg_max, window.dmg_stddev, notReached);
     const defensiveName = window.defensive_name ?? window.common_defensives?.[0] ?? '';
-    const spellIds = window.spell_id != null ? [window.spell_id] : [];
     const labels = window.spell_id == null && defensiveName ? [defensiveName] : [];
     windows.push({
       timeStartS: window.time_s,
       timeEndS: window.time_s + window.window_length_s,
-      spellIds,
+      spells: windowSpells(window.spell_id, abilities),
       labels,
       status,
       statusIcon: icon,
-      overview: { label: '', playerPct: playerDamage, topAvg: window.dmg_avg, topMin: window.dmg_min, topMax: window.dmg_max },
-      detailRows: defensiveDetailRows(window.ability_breakdown, playerWindow, nameOf),
+      overview: { label: '', icon: '', playerPct: playerDamage, topAvg: window.dmg_avg, topMin: window.dmg_min, topMax: window.dmg_max },
+      detailRows: defensiveDetailRows(window.ability_breakdown, playerWindow, abilities),
     });
-    anchors.push(defensiveMapAnchor(window));
+    anchors.push(defensiveMapAnchor(window, abilities));
   });
   return { windows, anchors };
 }
@@ -352,6 +362,7 @@ export function buildDefensivePlanRows(bench: DefensiveBench | null): DefensiveP
     return {
       name: defensive.name,
       spellId: defensive.spell_id ?? null,
+      icon: bench.ability_icons[defensive.spell_id].icon,
       uses: benchmark?.avg_uses ?? null,
       firstCastS: benchmark?.avg_first_cast_s ?? null,
       windowsS,
@@ -391,11 +402,6 @@ export class DefensiveFeatureService {
       const fEnd = fight.endTime;
       const fightDurationS = (fEnd - fStart) / 1000;
 
-      const reportAbilities = new Map<number, BakedAbility>();
-      for (const ability of report.masterData?.abilities ?? []) {
-        reportAbilities.set(ability.gameID, { icon: (ability.icon ?? '').replace(/\.jpg$/i, ''), name: ability.name ?? '' });
-      }
-
       const [casts, buffs, dtEvents] = await Promise.all([
         this.wclApi.getAllEvents(reportCode, fightId, 'Casts', fStart, fEnd, playerId),
         this.wclApi.getAllEvents(reportCode, fightId, 'Buffs', fStart, fEnd, playerId),
@@ -408,13 +414,11 @@ export class DefensiveFeatureService {
         : [];
 
       const playerWindows = computePlayerDefensiveWindows(bench.defensive_windows, dtEvents, fStart);
-      const nameOf = (spellId: number): string =>
-        bench.ability_icons[spellId]?.name || reportAbilities.get(spellId)?.name || `Spell ${spellId}`;
       const iconByName: Record<string, string> = {};
       for (const [name, spellId] of Object.entries(bench.cd_spell_ids)) {
-        iconByName[name] = bench.ability_icons[spellId]?.icon || reportAbilities.get(spellId)?.icon || '';
+        iconByName[name] = bench.ability_icons[spellId].icon;
       }
-      const { windows, anchors } = buildDefensiveWindows(bench.defensive_windows, playerWindows, fightDurationS, nameOf);
+      const { windows, anchors } = buildDefensiveWindows(bench.defensive_windows, playerWindows, fightDurationS, bench.ability_icons);
       return { findings, spellIdsByName: bench.cd_spell_ids, iconByName, windows, anchors };
     } catch (err) {
       logWarn(`DefensiveFeatureService.loadAnalysisView ${reportCode}:${fightId}`, err);

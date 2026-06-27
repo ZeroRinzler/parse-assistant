@@ -4,10 +4,10 @@
   </p>
 } @else {
   <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
-    @if (contextSpellIds().length) {
+    @if (contextSpells().length) {
       <div class="flex flex-wrap items-center gap-2">
-        @for (sid of contextSpellIds(); track sid) {
-          <wl-game-icon [id]="sid" />
+        @for (spell of contextSpells(); track spell.id) {
+          <wl-game-icon [id]="spell.id" [icon]="spell.icon" [name]="spell.name" />
         }
       </div>
     } @else if (contextLabel()) {

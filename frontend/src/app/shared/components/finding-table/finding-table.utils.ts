@@ -23,8 +23,8 @@ export interface FindingRow {
   severity: 'critical' | 'warning';
   name?: string;
   spellId?: number | null;
-  /** Icon filename (no extension) for `wl-game-icon`; empty renders name-only. */
-  icon?: string;
+  /** Baked icon filename for `wl-game-icon` (empty string when there is no art). */
+  icon: string;
   timestampMs?: number | null;
   chip?: string;
   what?: string;
@@ -36,14 +36,16 @@ export interface FindingRow {
 export interface OnPlanChip {
   name: string;
   spellId: number | null;
-  icon?: string;
+  /** Baked icon filename for `wl-game-icon` (empty string when there is no art). */
+  icon: string;
 }
 
 /** One collapsed spell entry: a cooldown / defensive and the findings it gathered. */
 export interface FindingEntry {
   name: string;
   spellId: number | null;
-  icon?: string;
+  /** Baked icon filename for `wl-game-icon` (empty string when there is no art). */
+  icon: string;
   hasIssue: boolean;
   hasCritical: boolean;
   metaItems: string[];
@@ -82,8 +84,8 @@ interface FindingBucket { issues: AnalysisFinding[]; holds: AnalysisFinding[]; s
 export interface BucketOptions {
   /** Resolves a cooldown/defensive name to its spell id for icon rendering. */
   spellId: (name: string) => number | null;
-  /** Resolves a cooldown/defensive name to its icon filename (no extension). */
-  icon?: (name: string) => string;
+  /** Resolves a cooldown/defensive name to its baked icon filename (empty when none). */
+  icon: (name: string) => string;
   /**
    * When set, findings with category `rule_violation` or no `cd_name` are peeled
    * off into the returned `ruleFindings` instead of being bucketed (offensive view).
@@ -133,7 +135,7 @@ export function bucketFindings(
     return {
       name,
       spellId: options.spellId(name),
-      icon: options.icon?.(name) ?? '',
+      icon: options.icon(name),
       hasCritical,
       hasIssue,
       metaItems,

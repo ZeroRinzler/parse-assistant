@@ -95,6 +95,6 @@ export interface PerDefensiveBenchmark {
 
 export interface EncounterGearStats {
   talent_builds: { key: string; pct: number; report_code?: string; fight_id?: number; player_name?: string }[];
-  trinkets: Record<number, { id: number; name: string; pct: number }[]>;
+  trinkets: Record<number, { id: number; name: string; icon: string; pct: number }[]>;
   enchants: Record<number, { id: number; name: string; pct: number }[]>;
 }

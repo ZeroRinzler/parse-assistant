@@ -18,8 +18,8 @@
       <div class="grid grid-cols-[1fr_190px_210px] gap-4 items-center px-[18px] py-[13px] border-t border-[var(--border)]">
         <!-- What -->
         <div class="flex items-center gap-[11px] min-w-0">
-          @if (defensive.spellId) {
-            <wl-game-icon [id]="defensive.spellId" [name]="defensive.name"></wl-game-icon>
+          @if (defensive.spellId; as spellId) {
+            <wl-game-icon [id]="spellId" [icon]="defensive.icon" [name]="defensive.name"></wl-game-icon>
           } @else {
             <span class="text-[15px] font-medium text-[var(--text)] whitespace-nowrap">{{ defensive.name }}</span>
           }

@@ -42,16 +42,17 @@ describe('splitCommonCds', () => {
 });
 
 describe('burstMapAnchor', () => {
-  it('builds the seek time, label and known spell ids', () => {
+  const abilities = { 121471: { icon: 'sb', name: 'Shadow Blades' } };
+  it('builds the seek time, label and known spells', () => {
     const window = { time_s: 12, window_length_s: 18, common_cds: ['Shadow Blades', 'Mystery'] } as BurstWindow;
-    expect(burstMapAnchor(window, { 'Shadow Blades': 121471 })).toEqual({
-      timeS: 12, label: 'Shadow Blades, Mystery', spellIds: [121471],
+    expect(burstMapAnchor(window, { 'Shadow Blades': 121471 }, abilities)).toEqual({
+      timeS: 12, label: 'Shadow Blades, Mystery', spells: [{ id: 121471, icon: 'sb', name: 'Shadow Blades' }],
     });
   });
 
   it('falls back to a generic label when a window has no cds', () => {
     const window = { time_s: 5, window_length_s: 8, common_cds: [] } as unknown as BurstWindow;
-    expect(burstMapAnchor(window, {})).toEqual({ timeS: 5, label: 'Burst window', spellIds: [] });
+    expect(burstMapAnchor(window, {}, {})).toEqual({ timeS: 5, label: 'Burst window', spells: [] });
   });
 });
 
@@ -63,27 +64,28 @@ describe('buildBurstView', () => {
       { spell_id: 279043, avg_damage: 600, min_damage: 400, max_damage: 800, count: 5, avg_casts: 2 },
     ],
   };
+  const abilities = { 121471: { icon: 'sb', name: 'Shadow Blades' }, 279043: { icon: 'evis', name: 'Eviscerate' } };
 
   it('pairs each window with the player damage at the same index', () => {
     const player: PlayerBurstWindow[] = [
       { time_s: 10, window_damage: 950, ability_breakdown: [{ spell_id: 279043, damage: 550, casts: 2 }] },
     ];
-    const view = buildBurstView([window], player, 300, { 'Shadow Blades': 121471 }, () => 'Shadow Blades');
+    const view = buildBurstView([window], player, 300, { 'Shadow Blades': 121471 }, abilities);
     expect(view.windows).toHaveLength(1);
     expect(view.windows[0].overview.playerPct).toBe(950);
-    expect(view.windows[0].spellIds).toEqual([121471]);
-    expect(view.windows[0].detailRows[0]).toMatchObject({ spellId: 279043, label: 'Shadow Blades', playerPct: 550, topAvg: 600 });
-    expect(view.anchors[0]).toEqual({ timeS: 10, label: 'Shadow Blades', spellIds: [121471] });
+    expect(view.windows[0].spells).toEqual([{ id: 121471, icon: 'sb', name: 'Shadow Blades' }]);
+    expect(view.windows[0].detailRows[0]).toMatchObject({ spellId: 279043, label: 'Eviscerate', icon: 'evis', playerPct: 550, topAvg: 600 });
+    expect(view.anchors[0]).toEqual({ timeS: 10, label: 'Shadow Blades', spells: [{ id: 121471, icon: 'sb', name: 'Shadow Blades' }] });
   });
 
   it('mutes and drops player data for a window the fight never reached', () => {
-    const view = buildBurstView([window], [], 5, {}, id => `Spell ${id}`);
+    const view = buildBurstView([window], [], 5, {}, abilities);
     expect(view.windows[0].status).toBe('muted');
     expect(view.windows[0].overview.playerPct).toBeNull();
   });
 
   it('bench-only marks windows neutral info (no player overlay) instead of muted', () => {
-    const view = buildBurstView([window], [], Number.POSITIVE_INFINITY, {}, id => `Spell ${id}`, true);
+    const view = buildBurstView([window], [], Number.POSITIVE_INFINITY, {}, abilities, true);
     expect(view.windows[0].status).toBe('info');
     expect(view.windows[0].statusIcon).toBe('insights');
     expect(view.windows[0].overview.playerPct).toBeNull();
@@ -144,6 +146,7 @@ function withBench(bench: BurstBench | null): BurstFeatureService {
 const benchFixture: BurstBench = {
   spec: 'SubtletyRogue', encounter_id: 1, encounter_name: 'Test', sample_count: 5,
   cd_spell_ids: { 'Shadow Blades': 121471 },
+  ability_icons: { 121471: { icon: 'sb', name: 'Shadow Blades' }, 279043: { icon: 'evis', name: 'Eviscerate' } },
   windows: [{
     time_s: 10, window_length_s: 20, dmg_avg: 1000, dmg_min: 800, dmg_max: 1200, dmg_stddev: 100,
     common_cds: ['Shadow Blades'],
@@ -163,7 +166,7 @@ describe('BurstFeatureService', () => {
     expect(view.windows[0].overview.playerPct).toBeNull();
     expect(view.windows[0].status).toBe('info');
     expect(view.windows[0].statusIcon).toBe('insights');
-    expect(view.anchors[0]).toEqual({ timeS: 10, label: 'Shadow Blades', spellIds: [121471] });
+    expect(view.anchors[0]).toEqual({ timeS: 10, label: 'Shadow Blades', spells: [{ id: 121471, icon: 'sb', name: 'Shadow Blades' }] });
   });
 
   it('player view: fetches the log and compares the player damage against the bench', async () => {
@@ -171,6 +174,6 @@ describe('BurstFeatureService', () => {
     expect(view.windows).toHaveLength(1);
     expect(view.windows[0].overview.playerPct).toBe(950);
     expect(view.windows[0].detailRows[0].label).toBe('Eviscerate');
-    expect(view.anchors[0]).toEqual({ timeS: 10, label: 'Shadow Blades', spellIds: [121471] });
+    expect(view.anchors[0]).toEqual({ timeS: 10, label: 'Shadow Blades', spells: [{ id: 121471, icon: 'sb', name: 'Shadow Blades' }] });
   });
 });

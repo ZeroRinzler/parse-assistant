@@ -108,6 +108,9 @@ const wclFake = {
   getReport: async (code: string) => (code === 'r1' ? reportFor(10, 'P1', 1) : reportFor(20, 'P2', 2)),
   getAllEvents: async (_code: string, _fightId: number, dataType: string) =>
     dataType === 'Casts' ? [cast(121471, 10)] : [damage(279043, 12, 1000)],
+  // Resolves a real icon + name for every requested spell id (gameData.ability).
+  getAbilities: async (ids: number[]) =>
+    Object.fromEntries(ids.map(id => [id, { icon: `icon_${id}`, name: `name_${id}` }])),
 };
 const filesFake = {
   getRulebook: async () => ({
@@ -132,6 +135,9 @@ describe('BurstTransformService (live, in-browser)', () => {
     expect(bench!.cd_spell_ids).toEqual({ 'Shadow Blades': 121471 });
     expect(bench!.windows).toHaveLength(1);
     expect(bench!.windows[0].common_cds).toContain('Shadow Blades');
+    // ability_icons is complete: header cooldown AND every window ability resolved by id.
+    expect(bench!.ability_icons[121471]).toEqual({ icon: 'icon_121471', name: 'name_121471' });
+    expect(bench!.ability_icons[279043]).toEqual({ icon: 'icon_279043', name: 'name_279043' });
   });
 
   it('returns null when the spec has no rulebook cooldowns', async () => {

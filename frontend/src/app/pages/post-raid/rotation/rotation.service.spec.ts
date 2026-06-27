@@ -156,18 +156,19 @@ describe('analyzeRotationFindings', () => {
 });
 
 describe('bucketRotationFindings', () => {
+  const abilities = { 121471: { icon: 'sb', name: 'Shadow Blades' }, 1856: { icon: 'vanish', name: 'Vanish' } };
   it('splits rule rows, cd issue rows and on-plan chips', () => {
     const findings: AnalysisFinding[] = [
       { severity: 'critical', category: 'rule_violation', label: 'A without B', message: '', measured: { value: '1 / 1' }, details: { remedy: 'fix' } },
       { severity: 'warning', category: 'cooldown_delay', cd_name: 'Shadow Blades', message: '', measured: { value: '+3s' }, timestamp_ms: 4000 },
       { severity: 'success', category: 'cooldown_usage', cd_name: 'Vanish', message: '' },
     ];
-    const out = bucketRotationFindings(findings, { 'Shadow Blades': 121471, 'Vanish': 1856 });
+    const out = bucketRotationFindings(findings, { 'Shadow Blades': 121471, 'Vanish': 1856 }, abilities);
     expect(out.ruleRows).toHaveLength(1);
     expect(out.ruleRows[0].what).toBe('A without B');
     expect(out.offensiveRows).toHaveLength(1);
-    expect(out.offensiveRows[0]).toMatchObject({ name: 'Shadow Blades', spellId: 121471, chip: 'held' });
-    expect(out.onPlan).toEqual([{ name: 'Vanish', spellId: 1856 }]);
+    expect(out.offensiveRows[0]).toMatchObject({ name: 'Shadow Blades', spellId: 121471, icon: 'sb', chip: 'held' });
+    expect(out.onPlan).toEqual([{ name: 'Vanish', spellId: 1856, icon: 'vanish' }]);
   });
 
   it('does not put a cooldown with issues on plan even if it also has a success', () => {
@@ -175,7 +176,7 @@ describe('bucketRotationFindings', () => {
       { severity: 'critical', category: 'lost_cooldown', cd_name: 'Shadow Blades', message: '', measured: { value: '0 / 2' } },
       { severity: 'success', category: 'cooldown_usage', cd_name: 'Shadow Blades', message: '' },
     ];
-    const out = bucketRotationFindings(findings, { 'Shadow Blades': 121471 });
+    const out = bucketRotationFindings(findings, { 'Shadow Blades': 121471 }, abilities);
     expect(out.onPlan).toEqual([]);
     expect(out.offensiveRows).toHaveLength(1);
   });
@@ -195,6 +196,7 @@ describe('buildComparisonTable', () => {
 });
 
 describe('buildCdPlan', () => {
+  const abilities = { 1856: { icon: 'vanish', name: 'Vanish' }, 121471: { icon: 'sb', name: 'Shadow Blades' } };
   it('orders by opener priority and surfaces holds for majority-hold cds', () => {
     const cooldowns = [
       { name: 'Vanish', spell_id: 1856, cooldown: 120, opener_priority: 2, usage_rule: 'late' },
@@ -204,7 +206,7 @@ describe('buildCdPlan', () => {
       'Shadow Blades': cdBench({ majority_hold: true, hold_targets: { '2': { target_s: 100, stddev_s: 5, count: 4, total_samples: 5 } } }),
       'Vanish': cdBench({ avg_first_cast_s: 20 }),
     };
-    const plan = buildCdPlan(cooldowns, benchmarks);
+    const plan = buildCdPlan(cooldowns, benchmarks, abilities);
     expect(plan.map(p => p.name)).toEqual(['Shadow Blades', 'Vanish']);
     expect(plan[0].holds).toEqual([{ castIndex: 2, targetS: 100 }]);
     expect(plan[0].bloodlust).toBe(true);
@@ -229,7 +231,7 @@ describe('RotationFeatureService', () => {
   it('returns an empty player view when bench is absent', async () => {
     const service = withSource(null);
     const view = await service.loadPlayerView('SubtletyRogue', 1, 'rX', 1, 10);
-    expect(view).toEqual({ ruleRows: [], offensiveRows: [], onPlan: [], comparison: [], abilityIcons: {} });
+    expect(view).toEqual({ ruleRows: [], offensiveRows: [], onPlan: [], comparison: [] });
   });
 
   it('computes player findings + comparison from the player log', async () => {
@@ -246,17 +248,17 @@ describe('RotationFeatureService', () => {
     const view = await service.loadPlayerView('SubtletyRogue', 1, 'rX', 1, 10);
     expect(view.comparison).toHaveLength(1);
     expect(view.comparison[0].player_uses).toBe(1);
-    expect(view.onPlan).toEqual([{ name: 'Shadow Blades', spellId: 121471 }]);
-    expect(view.abilityIcons[121471]).toEqual({ icon: 'sb', name: 'Shadow Blades' });
+    expect(view.comparison[0].icon).toBe('sb');
+    expect(view.onPlan).toEqual([{ name: 'Shadow Blades', spellId: 121471, icon: 'sb' }]);
   });
 
   it('returns bench-only plan rows for the pre-fight view', async () => {
     const service = withSource(bench({
       per_cd_benchmarks: { 'Shadow Blades': cdBench() },
     }));
-    const view = await service.loadPlanView('SubtletyRogue', 1);
-    expect(view.rows).toHaveLength(1);
-    expect(view.rows[0].name).toBe('Shadow Blades');
-    expect(view.abilityIcons[121471]).toEqual({ icon: 'sb', name: 'Shadow Blades' });
+    const rows = await service.loadPlanView('SubtletyRogue', 1);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].name).toBe('Shadow Blades');
+    expect(rows[0].icon).toBe('sb');
   });
 });

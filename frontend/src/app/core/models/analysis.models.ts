@@ -102,6 +102,8 @@ export interface AnalysisResult {
 export interface ComparisonEntry {
   cd_name: string;
   spell_id?: number;
+  /** Baked icon filename for `wl-game-icon` (empty string when there is no art). */
+  icon: string;
   player_uses?: number;
   top_uses?: number;
   player_uses_per_min?: number;

@@ -5,6 +5,26 @@
     <title>warcraft-learner</title>
     <base href="/" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script>
+      // Restore a deep link rescued by 404.html (see .github/spa-404.html).
+      // GitHub Pages cannot rewrite, so a client-side route lands on 404.html,
+      // which redirects here with the route encoded into the query as "/...".
+      // Decode it back into the real path + query and replace history before the
+      // app boots so the router sees the intended route. No-op on a normal load.
+      (function () {
+        var loc = window.location;
+        if (loc.search && loc.search.charAt(1) === '/') {
+          var decoded = loc.search
+            .slice(1)
+            .split('&')
+            .map(function (part) {
+              return part.replace(/~and~/g, '&');
+            })
+            .join('?');
+          window.history.replaceState(null, null, loc.pathname.slice(0, -1) + decoded + loc.hash);
+        }
+      })();
+    </script>
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <link rel="icon" type="image/x-icon" href="favicon.ico" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />

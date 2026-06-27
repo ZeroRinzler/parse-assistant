@@ -9,6 +9,8 @@
 export interface RangeRow {
   spellId?: number;
   label: string;
+  /** Baked icon filename for `wl-game-icon` (empty string when there is no art). */
+  icon: string;
   playerPct: number | null;
   // Top-parse range. All three may be null when no comparison data exists for a row.
   topAvg: number | null;
@@ -19,12 +21,21 @@ export interface RangeRow {
   topCasts?: number | null;
 }
 
+/** A spell rendered in a window header chip: id + its baked icon + name. */
+export interface WindowSpell {
+  id: number;
+  icon: string;
+  name: string;
+}
+
 export type WindowStatus = 'good' | 'warn' | 'bad' | 'muted' | 'info';
 
 export interface ComparisonWindow {
   timeStartS: number;
   timeEndS: number;
-  spellIds: number[];
+  /** Known cooldowns as header chips (id + baked icon + name). */
+  spells: WindowSpell[];
+  /** Cooldown names with no spell id, rendered as plain text. */
   labels: string[];
   status: WindowStatus;
   statusIcon: string;

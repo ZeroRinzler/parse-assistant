@@ -90,3 +90,14 @@ export function buildGearNamesQuery(itemIds: number[], enchantIds: number[]): st
   ].join(' ');
   return `query{gameData{${fields}}}`;
 }
+
+/**
+ * Build a batched `gameData { ... }` query that resolves spell icon + name by ID in
+ * one round-trip. Aliases are prefixed `a` (bare numeric identifiers are not valid
+ * GraphQL field names). `gameData.ability(id)` resolves EVERY spell id - including
+ * passives a report's `masterData.abilities` omits - so callers get a complete map.
+ */
+export function buildAbilityIconsQuery(ids: number[]): string {
+  const fields = ids.map(id => `a${id}: ability(id:${id}){id name icon}`).join(' ');
+  return `query{gameData{${fields}}}`;
+}

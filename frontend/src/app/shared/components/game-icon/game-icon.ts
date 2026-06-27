@@ -7,10 +7,11 @@ export type GameIconKind = 'spell' | 'item';
 /**
  * Renders a WoW spell or item as an icon + name that links to Wowhead.
  *
- * Inputs-only leaf: callers pass the icon filename and display name explicitly
- * (feature services resolve them from the report's `masterData.abilities` or the
- * ingest-baked slice data). When no icon is supplied the name still renders as a
- * plain Wowhead link.
+ * Inputs-only leaf with three required inputs: callers pass `id`, `icon`, and
+ * `name` explicitly on every use - feature services resolve icon + name from the
+ * ingest-baked `ability_icons` map (or the report's `masterData.abilities`). There
+ * is no fallback here: an empty `icon` legitimately renders name-only (no art),
+ * and `name` is always supplied by the caller.
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -26,25 +27,25 @@ export type GameIconKind = 'spell' | 'item';
       @if (iconUrl(); as src) {
         <img [ngSrc]="src" [width]="18" [height]="18" alt="" />
       }
-      <span>{{ displayName() }}</span>
+      <span>{{ name() }}</span>
     </a>
   `,
 })
 export class GameIconComponent {
   readonly id = input.required<number>();
   readonly kind = input<GameIconKind>('spell');
-  /** Explicit display name; falls back to a generic label when empty. */
-  readonly name = input<string>('');
-  /** Explicit icon filename (without extension); no art renders when empty. */
-  readonly icon = input<string>('');
+  /** Explicit display name (always provided by the caller). */
+  readonly name = input.required<string>();
+  /** Explicit icon filename; an empty string renders name-only (no art). */
+  readonly icon = input.required<string>();
 
+  // The icon may arrive with or without a trailing image extension (WCL's
+  // master-data icons carry `.jpg`); normalize before appending the zamimg suffix
+  // so the URL never doubles up (`foo.jpg.jpg`).
   protected readonly iconUrl = computed(() => {
-    const file = this.icon();
+    const file = this.icon().replace(/\.(jpg|jpeg|png|gif|webp)$/i, '');
     return file ? `https://wow.zamimg.com/images/wow/icons/small/${file}.jpg` : null;
   });
-
-  protected readonly displayName = computed(() =>
-    this.name() || `${this.kind() === 'item' ? 'Item' : 'Spell'} ${this.id()}`);
 
   protected readonly wowheadUrl = computed(() => `https://www.wowhead.com/${this.kind()}=${this.id()}`);
 }

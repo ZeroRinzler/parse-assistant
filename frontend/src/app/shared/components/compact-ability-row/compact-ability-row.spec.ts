@@ -4,7 +4,7 @@ import { RangeRow } from '../../../core/models/window-comparison.models';
 import { mountVm } from '../../../../testing/component-harness';
 
 function row(overrides: Partial<RangeRow>): RangeRow {
-  return { label: 'Test', playerPct: null, topAvg: null, topMin: null, topMax: null, ...overrides };
+  return { label: 'Test', icon: '', playerPct: null, topAvg: null, topMin: null, topMax: null, ...overrides };
 }
 
 const mount = (r: RangeRow, extra: Record<string, unknown> = {}) =>

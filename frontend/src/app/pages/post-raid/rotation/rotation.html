@@ -57,8 +57,8 @@
       </div>
       <div class="min-w-0">
         <div class="flex items-center gap-[7px] flex-wrap">
-          @if (row.spellId) {
-            <wl-game-icon [id]="row.spellId" [icon]="iconOf(row.spellId)" [name]="nameOf(row.spellId, row.name || '')"></wl-game-icon>
+          @if (row.spellId; as spellId) {
+            <wl-game-icon [id]="spellId" [icon]="row.icon" [name]="row.name"></wl-game-icon>
           } @else {
             <span class="inline-block bg-[var(--surface-alt)] border border-dashed border-[var(--border)] rounded w-[19px] h-[19px] shrink-0"></span>
             <span class="text-sm text-[var(--text)]">{{ row.name }}</span>
@@ -99,8 +99,8 @@
       <span class="text-[10px] uppercase tracking-widest text-[var(--success)] mr-0.5">On plan</span>
       @for (chip of onPlan(); track chip.name) {
         <span class="inline-flex items-center gap-[6px] bg-[var(--success)]/[0.06] border border-[var(--success)]/25 rounded-[20px] py-[3px] pr-[11px] pl-[7px]">
-          @if (chip.spellId) {
-            <wl-game-icon [id]="chip.spellId" [icon]="iconOf(chip.spellId)" [name]="nameOf(chip.spellId, chip.name)"></wl-game-icon>
+          @if (chip.spellId; as spellId) {
+            <wl-game-icon [id]="spellId" [icon]="chip.icon" [name]="chip.name"></wl-game-icon>
           } @else {
             <span class="inline-block bg-[var(--surface-alt)] border border-dashed border-[var(--border)] rounded w-[16px] h-[16px] shrink-0"></span>
             <span class="text-[13px] text-[var(--muted)]">{{ chip.name }}</span>
@@ -127,8 +127,8 @@
     @for (entry of comparison(); track entry.cd_name) {
       <div class="grid grid-cols-[minmax(0,1fr)_120px_120px] gap-[14px] px-4 py-[10px] items-center border-t border-[var(--border)]">
         <div class="min-w-0 flex items-center gap-[7px]">
-          @if (entry.spell_id) {
-            <wl-game-icon [id]="entry.spell_id" [icon]="iconOf(entry.spell_id)" [name]="nameOf(entry.spell_id, entry.cd_name)"></wl-game-icon>
+          @if (entry.spell_id; as spellId) {
+            <wl-game-icon [id]="spellId" [icon]="entry.icon" [name]="entry.cd_name"></wl-game-icon>
           } @else {
             <span class="text-sm text-[var(--text)]">{{ entry.cd_name }}</span>
           }

@@ -145,24 +145,24 @@ describe('MapFeatureService', () => {
 
   it('openAt sets the panel state and opens it', () => {
     const { service } = withData(sampleData);
-    service.openAt({ timeS: 42, label: 'Burst', spellIds: [121471], reference: { kind: 'enemy', gameId: 200 } });
+    service.openAt({ timeS: 42, label: 'Burst', spells: [{ id: 121471, icon: 'sb', name: 'Shadow Blades' }], reference: { kind: 'enemy', gameId: 200 } });
     expect(service.open()).toBe(true);
     expect(service.anchorTime()).toBe(42);
     expect(service.contextLabel()).toBe('Burst');
-    expect(service.contextSpellIds()).toEqual([121471]);
+    expect(service.contextSpells()).toEqual([{ id: 121471, icon: 'sb', name: 'Shadow Blades' }]);
     expect(service.reference()).toEqual({ kind: 'enemy', gameId: 200 });
   });
 
   it('openAt defaults the reference to the boss', () => {
     const { service } = withData(sampleData);
-    service.openAt({ timeS: 5, label: '', spellIds: [] });
+    service.openAt({ timeS: 5, label: '', spells: [] });
     expect(service.reference()).toEqual({ kind: 'boss' });
   });
 
   it('close hides the panel but keeps the loaded bench', async () => {
     const { service } = withData(sampleData);
     await service.loadBench('SubtletyRogue', 3144);
-    service.openAt({ timeS: 1, label: '', spellIds: [] });
+    service.openAt({ timeS: 1, label: '', spells: [] });
     service.close();
     expect(service.open()).toBe(false);
     expect(service.positions()).toBe(sampleData);
@@ -171,7 +171,7 @@ describe('MapFeatureService', () => {
   it('clear drops everything', async () => {
     const { service } = withData(sampleData);
     await service.loadBench('SubtletyRogue', 3144);
-    service.openAt({ timeS: 1, label: '', spellIds: [] });
+    service.openAt({ timeS: 1, label: '', spells: [] });
     service.clear();
     expect(service.open()).toBe(false);
     expect(service.positions()).toBeNull();

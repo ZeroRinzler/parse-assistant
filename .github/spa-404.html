@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>warcraft-learner</title>
+    <script>
+      // Single-page-app deep-link rescue for GitHub Pages.
+      //
+      // GitHub Pages has no server-side rewrite: a request for a client-side
+      // route (e.g. /warcraft-learner/pre or /warcraft-learner/pr-79/pre) is a
+      // file miss, so Pages serves this site-root 404.html for EVERY miss under
+      // the site - including PR previews under /warcraft-learner/pr-<n>/.
+      //
+      // Compute the correct app root (the production root, or a /pr-<n>/ preview
+      // root) and redirect the missed deep link to that root with the in-app
+      // route encoded into the query string, so the CORRECT index.html boots
+      // (right <base href> + bundle) and its decoder restores the URL.
+      (function () {
+        var loc = window.location;
+        var parts = loc.pathname.split('/');
+        // parts[0] is '' (leading slash); parts[1] is the Pages project segment
+        // ('warcraft-learner'). Keep that, plus a 'pr-<n>' preview segment when
+        // present, as the app root; everything after it is the in-app route.
+        var keep = 2;
+        if (parts[2] && /^pr-\d+$/.test(parts[2])) keep = 3;
+        var root = parts.slice(0, keep).join('/');
+        var route = parts.slice(keep).join('/').replace(/&/g, '~and~');
+        loc.replace(
+          loc.protocol +
+            '//' +
+            loc.host +
+            root +
+            '/?/' +
+            route +
+            (loc.search ? '&' + loc.search.slice(1).replace(/&/g, '~and~') : '') +
+            loc.hash
+        );
+      })();
+    </script>
+  </head>
+  <body></body>
+</html>

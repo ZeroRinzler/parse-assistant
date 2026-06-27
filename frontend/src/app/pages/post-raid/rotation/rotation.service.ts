@@ -30,14 +30,17 @@ import { ROTATION_DATA_SOURCE, RotationBench } from './rotation-data-source';
 
 export type Severity = AnalysisFinding['severity'];
 
-/** Spell id -> display info, baked from the bench (and/or the player's report). */
+/** Spell id -> baked icon + name, complete over every spell the card renders. */
 export type AbilityIcons = Record<number, { icon: string; name: string }>;
 
 /** One row of the flat finding table (severity / what / measured / fix). */
 export interface RotationFindingRow {
   severity: 'critical' | 'warning';
-  name?: string;
+  /** Display name for cooldown rows; empty for rule rows (which render `what`). */
+  name: string;
   spellId?: number | null;
+  /** Baked icon filename for `wl-game-icon` (empty string when there is no art). */
+  icon: string;
   timestampMs?: number | null;
   chip?: string;
   what?: string;
@@ -46,12 +49,19 @@ export interface RotationFindingRow {
 }
 
 /** A cooldown used cleanly, shown as an "on plan" chip rather than a row. */
-export interface RotationOnPlanChip { name: string; spellId: number | null; }
+export interface RotationOnPlanChip {
+  name: string;
+  spellId: number | null;
+  /** Baked icon filename for `wl-game-icon` (empty string when there is no art). */
+  icon: string;
+}
 
 /** Pre-fight cooldown-plan row. */
 export interface CdPlanRow {
   name: string;
   spellId: number | null;
+  /** Baked icon filename for `wl-game-icon` (empty string when there is no art). */
+  icon: string;
   firstCastS: number | null;
   uses: number | null;
   usesPerMin: number | null;
@@ -67,7 +77,6 @@ export interface RotationPlayerView {
   offensiveRows: RotationFindingRow[];
   onPlan: RotationOnPlanChip[];
   comparison: ComparisonEntry[];
-  abilityIcons: AbilityIcons;
 }
 
 /* ----------------------------- statistical predicates ----------------------------- */
@@ -370,11 +379,20 @@ interface FindingBucket { issues: AnalysisFinding[]; holds: AnalysisFinding[]; }
 
 /** Split findings into rotation-rule rows, per-cd issue rows, and on-plan chips. */
 export function bucketRotationFindings(
-  findings: AnalysisFinding[], cdSpellIds: Record<string, number>,
+  findings: AnalysisFinding[], cdSpellIds: Record<string, number>, abilities: AbilityIcons,
 ): { ruleRows: RotationFindingRow[]; offensiveRows: RotationFindingRow[]; onPlan: RotationOnPlanChip[] } {
   const ruleFindings: AnalysisFinding[] = [];
   const byName: Record<string, FindingBucket> = {};
   const successNames = new Set<string>();
+
+  // Resolve a cooldown name to its spell id + baked icon + display name. A name with
+  // no spell id renders as plain text (empty icon, the name itself).
+  const resolve = (name: string): { spellId: number | null; icon: string; rowName: string } => {
+    const spellId = cdSpellIds[name] ?? null;
+    return spellId != null
+      ? { spellId, icon: abilities[spellId].icon, rowName: abilities[spellId].name }
+      : { spellId: null, icon: '', rowName: name };
+  };
 
   for (const finding of findings) {
     if (finding.severity === 'success') { if (finding.cd_name) successNames.add(finding.cd_name); continue; }
@@ -389,6 +407,8 @@ export function bucketRotationFindings(
 
   const ruleRows: RotationFindingRow[] = ruleFindings.map(finding => ({
     severity: finding.severity === 'critical' ? 'critical' : 'warning',
+    name: '',
+    icon: '',
     what: finding.label,
     measured: finding.measured ?? { value: '-' },
     fix: finding.details?.remedy,
@@ -397,11 +417,13 @@ export function bucketRotationFindings(
   const offensiveRows: RotationFindingRow[] = [];
   for (const [name, bucket] of Object.entries(byName)) {
     if (!bucket.issues.length && !bucket.holds.length) continue;
+    const { spellId, icon, rowName } = resolve(name);
     for (const finding of [...bucket.issues, ...bucket.holds]) {
       offensiveRows.push({
         severity: finding.severity === 'critical' ? 'critical' : 'warning',
-        name,
-        spellId: cdSpellIds[name] ?? null,
+        name: rowName,
+        spellId,
+        icon,
         timestampMs: finding.timestamp_ms ?? null,
         chip: CAT_LABEL[finding.category],
         measured: finding.measured ?? { value: '-' },
@@ -414,7 +436,8 @@ export function bucketRotationFindings(
   const onPlan: RotationOnPlanChip[] = [];
   for (const name of successNames) {
     if (!byName[name] || (!byName[name].issues.length && !byName[name].holds.length)) {
-      onPlan.push({ name, spellId: cdSpellIds[name] ?? null });
+      const { spellId, icon, rowName } = resolve(name);
+      onPlan.push({ name: rowName, spellId, icon });
     }
   }
 
@@ -442,6 +465,7 @@ export function buildComparisonTable(
     rows.push({
       cd_name: cd.name,
       spell_id: cd.spell_id,
+      icon: bench.ability_icons[cd.spell_id].icon,
       player_uses: playerUses,
       player_uses_per_min: fightDurMin > 0 ? Math.round((playerUses / fightDurMin) * 100) / 100 : 0,
       top_avg_uses_per_min: cdBench.uses_per_min.avg,
@@ -457,7 +481,9 @@ export function buildComparisonTable(
 /* ----------------------------- pre-fight cooldown plan ----------------------------- */
 
 /** Bench-only cooldown game plan rows, ordered by opener priority. */
-export function buildCdPlan(cooldowns: RulebookCooldown[], benchmarks: Record<string, PerCdBenchmark>): CdPlanRow[] {
+export function buildCdPlan(
+  cooldowns: RulebookCooldown[], benchmarks: Record<string, PerCdBenchmark>, abilities: AbilityIcons,
+): CdPlanRow[] {
   const ordered = [...cooldowns].sort((a, b) => {
     const pa = a.opener_priority ?? 99;
     const pb = b.opener_priority ?? 99;
@@ -473,6 +499,7 @@ export function buildCdPlan(cooldowns: RulebookCooldown[], benchmarks: Record<st
     return {
       name: cd.name,
       spellId: cd.spell_id ?? null,
+      icon: abilities[cd.spell_id].icon,
       firstCastS: cdBench?.avg_first_cast_s ?? null,
       uses: cdBench?.avg_uses ?? null,
       usesPerMin: cdBench?.uses_per_min.avg ?? null,
@@ -499,19 +526,14 @@ export class RotationFeatureService {
   async loadPlayerView(
     spec: string, encounterId: number, reportCode: string, fightId: number, playerId: number,
   ): Promise<RotationPlayerView> {
-    const empty: RotationPlayerView = { ruleRows: [], offensiveRows: [], onPlan: [], comparison: [], abilityIcons: {} };
+    const empty: RotationPlayerView = { ruleRows: [], offensiveRows: [], onPlan: [], comparison: [] };
     const bench = await this.source.getRotationBench(spec, encounterId);
     if (!bench) return empty;
 
     try {
       const report = await this.wclApi.getReport(reportCode);
       const fight = report.fights.find(entry => entry.id === fightId);
-      if (!fight) return { ...empty, abilityIcons: bench.ability_icons };
-
-      const abilityIcons: AbilityIcons = { ...bench.ability_icons };
-      for (const ability of report.masterData?.abilities ?? []) {
-        abilityIcons[ability.gameID] = { icon: ability.icon, name: ability.name };
-      }
+      if (!fight) return empty;
 
       const [casts, buffs] = await Promise.all([
         this.wclApi.getAllEvents(reportCode, fightId, 'Casts', fight.startTime, fight.endTime, playerId),
@@ -521,22 +543,19 @@ export class RotationFeatureService {
       const findings = analyzeRotationFindings(
         fight.startTime, fight.endTime, casts, buffs, bench.major_cooldowns, bench.rules, bench,
       );
-      const { ruleRows, offensiveRows, onPlan } = bucketRotationFindings(findings, bench.cd_spell_ids);
+      const { ruleRows, offensiveRows, onPlan } = bucketRotationFindings(findings, bench.cd_spell_ids, bench.ability_icons);
       const comparison = buildComparisonTable(fight.startTime, fight.endTime, casts, bench.major_cooldowns, bench);
-      return { ruleRows, offensiveRows, onPlan, comparison, abilityIcons };
+      return { ruleRows, offensiveRows, onPlan, comparison };
     } catch (err) {
       logWarn(`RotationFeatureService.loadPlayerView ${reportCode}:${fightId}`, err);
-      return { ...empty, abilityIcons: bench.ability_icons };
+      return empty;
     }
   }
 
-  /** Pre-fight: bench-only cooldown plan rows + baked icons. */
-  async loadPlanView(spec: string, encounterId: number): Promise<{ rows: CdPlanRow[]; abilityIcons: AbilityIcons }> {
+  /** Pre-fight: bench-only cooldown plan rows (icons baked onto each row). */
+  async loadPlanView(spec: string, encounterId: number): Promise<CdPlanRow[]> {
     const bench = await this.source.getRotationBench(spec, encounterId);
-    if (!bench) return { rows: [], abilityIcons: {} };
-    return {
-      rows: buildCdPlan(bench.major_cooldowns, bench.per_cd_benchmarks),
-      abilityIcons: bench.ability_icons,
-    };
+    if (!bench) return [];
+    return buildCdPlan(bench.major_cooldowns, bench.per_cd_benchmarks, bench.ability_icons);
   }
 }

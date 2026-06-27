@@ -265,7 +265,6 @@ interface ParseRotation {
   gapListMs: number[];
   durationS: number;
   encounterName: string;
-  abilityIcons: Record<number, { icon: string; name: string }>;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -286,7 +285,6 @@ export class RotationTransformService implements RotationDataSource {
     const perParse: CdSummary[][] = [];
     const gapLists: number[][] = [];
     const durations: number[] = [];
-    const abilityIcons: Record<number, { icon: string; name: string }> = {};
     let encounterName = '';
     for (const ranking of rankings) {
       const parse = await this.computeParse(ranking, cooldowns);
@@ -295,12 +293,12 @@ export class RotationTransformService implements RotationDataSource {
       gapLists.push(parse.gapListMs);
       durations.push(parse.durationS);
       encounterName ||= parse.encounterName;
-      Object.assign(abilityIcons, parse.abilityIcons);
     }
     if (!perParse.length) return null;
 
     const { downtimeThresholdMs, topAvgEfficiency, topEfficiencyStddev } = computeEfficiencyThresholds(gapLists, durations);
 
+    const cd_spell_ids = rotationCdSpellIds(cooldowns, defensives);
     return {
       spec,
       encounter_id: encounterId,
@@ -313,8 +311,9 @@ export class RotationTransformService implements RotationDataSource {
       per_cd_benchmarks: aggregateCdBenchmarks(perParse),
       major_cooldowns: cooldowns,
       rules,
-      cd_spell_ids: rotationCdSpellIds(cooldowns, defensives),
-      ability_icons: abilityIcons,
+      cd_spell_ids,
+      // Resolve a real icon for every cooldown + defensive by id (complete, no fallback).
+      ability_icons: await this.wclApi.getAbilities(Object.values(cd_spell_ids)),
     };
   }
 
@@ -328,11 +327,6 @@ export class RotationTransformService implements RotationDataSource {
       const player = report.masterData?.actors?.find(actor => actor.name === ranking.player);
       if (!fight || !player) return null;
 
-      const abilityIcons: Record<number, { icon: string; name: string }> = {};
-      for (const ability of report.masterData?.abilities ?? []) {
-        abilityIcons[ability.gameID] = { icon: ability.icon, name: ability.name };
-      }
-
       const [casts, buffs] = await Promise.all([
         this.wclApi.getAllEvents(ranking.report_code, fight.id, 'Casts', fight.startTime, fight.endTime, player.id),
         this.wclApi.getAllEvents(ranking.report_code, fight.id, 'Buffs', fight.startTime, fight.endTime, player.id),
@@ -345,7 +339,6 @@ export class RotationTransformService implements RotationDataSource {
         gapListMs: castGapListMs(casts),
         durationS: fightDurS,
         encounterName: fight.name ?? '',
-        abilityIcons,
       };
     } catch (err) {
       logWarn(`RotationTransformService parse ${ranking.report_code}:${ranking.fight_id}`, err);

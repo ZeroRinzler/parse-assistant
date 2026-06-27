@@ -75,18 +75,18 @@ describe('buildBenchTrinketRows', () => {
   it('returns the top trinket for each slot', () => {
     const rows = buildBenchTrinketRows(stats({
       trinkets: {
-        12: [{ id: 193701, name: "Algeth'ar Puzzle Box", pct: 50 }],
-        13: [{ id: 249343, name: 'Gaze of the Alnseer', pct: 80 }],
+        12: [{ id: 193701, name: "Algeth'ar Puzzle Box", icon: 'box', pct: 50 }],
+        13: [{ id: 249343, name: 'Gaze of the Alnseer', icon: 'gaze', pct: 80 }],
       },
     }));
     expect(rows).toHaveLength(2);
-    expect(rows[0]).toEqual({ slotLabel: 'Trinket 1', id: 193701, name: "Algeth'ar Puzzle Box", pct: 50 });
-    expect(rows[1]).toEqual({ slotLabel: 'Trinket 2', id: 249343, name: 'Gaze of the Alnseer', pct: 80 });
+    expect(rows[0]).toEqual({ slotLabel: 'Trinket 1', id: 193701, name: "Algeth'ar Puzzle Box", icon: 'box', pct: 50 });
+    expect(rows[1]).toEqual({ slotLabel: 'Trinket 2', id: 249343, name: 'Gaze of the Alnseer', icon: 'gaze', pct: 80 });
   });
 
   it('skips a trinket slot with no bench data', () => {
     const rows = buildBenchTrinketRows(stats({
-      trinkets: { 12: [{ id: 193701, name: 'Box', pct: 50 }] },
+      trinkets: { 12: [{ id: 193701, name: 'Box', icon: 'box', pct: 50 }] },
     }));
     expect(rows).toHaveLength(1);
     expect(rows[0].slotLabel).toBe('Trinket 1');
@@ -101,8 +101,8 @@ describe('buildBenchTrinketRows', () => {
 describe('buildTrinketRows', () => {
   const benchStats = stats({
     trinkets: {
-      12: [{ id: 193701, name: "Algeth'ar Puzzle Box", pct: 50 }],
-      13: [{ id: 249343, name: 'Gaze of the Alnseer', pct: 80 }],
+      12: [{ id: 193701, name: "Algeth'ar Puzzle Box", icon: 'box', pct: 50 }],
+      13: [{ id: 249343, name: 'Gaze of the Alnseer', icon: 'gaze', pct: 80 }],
     },
   });
 

@@ -118,14 +118,17 @@ describe('defensiveWindowStatus', () => {
 });
 
 describe('defensiveMapAnchor', () => {
-  it('carries seek time, label, defensive spell id and the dominant enemy game id', () => {
+  const abilities = { 31224: { icon: 'cloak', name: 'Cloak of Shadows' } };
+  it('carries seek time, label, defensive spell and the dominant enemy game id', () => {
     const window = { time_s: 30, window_length_s: 5, defensive_name: 'Cloak of Shadows', spell_id: 31224, ref_game_id: 6666 } as BurstWindow;
-    expect(defensiveMapAnchor(window)).toEqual({ timeS: 30, label: 'Cloak of Shadows', spellIds: [31224], refGameId: 6666 });
+    expect(defensiveMapAnchor(window, abilities)).toEqual({
+      timeS: 30, label: 'Cloak of Shadows', spells: [{ id: 31224, icon: 'cloak', name: 'Cloak of Shadows' }], refGameId: 6666,
+    });
   });
 
   it('falls back to a generic label and null ref when absent', () => {
     const window = { time_s: 5, window_length_s: 5 } as BurstWindow;
-    expect(defensiveMapAnchor(window)).toEqual({ timeS: 5, label: 'Defensive', spellIds: [], refGameId: null });
+    expect(defensiveMapAnchor(window, {})).toEqual({ timeS: 5, label: 'Defensive', spells: [], refGameId: null });
   });
 });
 
@@ -135,19 +138,20 @@ describe('buildDefensiveWindows', () => {
     defensive_name: 'Cloak of Shadows', spell_id: 31224, ref_game_id: 6666,
     ability_breakdown: [{ spell_id: 700, avg_damage: 600, min_damage: 400, max_damage: 800, count: 5 }],
   };
+  const abilities = { 31224: { icon: 'cloak', name: 'Cloak of Shadows' }, 700: { icon: 'hit', name: 'Boss Hit' } };
 
   it('pairs each window with player damage taken at the same index', () => {
     const player: PlayerBurstWindow[] = [{ time_s: 30, window_damage: 1150, ability_breakdown: [{ spell_id: 700, damage: 700 }] }];
-    const { windows, anchors } = buildDefensiveWindows([window], player, 300, () => 'Boss Hit');
+    const { windows, anchors } = buildDefensiveWindows([window], player, 300, abilities);
     expect(windows[0].overview.playerPct).toBe(1150);
     expect(windows[0].status).toBe('warn');
-    expect(windows[0].spellIds).toEqual([31224]);
-    expect(windows[0].detailRows[0]).toMatchObject({ spellId: 700, label: 'Boss Hit', playerPct: 700, topAvg: 600 });
-    expect(anchors[0]).toEqual({ timeS: 30, label: 'Cloak of Shadows', spellIds: [31224], refGameId: 6666 });
+    expect(windows[0].spells).toEqual([{ id: 31224, icon: 'cloak', name: 'Cloak of Shadows' }]);
+    expect(windows[0].detailRows[0]).toMatchObject({ spellId: 700, label: 'Boss Hit', icon: 'hit', playerPct: 700, topAvg: 600 });
+    expect(anchors[0]).toEqual({ timeS: 30, label: 'Cloak of Shadows', spells: [{ id: 31224, icon: 'cloak', name: 'Cloak of Shadows' }], refGameId: 6666 });
   });
 
   it('mutes and drops player data for a window the fight never reached', () => {
-    const { windows } = buildDefensiveWindows([window], [], 5, id => `Spell ${id}`);
+    const { windows } = buildDefensiveWindows([window], [], 5, abilities);
     expect(windows[0].status).toBe('muted');
     expect(windows[0].overview.playerPct).toBeNull();
   });
@@ -173,6 +177,7 @@ describe('buildDefensivePlanRows', () => {
   it('builds plan rows with window times and avg uses', () => {
     const bench = benchWith({
       defensives: [{ name: 'Cloak of Shadows', spell_id: 31224, cooldown: 120, duration: 5, usage_rule: 'Use it', talent_gated: false }],
+      ability_icons: { 31224: { icon: 'cloak', name: 'Cloak of Shadows' } },
       per_defensive_benchmarks: {
         'Cloak of Shadows': {
           sample_count: 5, avg_first_cast_s: 12, stddev_first_cast_s: 2, avg_gap_s: null, stddev_gap_s: null,
@@ -184,7 +189,7 @@ describe('buildDefensivePlanRows', () => {
     });
     const rows = buildDefensivePlanRows(bench);
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ name: 'Cloak of Shadows', spellId: 31224, uses: 2, firstCastS: 12, windowsS: [30], rule: 'Use it' });
+    expect(rows[0]).toMatchObject({ name: 'Cloak of Shadows', spellId: 31224, icon: 'cloak', uses: 2, firstCastS: 12, windowsS: [30], rule: 'Use it' });
   });
 });
 
@@ -208,7 +213,7 @@ function fullBench(): DefensiveBench {
     top_defensives_summary: [{ spell_id: 31224, avg_uses: 2, min_uses: 1, max_uses: 3 }],
     defensives: [CLOAK_META],
     cd_spell_ids: { 'Cloak of Shadows': 31224 },
-    ability_icons: { 700: { icon: 'hit', name: 'Boss Hit' } },
+    ability_icons: { 31224: { icon: 'cloak', name: 'Cloak of Shadows' }, 700: { icon: 'hit', name: 'Boss Hit' } },
   };
 }
 

@@ -7,7 +7,7 @@ import {
   DefensiveTransformService,
   defensiveSpellIds, defensivePlanMeta, buildBuffWindows, summarizeDefensiveCasts,
   findParseDefensiveWindows, clusterDefensiveWindows, buildHoldTargets, buildDefensiveBenchmark,
-  aggregateDefensiveBenchmarks, bakeAbilityIcons,
+  aggregateDefensiveBenchmarks,
   ParseDefWindow, ParseDefensiveSummary,
 } from './defensive-transform.service';
 
@@ -137,17 +137,6 @@ describe('aggregateDefensiveBenchmarks', () => {
   });
 });
 
-describe('bakeAbilityIcons', () => {
-  it('bakes defensive spells + window abilities, dropping .jpg', () => {
-    const windows = [{ ability_breakdown: [{ spell_id: 700 }] }] as never;
-    const icons = bakeAbilityIcons(
-      [CLOAK], windows,
-      new Map([[31224, { name: 'Cloak of Shadows', icon: 'spell.jpg' }], [700, { name: 'Hit', icon: 'hit' }]]),
-    );
-    expect(icons).toEqual({ 31224: { icon: 'spell', name: 'Cloak of Shadows' }, 700: { icon: 'hit', name: 'Hit' } });
-  });
-});
-
 /* ----------------------------- service (end to end, fake client) ----------------------------- */
 
 function reportFor(playerId: number, playerName: string, fightId: number) {
@@ -173,6 +162,9 @@ const wclFake = {
     if (dataType === 'Casts') return [cast(31224, 30)];
     return [dtaken(700, 32, 1000, 9)]; // DamageTaken
   },
+  // Resolves a real icon + name for every requested spell id (gameData.ability).
+  getAbilities: async (ids: number[]) =>
+    Object.fromEntries(ids.map(id => [id, id === 700 ? { icon: 'hit', name: 'Boss Hit' } : { icon: 'cloak', name: 'Cloak of Shadows' }])),
 };
 const filesFake = {
   getRulebook: async () => ({ spec: 'SubtletyRogue', major_cooldowns: [], defensives: [CLOAK] }),

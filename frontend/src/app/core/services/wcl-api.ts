@@ -8,7 +8,7 @@ import {
 } from '../models/wcl.models';
 import {
   REPORT_Q, REPORT_ABILITIES_Q, PLAYER_DETAILS_Q, EVENTS_Q,
-  COMBATANT_INFO_Q, RANKINGS_Q, buildGearNamesQuery,
+  COMBATANT_INFO_Q, RANKINGS_Q, buildGearNamesQuery, buildAbilityIconsQuery,
   ReportQueryVars, ReportAbilitiesQueryVars, PlayerDetailsQueryVars,
   EventsQueryVars, CombatantInfoQueryVars, RankingsQueryVars,
 } from './wcl-queries';
@@ -150,6 +150,26 @@ export class WclApiService {
       buildGearNamesQuery(itemIds, enchantIds),
     );
     return result?.gameData ?? {};
+  }
+
+  /**
+   * Resolve icon + name for each spell id via `gameData.ability(id)` in one batched
+   * round-trip, keyed by spell id with the trailing `.jpg` stripped (the bare zamimg
+   * filename `wl-game-icon` expects). `gameData.ability` resolves EVERY id - including
+   * passives a report's `masterData.abilities` omits - so the result is complete by
+   * construction; there is no missing-data case to fall back on.
+   */
+  async getAbilities(ids: number[]): Promise<Record<number, { icon: string; name: string }>> {
+    const unique = [...new Set(ids)].filter(id => id > 0);
+    if (!unique.length) return {};
+    const result = await this.query<{ gameData: Record<string, { id: number; name: string; icon: string } | null> }>(
+      buildAbilityIconsQuery(unique),
+    );
+    const icons: Record<number, { icon: string; name: string }> = {};
+    for (const entry of Object.values(result?.gameData ?? {})) {
+      if (entry) icons[entry.id] = { icon: entry.icon.replace(/\.jpg$/i, ''), name: entry.name };
+    }
+    return icons;
   }
 
   /**

@@ -18,7 +18,7 @@ import { BurstWindow, TopDefensiveSummary } from '../../../core/models/analysis.
 import { PerDefensiveBenchmark } from '../../../core/models/encounter.models';
 import { logWarn } from '../../../core/log';
 import { mean, median, deviation } from 'd3-array';
-import { DefensiveBench, DefensiveDataSource, DefensivePlanMeta, BakedAbility } from './defensive-data-source';
+import { DefensiveBench, DefensiveDataSource, DefensivePlanMeta } from './defensive-data-source';
 
 /** How many top parses to sample (matches the ingest bench). */
 const TOP_PARSE_COUNT = 10;
@@ -393,25 +393,6 @@ export function aggregateDefensiveBenchmarks(
   return { perDefensiveBenchmarks, topDefensivesSummary };
 }
 
-/** Bake icon/name for every defensive spell + window ability referenced by the slice. */
-export function bakeAbilityIcons(
-  defensives: RulebookDefensive[],
-  windows: BurstWindow[],
-  abilityMeta: Map<number, { name: string; icon: string }>,
-): Record<number, BakedAbility> {
-  const wanted = new Set<number>();
-  for (const defensive of defensives) if (defensive.spell_id) wanted.add(defensive.spell_id);
-  for (const window of windows) for (const ability of window.ability_breakdown) wanted.add(ability.spell_id);
-
-  const icons: Record<number, BakedAbility> = {};
-  for (const spellId of wanted) {
-    const meta = abilityMeta.get(spellId);
-    if (!meta) continue;
-    icons[spellId] = { icon: (meta.icon || '').replace(/\.jpg$/i, ''), name: meta.name || '' };
-  }
-  return icons;
-}
-
 /* ----------------------------- service shell ----------------------------- */
 
 @Injectable({ providedIn: 'root' })
@@ -429,7 +410,6 @@ export class DefensiveTransformService implements DefensiveDataSource {
 
     const allWindows: ParseDefWindow[] = [];
     const perParseSummaries: ParseDefensiveSummary[][] = [];
-    const abilityMeta = new Map<number, { name: string; icon: string }>();
     let sampleCount = 0;
     let encounterName = '';
     for (const ranking of rankings) {
@@ -437,7 +417,6 @@ export class DefensiveTransformService implements DefensiveDataSource {
       if (!parse) continue;
       allWindows.push(...parse.windows);
       perParseSummaries.push(parse.summaries);
-      for (const [id, meta] of parse.abilityMeta) if (!abilityMeta.has(id)) abilityMeta.set(id, meta);
       encounterName ||= parse.encounterName;
       sampleCount += 1;
     }
@@ -445,6 +424,12 @@ export class DefensiveTransformService implements DefensiveDataSource {
 
     const defensiveWindows = clusterDefensiveWindows(allWindows, sampleCount);
     const { perDefensiveBenchmarks, topDefensivesSummary } = aggregateDefensiveBenchmarks(perParseSummaries, defensives);
+    const cd_spell_ids = defensiveSpellIds(defensives);
+    // Resolve a real icon for every defensive + window ability by id (complete, no fallback).
+    const referencedIds = [
+      ...Object.values(cd_spell_ids),
+      ...defensiveWindows.flatMap(window => window.ability_breakdown.map(ability => ability.spell_id)),
+    ];
 
     return {
       spec,
@@ -455,8 +440,8 @@ export class DefensiveTransformService implements DefensiveDataSource {
       defensive_windows: defensiveWindows,
       top_defensives_summary: topDefensivesSummary,
       defensives: defensivePlanMeta(defensives),
-      cd_spell_ids: defensiveSpellIds(defensives),
-      ability_icons: bakeAbilityIcons(defensives, defensiveWindows, abilityMeta),
+      cd_spell_ids,
+      ability_icons: await this.wclApi.getAbilities(referencedIds),
     };
   }
 
@@ -466,7 +451,6 @@ export class DefensiveTransformService implements DefensiveDataSource {
   ): Promise<{
     windows: ParseDefWindow[];
     summaries: ParseDefensiveSummary[];
-    abilityMeta: Map<number, { name: string; icon: string }>;
     encounterName: string;
   } | null> {
     try {
@@ -477,10 +461,6 @@ export class DefensiveTransformService implements DefensiveDataSource {
 
       const gameIdByActorId = new Map<number, number>();
       for (const enemy of report.masterData?.enemies ?? []) gameIdByActorId.set(enemy.id, enemy.gameID);
-      const abilityMeta = new Map<number, { name: string; icon: string }>();
-      for (const ability of report.masterData?.abilities ?? []) {
-        abilityMeta.set(ability.gameID, { name: ability.name ?? '', icon: ability.icon ?? '' });
-      }
 
       const [buffs, casts, dmgTaken] = await Promise.all([
         this.wclApi.getAllEvents(ranking.report_code, fight.id, 'Buffs', fight.startTime, fight.endTime, player.id),
@@ -492,7 +472,7 @@ export class DefensiveTransformService implements DefensiveDataSource {
       const buffWindows = buildBuffWindows(buffs, fight.startTime);
       const windows = findParseDefensiveWindows(dmgTaken, fight.startTime, buffWindows, defensives, gameIdByActorId);
       const summaries = summarizeDefensiveCasts(defensives, buffWindows, casts, fight.startTime, fightDurationS);
-      return { windows, summaries, abilityMeta, encounterName: fight.name ?? '' };
+      return { windows, summaries, encounterName: fight.name ?? '' };
     } catch (err) {
       logWarn(`DefensiveTransformService parse ${ranking.report_code}:${ranking.fight_id}`, err);
       return null;

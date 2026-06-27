@@ -236,6 +236,7 @@ export interface BenchTrinketRow {
   slotLabel: string;
   id: number;
   name: string;
+  icon: string;
   pct: number;
 }
 
@@ -264,7 +265,7 @@ export function buildBenchTrinketRows(stats: EncounterGearStats | null): BenchTr
   const topTrinkets = stats?.trinkets ?? {};
   return [12, 13].reduce<BenchTrinketRow[]>((acc, slot) => {
     const top = topTrinkets[slot]?.[0];
-    if (top) acc.push({ slotLabel: slotName(slot), id: top.id, name: top.name, pct: top.pct });
+    if (top) acc.push({ slotLabel: slotName(slot), id: top.id, name: top.name, icon: top.icon, pct: top.pct });
     return acc;
   }, []);
 }

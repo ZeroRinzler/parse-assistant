@@ -257,13 +257,22 @@ export class BurstTransformService implements BurstDataSource {
     }
     if (!sampleCount) return null;
 
+    const windows = clusterParseWindows(allWindows, sampleCount);
+    const cd_spell_ids = cdSpellIds(cooldowns, defensives);
+    // Resolve a real icon for every spell the card renders - header cooldowns and
+    // each window ability - by id, so the map is complete (no fallback).
+    const referencedIds = [
+      ...Object.values(cd_spell_ids),
+      ...windows.flatMap(window => window.ability_breakdown.map(ability => ability.spell_id)),
+    ];
     return {
       spec,
       encounter_id: encounterId,
       encounter_name: encounterName,
       sample_count: sampleCount,
-      windows: clusterParseWindows(allWindows, sampleCount),
-      cd_spell_ids: cdSpellIds(cooldowns, defensives),
+      windows,
+      cd_spell_ids,
+      ability_icons: await this.wclApi.getAbilities(referencedIds),
     };
   }
 
@@ -277,6 +286,7 @@ export class BurstTransformService implements BurstDataSource {
       const player = report.masterData?.actors?.find(actor => actor.name === ranking.player);
       if (!fight || !player) return null;
 
+      // Names only - used to attribute casts by ability name inside a parse window.
       const abilityNames = new Map<number, string>(
         (report.masterData?.abilities ?? []).map(ability => [ability.gameID, ability.name]),
       );

@@ -70,8 +70,8 @@
       <span class="flex-1 text-sm font-medium">
         Window {{ activeIndex() + 1 }} - {{ w.timeStartS | formatDuration }} to {{ w.timeEndS | formatDuration }}
       </span>
-      @for (sid of w.spellIds; track sid) {
-        <wl-game-icon [id]="sid"></wl-game-icon>
+      @for (spell of w.spells; track spell.id) {
+        <wl-game-icon [id]="spell.id" [icon]="spell.icon" [name]="spell.name"></wl-game-icon>
       }
       @for (lbl of w.labels; track lbl) {
         <span class="text-sm text-[var(--muted)]">{{ lbl }}</span>

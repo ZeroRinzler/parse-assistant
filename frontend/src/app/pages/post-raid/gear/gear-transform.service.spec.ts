@@ -46,12 +46,12 @@ describe('toParseGear', () => {
   it('reduces a found CharacterGear to its talent/trinket/enchant fingerprint', () => {
     const gear: CharacterGear = {
       found: true, talent_key: 'v2:1,2',
-      trinkets: [{ slot: 12, id: 100, name: 'A' }],
+      trinkets: [{ slot: 12, id: 100, name: 'A', icon: 'inv_a' }],
       enchants: [{ slot: 15, id: 8041, name: 'Sophic' }],
     };
     expect(toParseGear(gear)).toEqual({
       talent_key: 'v2:1,2',
-      trinkets: [{ slot: 12, id: 100, name: 'A' }],
+      trinkets: [{ slot: 12, id: 100, name: 'A', icon: 'inv_a' }],
       enchants: [{ slot: 15, id: 8041, name: 'Sophic' }],
     });
   });
@@ -69,10 +69,10 @@ describe('aggregateParseGear', () => {
 
   it('rolls talent builds, trinkets per slot, and enchants into pct distributions', () => {
     const parses: ParseGear[] = [
-      parse({ talent_key: 'v2:A', trinkets: [{ slot: 12, id: 100, name: 'A' }], enchants: [{ slot: 15, id: 8041, name: 'Soph' }] }),
-      parse({ talent_key: 'v2:A', trinkets: [{ slot: 12, id: 100, name: 'A' }], enchants: [{ slot: 15, id: 8041, name: 'Soph' }] }),
-      parse({ talent_key: 'v2:B', trinkets: [{ slot: 12, id: 200, name: 'B' }], enchants: [] }),
-      parse({ talent_key: 'v2:A', trinkets: [{ slot: 13, id: 300, name: 'C' }], enchants: [{ slot: 15, id: 9000, name: 'Other' }] }),
+      parse({ talent_key: 'v2:A', trinkets: [{ slot: 12, id: 100, name: 'A', icon: 'inv_a' }], enchants: [{ slot: 15, id: 8041, name: 'Soph' }] }),
+      parse({ talent_key: 'v2:A', trinkets: [{ slot: 12, id: 100, name: 'A', icon: 'inv_a' }], enchants: [{ slot: 15, id: 8041, name: 'Soph' }] }),
+      parse({ talent_key: 'v2:B', trinkets: [{ slot: 12, id: 200, name: 'B', icon: 'inv_b' }], enchants: [] }),
+      parse({ talent_key: 'v2:A', trinkets: [{ slot: 13, id: 300, name: 'C', icon: 'inv_c' }], enchants: [{ slot: 15, id: 9000, name: 'Other' }] }),
     ];
     const stats = aggregateParseGear(parses);
 
@@ -80,10 +80,10 @@ describe('aggregateParseGear', () => {
     expect(stats.talent_builds[1]).toMatchObject({ key: 'v2:B', pct: 25 });
     // slot 12: id 100 in 2/4 = 50%, id 200 in 1/4 = 25%
     expect(stats.trinkets[12]).toEqual([
-      { id: 100, name: 'A', pct: 50 },
-      { id: 200, name: 'B', pct: 25 },
+      { id: 100, name: 'A', icon: 'inv_a', pct: 50 },
+      { id: 200, name: 'B', icon: 'inv_b', pct: 25 },
     ]);
-    expect(stats.trinkets[13]).toEqual([{ id: 300, name: 'C', pct: 25 }]);
+    expect(stats.trinkets[13]).toEqual([{ id: 300, name: 'C', icon: 'inv_c', pct: 25 }]);
     // slot 15: 8041 in 2/4 = 50%, 9000 in 1/4 = 25%
     expect(stats.enchants[15]).toEqual([
       { id: 8041, name: 'Soph', pct: 50 },
@@ -93,7 +93,7 @@ describe('aggregateParseGear', () => {
 
   it('ignores non-trinket slots and zero ids', () => {
     const stats = aggregateParseGear([
-      parse({ trinkets: [{ slot: 5, id: 1, name: 'X' }, { slot: 12, id: 0, name: '' }] }),
+      parse({ trinkets: [{ slot: 5, id: 1, name: 'X', icon: 'x' }, { slot: 12, id: 0, name: '', icon: '' }] }),
     ]);
     expect(stats.trinkets).toEqual({});
   });
@@ -145,7 +145,7 @@ describe('GearTransformService (live, in-browser)', () => {
     expect(bench!.sample_count).toBe(2);
     expect(bench!.encounter_name).toBe('Boss');
     expect(bench!.talent_builds[0]).toMatchObject({ key: 'v2:65', pct: 100 });
-    expect(bench!.trinkets[12]).toEqual([{ id: 100, name: 'A', pct: 100 }]);
+    expect(bench!.trinkets[12]).toEqual([{ id: 100, name: 'A', icon: 't', pct: 100 }]);
     expect(bench!.enchants[15]).toEqual([{ id: 8041, name: 'Soph', pct: 100 }]);
   });
 

@@ -103,7 +103,7 @@ export function talentKeyFromTree(tree: { nodeID?: number }[] | undefined): stri
 /** One top parse reduced to just its gear fingerprint (or null when unavailable). */
 export interface ParseGear {
   talent_key: string;
-  trinkets: { slot: number; id: number; name: string }[];
+  trinkets: { slot: number; id: number; name: string; icon: string }[];
   enchants: { slot: number; id: number; name: string }[];
 }
 
@@ -112,7 +112,7 @@ export function toParseGear(gear: CharacterGear | null): ParseGear | null {
   if (!gear?.found) return null;
   return {
     talent_key: gear.talent_key ?? '',
-    trinkets: (gear.trinkets ?? []).map(trinket => ({ slot: trinket.slot, id: trinket.id, name: trinket.name })),
+    trinkets: (gear.trinkets ?? []).map(trinket => ({ slot: trinket.slot, id: trinket.id, name: trinket.name, icon: trinket.icon ?? '' })),
     enchants: (gear.enchants ?? []).map(enchant => ({ slot: enchant.slot, id: enchant.id, name: enchant.name })),
   };
 }
@@ -128,6 +128,7 @@ export function aggregateParseGear(parses: ParseGear[]): EncounterGearStats {
   const talentExample = new Map<string, { report_code?: string; fight_id?: number; player_name?: string }>();
   const trinketCounters = new Map<number, Map<number, number>>();
   const trinketNames = new Map<number, string>();
+  const trinketIcons = new Map<number, string>();
   const enchantCounters = new Map<number, Map<number, number>>();
   const enchantNames = new Map<number, string>();
 
@@ -144,6 +145,7 @@ export function aggregateParseGear(parses: ParseGear[]): EncounterGearStats {
         const slotMap = trinketCounters.get(slot)!;
         slotMap.set(trinket.id, (slotMap.get(trinket.id) ?? 0) + 1);
         if (!trinketNames.has(trinket.id)) trinketNames.set(trinket.id, trinket.name ?? '');
+        if (!trinketIcons.has(trinket.id)) trinketIcons.set(trinket.id, trinket.icon);
       }
     }
 
@@ -170,7 +172,7 @@ export function aggregateParseGear(parses: ParseGear[]): EncounterGearStats {
     trinkets[slot] = [...counter.entries()]
       .sort((a, b) => b[1] - a[1])
       .slice(0, MAX_TRINKETS_PER_SLOT)
-      .map(([id, count]) => ({ id, name: trinketNames.get(id) ?? '', pct: pct(count, total) }));
+      .map(([id, count]) => ({ id, name: trinketNames.get(id) ?? '', icon: trinketIcons.get(id) ?? '', pct: pct(count, total) }));
   }
 
   const enchants: EncounterGearStats['enchants'] = {};

@@ -5,7 +5,7 @@ import { GameIconComponent } from '../../../shared/components/game-icon/game-ico
 import { FormatDurationPipe } from '../../../shared/pipes/format-duration-pipe';
 import { ComparisonEntry } from '../../../core/models/analysis.models';
 import {
-  RotationFeatureService, AbilityIcons, RotationFindingRow, RotationOnPlanChip,
+  RotationFeatureService, RotationFindingRow, RotationOnPlanChip,
 } from './rotation.service';
 
 /**
@@ -14,8 +14,8 @@ import {
  * "Offensives" finding sections plus the per-cooldown comparison table. Its bench
  * comes from the swappable `ROTATION_DATA_SOURCE` (file in prod, live transform
  * under the dev flag); the player findings are computed from the player's own log,
- * fetched by the service. Spell art is baked into `abilityIcons` and passed
- * explicitly to `wl-game-icon`, so this never touches the icon cache.
+ * fetched by the service. Spell art is baked onto each row and passed explicitly
+ * to `wl-game-icon`.
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -36,7 +36,6 @@ export class RotationComponent {
   protected readonly offensiveRows = signal<RotationFindingRow[]>([]);
   protected readonly onPlan = signal<RotationOnPlanChip[]>([]);
   protected readonly comparison = signal<ComparisonEntry[]>([]);
-  protected readonly abilityIcons = signal<AbilityIcons>({});
 
   // Bumped on every reload so a slow earlier response can't overwrite a newer one.
   private loadToken = 0;
@@ -55,15 +54,7 @@ export class RotationComponent {
         this.offensiveRows.set(view.offensiveRows);
         this.onPlan.set(view.onPlan);
         this.comparison.set(view.comparison);
-        this.abilityIcons.set(view.abilityIcons);
       });
     });
-  }
-
-  protected iconOf(spellId: number | null | undefined): string {
-    return spellId != null ? (this.abilityIcons()[spellId]?.icon ?? '') : '';
-  }
-  protected nameOf(spellId: number | null | undefined, fallback = ''): string {
-    return (spellId != null ? this.abilityIcons()[spellId]?.name : '') || fallback;
   }
 }
