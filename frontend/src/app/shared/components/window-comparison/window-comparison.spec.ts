@@ -151,6 +151,59 @@ describe('WindowComparisonComponent showCasts', () => {
   });
 });
 
+describe('WindowComparisonComponent segmentLeftPcts', () => {
+  // MIN_GAP_PCT = 5, EDGE_INSET_PCT = 4 -> band [4, 96], default gap 5.
+  const INSET = 4;
+  const DEFAULT_GAP = 5;
+
+  const winAt = (timeStartS: number, timeEndS: number): ComparisonWindow => ({
+    ...win({}),
+    timeStartS,
+    timeEndS,
+  });
+
+  const leftPctsOf = (windows: ComparisonWindow[]): number[] => {
+    const { vm } = mountVm(WindowComparisonComponent, { windows });
+    return (vm['segmentLeftPcts'] as () => number[])();
+  };
+
+  it('leaves well-separated markers at their exact time position', () => {
+    // timelineEnd = 100, so timeStartS maps 1:1 to a percent. 20 and 80 are far
+    // apart and inside the band, so neither is nudged.
+    expect(leftPctsOf([winAt(20, 100), winAt(80, 100)])).toEqual([20, 80]);
+  });
+
+  it('spreads near-coincident markers to at least the gap apart', () => {
+    const pcts = leftPctsOf([winAt(50, 100), winAt(51, 100)]);
+    expect(pcts[1] - pcts[0]).toBeGreaterThanOrEqual(DEFAULT_GAP - 1e-9);
+  });
+
+  it('keeps every marker inside the inset band and ordered', () => {
+    const pcts = leftPctsOf([winAt(0, 100), winAt(50, 100), winAt(100, 100)]);
+    expect(pcts[0]).toBeGreaterThanOrEqual(INSET);
+    expect(pcts[pcts.length - 1]).toBeLessThanOrEqual(100 - INSET);
+    for (let i = 1; i < pcts.length; i++) expect(pcts[i]).toBeGreaterThan(pcts[i - 1]);
+  });
+
+  it('never overlaps even when many markers crowd the right edge', () => {
+    // 25 windows bunched into the last quarter of the fight. A fixed 5% gap
+    // (24 * 5 = 120%) cannot fit, so the gap shrinks to fill the band exactly.
+    const windows = Array.from({ length: 25 }, (_, i) => winAt(76 + i, 100));
+    const pcts = leftPctsOf(windows);
+    const band = 100 - 2 * INSET;
+    const gap = Math.min(DEFAULT_GAP, band / (windows.length - 1));
+    expect(pcts[0]).toBeGreaterThanOrEqual(INSET - 1e-9);
+    expect(pcts[pcts.length - 1]).toBeLessThanOrEqual(100 - INSET + 1e-9);
+    for (let i = 1; i < pcts.length; i++) {
+      expect(pcts[i] - pcts[i - 1]).toBeGreaterThanOrEqual(gap - 1e-9);
+    }
+  });
+
+  it('returns a lone marker at its exact time without spreading', () => {
+    expect(leftPctsOf([winAt(50, 100)])).toEqual([50]);
+  });
+});
+
 describe('WindowComparisonComponent timeTicks', () => {
   const ticksForEnd = (timeEndS: number): number[] => {
     const w = { ...win({}), timeEndS };

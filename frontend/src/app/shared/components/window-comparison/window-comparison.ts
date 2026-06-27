@@ -119,23 +119,31 @@ export class WindowComparisonComponent {
 
   // `left` per segment as a raw percentage (bound via [style.left.%]), so no DOM
   // measurement is needed. A two-pass collision algorithm nudges overlapping
-  // buttons apart, then each center is held inside a small inset band so a
-  // half-button never hangs off the rail ends.
+  // buttons apart inside the inset band [inset, 100 - inset]. The inset is part
+  // of the spread bounds (not a post-hoc clamp, which would re-collide the rail
+  // markers), and the gap shrinks to fit when there are too many buttons to hold
+  // the full MIN_GAP_PCT, so markers never visually overlap on a crowded timeline.
   protected readonly segmentLeftPcts = computed<number[]>(() => {
     const windows = this.windows();
-    const minGap = WindowComparisonComponent.MIN_GAP_PCT;
     const inset = WindowComparisonComponent.EDGE_INSET_PCT;
-    const centers = windows.map(w => this.leftPct(w.timeStartS));
-    // Forward pass: push later buttons right.
+    const lo = inset;
+    const hi = 100 - inset;
+    const centers = windows.map(w => Math.min(hi, Math.max(lo, this.leftPct(w.timeStartS))));
+    if (centers.length < 2) return centers;
+    // Effective gap fits all buttons edge-to-edge within the band when crowded.
+    const gap = Math.min(WindowComparisonComponent.MIN_GAP_PCT, (hi - lo) / (centers.length - 1));
+    // Forward pass: push later buttons right to clear the gap.
     for (let i = 1; i < centers.length; i++) {
-      if (centers[i] < centers[i - 1] + minGap) centers[i] = centers[i - 1] + minGap;
+      centers[i] = Math.max(centers[i], centers[i - 1] + gap);
     }
-    // Clamp rightmost to 100%, then backward pass to pull earlier buttons left.
-    centers[centers.length - 1] = Math.min(centers[centers.length - 1], 100);
+    // Anchor the rightmost inside the band, then backward pass pulls earlier
+    // buttons left. (hi - lo) >= (n - 1) * gap by construction, so the backward
+    // pass cannot push the leftmost below lo - no trailing clamp is needed.
+    centers[centers.length - 1] = Math.min(centers[centers.length - 1], hi);
     for (let i = centers.length - 2; i >= 0; i--) {
-      centers[i] = Math.min(centers[i], centers[i + 1] - minGap);
+      centers[i] = Math.min(centers[i], centers[i + 1] - gap);
     }
-    return centers.map(c => Math.min(100 - inset, Math.max(inset, c)));
+    return centers;
   });
 
   protected readonly overviewMax = computed(() => {
