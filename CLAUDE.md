@@ -137,8 +137,10 @@ warcraft-learner/
 │       │   ├── angular-runtime.ts   # Boots jsdom + Angular TestBed injector; provides Node transports; returns transform services + WclApiService + DataFileApiService
 │       │   ├── node-wcl-transport.ts        # FetchWclTransport - plain fetch GraphQL, in-run cache
 │       │   ├── node-data-file-transport.ts  # FsDataFileTransport - fs read/write/list
-│       │   ├── code-hash.ts         # Hash of the transform source files (signature-skip)
-│       │   ├── signature.ts         # source_signature compute/compare (signature-skip)
+│       │   ├── ingest-version.ts    # INGEST_VERSION: manual integer folded into the skip-signature + stamped on each file
+│       │   ├── signature.ts         # source_signature + ingest_version compute/compare (signature-skip)
+│       │   ├── git-mtime.ts         # Git last-commit time of a spec's data dir (work-ordering)
+│       │   ├── ordering.ts          # Spec/encounter work-ordering (empty -> old-version -> current, oldest git-time within)
 │       │   ├── wcl-fetchers.ts      # Discovery: getEncounters (worldData + rankings liveness probe)
 │       │   ├── wcl-client.ts        # Discovery: WclQueryClient interface + EventFetchOptions + BudgetExceededError
 │       │   ├── wcl-queries.ts       # Discovery: RATE_LIMIT_QUERY, ENCOUNTERS_QUERY, RANKINGS_QUERY (+ RankingsQueryVars)
@@ -208,7 +210,7 @@ The `src/**` specs cannot run under a bare `npx vitest` - they need the `@angula
 | `*-transform.service.spec.ts` | the slice's bench math (clustering / aggregation) as pure fns, **plus** an end-to-end pass through the `*TransformService` with a fake `WclApiService` |
 | `*.service.spec.ts` | the `*FeatureService`'s pure view-model fns (table-driven), **plus** an end-to-end pass with a fake `*_DATA_SOURCE` (and a fake `WclApiService` where the slice fetches the player log) |
 
-Ingestion runs these very `*TransformService`s headlessly, so the only specs under `scripts/ingest/**` cover the discovery helpers it still owns (`wcl-fetchers.spec.ts`, `wcl-mappers.spec.ts`, `code-hash.spec.ts`, `signature.spec.ts`).
+Ingestion runs these very `*TransformService`s headlessly, so the only specs under `scripts/ingest/**` cover the discovery + orchestration helpers it still owns (`wcl-fetchers.spec.ts`, `wcl-mappers.spec.ts`, `signature.spec.ts`, `ordering.spec.ts`).
 
 **Conventions: tests as documentation.** Colocate specs next to the unit (`burst.service.spec.ts` beside `burst.service.ts`). `describe` names the unit (`'burstWindowStatus'`); `it` is a behavior sentence with no "should" (`it('flags a value more than 2 sigma above the mean')`). For rule/threshold tests, pair every "triggers" case with a "does not trigger at the boundary" case - boundary comparisons are strict (a value exactly at `mean + 2*stddev` is **not** an outlier).
 
@@ -332,10 +334,10 @@ The legacy monolith (`AnalysisService`/`AnalysisEngineService`, the `computeAnal
 Runs `frontend/scripts/ingest/orchestrator.ts`, which boots a headless Angular runtime (`scripts/ingest/angular-runtime.ts`: jsdom + Angular TestBed injector wired to the Node WCL + data-file transports) and drives the SAME five `*TransformService`s the browser uses, persisting through the SAME `DataFileApiService` (Node filesystem transport). There is no separate Node analysis pipeline. Also runs as the `ingest-parses.yml` GHA hourly (cron `23 * * * *`) and on manual `workflow_dispatch`. The same hourly workflow runs `npm run scrape` first to keep guide content fresh, then ingestion.
 
 1. Boots the Angular runtime and authenticates to WCL with client credentials (from `WCL_CLIENT_ID`/`WCL_CLIENT_SECRET` environment variables - server-side secret, only used in GHA, never in the browser).
-2. Discovers the specs that have a `rulebook.json` and the current live encounters (`getEncounters`: `worldData` discovery + a cheap rankings liveness probe).
-3. Per encounter: asserts remaining WCL budget, fetches rankings (cheap), computes a code+ranking `source_signature` (an analogue of the old INGEST_HASH, hashing the transform source files + the parse set), and **skips** the encounter when the signature matches the stored stamp.
+2. Discovers the specs that have a `rulebook.json` and the current live encounters (`getEncounters`: `worldData` discovery + a cheap rankings liveness probe). **Spec work-order** (`ordering.ts`, all cheap disk + git reads, zero WCL budget): empty specs first, then **old-version** specs (any on-disk file below the current `INGEST_VERSION`), then **current-version** specs, and within each group **oldest git-commit time first** (`git-mtime.ts` reads the last commit touching the spec's data dir - the workflow checks out with `fetch-depth: 0` so this is meaningful). So a budget-bounded run fixes the most out-of-date data first instead of starving the alphabetically-late specs.
+3. Per encounter: asserts remaining WCL budget, fetches rankings (cheap), computes a version+ranking `source_signature` (`sha256(INGEST_VERSION + parse-set fingerprint)`), and **skips** the encounter when the signature matches the stored stamp. `INGEST_VERSION` (`ingest-version.ts`) is a **manual integer** that replaced the old transform-source code-hash: bumping it invalidates every cached file. Because transform-file edits no longer auto-invalidate, **Claude bumps `INGEST_VERSION` (or suggests bumping it) as part of any change that should produce different tailored data** (transform math, rulebook semantics, a deliberate refresh). Currently `1` (the `source_id` change).
 4. Otherwise runs the five transform services (`burst`/`rotation`/`defensive`/`gear`/`map`) under bounded concurrency. Each fetches the parses it needs (`Casts`/`Buffs`/`DamageDone`/`DamageTaken`, plus `includeResources`/`hostilityType` events for positions) via the shared cached `WclApiService` and computes its slice.
-5. Writes the stamped per-slice tailored files (`{spec}/{burst,rotation,defensive,gear}/{enc_id}.json`) and per-parse position timelines (`positions/{enc_id}.json`).
+5. Writes the stamped per-slice tailored files (`{spec}/{burst,rotation,defensive,gear}/{enc_id}.json`) and per-parse position timelines (`positions/{enc_id}.json`); every file carries both `source_signature` and the bare `ingest_version` integer.
 6. Rebuilds the `{spec}/encounters.json` and top-level `index.json` indexes, then prunes stale encounters.
 
 GHA commits `frontend/public/data/specs/**`, which triggers `deploy-pages.yml` to rebuild and redeploy.
@@ -391,6 +393,9 @@ AI-generated rulebook. Extra top-level fields added on save: `guide_count`, `sav
 
 ### `positions/{enc_id}.json`
 Per-parse position timelines for the positioning map (written by `MapTransformService.getMapData` run headlessly by `scripts/ingest/orchestrator.ts`; consumed by `core/services/positioning-core.ts` + `core/models/positioning.models.ts`). Top-level: `{spec, encounter_id, encounter_name, interval_s, sample_count, parses[]}`. Each parse: `{report_code, fight_id, player_name, duration_s, interval_s, player: PosRow[], enemies: [{game_id, name, is_boss, samples: PosRow[]}]}`. A `PosRow` is `[t_s, x, y, facing|null, mapID|null]` with **raw** WCL units (x/y in hundredths of a yard, facing in milliradians) - the frontend scales them. Enemies are keyed by `game_id` so the same boss/add matches across parses; `is_boss` = the enemy with the highest `maxHitPoints`.
+
+### Signature stamps (every slice + positions file)
+Every tailored file (`{burst,rotation,defensive,gear}/{enc}.json` + `positions/{enc}.json`) carries two ingestion stamps: `source_signature` (the `sha256(INGEST_VERSION + parse-set fingerprint)` skip key) and the bare `ingest_version` integer (the same version, unhashed, read by the work-ordering to tell stale-version data from current). `ingest_version` is required - every write stamps it, and a one-time migration backfilled it onto pre-existing files (v1 where the gear file already carried `source_id`, else v0).
 
 ### Raw parse samples (no longer persisted)
 Raw per-parse samples are no longer written to disk (the old `parse_samples/{enc_id}.json` file is gone). The transform services compute each slice directly from WCL in-memory during ingestion, so there is no intermediate sample file.

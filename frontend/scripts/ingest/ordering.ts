@@ -2,24 +2,41 @@
  * Work-ordering for the ingestion orchestrator.
  *
  * Each run is bounded by the WCL hourly point budget: when it runs out, the loop stops and
- * the next run resumes. To stop never-ingested specs from starving (the old alphabetical
- * order always worked the same early specs first), these pure helpers order the work so a
- * budget-bounded run fills the emptiest data first. The orchestrator supplies the on-disk
- * data counts (cheap disk reads, zero WCL budget); the ordering itself is pure and total.
+ * the next run resumes. To stop stale specs from starving (the old order always worked the
+ * same early specs first), these pure helpers order the work so a budget-bounded run fixes
+ * the most out-of-date data first. The orchestrator supplies cheap disk/git signals (zero
+ * WCL budget); the ordering itself is pure and total.
  */
 
+/** One spec's ordering inputs - all derived from cheap disk + git reads. */
+export interface SpecOrderEntry {
+  spec: string;
+  /** Burst files on disk (0 = never ingested). */
+  dataCount: number;
+  /** True only when every on-disk file is at the current INGEST_VERSION. */
+  onCurrentVersion: boolean;
+  /** Git last-commit unix seconds of the spec's data dir; null = no history (oldest). */
+  lastChange: number | null;
+}
+
 /**
- * Specs ordered by how much data they already have on disk, least first (never-ingested
- * before partial before fully-populated), alphabetical within equal counts for stability.
- * So a budget-bounded run fills empty specs before refreshing populated ones (the populated
- * ones are cheap signature-skips anyway).
+ * Specs ordered so a budget-bounded run fixes the most out-of-date data first:
+ *   1. empty specs (never ingested),
+ *   2. old-version specs (data not fully at the current INGEST_VERSION),
+ *   3. current-version specs,
+ * and within each group oldest git-commit time first (a null/absent time counts as oldest).
+ * Alphabetical tiebreak keeps the order stable when times are equal. So a code/version bump
+ * refreshes the stalest specs before re-checking the freshly-rewritten ones.
  */
-export function orderSpecsByDataAscending(
-  entries: ReadonlyArray<{ spec: string; dataCount: number }>,
-): string[] {
+export function orderSpecsByVersionThenTime(entries: ReadonlyArray<SpecOrderEntry>): string[] {
+  const group = (entry: SpecOrderEntry): number =>
+    entry.dataCount === 0 ? 0 : entry.onCurrentVersion ? 2 : 1;
+  const time = (entry: SpecOrderEntry): number => entry.lastChange ?? -Infinity;
   return entries
     .slice()
-    .sort((a, b) => a.dataCount - b.dataCount || a.spec.localeCompare(b.spec))
+    .sort(
+      (a, b) => group(a) - group(b) || time(a) - time(b) || a.spec.localeCompare(b.spec),
+    )
     .map(entry => entry.spec);
 }
 

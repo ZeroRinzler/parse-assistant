@@ -30,11 +30,14 @@ import {
   type WclQueryClient, type EventFetchOptions, BudgetExceededError,
 } from './wcl-client.ts';
 import { RATE_LIMIT_QUERY } from './wcl-queries.ts';
-import { computeCodeHash } from './code-hash.ts';
-import { orderSpecsByDataAscending, orderEncountersByMissingFirst } from './ordering.ts';
+import { INGEST_VERSION } from './ingest-version.ts';
+import { specDataMtime } from './git-mtime.ts';
 import {
-  encounterSignature, readStoredSignature, signatureMatches, stampSignature,
-  type SignatureRanking,
+  orderSpecsByVersionThenTime, orderEncountersByMissingFirst, type SpecOrderEntry,
+} from './ordering.ts';
+import {
+  encounterSignature, readStoredSignature, readStoredVersion, signatureMatches, stampSignature,
+  type SignatureRanking, type SignedFile,
 } from './signature.ts';
 import { logWarn } from '../../src/app/core/log.ts';
 import type { WclRateLimitData, WclResourceEvent, IngestEncounter } from './models/wcl.models.ts';
@@ -118,31 +121,31 @@ async function ingestEncounter(
     limit(async () => {
       const bench = await transforms.burst.getBurstBench(spec, encId);
       if (!bench) { console.log(`    [${encounter.name}] burst: no data, skipped`); return; }
-      await dataFile.writeSlice(spec, encId, 'burst', stampSignature(bench, signature));
+      await dataFile.writeSlice(spec, encId, 'burst', stampSignature(bench, signature, INGEST_VERSION));
       wroteAny = true;
     }),
     limit(async () => {
       const bench = await transforms.rotation.getRotationBench(spec, encId);
       if (!bench) { console.log(`    [${encounter.name}] rotation: no data, skipped`); return; }
-      await dataFile.writeSlice(spec, encId, 'rotation', stampSignature(bench, signature));
+      await dataFile.writeSlice(spec, encId, 'rotation', stampSignature(bench, signature, INGEST_VERSION));
       wroteAny = true;
     }),
     limit(async () => {
       const bench = await transforms.defensive.getDefensiveBench(spec, encId);
       if (!bench) { console.log(`    [${encounter.name}] defensive: no data, skipped`); return; }
-      await dataFile.writeSlice(spec, encId, 'defensive', stampSignature(bench, signature));
+      await dataFile.writeSlice(spec, encId, 'defensive', stampSignature(bench, signature, INGEST_VERSION));
       wroteAny = true;
     }),
     limit(async () => {
       const bench = await transforms.gear.getGearBench(spec, encId);
       if (!bench) { console.log(`    [${encounter.name}] gear: no data, skipped`); return; }
-      await dataFile.writeSlice(spec, encId, 'gear', stampSignature(bench, signature));
+      await dataFile.writeSlice(spec, encId, 'gear', stampSignature(bench, signature, INGEST_VERSION));
       wroteAny = true;
     }),
     limit(async () => {
       const map = await transforms.map.getMapData(spec, encId);
       if (!map) { console.log(`    [${encounter.name}] positions: no data, skipped`); return; }
-      await dataFile.writePositions(spec, encId, stampSignature(map, signature));
+      await dataFile.writePositions(spec, encId, stampSignature(map, signature, INGEST_VERSION));
     }),
   ];
   await Promise.all(tasks);
@@ -217,7 +220,7 @@ async function pruneStaleEncounters(runtime: IngestRuntime, spec: string, protec
 
 async function ingestSpec(
   runtime: IngestRuntime, client: RuntimeWclClient, spec: string,
-  encounters: IngestEncounter[], protectedIds: Set<number>, codeHash: string,
+  encounters: IngestEncounter[], protectedIds: Set<number>, version: string,
 ): Promise<boolean> {
   console.log(`\nIngesting ${spec} - ${encounters.length} encounters (top ${TOP_N})`);
 
@@ -248,7 +251,7 @@ async function ingestSpec(
         console.log(`  [${encounter.name}] no rankings, skipped`);
         continue;
       }
-      const signature = encounterSignature(codeHash, rankings);
+      const signature = encounterSignature(version, rankings);
 
       // Skip check: compare against the signature stamped on the existing burst file.
       const existing = await runtime.dataFile.getSlice<{ source_signature?: string }>(spec, encounter.id, 'burst');
@@ -302,8 +305,8 @@ async function main(): Promise<void> {
   console.log('warcraft-learner - Parse Ingestion CLI');
   const runtime = await bootstrapIngestRuntime();
   const client = new RuntimeWclClient(runtime);
-  const codeHash = computeCodeHash();
-  console.log(`Code hash: ${codeHash}`);
+  const version = String(INGEST_VERSION);
+  console.log(`Ingest version: ${version}`);
 
   process.stdout.write('Resolving current raids...');
   let encounters: IngestEncounter[];
@@ -335,19 +338,29 @@ async function main(): Promise<void> {
       console.log('No known specs (no rulebook.json found). Nothing to do.');
       return;
     }
-    // Order specs with the least on-disk data first (disk-only count, zero WCL budget) so a
-    // budget-bounded run fills never-ingested specs before refreshing populated ones.
-    const entries = await Promise.all(withRulebook.map(async spec => ({
-      spec,
-      dataCount: (await runtime.dataFile.listSliceFiles(spec, 'burst'))
-        .filter(file => file.endsWith('.json')).length,
-    })));
-    specs = orderSpecsByDataAscending(entries);
-    console.log(`Specs (least-data first): ${specs.join(', ')}`);
+    // Order specs so a budget-bounded run fixes the most out-of-date data first: empty ->
+    // old-version -> current, oldest git-commit time within each group. All cheap disk + git
+    // reads, zero WCL budget.
+    const entries: SpecOrderEntry[] = await Promise.all(withRulebook.map(async spec => {
+      const burstFiles = (await runtime.dataFile.listSliceFiles(spec, 'burst'))
+        .filter(file => file.endsWith('.json'));
+      const versions = await Promise.all(burstFiles.map(async file => {
+        const slice = await runtime.dataFile.getSlice<SignedFile>(spec, parseInt(file), 'burst');
+        return slice ? readStoredVersion(slice) : null;
+      }));
+      return {
+        spec,
+        dataCount: burstFiles.length,
+        onCurrentVersion: burstFiles.length > 0 && versions.every(stored => stored === INGEST_VERSION),
+        lastChange: specDataMtime(spec),
+      };
+    }));
+    specs = orderSpecsByVersionThenTime(entries);
+    console.log(`Specs (old version + oldest-updated first): ${specs.join(', ')}`);
   }
 
   for (const spec of specs) {
-    const budgetExhausted = await ingestSpec(runtime, client, spec, encounters, protectedIds, codeHash);
+    const budgetExhausted = await ingestSpec(runtime, client, spec, encounters, protectedIds, version);
     if (budgetExhausted) break;
   }
 }

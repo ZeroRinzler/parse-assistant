@@ -30,6 +30,10 @@ jobs:
         with:
           ref: ${{ github.ref }}
           token: ${{ steps.app-token.outputs.token }}
+          # Full history: the orchestrator orders specs by the git last-commit time of each
+          # spec's data dir (git-mtime.ts). A shallow clone collapses every path's git log to
+          # one commit, which would make all specs tie.
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
