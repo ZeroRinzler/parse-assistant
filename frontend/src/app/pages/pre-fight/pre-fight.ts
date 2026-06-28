@@ -104,7 +104,9 @@ export class PreFightComponent implements OnInit {
 
   protected onClassChange(): void {
     // A new class invalidates the spec, encounter, map, and persisted spec selection.
-    this.specControl.setValue('', { emitEvent: false });
+    // Emit so the `selectedSpec` signal (and thus the select trigger) clears - suppressing
+    // the event would leave the trigger showing the now-invalid spec from the old class.
+    this.specControl.setValue('', { emitEvent: true });
     this.selectionStore.savePreFight({ spec: null });
     this.mapFeature.clear();
     this.encControl.setValue(0, { emitEvent: false });
