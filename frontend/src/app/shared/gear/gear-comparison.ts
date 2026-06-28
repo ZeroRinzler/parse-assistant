@@ -108,7 +108,13 @@ export function buildTalentBuilds(stats: EncounterGearStats | null, playerKey: s
   return builds.map((b, i) => ({
     pct: b.pct,
     isPlayer: !!playerKey && b.key === playerKey,
-    link: b.report_code ? `https://www.warcraftlogs.com/reports/${b.report_code}#fight=${b.fight_id ?? 0}` : null,
+    // Deep-link to the example parse: select the fight, the summary tab, and the player
+    // (`source` = their actor id). `source_id` is absent only for gear data ingested before
+    // it was captured; fall back to fight-only until re-ingestion backfills it.
+    link: b.report_code
+      ? `https://www.warcraftlogs.com/reports/${b.report_code}?fight=${b.fight_id ?? 0}` +
+        (b.source_id != null ? `&type=summary&source=${b.source_id}` : '')
+      : null,
     playerName: b.player_name || '',
     label: i === 0 ? 'Most common build' : `Alt build ${i}`,
   }));

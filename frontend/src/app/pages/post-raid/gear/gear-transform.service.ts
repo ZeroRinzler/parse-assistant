@@ -115,13 +115,16 @@ export interface ParseGear {
   report_code: string;
   fight_id: number;
   player_name: string;
+  /** The player's actor id within their report - the WCL deep-link `source`. */
+  source_id: number;
 }
 
 /**
  * Reduce a fetched `CharacterGear` to the fields the gear aggregation needs, tagged
  * with the parse identity from its `ranking` (so a build can link to an example parse).
+ * `sourceId` is the player's actor id within that report (the WCL `source` deep-link).
  */
-export function toParseGear(gear: CharacterGear | null, ranking: ParseRanking): ParseGear | null {
+export function toParseGear(gear: CharacterGear | null, ranking: ParseRanking, sourceId: number): ParseGear | null {
   if (!gear?.found) return null;
   return {
     talent_key: gear.talent_key ?? '',
@@ -130,6 +133,7 @@ export function toParseGear(gear: CharacterGear | null, ranking: ParseRanking): 
     report_code: ranking.report_code,
     fight_id: ranking.fight_id,
     player_name: ranking.player,
+    source_id: sourceId,
   };
 }
 
@@ -141,7 +145,7 @@ export function aggregateParseGear(parses: ParseGear[]): EncounterGearStats {
   const total = parses.length;
 
   const talentCounter = new Map<string, number>();
-  const talentExample = new Map<string, { report_code: string; fight_id: number; player_name: string }>();
+  const talentExample = new Map<string, { report_code: string; fight_id: number; player_name: string; source_id: number }>();
   const trinketCounters = new Map<number, Map<number, number>>();
   const trinketNames = new Map<number, string>();
   const trinketIcons = new Map<number, string>();
@@ -156,6 +160,7 @@ export function aggregateParseGear(parses: ParseGear[]): EncounterGearStats {
           report_code: parse.report_code,
           fight_id: parse.fight_id,
           player_name: parse.player_name,
+          source_id: parse.source_id,
         });
       }
     }
@@ -275,7 +280,7 @@ export class GearTransformService implements GearDataSource {
         found: true, spec, source_report: ranking.report_code,
         talent_key: talentKeyFromTree(event.talentTree), trinkets, enchants,
       };
-      const gear = toParseGear(characterGear, ranking);
+      const gear = toParseGear(characterGear, ranking, player.id);
       if (!gear) return null;
       return { gear, encounterName: fight.name ?? '' };
     } catch (err) {
