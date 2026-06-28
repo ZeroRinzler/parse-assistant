@@ -82,12 +82,14 @@
               <div class="text-[15px] font-bold tabular-nums">{{ build.pct }}%</div>
               <div class="text-[10px] opacity-60 mt-px tabular-nums">of top parsers</div>
             </div>
-            <div class="hidden md:block text-[13px] text-[var(--muted)] leading-[1.45] border-l border-[var(--border)] pl-[14px]">
-              @if (build.link) {
+            @if (build.link) {
+              <div class="col-start-2 md:col-auto text-right md:text-left text-[13px] text-[var(--muted)] leading-[1.45] md:border-l md:border-[var(--border)] md:pl-[14px]">
                 <a class="text-[var(--gold)] no-underline hover:brightness-125"
                    [href]="build.link" target="_blank" rel="noopener">View parse &#8599;</a>
-              }
-            </div>
+              </div>
+            } @else {
+              <div class="hidden md:block"></div>
+            }
           </div>
         }
       } @else {
