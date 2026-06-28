@@ -25,7 +25,7 @@ export type GameIconKind = 'spell' | 'item';
       rel="noopener"
       class="inline-flex items-center gap-1.5 no-underline hover:brightness-125">
       @if (iconUrl(); as src) {
-        <img [ngSrc]="src" [width]="18" [height]="18" alt="" />
+        <img [ngSrc]="src" [width]="18" [height]="18" alt="" class="rounded-sm" />
       }
       <span>{{ name() }}</span>
     </a>
