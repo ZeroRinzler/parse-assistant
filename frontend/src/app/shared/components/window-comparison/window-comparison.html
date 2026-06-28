@@ -93,10 +93,9 @@
           </button>
         }
         @if (!activeIsMuted()) {
-          <span class="tabular-nums text-xs flex items-baseline gap-1">
+          <span class="tabular-nums text-xs flex items-baseline gap-2">
             <span class="text-[var(--muted)]">{{ w.overview.playerPct | formatDamage }}</span>
             @if (overviewDeltaText()) {
-              <span class="text-[var(--muted)]">·</span>
               <span
                 [class.badge-muted]="overviewDeltaStatus() === 'muted'"
                 [class.badge-success]="overviewDeltaStatus() === 'better'"
