@@ -72,7 +72,7 @@ describe('buildBenchEnchantRows', () => {
 });
 
 describe('buildBenchTrinketRows', () => {
-  it('returns the top trinket for each slot', () => {
+  it('returns the two distinct trinkets ranked by overall usage', () => {
     const rows = buildBenchTrinketRows(stats({
       trinkets: {
         12: [{ id: 193701, name: "Algeth'ar Puzzle Box", icon: 'box', pct: 50 }],
@@ -80,11 +80,29 @@ describe('buildBenchTrinketRows', () => {
       },
     }));
     expect(rows).toHaveLength(2);
-    expect(rows[0]).toEqual({ slotLabel: 'Trinket 1', id: 193701, name: "Algeth'ar Puzzle Box", icon: 'box', pct: 50 });
-    expect(rows[1]).toEqual({ slotLabel: 'Trinket 2', id: 249343, name: 'Gaze of the Alnseer', icon: 'gaze', pct: 80 });
+    expect(rows[0]).toEqual({ slotLabel: 'Trinket 1', id: 249343, name: 'Gaze of the Alnseer', icon: 'gaze', pct: 80 });
+    expect(rows[1]).toEqual({ slotLabel: 'Trinket 2', id: 193701, name: "Algeth'ar Puzzle Box", icon: 'box', pct: 50 });
   });
 
-  it('skips a trinket slot with no bench data', () => {
+  it('never repeats the same trinket when one item dominates both slots', () => {
+    // The Rotmire bug: "Gaze" is the single most popular trinket, so the raw
+    // per-slot aggregation ranks it #1 in both slot 12 and slot 13. The merged
+    // pair must surface Gaze once (summed 40+30=70) and the next distinct item.
+    const rows = buildBenchTrinketRows(stats({
+      trinkets: {
+        12: [{ id: 249343, name: 'Gaze of the Alnseer', icon: 'gaze', pct: 40 },
+             { id: 193701, name: "Algeth'ar Puzzle Box", icon: 'box', pct: 30 }],
+        13: [{ id: 249343, name: 'Gaze of the Alnseer', icon: 'gaze', pct: 30 },
+             { id: 193701, name: "Algeth'ar Puzzle Box", icon: 'box', pct: 25 }],
+      },
+    }));
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toEqual({ slotLabel: 'Trinket 1', id: 249343, name: 'Gaze of the Alnseer', icon: 'gaze', pct: 70 });
+    expect(rows[1]).toEqual({ slotLabel: 'Trinket 2', id: 193701, name: "Algeth'ar Puzzle Box", icon: 'box', pct: 55 });
+    expect(new Set(rows.map(r => r.id)).size).toBe(2);
+  });
+
+  it('returns a single row when only one distinct trinket has bench data', () => {
     const rows = buildBenchTrinketRows(stats({
       trinkets: { 12: [{ id: 193701, name: 'Box', icon: 'box', pct: 50 }] },
     }));
@@ -160,7 +178,10 @@ describe('buildTrinketRows', () => {
     });
   });
 
-  it('flags a slot whose worn trinket matches neither bench top pick', () => {
+  it('flags a slot whose worn trinket matches neither recommended trinket', () => {
+    // Neither worn trinket is recommended, so both slots get a "Switch to" - the
+    // distinct recommendations are assigned in overall-usage order (Gaze 80 then
+    // Puzzle Box 50) and never collide.
     const rows = buildTrinketRows(
       gear({
         trinkets: [
@@ -170,8 +191,33 @@ describe('buildTrinketRows', () => {
       }),
       benchStats,
     );
-    expect(rows[0]).toMatchObject({ status: 'info', note: "Switch to Algeth'ar Puzzle Box (50%)" });
-    expect(rows[1]).toMatchObject({ status: 'info', note: 'Switch to Gaze of the Alnseer (80%)' });
+    expect(rows[0]).toMatchObject({ status: 'info', note: 'Switch to Gaze of the Alnseer (80%)' });
+    expect(rows[1]).toMatchObject({ status: 'info', note: "Switch to Algeth'ar Puzzle Box (50%)" });
+  });
+
+  it('never recommends the same trinket for both slots when one item dominates', () => {
+    // Same dominant-trinket bench as the Rotmire bug; a player wearing neither
+    // recommended trinket must get two distinct suggestions, not Gaze twice.
+    const dominantStats = stats({
+      trinkets: {
+        12: [{ id: 249343, name: 'Gaze of the Alnseer', icon: 'gaze', pct: 40 },
+             { id: 193701, name: "Algeth'ar Puzzle Box", icon: 'box', pct: 30 }],
+        13: [{ id: 249343, name: 'Gaze of the Alnseer', icon: 'gaze', pct: 30 },
+             { id: 193701, name: "Algeth'ar Puzzle Box", icon: 'box', pct: 25 }],
+      },
+    });
+    const rows = buildTrinketRows(
+      gear({
+        trinkets: [
+          { slot: 12, id: 111111, name: 'Wrong A' },
+          { slot: 13, id: 222222, name: 'Wrong B' },
+        ],
+      }),
+      dominantStats,
+    );
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({ status: 'info', note: 'Switch to Gaze of the Alnseer (70%)' });
+    expect(rows[1]).toMatchObject({ status: 'info', note: "Switch to Algeth'ar Puzzle Box (55%)" });
   });
 
   it('surfaces the top recommendation when the player has no trinket in a slot', () => {

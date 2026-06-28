@@ -162,61 +162,85 @@ function trinketSetMatches(
   return true;
 }
 
+/** Overall usage of a trinket id among top parsers (summed across slots 12/13). */
+function trinketUsagePct(stats: EncounterGearStats | null, id: number): number | null {
+  const topTrinkets = stats?.trinkets ?? {};
+  let sum = 0;
+  let found = false;
+  for (const slot of [12, 13]) {
+    const hit = (topTrinkets[slot] ?? []).find(trinket => trinket.id === id);
+    if (hit) {
+      sum += hit.pct;
+      found = true;
+    }
+  }
+  return found ? sum : null;
+}
+
 /**
  * Per-slot trinket comparison: player's item vs top-parse consensus.
  * Returns a row for each slot (12, 13) that has either a player item or bench data.
+ *
+ * Recommendations come from `topTrinketPair` (two distinct trinkets ranked by
+ * overall usage), not per-slot top picks - a trinket cannot be equipped twice,
+ * so each recommendation is consumed by at most one slot and the same item is
+ * never suggested for both.
  */
 export function buildTrinketRows(gear: CharacterGear | null, stats: EncounterGearStats | null): TrinketRow[] {
-  const topTrinkets = stats?.trinkets ?? {};
   const playerTrinkets = gear?.trinkets ?? [];
+  const pair = topTrinketPair(stats);
   const rows: TrinketRow[] = [];
 
-  // Trinket slot order does not matter: if the player wears both top-pick
+  // Trinket slot order does not matter: if the player wears both recommended
   // trinkets (in either slot order), accept both rows as optimal instead of
   // flagging each slot for a "Switch to" swap.
-  const benchTop12 = topTrinkets[12]?.[0];
-  const benchTop13 = topTrinkets[13]?.[0];
-  if (trinketSetMatches(playerTrinkets, benchTop12?.id, benchTop13?.id)) {
+  if (trinketSetMatches(playerTrinkets, pair[0]?.id, pair[1]?.id)) {
     for (const slot of [12, 13]) {
       const label = slotName(slot);
       const player = playerTrinkets.find(trinket => trinket.slot === slot)!;
-      // The player's worn trinket is one of the two bench top picks; pull its
-      // usage pct from whichever bench slot lists it.
-      const matchingBenchPct =
-        benchTop12?.id === player.id ? benchTop12.pct : benchTop13?.id === player.id ? benchTop13.pct : null;
+      const matchingPct = pair.find(rec => rec.id === player.id)?.pct ?? null;
       rows.push({ slotLabel: label, id: player.id, name: player.name, icon: player.icon ?? '',
-        status: 'ok', topPct: matchingBenchPct, note: null });
+        status: 'ok', topPct: matchingPct, note: null });
     }
     return rows;
   }
 
+  // Mark recommendations the player already wears as satisfied, then hand the
+  // remaining (distinct) recommendations to the slots that need one. Consuming
+  // each recommendation once guarantees the two suggestions never collide.
+  const wornIds = new Set(playerTrinkets.map(trinket => trinket.id));
+  const remainingRecs = pair.filter(rec => !wornIds.has(rec.id));
+  let recIndex = 0;
+
   for (const slot of [12, 13]) {
     const label = slotName(slot);
-    const topList = topTrinkets[slot] ?? [];
-    const top = topList[0];
-    const player = playerTrinkets.find(t => t.slot === slot);
-
-    if (!player && !top) continue;
+    const player = playerTrinkets.find(trinket => trinket.slot === slot);
 
     if (!player) {
-      // No player item; surface the top recommendation as an info prompt.
-      rows.push({ slotLabel: label, id: top.id, name: top.name, icon: '',
-        status: 'info', topPct: top.pct, note: `${top.pct}% run this trinket` });
+      // No player item; surface the next recommendation as an info prompt.
+      const rec = remainingRecs[recIndex];
+      if (!rec) continue;
+      recIndex++;
+      rows.push({ slotLabel: label, id: rec.id, name: rec.name, icon: '',
+        status: 'info', topPct: rec.pct, note: `${rec.pct}% run this trinket` });
       continue;
     }
 
-    // Find how popular the player's current trinket is among top parsers.
-    const playerUsagePct = topList.find(t => t.id === player.id)?.pct ?? null;
+    if (wornIds.has(player.id) && pair.some(rec => rec.id === player.id)) {
+      // Player wears one of the two recommended trinkets; this slot is optimal.
+      rows.push({ slotLabel: label, id: player.id, name: player.name, icon: player.icon ?? '',
+        status: 'ok', topPct: pair.find(rec => rec.id === player.id)!.pct, note: null });
+      continue;
+    }
 
-    if (top && player.id === top.id) {
+    const rec = remainingRecs[recIndex];
+    if (rec) {
+      recIndex++;
       rows.push({ slotLabel: label, id: player.id, name: player.name, icon: player.icon ?? '',
-        status: 'ok', topPct: top.pct, note: null });
-    } else if (top) {
-      rows.push({ slotLabel: label, id: player.id, name: player.name, icon: player.icon ?? '',
-        status: 'info', topPct: playerUsagePct,
-        note: `Switch to ${top.name} (${top.pct}%)` });
+        status: 'info', topPct: trinketUsagePct(stats, player.id),
+        note: `Switch to ${rec.name} (${rec.pct}%)` });
     } else {
-      // No bench data for this slot; player item is acceptable.
+      // No bench data / no distinct recommendation left; player item is acceptable.
       rows.push({ slotLabel: label, id: player.id, name: player.name, icon: player.icon ?? '',
         status: 'ok', topPct: null, note: null });
     }
@@ -246,6 +270,37 @@ export interface BenchTrinketRow {
   pct: number;
 }
 
+export interface RecommendedTrinket {
+  id: number;
+  name: string;
+  icon: string;
+  pct: number;
+}
+
+/**
+ * The two distinct trinkets top parsers run, ranked by overall usage.
+ *
+ * Trinket slot order is irrelevant in WoW and a trinket cannot be equipped
+ * twice, so the per-slot distributions (which can name the same item as the
+ * top pick of both slot 12 and slot 13) are merged by id. Each item's slot-12
+ * and slot-13 usage is summed - the two slot sets are disjoint because no parse
+ * wears the same trinket in both slots, so the sum is the true "% of top parsers
+ * running this trinket" (40% in slot 12 + 30% in slot 13 = 70% overall). The two
+ * most-used distinct trinkets are returned, so the same item is never surfaced twice.
+ */
+export function topTrinketPair(stats: EncounterGearStats | null): RecommendedTrinket[] {
+  const topTrinkets = stats?.trinkets ?? {};
+  const byId = new Map<number, RecommendedTrinket>();
+  for (const slot of [12, 13]) {
+    for (const trinket of topTrinkets[slot] ?? []) {
+      const existing = byId.get(trinket.id);
+      if (existing) existing.pct += trinket.pct;
+      else byId.set(trinket.id, { id: trinket.id, name: trinket.name, icon: trinket.icon, pct: trinket.pct });
+    }
+  }
+  return [...byId.values()].sort((a, b) => b.pct - a.pct).slice(0, 2);
+}
+
 /**
  * Shows the consensus enchant per slot for the boss-study view.
  * Omits slots where fewer than 40% of top parsers enchant.
@@ -265,13 +320,16 @@ export function buildBenchEnchantRows(stats: EncounterGearStats | null): BenchEn
 }
 
 /**
- * Shows the most-used trinket per slot (12 and 13) for the boss-study view.
+ * Shows the two distinct most-used trinkets for the boss-study view, ranked by
+ * overall usage. A trinket can only be equipped once, so the rows are the
+ * `topTrinketPair` (merged across slots), never the same item twice.
  */
 export function buildBenchTrinketRows(stats: EncounterGearStats | null): BenchTrinketRow[] {
-  const topTrinkets = stats?.trinkets ?? {};
-  return [12, 13].reduce<BenchTrinketRow[]>((acc, slot) => {
-    const top = topTrinkets[slot]?.[0];
-    if (top) acc.push({ slotLabel: slotName(slot), id: top.id, name: top.name, icon: top.icon, pct: top.pct });
-    return acc;
-  }, []);
+  return topTrinketPair(stats).map((trinket, index) => ({
+    slotLabel: index === 0 ? 'Trinket 1' : 'Trinket 2',
+    id: trinket.id,
+    name: trinket.name,
+    icon: trinket.icon,
+    pct: trinket.pct,
+  }));
 }
