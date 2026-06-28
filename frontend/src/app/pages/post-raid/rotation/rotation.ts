@@ -1,8 +1,9 @@
-import { ChangeDetectionStrategy, Component, effect, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, effect, inject, input, output, signal } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { GameIconComponent } from '../../../shared/components/game-icon/game-icon';
 import { CollapsibleTextComponent } from '../../../shared/components/collapsible-text/collapsible-text';
 import { FormatDurationPipe } from '../../../shared/pipes/format-duration-pipe';
+import { logWarn } from '../../../core/log';
 import {
   RotationFeatureService, RotationFindingRow, RotationOnPlanChip,
 } from './rotation.service';
@@ -31,6 +32,9 @@ export class RotationComponent {
   readonly fightId = input.required<number>();
   readonly playerId = input.required<number>();
 
+  /** Emits false when the card has finished loading; the page gates its spinner on it. */
+  readonly busyChange = output<boolean>();
+
   protected readonly ruleRows = signal<RotationFindingRow[]>([]);
   protected readonly offensiveRows = signal<RotationFindingRow[]>([]);
   protected readonly onPlan = signal<RotationOnPlanChip[]>([]);
@@ -46,12 +50,15 @@ export class RotationComponent {
       const fightId = this.fightId();
       const playerId = this.playerId();
       const token = ++this.loadToken;
-      void this.rotation.loadPlayerView(spec, encounterId, reportCode, fightId, playerId).then(view => {
-        if (token !== this.loadToken) return;
-        this.ruleRows.set(view.ruleRows);
-        this.offensiveRows.set(view.offensiveRows);
-        this.onPlan.set(view.onPlan);
-      });
+      void this.rotation.loadPlayerView(spec, encounterId, reportCode, fightId, playerId)
+        .then(view => {
+          if (token !== this.loadToken) return;
+          this.ruleRows.set(view.ruleRows);
+          this.offensiveRows.set(view.offensiveRows);
+          this.onPlan.set(view.onPlan);
+        })
+        .catch(err => logWarn('rotation.loadPlayerView', err))
+        .finally(() => { if (token === this.loadToken) this.busyChange.emit(false); });
     });
   }
 }

@@ -85,18 +85,22 @@
       <div class="mb-4 rounded-lg border border-[var(--critical)]/30 bg-[var(--critical)]/10 px-4 py-3.5 text-[13px] text-[var(--critical)]">{{ error() }}</div>
     }
 
-    @if (loadingReport() || loadingAnalysis()) {
+    @if (loadingReport() || loadingAnalysis() || (ready() && cardsBusy())) {
       <wl-loading-spinner [message]="loadingMsg()"></wl-loading-spinner>
     }
 
     @if (ready() && !loadingAnalysis()) {
-      <div class="flex flex-col gap-6">
+      <!-- Mounted (so each card's load effect runs) but hidden via display:none until every
+           card finishes loading, then the whole block reveals at once. Not @if-gated on
+           cardsBusy() - that would unmount the cards and never start their loads. -->
+      <div class="flex flex-col gap-6" [class.hidden]="cardsBusy()">
         <wl-rotation
           [spec]="spec()"
           [encounterId]="selectedEncounterId()"
           [reportCode]="reportCode()"
           [fightId]="selectedFightId()!"
-          [playerId]="selectedPlayerId()!">
+          [playerId]="selectedPlayerId()!"
+          (busyChange)="rotationBusy.set($event)">
         </wl-rotation>
 
         <wl-burst-windows
@@ -106,7 +110,8 @@
           [fight]="selectedFightId()!"
           [player]="selectedPlayerId()!"
           [showMap]="mapReady()"
-          (openMap)="onOpenMap($event)">
+          (openMap)="onOpenMap($event)"
+          (busyChange)="burstBusy.set($event)">
         </wl-burst-windows>
 
         <wl-defensive
@@ -117,7 +122,8 @@
           [player]="selectedPlayerId()!"
           [fightDuration]="selectedFightDuration()"
           [showMap]="mapReady()"
-          (openMap)="onDefensiveOpenMap($event)">
+          (openMap)="onDefensiveOpenMap($event)"
+          (busyChange)="defensiveBusy.set($event)">
         </wl-defensive>
 
         <wl-gear
@@ -125,7 +131,8 @@
           [encounterId]="selectedEncounterId()"
           [report]="reportCode()"
           [fight]="selectedFightId()!"
-          [player]="selectedPlayerId()!">
+          [player]="selectedPlayerId()!"
+          (busyChange)="gearBusy.set($event)">
         </wl-gear>
       </div>
     }

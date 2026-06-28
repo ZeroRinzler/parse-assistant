@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, effect, inject, input, output, signal } from '@angular/core';
 import { WindowComparisonComponent } from '../../../shared/components/window-comparison/window-comparison';
 import { ComparisonWindow } from '../../../core/models/window-comparison.models';
+import { logWarn } from '../../../core/log';
 import { BurstFeatureService, BurstMapAnchor } from './burst.service';
 
 /**
@@ -32,6 +33,8 @@ export class BurstWindowsComponent {
   readonly showMap = input<boolean>(false);
 
   readonly openMap = output<BurstMapAnchor>();
+  /** Emits false when the card has finished loading; the page gates its spinner on it. */
+  readonly busyChange = output<boolean>();
 
   private readonly _windows = signal<ComparisonWindow[]>([]);
   private readonly _anchors = signal<BurstMapAnchor[]>([]);
@@ -51,11 +54,14 @@ export class BurstWindowsComponent {
       const load = report && fight && player
         ? this.burst.loadPlayerView(spec, encounterId, report, fight, player)
         : this.burst.loadBenchView(spec, encounterId);
-      void load.then(view => {
-        if (token !== this.loadToken) return;
-        this._windows.set(view.windows);
-        this._anchors.set(view.anchors);
-      });
+      void load
+        .then(view => {
+          if (token !== this.loadToken) return;
+          this._windows.set(view.windows);
+          this._anchors.set(view.anchors);
+        })
+        .catch(err => logWarn('burst.loadPlayerView', err))
+        .finally(() => { if (token === this.loadToken) this.busyChange.emit(false); });
     });
   }
 

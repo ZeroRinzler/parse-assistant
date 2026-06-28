@@ -187,6 +187,18 @@ export class PostRaidComponent {
   protected readonly loadingReport = signal(false);
   protected readonly loadingAnalysis = signal(false);
   protected readonly loadingMsg = signal('Loading…');
+
+  // Per-card busy state. Each feature card emits `busyChange(false)` when its async load
+  // settles; the page sets them true at the start of each analysis (resolveSelection). The
+  // spinner stays up - and the cards stay hidden - until every card has finished loading,
+  // so the cards never flash empty content between mount and first data. Init true: cards
+  // are never shown before the first load completes.
+  protected readonly rotationBusy = signal(true);
+  protected readonly burstBusy = signal(true);
+  protected readonly defensiveBusy = signal(true);
+  protected readonly gearBusy = signal(true);
+  protected readonly cardsBusy = computed(() =>
+    this.rotationBusy() || this.burstBusy() || this.defensiveBusy() || this.gearBusy());
   protected readonly error = signal('');
   protected readonly status = signal('');
 
@@ -396,6 +408,14 @@ export class PostRaidComponent {
       const spec = specOf(groups, playerId);
       if (!spec) { this.error.set('Could not resolve the selected player\'s spec.'); return; }
       this.spec.set(spec);
+
+      // Mark every card busy before they mount/reload, so the spinner stays up continuously
+      // until each card emits busyChange(false) - no gap where the cards render empty.
+      this.rotationBusy.set(true);
+      this.burstBusy.set(true);
+      this.defensiveBusy.set(true);
+      this.gearBusy.set(true);
+      this.loadingMsg.set('Analyzing your log…');
 
       const fight = this.fights().find(f => f.id === fightId);
       if (fight) void this.mapFeature.prepare(this.reportCode(), fight, playerId, spec, this._enemies);

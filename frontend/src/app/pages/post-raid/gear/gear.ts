@@ -1,8 +1,9 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { GameIconComponent } from '../../../shared/components/game-icon/game-icon';
 import { CollapsibleTextComponent } from '../../../shared/components/collapsible-text/collapsible-text';
 import { slotName, statusIcon } from '../../../shared/gear/gear-comparison';
+import { logWarn } from '../../../core/log';
 import { GearFeatureService, GearComparisonView, emptyGearView } from './gear.service';
 
 /**
@@ -30,6 +31,9 @@ export class GearComponent {
   readonly fight = input<number>(0);
   readonly player = input<number>(0);
 
+  /** Emits false when the card has finished loading; the page gates its spinner on it. */
+  readonly busyChange = output<boolean>();
+
   private readonly _view = signal<GearComparisonView>(emptyGearView());
   protected readonly view = this._view.asReadonly();
 
@@ -54,9 +58,10 @@ export class GearComponent {
       const load = report && fight && player
         ? this.gear.loadComparisonView(spec, encounterId, report, fight, player)
         : this.gear.loadBenchView(spec, encounterId);
-      void load.then(view => {
-        if (token === this.loadToken) this._view.set(view);
-      });
+      void load
+        .then(view => { if (token === this.loadToken) this._view.set(view); })
+        .catch(err => logWarn('gear.loadComparisonView', err))
+        .finally(() => { if (token === this.loadToken) this.busyChange.emit(false); });
     });
   }
 }

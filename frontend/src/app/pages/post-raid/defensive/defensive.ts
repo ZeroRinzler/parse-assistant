@@ -5,6 +5,7 @@ import {
   bucketFindings, CAT_LABEL, FindingRow, FindingTableComponent, onPlanFromEntries, rowsFromEntries,
 } from '../../../shared/components/finding-table/finding-table';
 import { WindowComparisonComponent } from '../../../shared/components/window-comparison/window-comparison';
+import { logWarn } from '../../../core/log';
 import { DefensiveFeatureService, DefensiveMapAnchor } from './defensive.service';
 
 /**
@@ -35,6 +36,8 @@ export class DefensiveComponent {
   readonly fightDuration = input<number>(0);
 
   readonly openMap = output<DefensiveMapAnchor>();
+  /** Emits false when the card has finished loading; the page gates its spinner on it. */
+  readonly busyChange = output<boolean>();
 
   private readonly _findings = signal<AnalysisFinding[]>([]);
   private readonly _spellIdsByName = signal<Record<string, number>>({});
@@ -54,14 +57,17 @@ export class DefensiveComponent {
       const fight = this.fight();
       const player = this.player();
       const token = ++this.loadToken;
-      void this.defensive.loadAnalysisView(spec, encounterId, report, fight, player).then(view => {
-        if (token !== this.loadToken) return;
-        this._findings.set(view.findings);
-        this._spellIdsByName.set(view.spellIdsByName);
-        this._iconByName.set(view.iconByName);
-        this._windows.set(view.windows);
-        this._anchors.set(view.anchors);
-      });
+      void this.defensive.loadAnalysisView(spec, encounterId, report, fight, player)
+        .then(view => {
+          if (token !== this.loadToken) return;
+          this._findings.set(view.findings);
+          this._spellIdsByName.set(view.spellIdsByName);
+          this._iconByName.set(view.iconByName);
+          this._windows.set(view.windows);
+          this._anchors.set(view.anchors);
+        })
+        .catch(err => logWarn('defensive.loadAnalysisView', err))
+        .finally(() => { if (token === this.loadToken) this.busyChange.emit(false); });
     });
   }
 
