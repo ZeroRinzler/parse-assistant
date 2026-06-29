@@ -94,7 +94,7 @@ describe('analyzeDefensiveFindings', () => {
 describe('computePlayerDefensiveWindows', () => {
   it('sums player damage taken inside each top defensive window (half-open)', () => {
     const top: BurstWindow[] = [
-      { time_s: 10, window_length_s: 5, dmg_avg: 0, dmg_min: 0, dmg_max: 0, dmg_stddev: 0, ability_breakdown: [] },
+      { time_s: 10, window_length_s: 5, dmg_avg: 0, dmg_min: 0, dmg_max: 0, dmg_stddev: 0, common_cds: [], ability_breakdown: [] },
     ];
     const out = computePlayerDefensiveWindows(top, [dtaken(700, 12, 400), dtaken(701, 14, 100), dtaken(700, 15, 999)], 0);
     expect(out[0].window_damage).toBe(500); // event at exactly 15 (== end) excluded
@@ -135,7 +135,7 @@ describe('defensiveMapAnchor', () => {
 describe('buildDefensiveWindows', () => {
   const window: BurstWindow = {
     time_s: 30, window_length_s: 5, dmg_avg: 1000, dmg_min: 800, dmg_max: 1200, dmg_stddev: 100,
-    defensive_name: 'Cloak of Shadows', spell_id: 31224, ref_game_id: 6666,
+    defensive_name: 'Cloak of Shadows', spell_id: 31224, ref_game_id: 6666, common_cds: ['Cloak of Shadows'],
     ability_breakdown: [{ spell_id: 700, avg_damage: 600, min_damage: 400, max_damage: 800, count: 5 }],
   };
   const abilities = { 31224: { icon: 'cloak', name: 'Cloak of Shadows' }, 700: { icon: 'hit', name: 'Boss Hit' } };
@@ -185,7 +185,7 @@ describe('buildDefensivePlanRows', () => {
           majority_hold: false,
         },
       },
-      defensive_windows: [{ time_s: 30, window_length_s: 5, dmg_avg: 0, dmg_min: 0, dmg_max: 0, dmg_stddev: 0, defensive_name: 'Cloak of Shadows', ability_breakdown: [] }],
+      defensive_windows: [{ time_s: 30, window_length_s: 5, dmg_avg: 0, dmg_min: 0, dmg_max: 0, dmg_stddev: 0, defensive_name: 'Cloak of Shadows', common_cds: ['Cloak of Shadows'], ability_breakdown: [] }],
     });
     const rows = buildDefensivePlanRows(bench);
     expect(rows).toHaveLength(1);
@@ -207,7 +207,7 @@ function fullBench(): DefensiveBench {
     },
     defensive_windows: [{
       time_s: 30, window_length_s: 5, dmg_avg: 1000, dmg_min: 800, dmg_max: 1200, dmg_stddev: 100,
-      defensive_name: 'Cloak of Shadows', spell_id: 31224, ref_game_id: 6666,
+      defensive_name: 'Cloak of Shadows', spell_id: 31224, ref_game_id: 6666, common_cds: ['Cloak of Shadows'],
       ability_breakdown: [{ spell_id: 700, avg_damage: 600, min_damage: 400, max_damage: 800, count: 5 }],
     }],
     top_defensives_summary: [{ spell_id: 31224, avg_uses: 2, min_uses: 1, max_uses: 3 }],

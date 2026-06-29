@@ -98,7 +98,7 @@ function windowSpells(spellIds: number[], abilities: AbilityIcons): WindowSpell[
 
 /** Map anchor for a window: when to seek and which cooldowns to highlight. */
 export function burstMapAnchor(window: BurstWindow, cdSpellIds: Record<string, number>, abilities: AbilityIcons): BurstMapAnchor {
-  const cds = window.common_cds ?? [];
+  const cds = window.common_cds;
   const spellIds = cds.map(name => cdSpellIds[name]).filter((id): id is number => !!id);
   return {
     timeS: window.time_s,
@@ -127,7 +127,7 @@ export function buildBurstView(
     const playerWindow = notReached ? null : (playerWindows[index] ?? null);
     const playerDamage = playerWindow?.window_damage ?? null;
     const { status, icon } = burstWindowStatus(playerDamage, window.dmg_avg, window.dmg_min, window.dmg_stddev, notReached, benchOnly);
-    const { spellIds, labels } = splitCommonCds(window.common_cds ?? [], cdSpellIds);
+    const { spellIds, labels } = splitCommonCds(window.common_cds, cdSpellIds);
     windows.push({
       timeStartS: window.time_s,
       timeEndS: window.time_s + window.window_length_s,

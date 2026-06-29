@@ -1,5 +1,3 @@
-import type { CharacterGear } from './wcl.models';
-
 export interface AnalysisFinding {
   severity: 'critical' | 'warning' | 'info' | 'hold_suggestion' | 'success';
   category: string;
@@ -26,7 +24,6 @@ export interface AbilityBreakdown {
   avg_damage: number;
   min_damage: number;
   max_damage: number;
-  damage?: number;
   count: number;
   /** Top-parse average cast count per window. Burst windows only; absent on defensives. */
   avg_casts?: number;
@@ -44,7 +41,7 @@ export interface BurstWindow {
   dmg_min: number;
   dmg_max: number;
   dmg_stddev: number;
-  common_cds?: string[];
+  common_cds: string[];
   common_defensives?: string[];
   avg_targets?: number;
   ability_breakdown: AbilityBreakdown[];
@@ -83,23 +80,4 @@ export interface TopDefensiveSummary {
   avg_uses: number;
   min_uses: number;
   max_uses: number;
-}
-
-export interface AnalysisResult {
-  player: string;
-  spec: string;
-  rulebook_source: 'generated' | 'static' | 'none';
-  findings: AnalysisFinding[];
-  cd_spell_ids: Record<string, number>;
-  ability_icons: Record<string, { icon: string; name: string }>;
-  burst_windows?: BurstWindow[];
-  player_burst_windows?: PlayerBurstWindow[];
-  player_fight_duration_s?: number;
-  player_defensives?: PlayerDefensive[];
-  top_defensives_summary?: TopDefensiveSummary[];
-  defensive_findings?: AnalysisFinding[];
-  top_defensive_windows?: BurstWindow[];
-  player_defensive_windows?: PlayerBurstWindow[];
-  /** Player's own gear from their most recent ranked kill of this encounter. */
-  player_gear?: CharacterGear;
 }

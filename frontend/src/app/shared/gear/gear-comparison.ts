@@ -35,7 +35,7 @@ export interface EnchantRow {
 export interface TalentBuildRow {
   pct: number;
   isPlayer: boolean;
-  link: string | null;
+  link: string;
   playerName: string;
   label: string;
 }
@@ -110,10 +110,8 @@ export function buildTalentBuilds(stats: EncounterGearStats | null, playerKey: s
     isPlayer: !!playerKey && b.key === playerKey,
     // Deep-link to the example parse: select the fight, the summary tab, and the player
     // (`source` = their actor id within that report).
-    link: b.report_code
-      ? `https://www.warcraftlogs.com/reports/${b.report_code}?fight=${b.fight_id ?? 0}&type=summary&source=${b.source_id}`
-      : null,
-    playerName: b.player_name || '',
+    link: `https://www.warcraftlogs.com/reports/${b.report_code}?fight=${b.fight_id}&type=summary&source=${b.source_id}`,
+    playerName: b.player_name,
     label: i === 0 ? 'Most common build' : `Alt build ${i}`,
   }));
 }

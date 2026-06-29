@@ -112,7 +112,7 @@ describe('findPlayerBurstWindows', () => {
   const damage = (spellId: number, atS: number, amount: number): WclEvent =>
     ({ type: 'damage', timestamp: atS * 1000, abilityGameID: spellId, amount });
   const window: BurstWindow = {
-    time_s: 10, window_length_s: 20, dmg_avg: 0, dmg_min: 0, dmg_max: 0, dmg_stddev: 0, ability_breakdown: [],
+    time_s: 10, window_length_s: 20, dmg_avg: 0, dmg_min: 0, dmg_max: 0, dmg_stddev: 0, common_cds: [], ability_breakdown: [],
   };
 
   it('sums player damage inside the window and counts casts by ability name', () => {
