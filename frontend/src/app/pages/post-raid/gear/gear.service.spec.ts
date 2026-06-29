@@ -10,7 +10,7 @@ import {
 function benchWith(overrides: Partial<GearBench> = {}): GearBench {
   return {
     spec: 'SubtletyRogue', encounter_id: 1, encounter_name: 'Boss', sample_count: 10,
-    talent_builds: [{ key: 'v2:A', pct: 80, report_code: 'abc', fight_id: 2, player_name: 'Top' }],
+    talent_builds: [{ key: 'v2:A', pct: 80, report_code: 'abc', fight_id: 2, player_name: 'Top', source_id: 5 }],
     trinkets: { 12: [{ id: 100, name: 'A', icon: 'inv_a', pct: 70 }] },
     enchants: { 15: [{ id: 8041, name: 'Sophic', pct: 90 }] },
     ...overrides,
@@ -22,7 +22,7 @@ function benchWith(overrides: Partial<GearBench> = {}): GearBench {
 describe('benchToStats', () => {
   it('extracts the gear stats block from a bench', () => {
     expect(benchToStats(benchWith())).toEqual({
-      talent_builds: [{ key: 'v2:A', pct: 80, report_code: 'abc', fight_id: 2, player_name: 'Top' }],
+      talent_builds: [{ key: 'v2:A', pct: 80, report_code: 'abc', fight_id: 2, player_name: 'Top', source_id: 5 }],
       trinkets: { 12: [{ id: 100, name: 'A', icon: 'inv_a', pct: 70 }] },
       enchants: { 15: [{ id: 8041, name: 'Sophic', pct: 90 }] },
     });

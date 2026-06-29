@@ -190,7 +190,8 @@ export function aggregateParseGear(parses: ParseGear[]): EncounterGearStats {
   const talent_builds = [...talentCounter.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, MAX_TALENT_BUILDS)
-    .map(([key, count]) => ({ key, pct: pct(count, total), ...(talentExample.get(key) ?? {}) }));
+    // talentExample is set in lockstep with talentCounter, so every counted key has an example.
+    .map(([key, count]) => ({ key, pct: pct(count, total), ...talentExample.get(key)! }));
 
   const trinkets: EncounterGearStats['trinkets'] = {};
   for (const slot of TRINKET_SLOTS) {

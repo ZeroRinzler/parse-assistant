@@ -109,11 +109,9 @@ export function buildTalentBuilds(stats: EncounterGearStats | null, playerKey: s
     pct: b.pct,
     isPlayer: !!playerKey && b.key === playerKey,
     // Deep-link to the example parse: select the fight, the summary tab, and the player
-    // (`source` = their actor id). `source_id` is absent only for gear data ingested before
-    // it was captured; fall back to fight-only until re-ingestion backfills it.
+    // (`source` = their actor id within that report).
     link: b.report_code
-      ? `https://www.warcraftlogs.com/reports/${b.report_code}?fight=${b.fight_id ?? 0}` +
-        (b.source_id != null ? `&type=summary&source=${b.source_id}` : '')
+      ? `https://www.warcraftlogs.com/reports/${b.report_code}?fight=${b.fight_id ?? 0}&type=summary&source=${b.source_id}`
       : null,
     playerName: b.player_name || '',
     label: i === 0 ? 'Most common build' : `Alt build ${i}`,
