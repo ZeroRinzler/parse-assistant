@@ -24,6 +24,41 @@ export interface SignatureRanking {
   fight_id: number;
 }
 
+/** The raw WCL ranking fields the selection reads (structural, no transport coupling). */
+export interface RawSignatureRanking {
+  name?: string;
+  report?: { code?: string; fightID?: number };
+}
+
+// WCL surfaces a privacy-hidden parse in rankings with an anonymized "Character <id>-<id>"
+// name (real names are letters only), so it can never match a report actor and the
+// transforms drop it as unfetchable. The WCL API has no flag to exclude these, so the
+// filter is client-side - and the signature applies the same one so the hash keys on the
+// parses that actually feed the data. Keep in lockstep with the transforms' regex.
+const ANONYMIZED_NAME = /^Character \d+-\d+$/;
+
+/** `report_code:fight_id` key - the unit of the parse-set fingerprint and the inaccessible set. */
+export function parseKey(ranking: SignatureRanking): string {
+  return `${ranking.report_code}:${ranking.fight_id}`;
+}
+
+/**
+ * The candidate parse set the signature draws from - identical to the transforms'
+ * `toParseRankings(raw, count)` selection (drop anonymized + no-code rows, take the top
+ * `count`), minus the unused player field.
+ */
+export function selectSignatureRankings(raw: RawSignatureRanking[], count: number): SignatureRanking[] {
+  return raw
+    .filter(ranking => ranking.report?.code && !ANONYMIZED_NAME.test(ranking.name ?? ''))
+    .slice(0, count)
+    .map(ranking => ({ report_code: ranking.report?.code ?? '', fight_id: ranking.report?.fightID ?? 0 }));
+}
+
+/** The persisted `report_code:fight_id` keys known inaccessible (permission-denied) last run. */
+export function readInaccessibleParses(file: { inaccessible_parses?: string[] } | null | undefined): Set<string> {
+  return new Set(file?.inaccessible_parses ?? []);
+}
+
 /**
  * A stored tailored file carries its producing signature for the skip check, plus the
  * bare ingest version for the work-ordering. `ingest_version` is required: every write
@@ -32,6 +67,10 @@ export interface SignatureRanking {
 export interface SignedFile {
   source_signature?: string;
   ingest_version: number;
+  // Only the canonical burst file carries this: the report_code:fight_id keys found
+  // inaccessible (permission-denied) during the run that produced it, so the next cheap
+  // hash check can exclude them without re-fetching.
+  inaccessible_parses?: string[];
 }
 
 /** Stable `report_code:fight_id` list, sorted, so ranking order never affects the hash. */

@@ -39,6 +39,8 @@ export interface IngestRuntime {
   };
   /** Drop the WCL in-process read cache (call between encounters to bound memory). */
   clearWclCache(): void;
+  /** Return + clear the report codes that hit a permission-denied error since the last call. */
+  takeInaccessibleReportCodes(): string[];
 }
 
 let booted: IngestRuntime | null = null;
@@ -104,6 +106,7 @@ export async function bootstrapIngestRuntime(dataDir: string = DATA_SPECS_DIR): 
       map: env.get(MapT),
     },
     clearWclCache: () => wclTransport.clearCache(),
+    takeInaccessibleReportCodes: () => wclTransport.takeInaccessibleCodes(),
   }));
   return booted;
 }

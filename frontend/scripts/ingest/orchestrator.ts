@@ -37,6 +37,7 @@ import {
 } from './ordering.ts';
 import {
   encounterSignature, readStoredSignature, readStoredVersion, signatureMatches, stampSignature,
+  selectSignatureRankings, parseKey, readInaccessibleParses,
   type SignatureRanking, type SignedFile,
 } from './signature.ts';
 import { logWarn } from '../../src/app/core/log.ts';
@@ -44,6 +45,10 @@ import type { WclRateLimitData, WclResourceEvent, IngestEncounter } from './mode
 import type { EncounterEntry, SpecEntry } from '../../src/app/core/models/encounter.models.ts';
 
 const TOP_N = 10;
+// The signature draws its candidate pool from the same depth the transforms over-fetch to
+// (their CANDIDATE_POOL_COUNT = TOP_PARSE_COUNT * 2), so a parse that backfills a private
+// top parse is part of the skip key.
+const SIGNATURE_POOL_COUNT = TOP_N * 2;
 const POINTS_MARGIN = 500;     // stop cleanly when fewer than this many WCL points remain in the hour
 const SLICE_CONCURRENCY = 3;   // max transforms run concurrently per encounter
 
@@ -98,57 +103,68 @@ class RuntimeWclClient implements WclQueryClient {
   }
 }
 
-/** Rankings reduced to the signature shape (report + fight identity), via getRankings. */
-async function rankingSignatureRows(runtime: IngestRuntime, spec: string, encounterId: number): Promise<SignatureRanking[]> {
+/** The candidate parse pool the signature draws from (anonymized-filtered, top SIGNATURE_POOL_COUNT). */
+async function rankingPool(runtime: IngestRuntime, spec: string, encounterId: number): Promise<SignatureRanking[]> {
   const raw = await runtime.wclApi.getRankings(spec, encounterId);
-  return raw
-    .filter(ranking => ranking.report?.code)
-    .slice(0, TOP_N)
-    .map(ranking => ({ report_code: ranking.report?.code ?? '', fight_id: ranking.report?.fightID ?? 0 }));
+  return selectSignatureRankings(raw, SIGNATURE_POOL_COUNT);
 }
 
-/** Compute every slice for one encounter and write the tailored files, stamped. */
+/**
+ * Compute every slice for one encounter and write the tailored files, stamped. Computes all
+ * five slices first (concurrently, sharing fetches), THEN stamps + writes: the final
+ * signature and the inaccessible-parse set are known only after every transform has fetched,
+ * so any private top parse a transform backfilled past is excluded from the skip key and
+ * persisted on the canonical burst file for the next run's cheap check.
+ */
 async function ingestEncounter(
-  runtime: IngestRuntime, spec: string, encounter: IngestEncounter, signature: string,
+  runtime: IngestRuntime, spec: string, encounter: IngestEncounter, version: string, poolRows: SignatureRanking[],
 ): Promise<boolean> {
   const { dataFile, transforms } = runtime;
   const encId = encounter.id;
   const limit = pLimit(SLICE_CONCURRENCY);
 
-  // Each task computes one slice and writes it; null result -> skip that file.
+  const [burst, rotation, defensive, gear, map] = await Promise.all([
+    limit(() => transforms.burst.getBurstBench(spec, encId)),
+    limit(() => transforms.rotation.getRotationBench(spec, encId)),
+    limit(() => transforms.defensive.getDefensiveBench(spec, encId)),
+    limit(() => transforms.gear.getGearBench(spec, encId)),
+    limit(() => transforms.map.getMapData(spec, encId)),
+  ]);
+
+  // Parses a transform found inaccessible (permission-denied) this run. Key on the top-N
+  // ACCESSIBLE parses so the stamped signature matches the data, and persist the inaccessible
+  // keys so the next hash check can exclude them without re-fetching.
+  const inaccessibleCodes = new Set(runtime.takeInaccessibleReportCodes());
+  const inaccessibleParses = poolRows.filter(row => inaccessibleCodes.has(row.report_code)).map(parseKey);
+  const inaccessibleSet = new Set(inaccessibleParses);
+  const usedRows = poolRows.filter(row => !inaccessibleSet.has(parseKey(row))).slice(0, TOP_N);
+  const signature = encounterSignature(version, usedRows);
+
   let wroteAny = false;
-  const tasks = [
-    limit(async () => {
-      const bench = await transforms.burst.getBurstBench(spec, encId);
-      if (!bench) { console.log(`    [${encounter.name}] burst: no data, skipped`); return; }
-      await dataFile.writeSlice(spec, encId, 'burst', stampSignature(bench, signature, INGEST_VERSION));
-      wroteAny = true;
-    }),
-    limit(async () => {
-      const bench = await transforms.rotation.getRotationBench(spec, encId);
-      if (!bench) { console.log(`    [${encounter.name}] rotation: no data, skipped`); return; }
-      await dataFile.writeSlice(spec, encId, 'rotation', stampSignature(bench, signature, INGEST_VERSION));
-      wroteAny = true;
-    }),
-    limit(async () => {
-      const bench = await transforms.defensive.getDefensiveBench(spec, encId);
-      if (!bench) { console.log(`    [${encounter.name}] defensive: no data, skipped`); return; }
-      await dataFile.writeSlice(spec, encId, 'defensive', stampSignature(bench, signature, INGEST_VERSION));
-      wroteAny = true;
-    }),
-    limit(async () => {
-      const bench = await transforms.gear.getGearBench(spec, encId);
-      if (!bench) { console.log(`    [${encounter.name}] gear: no data, skipped`); return; }
-      await dataFile.writeSlice(spec, encId, 'gear', stampSignature(bench, signature, INGEST_VERSION));
-      wroteAny = true;
-    }),
-    limit(async () => {
-      const map = await transforms.map.getMapData(spec, encId);
-      if (!map) { console.log(`    [${encounter.name}] positions: no data, skipped`); return; }
-      await dataFile.writePositions(spec, encId, stampSignature(map, signature, INGEST_VERSION));
-    }),
-  ];
-  await Promise.all(tasks);
+  const writes: Promise<unknown>[] = [];
+  if (burst) {
+    // Canonical carrier: also persists the inaccessible set the skip check reads.
+    const stamped = { ...stampSignature(burst, signature, INGEST_VERSION), inaccessible_parses: inaccessibleParses };
+    writes.push(dataFile.writeSlice(spec, encId, 'burst', stamped));
+    wroteAny = true;
+  } else { console.log(`    [${encounter.name}] burst: no data, skipped`); }
+  if (rotation) {
+    writes.push(dataFile.writeSlice(spec, encId, 'rotation', stampSignature(rotation, signature, INGEST_VERSION)));
+    wroteAny = true;
+  } else { console.log(`    [${encounter.name}] rotation: no data, skipped`); }
+  if (defensive) {
+    writes.push(dataFile.writeSlice(spec, encId, 'defensive', stampSignature(defensive, signature, INGEST_VERSION)));
+    wroteAny = true;
+  } else { console.log(`    [${encounter.name}] defensive: no data, skipped`); }
+  if (gear) {
+    writes.push(dataFile.writeSlice(spec, encId, 'gear', stampSignature(gear, signature, INGEST_VERSION)));
+    wroteAny = true;
+  } else { console.log(`    [${encounter.name}] gear: no data, skipped`); }
+  if (map) {
+    writes.push(dataFile.writePositions(spec, encId, stampSignature(map, signature, INGEST_VERSION)));
+  } else { console.log(`    [${encounter.name}] positions: no data, skipped`); }
+
+  await Promise.all(writes);
   return wroteAny;
 }
 
@@ -246,15 +262,18 @@ async function ingestSpec(
     for (const encounter of orderEncountersByMissingFirst(encounters, presentIds)) {
       await client.assertBudget(POINTS_MARGIN);
 
-      const rankings = await rankingSignatureRows(runtime, spec, encounter.id);
-      if (!rankings.length) {
+      const poolRows = await rankingPool(runtime, spec, encounter.id);
+      if (!poolRows.length) {
         console.log(`  [${encounter.name}] no rankings, skipped`);
         continue;
       }
-      const signature = encounterSignature(version, rankings);
 
-      // Skip check: compare against the signature stamped on the existing burst file.
-      const existing = await runtime.dataFile.getSlice<{ source_signature?: string }>(spec, encounter.id, 'burst');
+      // Skip check: key on the top-N ACCESSIBLE parses - exclude the ones a prior run found
+      // inaccessible (persisted on the burst file) - and compare against its stamped signature.
+      const existing = await runtime.dataFile.getSlice<SignedFile>(spec, encounter.id, 'burst');
+      const known = readInaccessibleParses(existing);
+      const usedRows = poolRows.filter(row => !known.has(parseKey(row))).slice(0, TOP_N);
+      const signature = encounterSignature(version, usedRows);
       if (signatureMatches(readStoredSignature(existing), signature)) {
         console.log(`  [${encounter.name}] unchanged (signature ${signature}), skipped`);
         continue;
@@ -262,7 +281,7 @@ async function ingestSpec(
 
       console.log(`  [${encounter.name}] computing slices (signature ${signature})...`);
       try {
-        const wrote = await ingestEncounter(runtime, spec, encounter, signature);
+        const wrote = await ingestEncounter(runtime, spec, encounter, version, poolRows);
         console.log(`  [${encounter.name}] ${wrote ? 'done' : 'no slice data produced'}`);
       } finally {
         // Drop this encounter's cached reports/events before the next one (bound memory;

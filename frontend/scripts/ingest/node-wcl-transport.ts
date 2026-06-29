@@ -14,10 +14,23 @@ interface GraphQLResponse<TData> { data?: TData; errors?: Array<{ message: strin
 
 export class FetchWclTransport implements WclTransport {
   private readonly cache = new Map<string, Promise<unknown>>();
+  // Report codes that returned a "no permission" GraphQL error this run. A private/
+  // inaccessible log is only knowable by fetching it, so we record it here when the fetch
+  // reveals it; the orchestrator persists the set so later cheap hash checks can exclude
+  // these logs without re-fetching. Only deterministic permission denials land here -
+  // never transient network/HTTP errors (which must not stick a usable log as inaccessible).
+  private readonly inaccessibleCodes = new Set<string>();
 
   /** Drop the in-process read cache (called between encounters to bound memory). */
   clearCache(): void {
     this.cache.clear();
+  }
+
+  /** Return + clear the report codes that hit a permission-denied error since the last call. */
+  takeInaccessibleCodes(): string[] {
+    const codes = [...this.inaccessibleCodes];
+    this.inaccessibleCodes.clear();
+    return codes;
   }
 
   async query<TData>(gqlString: string, variables: object, token: string, cacheFirst: boolean): Promise<TData> {
@@ -47,7 +60,11 @@ export class FetchWclTransport implements WclTransport {
     }
     const body = await response.json() as GraphQLResponse<TData>;
     if (body.errors?.length) {
-      throw new WclTransportError(body.errors[0]?.message || 'WCL GraphQL error', 0);
+      const message = body.errors[0]?.message || 'WCL GraphQL error';
+      // A "no permission to view this report" rejection marks the report as inaccessible.
+      const code = (variables as { code?: string }).code;
+      if (code && /permission/i.test(message)) this.inaccessibleCodes.add(code);
+      throw new WclTransportError(message, 0);
     }
     if (body.data === undefined) {
       throw new WclTransportError('WCL response had no data', 0);
