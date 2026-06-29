@@ -21,7 +21,7 @@ import { WclApiService } from '../../../core/services/wcl-api';
 import { AnalysisFinding } from '../../../core/models/analysis.models';
 import { PerCdBenchmark, UsesPerMin } from '../../../core/models/encounter.models';
 import {
-  RulebookCooldown, RulebookRule,
+  RulebookCooldown, RulebookRule, RuleCondition,
   CastWithoutPriorCondition, HoldCooldownForAnchorCondition,
 } from '../../../core/models/rulebook.models';
 import { WclEvent } from '../../../core/models/wcl.models';
@@ -74,6 +74,8 @@ export interface CdPlanRow {
 /** Post-raid rotation view-model. */
 export interface RotationPlayerView {
   ruleRows: RotationFindingRow[];
+  /** Labels of rotation rules the player followed cleanly this fight. */
+  ruleOnPlan: string[];
   offensiveRows: RotationFindingRow[];
   onPlan: RotationOnPlanChip[];
 }
@@ -213,6 +215,34 @@ export function evaluateRules(rules: RulebookRule[], casts: WclEvent[], fStart: 
     if (finding) findings.push(finding);
   }
   return findings;
+}
+
+/** Positive on-plan label for a rule: its description, else a phrasing of the condition. */
+export function ruleLabel(cond: RuleCondition, description?: string): string {
+  if (description) return description;
+  return cond.kind === 'cast_without_prior'
+    ? `${cond.spell_name} with ${cond.required_spell_name}`
+    : `${cond.spell_names.join('/')} held for ${cond.anchor_spell_name}`;
+}
+
+/** Labels of rules the player exercised this fight and followed cleanly (no violation). */
+export function rulesFollowed(rules: RulebookRule[], casts: WclEvent[], fStart: number): string[] {
+  const castTimes = buildCastTimes(casts, fStart);
+  const followed: string[] = [];
+  for (const rule of rules) {
+    const cond = rule.condition;
+    if (!cond) continue;
+    const severity: Severity = rule.priority === 'critical' ? 'critical' : 'warning';
+    if (cond.kind === 'cast_without_prior') {
+      const applicable = (castTimes[cond.spell_id]?.length ?? 0) > 0;
+      if (applicable && !evaluateCastWithoutPrior(cond, castTimes, severity)) followed.push(ruleLabel(cond, rule.description));
+    } else if (cond.kind === 'hold_cooldown_for_anchor') {
+      const applicable = (castTimes[cond.anchor_spell_id]?.length ?? 0) > 1
+        && cond.spell_ids.some(spellId => (castTimes[spellId]?.length ?? 0) > 0);
+      if (applicable && !evaluateHoldForAnchor(cond, castTimes, severity)) followed.push(ruleLabel(cond, rule.description));
+    }
+  }
+  return followed;
 }
 
 /* ----------------------------- offensive cooldown analysis (ported) ----------------------------- */
@@ -493,7 +523,7 @@ export class RotationFeatureService {
   async loadPlayerView(
     spec: string, encounterId: number, reportCode: string, fightId: number, playerId: number,
   ): Promise<RotationPlayerView> {
-    const empty: RotationPlayerView = { ruleRows: [], offensiveRows: [], onPlan: [] };
+    const empty: RotationPlayerView = { ruleRows: [], ruleOnPlan: [], offensiveRows: [], onPlan: [] };
     const bench = await this.source.getRotationBench(spec, encounterId);
     if (!bench) return empty;
 
@@ -511,7 +541,8 @@ export class RotationFeatureService {
         fight.startTime, fight.endTime, casts, buffs, bench.major_cooldowns, bench.rules, bench,
       );
       const { ruleRows, offensiveRows, onPlan } = bucketRotationFindings(findings, bench.cd_spell_ids, bench.ability_icons);
-      return { ruleRows, offensiveRows, onPlan };
+      const ruleOnPlan = rulesFollowed(bench.rules, casts, fight.startTime);
+      return { ruleRows, ruleOnPlan, offensiveRows, onPlan };
     } catch (err) {
       logWarn(`RotationFeatureService.loadPlayerView ${reportCode}:${fightId}`, err);
       return empty;

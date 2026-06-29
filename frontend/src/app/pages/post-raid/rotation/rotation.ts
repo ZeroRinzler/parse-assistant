@@ -36,6 +36,7 @@ export class RotationComponent {
   readonly busyChange = output<boolean>();
 
   protected readonly ruleRows = signal<RotationFindingRow[]>([]);
+  protected readonly ruleOnPlan = signal<string[]>([]);
   protected readonly offensiveRows = signal<RotationFindingRow[]>([]);
   protected readonly onPlan = signal<RotationOnPlanChip[]>([]);
 
@@ -54,6 +55,7 @@ export class RotationComponent {
         .then(view => {
           if (token !== this.loadToken) return;
           this.ruleRows.set(view.ruleRows);
+          this.ruleOnPlan.set(view.ruleOnPlan);
           this.offensiveRows.set(view.offensiveRows);
           this.onPlan.set(view.onPlan);
         })
