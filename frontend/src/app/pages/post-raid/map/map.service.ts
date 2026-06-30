@@ -200,7 +200,7 @@ export class MapFeatureService {
    * initial post-raid load). Clears any stale live overlay.
    */
   async loadBench(spec: string, encounterId: number): Promise<MapData | null> {
-    const data = await this.source.getMapData(spec, encounterId);
+    const data = await this.source.getBench(spec, encounterId);
     this.positions.set(data);
     this.live.set(null);
     return data;

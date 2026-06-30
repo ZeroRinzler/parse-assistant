@@ -4,7 +4,8 @@ import { WclApiService } from '../../../core/services/wcl-api';
 import { WclEvent } from '../../../core/models/wcl.models';
 import { BurstWindow, PlayerBurstWindow, PlayerDefensive } from '../../../core/models/analysis.models';
 import { PerDefensiveBenchmark } from '../../../core/models/encounter.models';
-import { DEFENSIVE_DATA_SOURCE, DefensiveBench, DefensiveDataSource } from './defensive-data-source';
+import { DEFENSIVE_DATA_SOURCE, DefensiveBench } from './defensive-data-source';
+import { DataSource } from '../../../core/data-source/data-source';
 import {
   DefensiveFeatureService,
   analyzeDefensives, analyzeDefensiveFindings, computePlayerDefensiveWindows,
@@ -414,7 +415,7 @@ function fullBench(): DefensiveBench {
 }
 
 function serviceWith(bench: DefensiveBench | null, wcl: Record<string, unknown> = {}): DefensiveFeatureService {
-  const source: DefensiveDataSource = { getDefensiveBench: () => Promise.resolve(bench) };
+  const source: DataSource<DefensiveBench> = { getBench: () => Promise.resolve(bench) };
   TestBed.configureTestingModule({
     providers: [
       { provide: DEFENSIVE_DATA_SOURCE, useValue: source },

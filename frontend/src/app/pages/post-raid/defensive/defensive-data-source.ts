@@ -1,4 +1,5 @@
 import { InjectionToken } from '@angular/core';
+import { DataSource } from '../../../core/data-source/data-source';
 import { BurstWindow, TopDefensiveSummary } from '../../../core/models/analysis.models';
 import { PerDefensiveBenchmark } from '../../../core/models/encounter.models';
 
@@ -44,12 +45,9 @@ export interface DefensiveBench {
 }
 
 /**
- * A source of defensive bench data: the production file reader (`DefensiveDataFileService`)
- * or the dev-flag live transform (`DefensiveTransformService`). The two implement the
- * same contract and are swapped by `provideDataSource` per `environment.useLiveTransform`.
+ * The defensive slice's data-source token. `provideDataSource` binds it to a
+ * `FileDataSource<DefensiveBench>` (production: reads the tailored file) or
+ * `DefensiveTransformService` (the dev `useLiveTransform` flag / ingestion: computes it
+ * live) - both `DataSource<DefensiveBench>`.
  */
-export interface DefensiveDataSource {
-  getDefensiveBench(spec: string, encounterId: number): Promise<DefensiveBench | null>;
-}
-
-export const DEFENSIVE_DATA_SOURCE = new InjectionToken<DefensiveDataSource>('DEFENSIVE_DATA_SOURCE');
+export const DEFENSIVE_DATA_SOURCE = new InjectionToken<DataSource<DefensiveBench>>('DEFENSIVE_DATA_SOURCE');

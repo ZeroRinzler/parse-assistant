@@ -1,5 +1,5 @@
 /**
- * Dev-flag `MapDataSource`: computes the top-parse position bench live in the
+ * Live `DataSource<MapData>`: computes the top-parse position bench live in the
  * browser (no ingestion). Self-contained per the slice rule - it imports ONLY the
  * two API services + models + `logWarn`, and reimplements its own position math
  * below (it does NOT reference the ingest analysis under `scripts/ingest`). Bound
@@ -25,7 +25,8 @@ import { DataFileApiService } from '../../../core/services/data-file-api';
 import { WclEvent, WclFight, ParseRanking, WclRawRanking } from '../../../core/models/wcl.models';
 import { ParsePositions, PosRow } from '../../../core/models/positioning.models';
 import { logWarn } from '../../../core/log';
-import { MapData, MapDataSource } from './map-data-source';
+import { DataSource } from '../../../core/data-source/data-source';
+import { MapData } from './map-data-source';
 
 /** How many top parses to sample (matches the ingest bench). */
 const TOP_PARSE_COUNT = 10;
@@ -218,11 +219,11 @@ export function buildParsePositions(input: ParsePositionInput): ParsePositions {
 /* ----------------------------- service shell ----------------------------- */
 
 @Injectable({ providedIn: 'root' })
-export class MapTransformService implements MapDataSource {
+export class MapTransformService implements DataSource<MapData> {
   private readonly wclApi = inject(WclApiService);
   private readonly dataFiles = inject(DataFileApiService);
 
-  async getMapData(spec: string, encounterId: number): Promise<MapData | null> {
+  async getBench(spec: string, encounterId: number): Promise<MapData | null> {
     const rankings = toParseRankings(await this.wclApi.getRankings(spec, encounterId), CANDIDATE_POOL_COUNT);
     if (!rankings.length) return null;
 

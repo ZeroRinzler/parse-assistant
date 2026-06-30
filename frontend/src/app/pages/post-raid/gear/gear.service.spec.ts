@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { CharacterGear, WclCombatantInfo, WclGearItem } from '../../../core/models/wcl.models';
 import { WclApiService } from '../../../core/services/wcl-api';
-import { GEAR_DATA_SOURCE, GearBench, GearDataSource } from './gear-data-source';
+import { GEAR_DATA_SOURCE, GearBench } from './gear-data-source';
+import { DataSource } from '../../../core/data-source/data-source';
 import {
   GearFeatureService, benchToStats, buildGearView, emptyGearView,
 } from './gear.service';
@@ -98,7 +99,7 @@ function toRawEvent(gear: CharacterGear): WclCombatantInfo {
 }
 
 function configure(bench: GearBench | null, gear: CharacterGear | null): GearFeatureService {
-  const source: GearDataSource = { getGearBench: () => Promise.resolve(bench) };
+  const source: DataSource<GearBench> = { getBench: () => Promise.resolve(bench) };
   const wclFake = {
     getCombatantInfo: async (): Promise<WclCombatantInfo | null> => (gear?.found ? toRawEvent(gear) : null),
     getGameNames: async () => ({}),

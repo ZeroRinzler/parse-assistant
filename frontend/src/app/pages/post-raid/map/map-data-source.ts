@@ -1,4 +1,5 @@
 import { InjectionToken } from '@angular/core';
+import { DataSource } from '../../../core/data-source/data-source';
 import { EncounterPositions } from '../../../core/models/positioning.models';
 
 /**
@@ -14,13 +15,9 @@ import { EncounterPositions } from '../../../core/models/positioning.models';
 export type MapData = EncounterPositions;
 
 /**
- * A source of map position data: the production file reader (`MapDataFileService`)
- * or the dev-flag live transform (`MapTransformService`). The two implement the
- * same contract and are swapped by `provideDataSource` per
- * `environment.useLiveTransform`.
+ * The map slice's data-source token. `provideDataSource` binds it to a
+ * `FileDataSource<MapData>` for the `positions` file (production) or `MapTransformService`
+ * (the dev `useLiveTransform` flag / ingestion: computes it live) - both
+ * `DataSource<MapData>`.
  */
-export interface MapDataSource {
-  getMapData(spec: string, encounterId: number): Promise<MapData | null>;
-}
-
-export const MAP_DATA_SOURCE = new InjectionToken<MapDataSource>('MAP_DATA_SOURCE');
+export const MAP_DATA_SOURCE = new InjectionToken<DataSource<MapData>>('MAP_DATA_SOURCE');

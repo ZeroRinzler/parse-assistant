@@ -90,6 +90,39 @@ export function encounterSignature(version: string, rankings: SignatureRanking[]
     .slice(0, 16);
 }
 
+/**
+ * The encounter's skip key: the signature over the top-`topN` ACCESSIBLE parses (the
+ * candidate pool minus the parses already known inaccessible). This is the one rule both
+ * the cheap pre-check and the post-fetch stamp key on, so they can never diverge.
+ *
+ * `inaccessible` is a set of `report_code:fight_id` keys (see `parseKey`) - the persisted
+ * set on the cheap check, the freshly discovered one after a fetch.
+ */
+export function encounterSkipKey(
+  poolRows: SignatureRanking[], inaccessible: Set<string>, version: string, topN: number,
+): string {
+  const usedRows = poolRows.filter(row => !inaccessible.has(parseKey(row))).slice(0, topN);
+  return encounterSignature(version, usedRows);
+}
+
+/**
+ * The post-fetch stamp decision: given the report codes a run found inaccessible
+ * (permission-denied), derive both the inaccessible parse keys to persist on the burst
+ * file AND the signature to stamp (keyed on the top-`topN` accessible parses). Parses
+ * never fetched - those below the `topN`th accessible - are naturally pruned, since only
+ * the codes the transforms actually hit are reported inaccessible.
+ *
+ * `inaccessibleCodes` is a set of bare report codes (what the transport reports), distinct
+ * from `encounterSkipKey`'s set of `report_code:fight_id` keys - the conversion happens here.
+ */
+export function signatureAfterFetch(
+  poolRows: SignatureRanking[], inaccessibleCodes: Set<string>, version: string, topN: number,
+): { signature: string; inaccessibleParses: string[] } {
+  const inaccessibleParses = poolRows.filter(row => inaccessibleCodes.has(row.report_code)).map(parseKey);
+  const signature = encounterSkipKey(poolRows, new Set(inaccessibleParses), version, topN);
+  return { signature, inaccessibleParses };
+}
+
 /** Read the `source_signature` stamped on an existing tailored file (null when absent). */
 export function readStoredSignature(file: { source_signature?: string } | null | undefined): string | null {
   return file?.source_signature ?? null;

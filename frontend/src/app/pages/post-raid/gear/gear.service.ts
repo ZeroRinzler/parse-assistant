@@ -156,7 +156,7 @@ export class GearFeatureService {
     spec: string, encounterId: number,
     reportCode: string, fightId: number, playerId: number,
   ): Promise<GearComparisonView> {
-    const bench = await this.source.getGearBench(spec, encounterId);
+    const bench = await this.source.getBench(spec, encounterId);
     const stats = benchToStats(bench);
     const playerGear = await this.fetchPlayerGear(reportCode, fightId, playerId, spec);
     if (!stats && !playerGear) return emptyGearView();
@@ -165,7 +165,7 @@ export class GearFeatureService {
 
   /** Pre-fight: bench-only consensus (no player log). */
   async loadBenchView(spec: string, encounterId: number): Promise<GearComparisonView> {
-    const bench = await this.source.getGearBench(spec, encounterId);
+    const bench = await this.source.getBench(spec, encounterId);
     const stats = benchToStats(bench);
     if (!stats) return emptyGearView();
     return buildGearView(null, stats);

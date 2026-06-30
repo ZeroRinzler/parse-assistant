@@ -1,4 +1,5 @@
 import { InjectionToken } from '@angular/core';
+import { DataSource } from '../../../core/data-source/data-source';
 import { BurstWindow } from '../../../core/models/analysis.models';
 
 /**
@@ -23,12 +24,9 @@ export interface BurstBench {
 }
 
 /**
- * A source of burst bench data: the production file reader (`BurstDataFileService`)
- * or the dev-flag live transform (`BurstTransformService`). The two implement the
- * same contract and are swapped by `provideDataSource` per `environment.useLiveTransform`.
+ * The burst slice's data-source token. `provideDataSource` binds it to a
+ * `FileDataSource<BurstBench>` (production: reads the tailored file) or
+ * `BurstTransformService` (the dev `useLiveTransform` flag / ingestion: computes it live)
+ * - both `DataSource<BurstBench>`.
  */
-export interface BurstDataSource {
-  getBurstBench(spec: string, encounterId: number): Promise<BurstBench | null>;
-}
-
-export const BURST_DATA_SOURCE = new InjectionToken<BurstDataSource>('BURST_DATA_SOURCE');
+export const BURST_DATA_SOURCE = new InjectionToken<DataSource<BurstBench>>('BURST_DATA_SOURCE');

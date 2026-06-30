@@ -1,5 +1,5 @@
 /**
- * Dev-flag `BurstDataSource`: computes the burst bench live in the browser (no
+ * Live `DataSource<BurstBench>`: computes the burst bench live in the browser (no
  * ingestion). Self-contained per the slice rule - it imports ONLY the two API
  * services + models + `logWarn`, and reimplements its own burst math below (it does
  * NOT reference the ingest analysis). Bound by `environment.useLiveTransform`.
@@ -20,7 +20,8 @@ import { BurstWindow } from '../../../core/models/analysis.models';
 import { logWarn } from '../../../core/log';
 import { mean, median, deviation, quantile } from 'd3-array';
 import { round, groupByTime } from '../../../shared/analysis/analysis-math';
-import { BurstBench, BurstDataSource } from './burst-data-source';
+import { DataSource } from '../../../core/data-source/data-source';
+import { BurstBench } from './burst-data-source';
 
 /** How many top parses to sample (matches the ingest bench). */
 const TOP_PARSE_COUNT = 10;
@@ -361,11 +362,11 @@ export function clusterParseWindows(windows: ParseWindow[], sampleCount: number,
 /* ----------------------------- service shell ----------------------------- */
 
 @Injectable({ providedIn: 'root' })
-export class BurstTransformService implements BurstDataSource {
+export class BurstTransformService implements DataSource<BurstBench> {
   private readonly wclApi = inject(WclApiService);
   private readonly dataFiles = inject(DataFileApiService);
 
-  async getBurstBench(spec: string, encounterId: number): Promise<BurstBench | null> {
+  async getBench(spec: string, encounterId: number): Promise<BurstBench | null> {
     const rulebook = await this.dataFiles.getRulebook(spec);
     const cooldowns = rulebook?.major_cooldowns ?? [];
     if (!cooldowns.length) return null;

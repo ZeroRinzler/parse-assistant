@@ -1,5 +1,5 @@
 /**
- * Dev-flag `GearDataSource`: computes the gear bench live in the browser (no
+ * Live `DataSource<GearBench>`: computes the gear bench live in the browser (no
  * ingestion). Self-contained per the slice rule - it imports ONLY the two API
  * services + models + `logWarn`, and reimplements its own aggregation math below
  * (it does NOT reference the ingest analysis). Bound by `environment.useLiveTransform`.
@@ -15,7 +15,8 @@ import { CharacterGear, ParseRanking, WclRawRanking } from '../../../core/models
 import { EncounterGearStats } from '../../../core/models/encounter.models';
 import { logWarn } from '../../../core/log';
 import { TRINKET_SLOTS, decodeHtmlEntities, extractGear } from './gear-extract';
-import { GearBench, GearDataSource } from './gear-data-source';
+import { DataSource } from '../../../core/data-source/data-source';
+import { GearBench } from './gear-data-source';
 
 // Re-exported from the slice-local projection module so existing call sites /
 // specs that import these from the transform service keep working.
@@ -211,10 +212,10 @@ export function aggregateParseGear(parses: ParseGear[]): EncounterGearStats {
 /* ----------------------------- service shell ----------------------------- */
 
 @Injectable({ providedIn: 'root' })
-export class GearTransformService implements GearDataSource {
+export class GearTransformService implements DataSource<GearBench> {
   private readonly wclApi = inject(WclApiService);
 
-  async getGearBench(spec: string, encounterId: number): Promise<GearBench | null> {
+  async getBench(spec: string, encounterId: number): Promise<GearBench | null> {
     const rankings = toParseRankings(await this.wclApi.getRankings(spec, encounterId), CANDIDATE_POOL_COUNT);
     if (!rankings.length) return null;
 

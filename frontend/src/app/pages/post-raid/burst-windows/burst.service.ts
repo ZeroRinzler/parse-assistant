@@ -225,7 +225,7 @@ export class BurstFeatureService {
   async loadPlayerView(
     spec: string, encounterId: number, reportCode: string, fightId: number, playerId: number,
   ): Promise<BurstView> {
-    const bench = await this.source.getBurstBench(spec, encounterId);
+    const bench = await this.source.getBench(spec, encounterId);
     if (!bench) return { windows: [], anchors: [] };
 
     try {
@@ -252,7 +252,7 @@ export class BurstFeatureService {
 
   /** Pre-fight: the top-parse burst windows with no player overlay (informational). */
   async loadBenchView(spec: string, encounterId: number): Promise<BurstView> {
-    const bench = await this.source.getBurstBench(spec, encounterId);
+    const bench = await this.source.getBench(spec, encounterId);
     if (!bench) return { windows: [], anchors: [] };
     return buildBurstView(bench.windows, [], Number.POSITIVE_INFINITY, bench.cd_spell_ids, bench.ability_icons, true);
   }

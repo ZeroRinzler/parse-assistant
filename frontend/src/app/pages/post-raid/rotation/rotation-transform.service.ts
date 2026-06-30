@@ -1,5 +1,5 @@
 /**
- * Dev-flag `RotationDataSource`: computes the rotation bench live in the browser
+ * Live `DataSource<RotationBench>`: computes the rotation bench live in the browser
  * (no ingestion). Self-contained per the slice rule - it imports ONLY the two API
  * services + models + `logWarn`, and reimplements its own per-cooldown statistics
  * below (it does NOT reference the ingest analysis). Bound by
@@ -18,7 +18,8 @@ import { PerCdBenchmark, UsesPerMin, HoldTargets } from '../../../core/models/en
 import { logWarn } from '../../../core/log';
 import { mean, median, deviation, quantile } from 'd3-array';
 import { round } from '../../../shared/analysis/analysis-math';
-import { RotationBench, RotationDataSource } from './rotation-data-source';
+import { DataSource } from '../../../core/data-source/data-source';
+import { RotationBench } from './rotation-data-source';
 
 /** How many top parses to sample (matches the ingest bench). */
 const TOP_PARSE_COUNT = 10;
@@ -301,11 +302,11 @@ interface ParseRotation {
 }
 
 @Injectable({ providedIn: 'root' })
-export class RotationTransformService implements RotationDataSource {
+export class RotationTransformService implements DataSource<RotationBench> {
   private readonly wclApi = inject(WclApiService);
   private readonly dataFiles = inject(DataFileApiService);
 
-  async getRotationBench(spec: string, encounterId: number): Promise<RotationBench | null> {
+  async getBench(spec: string, encounterId: number): Promise<RotationBench | null> {
     const rulebook = await this.dataFiles.getRulebook(spec);
     const cooldowns = rulebook?.major_cooldowns ?? [];
     if (!cooldowns.length) return null;

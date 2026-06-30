@@ -1,8 +1,8 @@
 /**
  * Production environment (default).
  *
- * `useLiveTransform: false` binds every `*_DATA_SOURCE` token to its
- * `*DataFileService` (reads the ingested, tailored static file). The dev override
+ * `useLiveTransform: false` binds every `*_DATA_SOURCE` token to a generic
+ * `FileDataSource` (reads the ingested, tailored static file). The dev override
  * lives in `environment.development.ts` and is swapped in by the `development`
  * build configuration's `fileReplacements` (see angular.json).
  */

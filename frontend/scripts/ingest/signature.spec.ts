@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  encounterSignature, readStoredSignature, readStoredVersion, signatureMatches, stampSignature,
-  selectSignatureRankings, parseKey, readInaccessibleParses,
+  encounterSignature, encounterSkipKey, signatureAfterFetch, readStoredSignature, readStoredVersion,
+  signatureMatches, stampSignature, selectSignatureRankings, parseKey, readInaccessibleParses,
   type SignatureRanking, type RawSignatureRanking,
 } from './signature.ts';
 
@@ -82,26 +82,24 @@ describe('readInaccessibleParses', () => {
 
 describe('inaccessible-aware skip key', () => {
   // Each parse has a STABLE identity (report_code:fight_id) independent of its rank, so a
-  // parse keeps its key when it moves position - the helpers below model that, then mimic
-  // the two halves of the orchestrator: the cheap skip check and the post-fetch stamp.
+  // parse keeps its key when it moves position. The cases below drive the PRODUCTION
+  // encounterSkipKey / signatureAfterFetch through thin fixture shims (array -> Set, fixed
+  // version) - the two halves of the orchestrator: the cheap skip check and the post-fetch stamp.
   const P = (report_code: string): SignatureRanking => ({ report_code, fight_id: 1 });
   const pool = (...codes: string[]): SignatureRanking[] => codes.map(P);
   const sig = (rows: SignatureRanking[]): string => encounterSignature('1', rows);
 
   // Skip check (orchestrator loop): key on the top-N accessible parses (pool minus the
   // persisted known-inaccessible keys).
-  const skipKey = (rows: SignatureRanking[], knownInaccessible: string[], n = 10): string => {
-    const known = new Set(knownInaccessible);
-    return sig(rows.filter(row => !known.has(parseKey(row))).slice(0, n));
-  };
+  const skipKey = (rows: SignatureRanking[], knownInaccessible: string[], n = 10): string =>
+    encounterSkipKey(rows, new Set(knownInaccessible), '1', n);
 
   // Post-fetch stamp (ingestEncounter): given the report codes the fetch found inaccessible,
   // return the stamped signature + the inaccessible key set persisted on the burst file.
   // Codes never fetched (e.g. a parse below the 10th accessible) are naturally pruned.
   const stampAfterCompute = (rows: SignatureRanking[], inaccessibleCodes: string[], n = 10) => {
-    const codes = new Set(inaccessibleCodes);
-    const inaccessible_parses = rows.filter(row => codes.has(row.report_code)).map(parseKey);
-    return { signature: skipKey(rows, inaccessible_parses, n), inaccessible_parses };
+    const { signature, inaccessibleParses } = signatureAfterFetch(rows, new Set(inaccessibleCodes), '1', n);
+    return { signature, inaccessible_parses: inaccessibleParses };
   };
 
   it('is unchanged when only the tail past the top-N accessible churns', () => {
@@ -182,6 +180,52 @@ describe('inaccessible-aware skip key', () => {
     const rows = pool('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j');
     const stampN = stampAfterCompute(rows, []);
     expect(skipKey(rows, stampN.inaccessible_parses)).toBe(stampN.signature);
+  });
+});
+
+describe('encounterSkipKey', () => {
+  const P = (report_code: string): SignatureRanking => ({ report_code, fight_id: 1 });
+  const pool = (...codes: string[]): SignatureRanking[] => codes.map(P);
+  const VERSION = '1';
+  const TOP_N = 3; // small N so the cases read as documentation, not a wall of fixtures
+
+  it('with no inaccessible parses, equals the signature over the top-N pool', () => {
+    const rows = pool('a', 'b', 'c', 'd');
+    expect(encounterSkipKey(rows, new Set(), VERSION, TOP_N))
+      .toBe(encounterSignature(VERSION, pool('a', 'b', 'c')));
+  });
+
+  it('excludes inaccessible keys before taking the top-N', () => {
+    // b inaccessible -> the top-3 accessible parses are a, c, d
+    expect(encounterSkipKey(pool('a', 'b', 'c', 'd'), new Set(['b:1']), VERSION, TOP_N))
+      .toBe(encounterSignature(VERSION, pool('a', 'c', 'd')));
+  });
+
+  it('ignores a parse past the top-N accessible (strict slice boundary)', () => {
+    const topN = encounterSkipKey(pool('a', 'b', 'c'), new Set(), VERSION, TOP_N);
+    // a 4th parse beyond the top-3 must not change the key
+    expect(encounterSkipKey(pool('a', 'b', 'c', 'd'), new Set(), VERSION, TOP_N)).toBe(topN);
+  });
+});
+
+describe('signatureAfterFetch', () => {
+  const P = (report_code: string): SignatureRanking => ({ report_code, fight_id: 1 });
+  const pool = (...codes: string[]): SignatureRanking[] => codes.map(P);
+  const VERSION = '1';
+  const TOP_N = 3;
+
+  it('maps inaccessible report codes to parse keys and signs the accessible top-N', () => {
+    const rows = pool('a', 'b', 'c', 'd');
+    const result = signatureAfterFetch(rows, new Set(['b']), VERSION, TOP_N);
+    expect(result.inaccessibleParses).toEqual(['b:1']);
+    expect(result.signature).toBe(encounterSkipKey(rows, new Set(['b:1']), VERSION, TOP_N));
+  });
+
+  it('returns no inaccessible parses when no code matches the pool', () => {
+    const rows = pool('a', 'b', 'c');
+    const result = signatureAfterFetch(rows, new Set(['zzz']), VERSION, TOP_N);
+    expect(result.inaccessibleParses).toEqual([]);
+    expect(result.signature).toBe(encounterSignature(VERSION, pool('a', 'b', 'c')));
   });
 });
 

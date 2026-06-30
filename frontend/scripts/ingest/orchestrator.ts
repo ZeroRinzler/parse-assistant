@@ -36,8 +36,8 @@ import {
   orderSpecsByVersionThenTime, orderEncountersByMissingFirst, type SpecOrderEntry,
 } from './ordering.ts';
 import {
-  encounterSignature, readStoredSignature, readStoredVersion, signatureMatches, stampSignature,
-  selectSignatureRankings, parseKey, readInaccessibleParses,
+  encounterSkipKey, signatureAfterFetch, readStoredSignature, readStoredVersion, signatureMatches,
+  stampSignature, selectSignatureRankings, readInaccessibleParses,
   type SignatureRanking, type SignedFile,
 } from './signature.ts';
 import { logWarn } from '../../src/app/core/log.ts';
@@ -124,21 +124,18 @@ async function ingestEncounter(
   const limit = pLimit(SLICE_CONCURRENCY);
 
   const [burst, rotation, defensive, gear, map] = await Promise.all([
-    limit(() => transforms.burst.getBurstBench(spec, encId)),
-    limit(() => transforms.rotation.getRotationBench(spec, encId)),
-    limit(() => transforms.defensive.getDefensiveBench(spec, encId)),
-    limit(() => transforms.gear.getGearBench(spec, encId)),
-    limit(() => transforms.map.getMapData(spec, encId)),
+    limit(() => transforms.burst.getBench(spec, encId)),
+    limit(() => transforms.rotation.getBench(spec, encId)),
+    limit(() => transforms.defensive.getBench(spec, encId)),
+    limit(() => transforms.gear.getBench(spec, encId)),
+    limit(() => transforms.map.getBench(spec, encId)),
   ]);
 
-  // Parses a transform found inaccessible (permission-denied) this run. Key on the top-N
-  // ACCESSIBLE parses so the stamped signature matches the data, and persist the inaccessible
-  // keys so the next hash check can exclude them without re-fetching.
+  // Parses a transform found inaccessible (permission-denied) this run. signatureAfterFetch
+  // keys the stamp on the top-N ACCESSIBLE parses and returns the inaccessible keys to persist,
+  // so the next cheap hash check can exclude them without re-fetching.
   const inaccessibleCodes = new Set(runtime.takeInaccessibleReportCodes());
-  const inaccessibleParses = poolRows.filter(row => inaccessibleCodes.has(row.report_code)).map(parseKey);
-  const inaccessibleSet = new Set(inaccessibleParses);
-  const usedRows = poolRows.filter(row => !inaccessibleSet.has(parseKey(row))).slice(0, TOP_N);
-  const signature = encounterSignature(version, usedRows);
+  const { signature, inaccessibleParses } = signatureAfterFetch(poolRows, inaccessibleCodes, version, TOP_N);
 
   let wroteAny = false;
   const writes: Promise<unknown>[] = [];
@@ -271,15 +268,13 @@ async function ingestSpec(
       // Skip check: key on the top-N ACCESSIBLE parses - exclude the ones a prior run found
       // inaccessible (persisted on the burst file) - and compare against its stamped signature.
       const existing = await runtime.dataFile.getSlice<SignedFile>(spec, encounter.id, 'burst');
-      const known = readInaccessibleParses(existing);
-      const usedRows = poolRows.filter(row => !known.has(parseKey(row))).slice(0, TOP_N);
-      const signature = encounterSignature(version, usedRows);
-      if (signatureMatches(readStoredSignature(existing), signature)) {
-        console.log(`  [${encounter.name}] unchanged (signature ${signature}), skipped`);
+      const skipKey = encounterSkipKey(poolRows, readInaccessibleParses(existing), version, TOP_N);
+      if (signatureMatches(readStoredSignature(existing), skipKey)) {
+        console.log(`  [${encounter.name}] unchanged (signature ${skipKey}), skipped`);
         continue;
       }
 
-      console.log(`  [${encounter.name}] computing slices (signature ${signature})...`);
+      console.log(`  [${encounter.name}] computing slices (signature ${skipKey})...`);
       try {
         const wrote = await ingestEncounter(runtime, spec, encounter, version, poolRows);
         console.log(`  [${encounter.name}] ${wrote ? 'done' : 'no slice data produced'}`);

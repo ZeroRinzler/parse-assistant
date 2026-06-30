@@ -604,7 +604,7 @@ export class RotationFeatureService {
     spec: string, encounterId: number, reportCode: string, fightId: number, playerId: number,
   ): Promise<RotationPlayerView> {
     const empty: RotationPlayerView = { ruleRows: [], ruleOnPlan: [], offensiveRows: [], onPlan: [] };
-    const bench = await this.source.getRotationBench(spec, encounterId);
+    const bench = await this.source.getBench(spec, encounterId);
     if (!bench) return empty;
 
     try {
@@ -632,7 +632,7 @@ export class RotationFeatureService {
 
   /** Pre-fight: bench-only cooldown plan rows (icons baked onto each row). */
   async loadPlanView(spec: string, encounterId: number): Promise<CdPlanRow[]> {
-    const bench = await this.source.getRotationBench(spec, encounterId);
+    const bench = await this.source.getBench(spec, encounterId);
     if (!bench) return [];
     return buildCdPlan(bench.major_cooldowns, bench.per_cd_benchmarks, bench.ability_icons);
   }

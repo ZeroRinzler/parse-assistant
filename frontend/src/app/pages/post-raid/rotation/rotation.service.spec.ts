@@ -10,7 +10,8 @@ import {
   isOutlierAbove, isCriticallyBelow, benchExpectedUses, closestToZero, castEfficiencyPct,
   fmtClock, sortBySeverity,
 } from '../../../shared/analysis/analysis-math';
-import { ROTATION_DATA_SOURCE, RotationBench, RotationDataSource } from './rotation-data-source';
+import { ROTATION_DATA_SOURCE, RotationBench } from './rotation-data-source';
+import { DataSource } from '../../../core/data-source/data-source';
 import {
   RotationFeatureService,
   evaluateCastWithoutPrior, evaluateHoldForAnchor, evaluateRules, buildCastTimes,
@@ -543,7 +544,7 @@ describe('buildCdPlan', () => {
 /* ----------------------------- feature service ----------------------------- */
 
 function withSource(value: RotationBench | null, wcl?: unknown): RotationFeatureService {
-  const source: RotationDataSource = { getRotationBench: () => Promise.resolve(value) };
+  const source: DataSource<RotationBench> = { getBench: () => Promise.resolve(value) };
   TestBed.configureTestingModule({
     providers: [
       { provide: ROTATION_DATA_SOURCE, useValue: source },

@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { WclEvent } from '../../../core/models/wcl.models';
 import { EncounterPositions } from '../../../core/models/positioning.models';
-import { MAP_DATA_SOURCE, MapData, MapDataSource } from './map-data-source';
+import { MAP_DATA_SOURCE, MapData } from './map-data-source';
+import { DataSource } from '../../../core/data-source/data-source';
 import {
   MapFeatureService, buildActorTimelines, listReferenceEnemies, buildLiveOverlay, resolveLiveReference,
   FACING_OFFSET_RAD,
@@ -137,8 +138,8 @@ describe('FACING_OFFSET_RAD', () => {
 
 function withData(data: MapData | null): { service: MapFeatureService; calls: [string, number][] } {
   const calls: [string, number][] = [];
-  const source: MapDataSource = {
-    getMapData: (spec, enc) => { calls.push([spec, enc]); return Promise.resolve(data); },
+  const source: DataSource<MapData> = {
+    getBench: (spec, enc) => { calls.push([spec, enc]); return Promise.resolve(data); },
   };
   TestBed.configureTestingModule({ providers: [{ provide: MAP_DATA_SOURCE, useValue: source }] });
   return { service: TestBed.inject(MapFeatureService), calls };

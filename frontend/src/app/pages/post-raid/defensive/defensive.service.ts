@@ -483,7 +483,7 @@ export class DefensiveFeatureService {
     fightId: number,
     playerId: number,
   ): Promise<DefensiveView> {
-    const bench = await this.source.getDefensiveBench(spec, encounterId);
+    const bench = await this.source.getBench(spec, encounterId);
     if (!bench) return { findings: [], spellIdsByName: {}, iconByName: {}, windows: [], anchors: [] };
 
     try {
@@ -525,7 +525,7 @@ export class DefensiveFeatureService {
 
   /** Pre-fight entry: the bench-only defensive-plan rows for a spec + encounter. */
   async loadPlan(spec: string, encounterId: number): Promise<DefensivePlanRow[]> {
-    const bench = await this.source.getDefensiveBench(spec, encounterId);
+    const bench = await this.source.getBench(spec, encounterId);
     return buildDefensivePlanRows(bench);
   }
 }

@@ -3,7 +3,8 @@ import { TestBed } from '@angular/core/testing';
 import { BurstWindow, PlayerBurstWindow } from '../../../core/models/analysis.models';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { WclEvent } from '../../../core/models/wcl.models';
-import { BURST_DATA_SOURCE, BurstBench, BurstDataSource } from './burst-data-source';
+import { BURST_DATA_SOURCE, BurstBench } from './burst-data-source';
+import { DataSource } from '../../../core/data-source/data-source';
 import {
   BurstFeatureService,
   burstWindowStatus, splitCommonCds, burstMapAnchor, buildBurstView, findPlayerBurstWindows,
@@ -146,7 +147,7 @@ const wclFake = {
 };
 
 function withBench(bench: BurstBench | null): BurstFeatureService {
-  const source: BurstDataSource = { getBurstBench: () => Promise.resolve(bench) };
+  const source: DataSource<BurstBench> = { getBench: () => Promise.resolve(bench) };
   TestBed.configureTestingModule({
     providers: [
       { provide: BURST_DATA_SOURCE, useValue: source },

@@ -255,7 +255,7 @@ describe('DefensiveTransformService (live, in-browser)', () => {
         { provide: DataFileApiService, useValue: filesFake as unknown as DataFileApiService },
       ],
     });
-    const bench = await TestBed.inject(DefensiveTransformService).getDefensiveBench('SubtletyRogue', 1);
+    const bench = await TestBed.inject(DefensiveTransformService).getBench('SubtletyRogue', 1);
     expect(bench).not.toBeNull();
     expect(bench!.sample_count).toBe(2);
     expect(bench!.encounter_name).toBe('Boss');
@@ -284,7 +284,7 @@ describe('DefensiveTransformService (live, in-browser)', () => {
         { provide: DataFileApiService, useValue: filesFake as unknown as DataFileApiService },
       ],
     });
-    const bench = await TestBed.inject(DefensiveTransformService).getDefensiveBench('SubtletyRogue', 1);
+    const bench = await TestBed.inject(DefensiveTransformService).getBench('SubtletyRogue', 1);
     // 11 candidates, one private: the 11th backfills the skipped parse to a full 10.
     expect(bench!.sample_count).toBe(10);
   });
@@ -296,6 +296,6 @@ describe('DefensiveTransformService (live, in-browser)', () => {
         { provide: DataFileApiService, useValue: { getRulebook: async () => ({ spec: 'X', defensives: [] }) } as unknown as DataFileApiService },
       ],
     });
-    expect(await TestBed.inject(DefensiveTransformService).getDefensiveBench('SubtletyRogue', 1)).toBeNull();
+    expect(await TestBed.inject(DefensiveTransformService).getBench('SubtletyRogue', 1)).toBeNull();
   });
 });

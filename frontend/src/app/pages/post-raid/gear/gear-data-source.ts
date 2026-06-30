@@ -1,4 +1,5 @@
 import { InjectionToken } from '@angular/core';
+import { DataSource } from '../../../core/data-source/data-source';
 import { EncounterGearStats } from '../../../core/models/encounter.models';
 
 /**
@@ -21,12 +22,9 @@ export interface GearBench {
 }
 
 /**
- * A source of gear bench data: the production file reader (`GearDataFileService`)
- * or the dev-flag live transform (`GearTransformService`). The two implement the
- * same contract and are swapped by `provideDataSource` per `environment.useLiveTransform`.
+ * The gear slice's data-source token. `provideDataSource` binds it to a
+ * `FileDataSource<GearBench>` (production: reads the tailored file) or
+ * `GearTransformService` (the dev `useLiveTransform` flag / ingestion: computes it live)
+ * - both `DataSource<GearBench>`.
  */
-export interface GearDataSource {
-  getGearBench(spec: string, encounterId: number): Promise<GearBench | null>;
-}
-
-export const GEAR_DATA_SOURCE = new InjectionToken<GearDataSource>('GEAR_DATA_SOURCE');
+export const GEAR_DATA_SOURCE = new InjectionToken<DataSource<GearBench>>('GEAR_DATA_SOURCE');

@@ -1,5 +1,5 @@
 /**
- * Dev-flag `DefensiveDataSource`: computes the defensive bench live in the browser
+ * Live `DataSource<DefensiveBench>`: computes the defensive bench live in the browser
  * (no ingestion). Self-contained per the slice rule - it imports ONLY the two API
  * services + models + `logWarn`, and reimplements its own defensive math below (it
  * does NOT reference the ingest analysis). Bound by `environment.useLiveTransform`.
@@ -19,7 +19,8 @@ import { PerDefensiveBenchmark } from '../../../core/models/encounter.models';
 import { logWarn } from '../../../core/log';
 import { mean, median, deviation } from 'd3-array';
 import { round, groupByTime } from '../../../shared/analysis/analysis-math';
-import { DefensiveBench, DefensiveDataSource, DefensivePlanMeta } from './defensive-data-source';
+import { DataSource } from '../../../core/data-source/data-source';
+import { DefensiveBench, DefensivePlanMeta } from './defensive-data-source';
 
 /** How many top parses to sample (matches the ingest bench). */
 const TOP_PARSE_COUNT = 10;
@@ -424,11 +425,11 @@ export function aggregateDefensiveBenchmarks(
 /* ----------------------------- service shell ----------------------------- */
 
 @Injectable({ providedIn: 'root' })
-export class DefensiveTransformService implements DefensiveDataSource {
+export class DefensiveTransformService implements DataSource<DefensiveBench> {
   private readonly wclApi = inject(WclApiService);
   private readonly dataFiles = inject(DataFileApiService);
 
-  async getDefensiveBench(spec: string, encounterId: number): Promise<DefensiveBench | null> {
+  async getBench(spec: string, encounterId: number): Promise<DefensiveBench | null> {
     const rulebook = await this.dataFiles.getRulebook(spec);
     const defensives = rulebook?.defensives ?? [];
     if (!defensives.length) return null;

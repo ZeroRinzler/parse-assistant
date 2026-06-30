@@ -1,4 +1,5 @@
 import { InjectionToken } from '@angular/core';
+import { DataSource } from '../../../core/data-source/data-source';
 import { PerCdBenchmark } from '../../../core/models/encounter.models';
 import { RulebookCooldown, RulebookRule } from '../../../core/models/rulebook.models';
 
@@ -35,13 +36,9 @@ export interface RotationBench {
 }
 
 /**
- * A source of rotation bench data: the production file reader
- * (`RotationDataFileService`) or the dev-flag live transform
- * (`RotationTransformService`). Both implement the same contract and are swapped
- * by `provideDataSource` per `environment.useLiveTransform`.
+ * The rotation slice's data-source token. `provideDataSource` binds it to a
+ * `FileDataSource<RotationBench>` (production: reads the tailored file) or
+ * `RotationTransformService` (the dev `useLiveTransform` flag / ingestion: computes it
+ * live) - both `DataSource<RotationBench>`.
  */
-export interface RotationDataSource {
-  getRotationBench(spec: string, encounterId: number): Promise<RotationBench | null>;
-}
-
-export const ROTATION_DATA_SOURCE = new InjectionToken<RotationDataSource>('ROTATION_DATA_SOURCE');
+export const ROTATION_DATA_SOURCE = new InjectionToken<DataSource<RotationBench>>('ROTATION_DATA_SOURCE');
