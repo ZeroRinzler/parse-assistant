@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { WclEvent } from '../../../core/models/wcl.models';
 import {
-  posActorId, collectPositionSamples, resampleTimeline, buildParsePositions,
+  posActorId, collectPositionSamples, resampleTimeline, buildParsePositions, selectBossAndEnemies,
   RawPosSample, EnemyMeta, POSITIONS_INTERVAL_S,
 } from './map-transform.service';
 
@@ -67,6 +67,85 @@ describe('resampleTimeline', () => {
   });
 });
 
+describe('selectBossAndEnemies', () => {
+  // Mirrors the module-private MAX_TRACKED_ENEMIES (kept enemy cap, boss excepted).
+  const MAX_TRACKED_ENEMIES = 5;
+  const PLAYER_ID = 1;
+  const BOSS_ID = 10;
+
+  function sample(maxHp: number): RawPosSample {
+    return { t: 0, x: 0, y: 0, facing: null, mapID: null, maxHp };
+  }
+
+  // Build a per-actor sample map: each entry is [actorId, sampleCount, maxHp].
+  function actorMap(entries: [number, number, number][]): Map<number, RawPosSample[]> {
+    const byActor = new Map<number, RawPosSample[]>();
+    for (const [actorId, count, maxHp] of entries) {
+      byActor.set(actorId, Array.from({ length: count }, () => sample(maxHp)));
+    }
+    return byActor;
+  }
+
+  function meta(actorIds: number[]): Map<number, EnemyMeta> {
+    return new Map(actorIds.map(actorId => [actorId, { gameID: actorId * 10, name: `actor-${actorId}` }]));
+  }
+
+  it('picks the boss by highest observed maxHp, ignoring sample count', () => {
+    const LOW_HP = 1000;
+    const HIGH_HP = 9000;
+    // The add has more samples, but the boss out-HPs it.
+    const byActor = actorMap([[BOSS_ID, 2, HIGH_HP], [11, 8, LOW_HP]]);
+    const { bossId, kept } = selectBossAndEnemies(byActor, PLAYER_ID, meta([BOSS_ID, 11]));
+    expect(bossId).toBe(BOSS_ID);
+    expect(kept.map(enemy => enemy.actorId).sort((a, b) => a - b)).toEqual([BOSS_ID, 11]);
+  });
+
+  it('excludes the player and unknown (non-enemy) actors', () => {
+    const HP = 5000;
+    const byActor = actorMap([[PLAYER_ID, 9, HP], [BOSS_ID, 3, HP], [99, 3, HP]]);
+    // 99 has no meta entry, so it is not an enemy candidate.
+    const { kept } = selectBossAndEnemies(byActor, PLAYER_ID, meta([BOSS_ID]));
+    expect(kept.map(enemy => enemy.actorId)).toEqual([BOSS_ID]);
+  });
+
+  it('caps the kept set at MAX_TRACKED_ENEMIES, keeping the most-sampled', () => {
+    const BASE_HP = 1000;
+    // One more enemy than the cap; the boss (id 20) has the fewest samples but max HP.
+    const BOSS_OF_MANY = 20;
+    const entries: [number, number, number][] = [
+      [11, 60, BASE_HP], [12, 50, BASE_HP], [13, 40, BASE_HP],
+      [14, 30, BASE_HP], [15, 20, BASE_HP], [BOSS_OF_MANY, 10, BASE_HP + 1],
+    ];
+    const enemyIds = entries.map(([actorId]) => actorId);
+    const { bossId, kept } = selectBossAndEnemies(actorMap(entries), PLAYER_ID, meta(enemyIds));
+    expect(bossId).toBe(BOSS_OF_MANY);
+    // The cap takes the 5 most-sampled (11..15); the boss is appended past the cap.
+    expect(kept).toHaveLength(MAX_TRACKED_ENEMIES + 1);
+    expect(kept.some(enemy => enemy.actorId === BOSS_OF_MANY)).toBe(true);
+    expect(kept.some(enemy => enemy.actorId === 15)).toBe(true);
+  });
+
+  it('drops the lowest-sampled enemy when over the cap and it is not the boss', () => {
+    const BASE_HP = 1000;
+    const BOSS_HP = 9000;
+    const LOW_SAMPLE_ADD = 16;
+    const entries: [number, number, number][] = [
+      [BOSS_ID, 60, BOSS_HP], [11, 50, BASE_HP], [12, 40, BASE_HP],
+      [13, 30, BASE_HP], [14, 20, BASE_HP], [LOW_SAMPLE_ADD, 5, BASE_HP],
+    ];
+    const enemyIds = entries.map(([actorId]) => actorId);
+    const { kept } = selectBossAndEnemies(actorMap(entries), PLAYER_ID, meta(enemyIds));
+    expect(kept).toHaveLength(MAX_TRACKED_ENEMIES);
+    expect(kept.some(enemy => enemy.actorId === LOW_SAMPLE_ADD)).toBe(false);
+  });
+
+  it('returns no boss when there are no enemy candidates', () => {
+    const { bossId, kept } = selectBossAndEnemies(actorMap([[PLAYER_ID, 5, 5000]]), PLAYER_ID, meta([]));
+    expect(bossId).toBeNull();
+    expect(kept).toEqual([]);
+  });
+});
+
 describe('buildParsePositions', () => {
   const enemyMeta = new Map<number, EnemyMeta>([
     [10, { gameID: 100, name: 'Boss' }],
@@ -90,7 +169,10 @@ describe('buildParsePositions', () => {
       resEvent({ ts: 4000, source: 11, x: 500, y: 0, maxHp: 1000 }),
       resEvent({ ts: 6000, source: 11, x: 500, y: 0, maxHp: 1000 }),
     ];
-    const parse = buildParsePositions('rep', 1, 'Me', 5, enemyMeta, events, 0, 6);
+    const parse = buildParsePositions({
+      reportCode: 'rep', fightId: 1, playerName: 'Me', playerId: 5,
+      enemyMetaById: enemyMeta, posEvents: events, fightStartMs: 0, durationS: 6,
+    });
     expect(parse.report_code).toBe('rep');
     expect(parse.player_name).toBe('Me');
     expect(parse.interval_s).toBe(POSITIONS_INTERVAL_S);
@@ -109,7 +191,10 @@ describe('buildParsePositions', () => {
       // add: only 1 sample -> below MIN_ENEMY_SAMPLES
       resEvent({ ts: 0, source: 11, x: 9, y: 9, maxHp: 1000 }),
     ];
-    const parse = buildParsePositions('rep', 1, 'Me', 5, enemyMeta, events, 0, 1.5);
+    const parse = buildParsePositions({
+      reportCode: 'rep', fightId: 1, playerName: 'Me', playerId: 5,
+      enemyMetaById: enemyMeta, posEvents: events, fightStartMs: 0, durationS: 1.5,
+    });
     expect(parse.enemies.some(e => e.game_id === 200)).toBe(false);
     expect(parse.enemies.some(e => e.is_boss)).toBe(true);
   });

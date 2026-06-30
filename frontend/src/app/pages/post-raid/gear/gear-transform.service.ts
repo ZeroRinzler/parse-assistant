@@ -11,18 +11,21 @@
  */
 import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
-import { CharacterGear, ParseRanking, WclRawRanking, WclGearItem } from '../../../core/models/wcl.models';
+import { CharacterGear, ParseRanking, WclRawRanking } from '../../../core/models/wcl.models';
 import { EncounterGearStats } from '../../../core/models/encounter.models';
 import { logWarn } from '../../../core/log';
+import { TRINKET_SLOTS, decodeHtmlEntities, extractGear } from './gear-extract';
 import { GearBench, GearDataSource } from './gear-data-source';
+
+// Re-exported from the slice-local projection module so existing call sites /
+// specs that import these from the transform service keep working.
+export { iconFile, decodeHtmlEntities, extractGear } from './gear-extract';
 
 /** How many top parses to sample (matches the ingest bench). */
 const TOP_PARSE_COUNT = 10;
 // Over-fetch so a private/unfetchable top parse can be backfilled by the
 // next-best one; the break in the loop caps actual fetches at TOP_PARSE_COUNT.
 const CANDIDATE_POOL_COUNT = TOP_PARSE_COUNT * 2;
-/** Trinket slots, per the WCL gear quirks. */
-const TRINKET_SLOTS = [12, 13] as const;
 /** Keep at most this many talent builds / trinkets / enchants per slot. */
 const MAX_TALENT_BUILDS = 5;
 const MAX_TRINKETS_PER_SLOT = 5;
@@ -49,47 +52,6 @@ export function toParseRankings(raw: WclRawRanking[], count: number): ParseRanki
       report_code: ranking.report?.code ?? '',
       fight_id: ranking.report?.fightID ?? 0,
     }));
-}
-
-/** Normalize a WCL gear icon ("inv_x.jpg") to the bare filename used by zamimg. */
-export function iconFile(icon?: string): string {
-  return (icon ?? '').replace(/\.jpg$/i, '');
-}
-
-/** Decode HTML entities in a string returned by WCL's gameData queries. */
-export function decodeHtmlEntities(text: string): string {
-  return text
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
-}
-
-/** Extract trinkets (slots 12/13) and enchants from a CombatantInfo gear array. */
-export function extractGear(gear: WclGearItem[] | undefined): {
-  trinkets: NonNullable<CharacterGear['trinkets']>;
-  enchants: NonNullable<CharacterGear['enchants']>;
-} {
-  const trinkets: NonNullable<CharacterGear['trinkets']> = [];
-  const enchants: NonNullable<CharacterGear['enchants']> = [];
-
-  (gear ?? []).forEach((item, slotIndex) => {
-    if (item?.id == null) return;
-    const itemId = typeof item.id === 'string' ? parseInt(item.id, 10) : item.id;
-
-    if (slotIndex === 12 || slotIndex === 13) {
-      trinkets.push({ slot: slotIndex, id: itemId, name: item.name ?? '', icon: iconFile(item.icon) });
-    }
-
-    const enchant = item.permanentEnchant;
-    if (enchant) {
-      const enchantId = typeof enchant === 'string' ? parseInt(enchant, 10) : enchant;
-      enchants.push({ slot: slotIndex, id: enchantId, name: item.permanentEnchantName ?? '' });
-    }
-  });
-
-  return { trinkets, enchants };
 }
 
 /**
@@ -138,36 +100,48 @@ export function toParseGear(gear: CharacterGear | null, ranking: ParseRanking, s
 }
 
 /**
- * Roll per-parse gear up into bench talent builds, per-slot trinkets (12/13), and
- * per-slot enchants - the `EncounterGearStats` block.
+ * Roll per-parse talent fingerprints into the top `MAX_TALENT_BUILDS` builds by
+ * frequency, each carrying the first-seen example parse identity.
  */
-export function aggregateParseGear(parses: ParseGear[]): EncounterGearStats {
+export function aggregateTalents(parses: ParseGear[]): EncounterGearStats['talent_builds'] {
   const total = parses.length;
-
   const talentCounter = new Map<string, number>();
   const talentExample = new Map<string, { report_code: string; fight_id: number; player_name: string; source_id: number }>();
+
+  for (const parse of parses) {
+    if (!parse.talent_key) continue;
+    talentCounter.set(parse.talent_key, (talentCounter.get(parse.talent_key) ?? 0) + 1);
+    if (!talentExample.has(parse.talent_key)) {
+      talentExample.set(parse.talent_key, {
+        report_code: parse.report_code,
+        fight_id: parse.fight_id,
+        player_name: parse.player_name,
+        source_id: parse.source_id,
+      });
+    }
+  }
+
+  return [...talentCounter.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, MAX_TALENT_BUILDS)
+    // talentExample is set in lockstep with talentCounter, so every counted key has an example.
+    .map(([key, count]) => ({ key, pct: pct(count, total), ...talentExample.get(key)! }));
+}
+
+/**
+ * Roll per-parse trinkets up into the per-slot (12/13) distributions, each slot's
+ * top `MAX_TRINKETS_PER_SLOT` trinkets by frequency.
+ */
+export function aggregateTrinkets(parses: ParseGear[]): EncounterGearStats['trinkets'] {
+  const total = parses.length;
   const trinketCounters = new Map<number, Map<number, number>>();
   const trinketNames = new Map<number, string>();
   const trinketIcons = new Map<number, string>();
-  const enchantCounters = new Map<number, Map<number, number>>();
-  const enchantNames = new Map<number, string>();
 
   for (const parse of parses) {
-    if (parse.talent_key) {
-      talentCounter.set(parse.talent_key, (talentCounter.get(parse.talent_key) ?? 0) + 1);
-      if (!talentExample.has(parse.talent_key)) {
-        talentExample.set(parse.talent_key, {
-          report_code: parse.report_code,
-          fight_id: parse.fight_id,
-          player_name: parse.player_name,
-          source_id: parse.source_id,
-        });
-      }
-    }
-
     for (const trinket of parse.trinkets) {
       const slot = trinket.slot;
-      if ((slot === 12 || slot === 13) && trinket.id) {
+      if ((TRINKET_SLOTS as readonly number[]).includes(slot) && trinket.id) {
         if (!trinketCounters.has(slot)) trinketCounters.set(slot, new Map());
         const slotMap = trinketCounters.get(slot)!;
         slotMap.set(trinket.id, (slotMap.get(trinket.id) ?? 0) + 1);
@@ -175,7 +149,30 @@ export function aggregateParseGear(parses: ParseGear[]): EncounterGearStats {
         if (!trinketIcons.has(trinket.id)) trinketIcons.set(trinket.id, trinket.icon);
       }
     }
+  }
 
+  const trinkets: EncounterGearStats['trinkets'] = {};
+  for (const slot of TRINKET_SLOTS) {
+    const counter = trinketCounters.get(slot);
+    if (!counter?.size) continue;
+    trinkets[slot] = [...counter.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, MAX_TRINKETS_PER_SLOT)
+      .map(([id, count]) => ({ id, name: trinketNames.get(id) ?? '', icon: trinketIcons.get(id) ?? '', pct: pct(count, total) }));
+  }
+  return trinkets;
+}
+
+/**
+ * Roll per-parse enchants up into the per-slot distributions (slots ascending),
+ * each slot's top `MAX_ENCHANTS_PER_SLOT` enchants by frequency.
+ */
+export function aggregateEnchants(parses: ParseGear[]): EncounterGearStats['enchants'] {
+  const total = parses.length;
+  const enchantCounters = new Map<number, Map<number, number>>();
+  const enchantNames = new Map<number, string>();
+
+  for (const parse of parses) {
     for (const enchant of parse.enchants) {
       const slot = enchant.slot;
       if (slot != null && enchant.id) {
@@ -187,22 +184,6 @@ export function aggregateParseGear(parses: ParseGear[]): EncounterGearStats {
     }
   }
 
-  const talent_builds = [...talentCounter.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, MAX_TALENT_BUILDS)
-    // talentExample is set in lockstep with talentCounter, so every counted key has an example.
-    .map(([key, count]) => ({ key, pct: pct(count, total), ...talentExample.get(key)! }));
-
-  const trinkets: EncounterGearStats['trinkets'] = {};
-  for (const slot of TRINKET_SLOTS) {
-    const counter = trinketCounters.get(slot);
-    if (!counter?.size) continue;
-    trinkets[slot] = [...counter.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, MAX_TRINKETS_PER_SLOT)
-      .map(([id, count]) => ({ id, name: trinketNames.get(id) ?? '', icon: trinketIcons.get(id) ?? '', pct: pct(count, total) }));
-  }
-
   const enchants: EncounterGearStats['enchants'] = {};
   for (const [slot, counter] of [...enchantCounters.entries()].sort((a, b) => a[0] - b[0])) {
     if (!counter.size) continue;
@@ -211,8 +192,20 @@ export function aggregateParseGear(parses: ParseGear[]): EncounterGearStats {
       .slice(0, MAX_ENCHANTS_PER_SLOT)
       .map(([id, count]) => ({ id, name: enchantNames.get(id) ?? '', pct: pct(count, total) }));
   }
+  return enchants;
+}
 
-  return { talent_builds, trinkets, enchants };
+/**
+ * Roll per-parse gear up into bench talent builds, per-slot trinkets (12/13), and
+ * per-slot enchants - the `EncounterGearStats` block. Composes the three per-facet
+ * aggregators.
+ */
+export function aggregateParseGear(parses: ParseGear[]): EncounterGearStats {
+  return {
+    talent_builds: aggregateTalents(parses),
+    trinkets: aggregateTrinkets(parses),
+    enchants: aggregateEnchants(parses),
+  };
 }
 
 /* ----------------------------- service shell ----------------------------- */

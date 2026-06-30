@@ -17,6 +17,7 @@ import { RulebookCooldown, RulebookDefensive } from '../../../core/models/rulebo
 import { PerCdBenchmark, UsesPerMin, HoldTargets } from '../../../core/models/encounter.models';
 import { logWarn } from '../../../core/log';
 import { mean, median, deviation, quantile } from 'd3-array';
+import { round } from '../../../shared/analysis/analysis-math';
 import { RotationBench, RotationDataSource } from './rotation-data-source';
 
 /** How many top parses to sample (matches the ingest bench). */
@@ -58,11 +59,6 @@ export function toParseRankings(raw: WclRawRanking[], count: number): ParseRanki
     }));
 }
 
-/** Round to `decimals` places (default 1). d3-array has no rounding helper. */
-function round(value: number, decimals = 1): number {
-  return Math.round(value * 10 ** decimals) / 10 ** decimals;
-}
-
 /** Cooldown name -> spell id, for the row / header icons. */
 export function rotationCdSpellIds(cooldowns: RulebookCooldown[], defensives: RulebookDefensive[]): Record<string, number> {
   const map: Record<string, number> = {};
@@ -81,6 +77,33 @@ export function detectBloodlust(buffEvents: WclEvent[], fightStartMs: number): n
   return null;
 }
 
+/** One deliberate hold of a cooldown past its prior cast + cooldown. */
+export interface HoldWindow {
+  cast_index: number;
+  actual_s: number;
+  delay_s: number;
+}
+
+/**
+ * Detect deliberate holds in one cooldown's ascending cast times. Hold detection is
+ * PRIOR-RELATIVE: each cast is measured against the prior ACTUAL cast + the cooldown,
+ * not a cumulative ideal schedule, so a single hold does not cascade into every later
+ * cast looking held. A cast counts as held only when it lands more than
+ * `HOLD_THRESHOLD_S` past that prior-relative reset (strict).
+ */
+export function detectHoldWindows(castTimesS: number[], effectiveCd: number): HoldWindow[] {
+  const holdWindows: HoldWindow[] = [];
+  for (let castIndex = 1; castIndex < castTimesS.length; castIndex++) {
+    const expected = castTimesS[castIndex - 1] + effectiveCd;
+    const actual = castTimesS[castIndex];
+    const delay = actual - expected;
+    if (delay > HOLD_THRESHOLD_S) {
+      holdWindows.push({ cast_index: castIndex + 1, actual_s: round(actual), delay_s: round(delay) });
+    }
+  }
+  return holdWindows;
+}
+
 /** Per-parse, per-cd cast summary: count, first cast, BL alignment, hold windows. */
 export interface CdSummary {
   name: string;
@@ -89,7 +112,7 @@ export interface CdSummary {
   bl_aligned: boolean;
   bl_offset_s: number | null;
   cast_times_s: number[];
-  hold_windows: { cast_index: number; actual_s: number; delay_s: number }[];
+  hold_windows: HoldWindow[];
   cast_pattern: 'hold' | 'on_cooldown';
   fight_duration_s: number;
 }
@@ -117,21 +140,7 @@ export function summarizeCooldownCasts(
       }
     }
 
-    // Hold detection is PRIOR-RELATIVE: each cast is measured against the prior ACTUAL
-    // cast + the cooldown, not a cumulative ideal schedule. So a single hold does not
-    // cascade into every later cast looking held.
-    const holdWindows: { cast_index: number; actual_s: number; delay_s: number }[] = [];
-    if (castTimesS.length > 1) {
-      const effectiveCd = cooldown.cooldown ?? 90;
-      for (let castIndex = 1; castIndex < castTimesS.length; castIndex++) {
-        const expected = castTimesS[castIndex - 1] + effectiveCd;
-        const actual = castTimesS[castIndex];
-        const delay = actual - expected;
-        if (delay > HOLD_THRESHOLD_S) {
-          holdWindows.push({ cast_index: castIndex + 1, actual_s: round(actual), delay_s: round(delay) });
-        }
-      }
-    }
+    const holdWindows = detectHoldWindows(castTimesS, cooldown.cooldown ?? 90);
 
     return {
       name: cooldown.name,

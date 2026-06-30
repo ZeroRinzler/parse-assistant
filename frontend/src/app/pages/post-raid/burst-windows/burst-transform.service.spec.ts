@@ -5,7 +5,8 @@ import { DataFileApiService } from '../../../core/services/data-file-api';
 import { WclEvent } from '../../../core/models/wcl.models';
 import {
   BurstTransformService, cdTimings, findParseWindows, clusterParseWindows, cdSpellIds, ParseWindow,
-  toParseRankings,
+  toParseRankings, bucketDamagePerBin, forwardRollingDamage, detectDenseRuns, trimRunToDamage,
+  windowAbilityBreakdown, BinRun,
 } from './burst-transform.service';
 import { SHADOW_BLADES, SHADOW_BLADES_DAMAGE, EVISCERATE, BLACK_POWDER } from '../../../../testing/spell-ids';
 
@@ -14,6 +15,16 @@ function cast(spellId: number, atS: number): WclEvent {
 }
 function damage(spellId: number, atS: number, amount: number): WclEvent {
   return { type: 'damage', timestamp: atS * 1000, abilityGameID: spellId, amount };
+}
+/** Call `findParseWindows` with the common fixed-fight defaults, overriding per case. */
+function scanWindows(
+  damageEvents: WclEvent[], fightEndMs: number,
+  overrides: { timings?: ReturnType<typeof cdTimings>; casts?: WclEvent[]; abilityNames?: Map<number, string> } = {},
+): ParseWindow[] {
+  return findParseWindows({
+    damage: damageEvents, fightStartMs: 0, fightEndMs,
+    timings: overrides.timings ?? [], casts: overrides.casts ?? [], abilityNames: overrides.abilityNames ?? new Map(),
+  });
 }
 /** A flat damage stream: `amount` at every second in [0, seconds). */
 function uniformDamage(spellId: number, seconds: number, amount: number): WclEvent[] {
@@ -77,11 +88,130 @@ describe('cdTimings', () => {
   });
 });
 
+describe('bucketDamagePerBin', () => {
+  // Three hits in one 1s bin (bin 1) sum; an out-of-range hit clamps into the last bin.
+  it('sums hits into their fight-relative bin and clamps out-of-range hits', () => {
+    const FIRST_HIT = 100;
+    const SECOND_HIT = 200;
+    const LATE_HIT = 50;
+    const BIN_COUNT = 3;
+    // hit timestamps in ms (DamageHit = [ts, dmg, abilityId]); ts 1000-1999 -> bin 1.
+    const hits: [number, number, number][] = [
+      [1000, FIRST_HIT, EVISCERATE], [1500, SECOND_HIT, EVISCERATE], [999_000, LATE_HIT, EVISCERATE],
+    ];
+    expect(bucketDamagePerBin(hits, 0, BIN_COUNT)).toEqual([0, FIRST_HIT + SECOND_HIT, LATE_HIT]);
+  });
+
+  it('clamps a pre-fight hit (negative offset) into bin 0', () => {
+    const PRE_FIGHT_HIT = 70;
+    expect(bucketDamagePerBin([[-5000, PRE_FIGHT_HIT, EVISCERATE]], 0, 2)).toEqual([PRE_FIGHT_HIT, 0]);
+  });
+});
+
+describe('forwardRollingDamage', () => {
+  // Each bin sums itself + the next ROLL_BINS-1; near the end the window truncates.
+  it('sums each bin with the next rollBins-1, truncating at the array end', () => {
+    const ROLL = 3;
+    const perBin = [1, 2, 3, 4];
+    // bin0:1+2+3=6, bin1:2+3+4=9, bin2:3+4=7, bin3:4=4
+    expect(forwardRollingDamage(perBin, ROLL)).toEqual([6, 9, 7, 4]);
+  });
+
+  it('equals the input when rollBins is 1', () => {
+    expect(forwardRollingDamage([5, 0, 8], 1)).toEqual([5, 0, 8]);
+  });
+});
+
+describe('detectDenseRuns', () => {
+  const THRESHOLD = 10;
+  const MERGE_GAP = 2;
+
+  it('opens a run on the first at-threshold bin (strict >=) and closes it at the last', () => {
+    // Bins 1..2 clear THRESHOLD; bin 0 and 3 do not -> run [1,2].
+    expect(detectDenseRuns([5, THRESHOLD, THRESHOLD, 5], THRESHOLD, MERGE_GAP)).toEqual([{ startBin: 1, endBin: 2 }]);
+  });
+
+  it('treats a bin exactly one below threshold as not dense', () => {
+    expect(detectDenseRuns([THRESHOLD - 1, THRESHOLD - 1], THRESHOLD, MERGE_GAP)).toEqual([]);
+  });
+
+  it('bridges a gap of exactly mergeGapBins sub-threshold bins', () => {
+    // dense, gap, gap, dense -> the 2-bin gap (<= MERGE_GAP) bridges into one run.
+    expect(detectDenseRuns([THRESHOLD, 0, 0, THRESHOLD], THRESHOLD, MERGE_GAP)).toEqual([{ startBin: 0, endBin: 3 }]);
+  });
+
+  it('splits a gap of mergeGapBins+1 sub-threshold bins into two runs', () => {
+    // dense, gap, gap, gap, dense -> the 3-bin gap (> MERGE_GAP) finalizes the first run.
+    expect(detectDenseRuns([THRESHOLD, 0, 0, 0, THRESHOLD], THRESHOLD, MERGE_GAP))
+      .toEqual([{ startBin: 0, endBin: 0 }, { startBin: 4, endBin: 4 }]);
+  });
+
+  it('returns [] when no bin clears the threshold', () => {
+    expect(detectDenseRuns([0, 1, 2], THRESHOLD, MERGE_GAP)).toEqual([]);
+  });
+});
+
+describe('trimRunToDamage', () => {
+  it('snaps a run to the first and last bins that carry damage', () => {
+    // Run spans bins 0..4, but only bins 1..3 carry damage.
+    const run: BinRun = { startBin: 0, endBin: 4 };
+    expect(trimRunToDamage(run, [0, 5, 6, 7, 0])).toEqual({ startBin: 1, endBin: 3 });
+  });
+
+  it('returns null when the run carries no damage at all', () => {
+    expect(trimRunToDamage({ startBin: 0, endBin: 2 }, [0, 0, 0])).toBeNull();
+  });
+
+  it('keeps a fully-dense run unchanged', () => {
+    expect(trimRunToDamage({ startBin: 1, endBin: 2 }, [0, 4, 5, 0])).toEqual({ startBin: 1, endBin: 2 });
+  });
+});
+
+describe('windowAbilityBreakdown', () => {
+  const nameOf = (spellId: number): string => new Map([[EVISCERATE, 'Eviscerate'], [BLACK_POWDER, 'Black Powder']]).get(spellId) ?? `Spell ${spellId}`;
+
+  it('ranks abilities by window damage, counts casts by name, and flags passive abilities', () => {
+    const EVIS_DMG = 600;
+    const BP_DMG = 400;
+    // DamageHit = [ts, dmg, abilityId]; window is [1000ms, 3000ms).
+    const windowHits: [number, number, number][] = [[1000, EVIS_DMG, EVISCERATE], [1500, BP_DMG, BLACK_POWDER]];
+    // CastRow = [ts, abilityId]; one Eviscerate cast in-window, one Black Powder cast out-of-window.
+    const castRows: [number, number][] = [[1200, EVISCERATE], [9000, BLACK_POWDER]];
+    const castNamesInParse = new Set(['Eviscerate']);
+    const breakdown = windowAbilityBreakdown(windowHits, castRows, 1000, 3000, nameOf, castNamesInParse);
+    expect(breakdown).toEqual([
+      { spell_id: EVISCERATE, damage: EVIS_DMG, casts: 1, is_passive: false },
+      // Black Powder was cast somewhere in the parse? No -> passive, and 0 in-window casts.
+      { spell_id: BLACK_POWDER, damage: BP_DMG, casts: 0, is_passive: true },
+    ]);
+  });
+
+  it('excludes a cast exactly on the half-open window end', () => {
+    const HIT_DMG = 500;
+    const windowHits: [number, number, number][] = [[1000, HIT_DMG, EVISCERATE]];
+    // A cast at exactly endMs (3000) is excluded; one just inside (2999) counts.
+    const castRows: [number, number][] = [[3000, EVISCERATE], [2999, EVISCERATE]];
+    const breakdown = windowAbilityBreakdown(windowHits, castRows, 1000, 3000, nameOf, new Set(['Eviscerate']));
+    expect(breakdown[0].casts).toBe(1);
+  });
+
+  it('caps the breakdown at the top 6 abilities by damage', () => {
+    const ABILITY_COUNT = 8;
+    // Eight abilities, descending damage; only the top 6 survive.
+    const windowHits: [number, number, number][] = Array.from(
+      { length: ABILITY_COUNT }, (_, index) => [1000, (ABILITY_COUNT - index) * 100, index + 1] as [number, number, number],
+    );
+    const breakdown = windowAbilityBreakdown(windowHits, [], 1000, 3000, nameOf, new Set());
+    expect(breakdown).toHaveLength(6);
+    expect(breakdown[0].damage).toBe(ABILITY_COUNT * 100);
+  });
+});
+
 describe('findParseWindows', () => {
   // A contiguous burst (damage at 10,11,12,13) on a long fight forms one dense run,
   // trimmed to the bins that actually carry damage, so it measures [10s, 14s).
   it('detects and measures a damage-density burst as a single window', () => {
-    const windows = findParseWindows(burstAt(10), 0, LONG_FIGHT_MS, [], [], new Map());
+    const windows = scanWindows(burstAt(10), LONG_FIGHT_MS);
     expect(windows).toHaveLength(1);
     expect(windows[0]).toMatchObject({ time_s: 10, window_length_s: 4, window_damage: 4 * BIN_DAMAGE });
     expect(windows[0].ability_breakdown[0]).toMatchObject({ spell_id: SHADOW_BLADES_DAMAGE, damage: 4 * BIN_DAMAGE });
@@ -89,13 +219,13 @@ describe('findParseWindows', () => {
 
   it('returns no window for sparse uniform low damage', () => {
     // 100/s for 10s is perfectly flat: no bin's rolling damage clears the density threshold.
-    expect(findParseWindows(uniformDamage(SHADOW_BLADES_DAMAGE, 10, 100), 0, 10_000, [], [], new Map())).toHaveLength(0);
+    expect(scanWindows(uniformDamage(SHADOW_BLADES_DAMAGE, 10, 100), 10_000)).toHaveLength(0);
   });
 
   it('returns [] for no damage, zero total, or a non-positive fight length', () => {
-    expect(findParseWindows([], 0, LONG_FIGHT_MS, [], [], new Map())).toEqual([]);
-    expect(findParseWindows([damage(SHADOW_BLADES_DAMAGE, 10, 0)], 0, LONG_FIGHT_MS, [], [], new Map())).toEqual([]);
-    expect(findParseWindows([damage(SHADOW_BLADES_DAMAGE, 10, BIN_DAMAGE)], 0, 0, [], [], new Map())).toEqual([]);
+    expect(scanWindows([], LONG_FIGHT_MS)).toEqual([]);
+    expect(scanWindows([damage(SHADOW_BLADES_DAMAGE, 10, 0)], LONG_FIGHT_MS)).toEqual([]);
+    expect(scanWindows([damage(SHADOW_BLADES_DAMAGE, 10, BIN_DAMAGE)], 0)).toEqual([]);
   });
 
   // An isolated spike's rolling damage equals its own value; the dense comparison is
@@ -103,26 +233,26 @@ describe('findParseWindows', () => {
   // t=50 holds the remaining damage so TOTAL_DAMAGE (and thus the threshold) stays fixed.
   it('keeps a spike whose rolling damage is exactly at the density threshold', () => {
     const spikeAtThreshold = [damage(EVISCERATE, 10, DENSITY_THRESHOLD), damage(BLACK_POWDER, 50, TOTAL_DAMAGE - DENSITY_THRESHOLD)];
-    const windows = findParseWindows(spikeAtThreshold, 0, HUNDRED_S_FIGHT_MS, [], [], new Map());
+    const windows = scanWindows(spikeAtThreshold, HUNDRED_S_FIGHT_MS);
     expect(windows.some(window => window.time_s === 10)).toBe(true);
   });
 
   it('drops a spike whose rolling damage is just below the density threshold', () => {
     const spikeBelow = [damage(EVISCERATE, 10, DENSITY_THRESHOLD - 1), damage(BLACK_POWDER, 50, TOTAL_DAMAGE - DENSITY_THRESHOLD + 1)];
-    const windows = findParseWindows(spikeBelow, 0, HUNDRED_S_FIGHT_MS, [], [], new Map());
+    const windows = scanWindows(spikeBelow, HUNDRED_S_FIGHT_MS);
     expect(windows.some(window => window.time_s === 10)).toBe(false);
   });
 
   it('bridges two dense runs separated by 2 sub-threshold bins into one window', () => {
     // Spikes 5 bins apart (t=10, t=15) -> a 2-bin gap -> merged, trimmed to [10s, 16s).
-    const windows = findParseWindows([damage(EVISCERATE, 10, BIN_DAMAGE), damage(BLACK_POWDER, 15, BIN_DAMAGE)], 0, HUNDRED_S_FIGHT_MS, [], [], new Map());
+    const windows = scanWindows([damage(EVISCERATE, 10, BIN_DAMAGE), damage(BLACK_POWDER, 15, BIN_DAMAGE)], HUNDRED_S_FIGHT_MS);
     expect(windows).toHaveLength(1);
     expect(windows[0]).toMatchObject({ time_s: 10, window_length_s: 6, window_damage: 2 * BIN_DAMAGE });
   });
 
   it('keeps two dense runs separated by 3 sub-threshold bins as separate windows', () => {
     // Spikes 6 bins apart (t=10, t=16) -> a 3-bin gap -> not merged; each trims to its bin.
-    const windows = findParseWindows([damage(EVISCERATE, 10, BIN_DAMAGE), damage(BLACK_POWDER, 16, BIN_DAMAGE)], 0, HUNDRED_S_FIGHT_MS, [], [], new Map());
+    const windows = scanWindows([damage(EVISCERATE, 10, BIN_DAMAGE), damage(BLACK_POWDER, 16, BIN_DAMAGE)], HUNDRED_S_FIGHT_MS);
     expect(windows).toHaveLength(2);
     expect(windows[0]).toMatchObject({ time_s: 10, window_length_s: 1 });
     expect(windows[1]).toMatchObject({ time_s: 16, window_length_s: 1 });
@@ -130,21 +260,21 @@ describe('findParseWindows', () => {
 
   it('drops a dense window below the significance share of fight damage', () => {
     // Spike of BIN_DAMAGE beside a 100x anchor: BIN_DAMAGE / (101 * BIN_DAMAGE) < SIGNIFICANCE_PCT -> dropped.
-    const windows = findParseWindows([damage(EVISCERATE, 10, BIN_DAMAGE), damage(BLACK_POWDER, 500, 100 * BIN_DAMAGE)], 0, 1_000_000, [], [], new Map());
+    const windows = scanWindows([damage(EVISCERATE, 10, BIN_DAMAGE), damage(BLACK_POWDER, 500, 100 * BIN_DAMAGE)], 1_000_000);
     expect(windows.some(window => window.time_s === 10)).toBe(false);
   });
 
   it('keeps a dense window at or above the significance share of fight damage', () => {
     // 600 of 10600 total = 5.66% >= SIGNIFICANCE_PCT -> kept.
     const significantDamage = 600;
-    const windows = findParseWindows([damage(EVISCERATE, 10, significantDamage), damage(BLACK_POWDER, 50, 10_000)], 0, HUNDRED_S_FIGHT_MS, [], [], new Map());
+    const windows = scanWindows([damage(EVISCERATE, 10, significantDamage), damage(BLACK_POWDER, 50, 10_000)], HUNDRED_S_FIGHT_MS);
     expect(windows.some(window => window.time_s === 10 && window.window_damage === significantDamage)).toBe(true);
   });
 
   it('excludes a hit exactly on the window end (half-open)', () => {
     // Burst 10..13 -> window [10s, 14s). A small probe at exactly 14s is too small to
     // extend the dense run, so the window geometry is fixed and the 14s hit is excluded.
-    const windows = findParseWindows([...burstAt(10), damage(BLACK_POWDER, 14, 10)], 0, LONG_FIGHT_MS, [], [], new Map());
+    const windows = scanWindows([...burstAt(10), damage(BLACK_POWDER, 14, 10)], LONG_FIGHT_MS);
     expect(windows).toHaveLength(1);
     expect(windows[0]).toMatchObject({ window_length_s: 4, window_damage: 4 * BIN_DAMAGE });
     expect(windows[0].ability_breakdown.map(ability => ability.spell_id)).not.toContain(BLACK_POWDER);
@@ -152,7 +282,7 @@ describe('findParseWindows', () => {
 
   it('includes a hit just inside the window end', () => {
     const probeDamage = 10;
-    const windows = findParseWindows([...burstAt(10), damage(BLACK_POWDER, 13.999, probeDamage)], 0, LONG_FIGHT_MS, [], [], new Map());
+    const windows = scanWindows([...burstAt(10), damage(BLACK_POWDER, 13.999, probeDamage)], LONG_FIGHT_MS);
     expect(windows[0]).toMatchObject({ window_length_s: 4, window_damage: 4 * BIN_DAMAGE + probeDamage });
     expect(windows[0].ability_breakdown.map(ability => ability.spell_id)).toContain(BLACK_POWDER);
   });
@@ -160,27 +290,27 @@ describe('findParseWindows', () => {
   it('attributes a cooldown whose cast lands inside the window', () => {
     // Window is [10s, 14s); a Shadow Blades cast at 10s is inside.
     const timings = cdTimings([cast(SHADOW_BLADES, 10)], [{ name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 90 }], 0);
-    const windows = findParseWindows(burstAt(10), 0, LONG_FIGHT_MS, timings, [cast(SHADOW_BLADES, 10)], new Map());
+    const windows = scanWindows(burstAt(10), LONG_FIGHT_MS, { timings, casts: [cast(SHADOW_BLADES, 10)] });
     expect(windows[0].active_cds).toEqual(['Shadow Blades']);
   });
 
   it('does not attribute a cooldown cast on the half-open window end', () => {
     // A cast at 14s sits exactly on the window end -> not attributed.
     const timings = cdTimings([cast(SHADOW_BLADES, 14)], [{ name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 90 }], 0);
-    const windows = findParseWindows(burstAt(10), 0, LONG_FIGHT_MS, timings, [cast(SHADOW_BLADES, 14)], new Map());
+    const windows = scanWindows(burstAt(10), LONG_FIGHT_MS, { timings, casts: [cast(SHADOW_BLADES, 14)] });
     expect(windows[0].active_cds).toEqual([]);
   });
 
   it('marks an ability with no matching cast event as passive', () => {
     // Eviscerate deals the burst damage but was never cast (only Shadow Blades was).
     const names = new Map([[SHADOW_BLADES, 'Shadow Blades'], [SHADOW_BLADES_DAMAGE, 'Eviscerate']]);
-    const windows = findParseWindows(burstAt(10), 0, LONG_FIGHT_MS, [], [cast(SHADOW_BLADES, 10)], names);
+    const windows = scanWindows(burstAt(10), LONG_FIGHT_MS, { casts: [cast(SHADOW_BLADES, 10)], abilityNames: names });
     expect(windows[0].ability_breakdown[0]).toMatchObject({ spell_id: SHADOW_BLADES_DAMAGE, is_passive: true });
   });
 
   it('marks an actively cast ability as not passive', () => {
     const names = new Map([[SHADOW_BLADES_DAMAGE, 'Eviscerate']]);
-    const windows = findParseWindows(burstAt(10), 0, LONG_FIGHT_MS, [], [cast(SHADOW_BLADES_DAMAGE, 10)], names);
+    const windows = scanWindows(burstAt(10), LONG_FIGHT_MS, { casts: [cast(SHADOW_BLADES_DAMAGE, 10)], abilityNames: names });
     expect(windows[0].ability_breakdown[0]).toMatchObject({ spell_id: SHADOW_BLADES_DAMAGE, is_passive: false });
   });
 });

@@ -8,6 +8,7 @@ import {
   defensiveSpellIds, defensivePlanMeta, buildBuffWindows, summarizeDefensiveCasts,
   findParseDefensiveWindows, clusterDefensiveWindows, buildHoldTargets, buildDefensiveBenchmark,
   aggregateDefensiveBenchmarks,
+  windowDamageBreakdown, clusterDamageStats, clusterAbilityBreakdown,
   ParseDefWindow, ParseDefensiveSummary,
 } from './defensive-transform.service';
 import { CLOAK_OF_SHADOWS } from '../../../../testing/spell-ids';
@@ -97,6 +98,56 @@ describe('findParseDefensiveWindows', () => {
     );
     expect(result[0].window_length_s).toBe(290); // 10 -> 300 (fight end), not 10 + duration
     expect(result[0].window_damage).toBe(400);
+  });
+});
+
+describe('windowDamageBreakdown', () => {
+  // hit = [timestampMs, damage, abilityId, sourceId]
+  type Hit = [number, number, number, number | null];
+  it('sums damage per ability id, highest first, ignoring id 0', () => {
+    const hits: Hit[] = [
+      [0, 500, BOSS_HIT, BOSS_ACTOR], [0, 200, ADD_HIT, ADD_ACTOR], [0, 100, BOSS_HIT, BOSS_ACTOR], [0, 999, 0, null],
+    ];
+    expect(windowDamageBreakdown(hits)).toEqual([{ spell_id: BOSS_HIT, damage: 600 }, { spell_id: ADD_HIT, damage: 200 }]);
+  });
+
+  it('keeps only the top 6 damage sources (boundary)', () => {
+    const TOP_N = 6;
+    const SOURCE_COUNT = 7; // one more than the cap
+    const hits: Hit[] = Array.from({ length: SOURCE_COUNT }, (_, i) => [0, (i + 1) * 100, BOSS_HIT + i, BOSS_ACTOR]);
+    expect(windowDamageBreakdown(hits)).toHaveLength(TOP_N);
+  });
+});
+
+describe('clusterDamageStats', () => {
+  it('reports avg/stddev/min/max over the window damages, rounded', () => {
+    const LOW = 700;
+    const HIGH = 900;
+    expect(clusterDamageStats([LOW, HIGH])).toEqual({ dmg_avg: 800, dmg_stddev: Math.round(Math.sqrt(20000)), dmg_min: LOW, dmg_max: HIGH });
+  });
+});
+
+describe('clusterAbilityBreakdown', () => {
+  const member = (abilities: { spell_id: number; damage: number }[]): ParseDefWindow => ({
+    time_s: 10, window_length_s: 5, window_damage: 700, pct_of_total: 0.2, parse_index: 0,
+    defensive_name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS, ref_game_id: BOSS_GAME_ID, ability_breakdown: abilities,
+  });
+
+  it('keeps an ability present in a majority of members with avg/min/max', () => {
+    const out = clusterAbilityBreakdown([
+      member([{ spell_id: BOSS_HIT, damage: 400 }]), member([{ spell_id: BOSS_HIT, damage: 600 }]),
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ spell_id: BOSS_HIT, avg_damage: 500, min_damage: 400, max_damage: 600, count: 2 });
+  });
+
+  it('drops an ability below the member-majority share (boundary)', () => {
+    // 1 of 3 members carries ADD_HIT -> 0.33 < 0.5 majority -> dropped.
+    const out = clusterAbilityBreakdown([
+      member([{ spell_id: BOSS_HIT, damage: 500 }]), member([{ spell_id: BOSS_HIT, damage: 500 }]),
+      member([{ spell_id: ADD_HIT, damage: 500 }]),
+    ]);
+    expect(out.map(ability => ability.spell_id)).toEqual([BOSS_HIT]);
   });
 });
 

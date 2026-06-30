@@ -18,6 +18,7 @@ import { BurstWindow, TopDefensiveSummary } from '../../../core/models/analysis.
 import { PerDefensiveBenchmark } from '../../../core/models/encounter.models';
 import { logWarn } from '../../../core/log';
 import { mean, median, deviation } from 'd3-array';
+import { round, groupByTime } from '../../../shared/analysis/analysis-math';
 import { DefensiveBench, DefensiveDataSource, DefensivePlanMeta } from './defensive-data-source';
 
 /** How many top parses to sample (matches the ingest bench). */
@@ -37,6 +38,10 @@ const CLUSTER_MERGE_S = 20;
 const HOLD_TRIGGER_FRAC = 0.4;
 /** A gap beyond this past the expected on-cooldown time counts as a deliberate hold. */
 const HOLD_THRESHOLD_S = 8;
+/** Keep only the top-N damage sources in a window's ability breakdown (UI row cap). */
+const ABILITY_BREAKDOWN_TOP_N = 6;
+/** Default defensive cooldown (s) when the rulebook entry omits one. */
+const DEFAULT_DEFENSIVE_COOLDOWN_S = 90;
 
 /* ----------------------------- pure helpers (own math) ----------------------------- */
 
@@ -57,11 +62,6 @@ export function toParseRankings(raw: WclRawRanking[], count: number): ParseRanki
     }));
 }
 
-
-/** Round to `decimals` places (default 1). d3-array has no rounding helper. */
-function round(value: number, decimals = 1): number {
-  return Math.round(value * 10 ** decimals) / 10 ** decimals;
-}
 
 /** Defensive name -> spell id, for the defensive window header icons. */
 export function defensiveSpellIds(defensives: RulebookDefensive[]): Record<string, number> {
@@ -143,7 +143,7 @@ export function summarizeDefensiveCasts(
   const summaries: ParseDefensiveSummary[] = [];
   for (const defensive of defensives) {
     const spellId = defensive.spell_id;
-    const cooldownS = defensive.cooldown ?? 90;
+    const cooldownS = defensive.cooldown ?? DEFAULT_DEFENSIVE_COOLDOWN_S;
     const castTimes: number[] = [];
 
     for (const buffWindow of (buffWindows.get(spellId) ?? [])) castTimes.push(round(buffWindow[0]));
@@ -179,6 +179,20 @@ export function summarizeDefensiveCasts(
   return summaries;
 }
 
+/** One window hit: `[timestampMs, damage, abilityId, sourceId]` (sorted by time). */
+type WindowHit = [number, number, number, number | null];
+
+/** Top-N damage sources in a window, summed by ability id, highest damage first. */
+export function windowDamageBreakdown(windowHits: WindowHit[]): { spell_id: number; damage: number }[] {
+  const abilityDmg = new Map<number, number>();
+  for (const [, damage, abilityId] of windowHits) {
+    if (abilityId) abilityDmg.set(abilityId, (abilityDmg.get(abilityId) ?? 0) + damage);
+  }
+  return [...abilityDmg.entries()]
+    .sort((a, b) => b[1] - a[1]).slice(0, ABILITY_BREAKDOWN_TOP_N)
+    .map(([spell_id, damage]) => ({ spell_id, damage }));
+}
+
 /**
  * Per-defensive windows for one parse: the MEASURED buff span (apply -> remove, or to
  * fight end for an open buff - never a rulebook duration) with the damage taken during
@@ -192,7 +206,7 @@ export function findParseDefensiveWindows(
 ): ParseDefWindow[] {
   const hits = damageTaken
     .filter(event => event.type === 'damage' && (event.amount ?? 0) + (event.absorbed ?? 0) > 0)
-    .map(event => [event.timestamp, (event.amount ?? 0) + (event.absorbed ?? 0), event.abilityGameID ?? 0, event.sourceID ?? null] as [number, number, number, number | null])
+    .map(event => [event.timestamp, (event.amount ?? 0) + (event.absorbed ?? 0), event.abilityGameID ?? 0, event.sourceID ?? null] as WindowHit)
     .sort((a, b) => a[0] - b[0]);
   if (!hits.length) return [];
   const total = hits.reduce((sum, hit) => sum + hit[1], 0);
@@ -209,13 +223,7 @@ export function findParseDefensiveWindows(
       const windowHits = hits.filter(hit => hit[0] >= startMs && hit[0] <= endMs);
       const windowDmg = windowHits.reduce((sum, hit) => sum + hit[1], 0);
 
-      const abilityDmg = new Map<number, number>();
-      for (const [, damage, abilityId] of windowHits) {
-        if (abilityId) abilityDmg.set(abilityId, (abilityDmg.get(abilityId) ?? 0) + damage);
-      }
-      const ability_breakdown = [...abilityDmg.entries()]
-        .sort((a, b) => b[1] - a[1]).slice(0, 6)
-        .map(([spell_id, damage]) => ({ spell_id, damage }));
+      const ability_breakdown = windowDamageBreakdown(windowHits);
 
       const dmgBySource = new Map<number, number>();
       for (const [, damage, , sourceId] of windowHits) {
@@ -240,21 +248,39 @@ export function findParseDefensiveWindows(
   return result.sort((a, b) => a.time_s - b.time_s);
 }
 
-/** Group windows whose time is within `mergeS` of the running cluster median. */
-function groupByTime<T extends { time_s: number }>(windows: T[], mergeS: number): T[][] {
-  const sorted = [...windows].sort((a, b) => a.time_s - b.time_s);
-  const clusters: T[][] = [];
-  let openTimes: number[] = [];
-  for (const window of sorted) {
-    if (clusters.length && Math.abs(window.time_s - (median(openTimes) ?? 0)) <= mergeS) {
-      clusters[clusters.length - 1].push(window);
-      openTimes.push(window.time_s);
-    } else {
-      clusters.push([window]);
-      openTimes = [window.time_s];
+/** Absolute damage stats (avg/stddev/min/max, rounded) over a cluster's window damages. */
+export function clusterDamageStats(damages: number[]): { dmg_avg: number; dmg_stddev: number; dmg_min: number; dmg_max: number } {
+  return {
+    dmg_avg: Math.round((mean(damages) ?? 0)),
+    dmg_stddev: Math.round((deviation(damages) ?? 0)),
+    dmg_min: Math.round(Math.min(...damages)),
+    dmg_max: Math.round(Math.max(...damages)),
+  };
+}
+
+/**
+ * Cross-parse top-N ability breakdown for a cluster: each ability present in at least
+ * a majority of member parses, with its avg/min/max damage, highest avg first.
+ */
+export function clusterAbilityBreakdown(cluster: ParseDefWindow[]): BurstWindow['ability_breakdown'] {
+  const abilityDamage = new Map<number, number[]>();
+  for (const member of cluster) {
+    for (const ability of member.ability_breakdown) {
+      if (!abilityDamage.has(ability.spell_id)) abilityDamage.set(ability.spell_id, []);
+      abilityDamage.get(ability.spell_id)!.push(ability.damage);
     }
   }
-  return clusters;
+  return [...abilityDamage.entries()]
+    .filter(([, list]) => list.length >= cluster.length * MEMBER_MAJORITY_FRAC)
+    .map(([spell_id, list]) => ({
+      spell_id,
+      avg_damage: Math.round((mean(list) ?? 0)),
+      min_damage: Math.round(Math.min(...list)),
+      max_damage: Math.round(Math.max(...list)),
+      count: list.length,
+    }))
+    .sort((a, b) => b.avg_damage - a.avg_damage)
+    .slice(0, ABILITY_BREAKDOWN_TOP_N);
 }
 
 /**
@@ -282,25 +308,6 @@ export function clusterDefensiveWindows(windows: ParseDefWindow[], sampleCount: 
       if ((median(shares) ?? 0) < WINDOW_MIN_DMG_PCT) continue;
       const damages = cluster.map(member => member.window_damage);
 
-      const abilityDamage = new Map<number, number[]>();
-      for (const member of cluster) {
-        for (const ability of member.ability_breakdown) {
-          if (!abilityDamage.has(ability.spell_id)) abilityDamage.set(ability.spell_id, []);
-          abilityDamage.get(ability.spell_id)!.push(ability.damage);
-        }
-      }
-      const ability_breakdown = [...abilityDamage.entries()]
-        .filter(([, list]) => list.length >= cluster.length * MEMBER_MAJORITY_FRAC)
-        .map(([spell_id, list]) => ({
-          spell_id,
-          avg_damage: Math.round((mean(list) ?? 0)),
-          min_damage: Math.round(Math.min(...list)),
-          max_damage: Math.round(Math.max(...list)),
-          count: list.length,
-        }))
-        .sort((a, b) => b.avg_damage - a.avg_damage)
-        .slice(0, 6);
-
       const refCounts = new Map<number, number>();
       for (const member of cluster) {
         if (member.ref_game_id != null) refCounts.set(member.ref_game_id, (refCounts.get(member.ref_game_id) ?? 0) + 1);
@@ -309,10 +316,7 @@ export function clusterDefensiveWindows(windows: ParseDefWindow[], sampleCount: 
 
       result.push({
         time_s: round(median(cluster.map(member => member.time_s)) ?? 0),
-        dmg_avg: Math.round((mean(damages) ?? 0)),
-        dmg_stddev: Math.round((deviation(damages) ?? 0)),
-        dmg_min: Math.round(Math.min(...damages)),
-        dmg_max: Math.round(Math.max(...damages)),
+        ...clusterDamageStats(damages),
         dmg_pct_avg: round((mean(shares) ?? 0), 3),
         window_length_s: round(mean(cluster.map(member => member.window_length_s)) ?? 0),
         defensive_name: defensiveName,
@@ -320,7 +324,7 @@ export function clusterDefensiveWindows(windows: ParseDefWindow[], sampleCount: 
         common_defensives: [defensiveName],
         common_cds: [defensiveName],
         ref_game_id,
-        ability_breakdown,
+        ability_breakdown: clusterAbilityBreakdown(cluster),
       });
     }
   }

@@ -38,6 +38,8 @@ export const POSITIONS_INTERVAL_S = 1.5;
 const MAX_TRACKED_ENEMIES = 5;
 /** A non-boss enemy needs at least this many resampled rows to be kept. */
 const MIN_ENEMY_SAMPLES = 4;
+// Times/durations are stored rounded to deciseconds (0.1s): multiply, round, divide.
+const DECISECONDS_PER_S = 10;
 
 /* ----------------------------- pure helpers (own math) ----------------------------- */
 
@@ -120,7 +122,7 @@ export function resampleTimeline(samples: RawPosSample[], durationS: number, int
       nearest = fraction < 0.5 ? before : after;
     }
     out.push([
-      Math.round(t * 10) / 10, Math.round(x), Math.round(y),
+      Math.round(t * DECISECONDS_PER_S) / DECISECONDS_PER_S, Math.round(x), Math.round(y),
       nearest.facing == null ? null : Math.round(nearest.facing), nearest.mapID,
     ]);
   }
@@ -130,29 +132,38 @@ export function resampleTimeline(samples: RawPosSample[], durationS: number, int
 /** gameID + name for a report's enemy actors, keyed by actor id. */
 export interface EnemyMeta { gameID: number | null; name: string; }
 
-/**
- * Build one parse's position payload from its resource-bearing events: the ranked
- * player's resampled timeline plus the notable enemy timelines (boss = highest
- * observed maxHitPoints, then the most-sampled enemies). Enemies are keyed by
- * gameID so the frontend matches "the same boss/add" across parses. Mirrors
- * ingest `buildParsePositions`.
- */
-export function buildParsePositions(
-  reportCode: string, fightId: number, playerName: string, playerId: number,
-  enemyMetaById: Map<number, EnemyMeta>, posEvents: WclEvent[],
-  fightStartMs: number, durationS: number,
-): ParsePositions {
-  const byActor = collectPositionSamples(posEvents, fightStartMs);
-  const playerSamples = byActor.get(playerId) ?? [];
+/** A candidate enemy actor with its grouped samples and HP/count used for selection. */
+export interface EnemyCandidate {
+  actorId: number;
+  count: number;
+  maxHp: number;
+  samples: RawPosSample[];
+  meta: EnemyMeta;
+}
 
-  const enemies: { actorId: number; count: number; maxHp: number; samples: RawPosSample[]; meta: EnemyMeta }[] = [];
+/** The enemies to track for a parse: the boss (or null if none) plus the kept enemy set. */
+export interface SelectedEnemies {
+  bossId: number | null;
+  kept: EnemyCandidate[];
+}
+
+/**
+ * Pick the tracked enemy set from grouped per-actor samples: the boss is the actor
+ * with the highest observed maxHitPoints; the rest are ranked by sample count and
+ * capped at MAX_TRACKED_ENEMIES (the boss is always retained even past the cap).
+ * The MIN_ENEMY_SAMPLES floor is applied later on resampled rows, not here. Pure.
+ */
+export function selectBossAndEnemies(
+  byActor: Map<number, RawPosSample[]>, playerId: number, enemyMetaById: Map<number, EnemyMeta>,
+): SelectedEnemies {
+  const enemies: EnemyCandidate[] = [];
   for (const [actorId, samples] of byActor) {
     if (actorId === playerId || !enemyMetaById.has(actorId)) continue;
     const maxHp = samples.reduce((max, sample) => Math.max(max, sample.maxHp), 0);
     enemies.push({ actorId, count: samples.length, maxHp, samples, meta: enemyMetaById.get(actorId)! });
   }
   enemies.sort((a, b) => b.count - a.count);
-  const bossEntry = enemies.reduce<typeof enemies[number] | null>(
+  const bossEntry = enemies.reduce<EnemyCandidate | null>(
     (best, enemy) => (enemy.maxHp > (best?.maxHp ?? -1) ? enemy : best), null);
   const bossId = bossEntry?.actorId ?? null;
   const kept = enemies.slice(0, MAX_TRACKED_ENEMIES);
@@ -160,12 +171,39 @@ export function buildParsePositions(
     const boss = enemies.find(enemy => enemy.actorId === bossId);
     if (boss) kept.push(boss);
   }
+  return { bossId, kept };
+}
+
+/** Inputs for building one parse's position payload from its resource-bearing events. */
+export interface ParsePositionInput {
+  reportCode: string;
+  fightId: number;
+  playerName: string;
+  playerId: number;
+  enemyMetaById: Map<number, EnemyMeta>;
+  posEvents: WclEvent[];
+  fightStartMs: number;
+  durationS: number;
+}
+
+/**
+ * Build one parse's position payload from its resource-bearing events: the ranked
+ * player's resampled timeline plus the notable enemy timelines (boss = highest
+ * observed maxHitPoints, then the most-sampled enemies). Enemies are keyed by
+ * gameID so the frontend matches "the same boss/add" across parses. Mirrors
+ * ingest `buildParsePositions`.
+ */
+export function buildParsePositions(input: ParsePositionInput): ParsePositions {
+  const { reportCode, fightId, playerName, playerId, enemyMetaById, posEvents, fightStartMs, durationS } = input;
+  const byActor = collectPositionSamples(posEvents, fightStartMs);
+  const playerSamples = byActor.get(playerId) ?? [];
+  const { bossId, kept } = selectBossAndEnemies(byActor, playerId, enemyMetaById);
 
   return {
     report_code: reportCode,
     fight_id: fightId,
     player_name: playerName,
-    duration_s: Math.round(durationS * 10) / 10,
+    duration_s: Math.round(durationS * DECISECONDS_PER_S) / DECISECONDS_PER_S,
     interval_s: POSITIONS_INTERVAL_S,
     player: resampleTimeline(playerSamples, durationS, POSITIONS_INTERVAL_S),
     enemies: kept.map(enemy => ({
@@ -224,10 +262,16 @@ export class MapTransformService implements MapDataSource {
       );
       const posEvents = await this.fetchPositionEvents(ranking.report_code, fight, player.id, enemyMetaById);
 
-      const positions = buildParsePositions(
-        ranking.report_code, fight.id, player.name, player.id,
-        enemyMetaById, posEvents, fight.startTime, (fight.endTime - fight.startTime) / 1000,
-      );
+      const positions = buildParsePositions({
+        reportCode: ranking.report_code,
+        fightId: fight.id,
+        playerName: player.name,
+        playerId: player.id,
+        enemyMetaById,
+        posEvents,
+        fightStartMs: fight.startTime,
+        durationS: (fight.endTime - fight.startTime) / 1000,
+      });
       return { positions, encounterName: fight.name ?? '' };
     } catch (err) {
       logWarn(`MapTransformService parse ${ranking.report_code}:${ranking.fight_id}`, err);

@@ -5,8 +5,20 @@ import { DataFileApiService } from '../../../core/services/data-file-api';
 import { CharacterGear, WclCombatantInfo, WclGearItem } from '../../../core/models/wcl.models';
 import {
   GearTransformService, toParseGear, aggregateParseGear, ParseGear,
+  aggregateTalents, aggregateTrinkets, aggregateEnchants,
   extractGear, talentKeyFromTree, toParseRankings,
 } from './gear-transform.service';
+
+// Per-slot caps mirrored from the transform service (MAX_TALENT_BUILDS = 5,
+// MAX_TRINKETS_PER_SLOT = 5, MAX_ENCHANTS_PER_SLOT = 3). The aggregator boundary
+// tests build one more than the cap to assert the slice keeps exactly the cap.
+const MAX_TALENT_BUILDS = 5;
+const MAX_TRINKETS_PER_SLOT = 5;
+const MAX_ENCHANTS_PER_SLOT = 3;
+const TRINKET_1_SLOT = 12;
+const TRINKET_2_SLOT = 13;
+const ENCHANT_SLOT = 15;
+const EXAMPLE_SOURCE_ID = 537;
 
 /* ----------------------------- pure functions ----------------------------- */
 
@@ -113,6 +125,106 @@ describe('aggregateParseGear', () => {
     ]);
     expect(stats.talent_builds[0]).toMatchObject({
       key: 'v2:A', report_code: 'rep1', fight_id: 3, player_name: 'Ann', source_id: 537,
+    });
+  });
+});
+
+/* ----------------------------- per-facet aggregators ----------------------------- */
+
+function gearParse(overrides: Partial<ParseGear>): ParseGear {
+  return {
+    talent_key: 'v2:1,2', trinkets: [], enchants: [],
+    report_code: 'rep', fight_id: 1, player_name: 'P', source_id: 1, ...overrides,
+  };
+}
+
+describe('aggregateTalents', () => {
+  it('ranks builds by frequency, tags the first-seen example, and is empty for no parses', () => {
+    expect(aggregateTalents([])).toEqual([]);
+
+    const builds = aggregateTalents([
+      gearParse({ talent_key: 'v2:A', report_code: 'rep1', fight_id: 3, player_name: 'Ann', source_id: EXAMPLE_SOURCE_ID }),
+      gearParse({ talent_key: 'v2:A', report_code: 'rep2', fight_id: 7, player_name: 'Bob', source_id: 99 }),
+      gearParse({ talent_key: 'v2:B' }),
+    ]);
+    expect(builds[0]).toMatchObject({ key: 'v2:A', pct: 67, report_code: 'rep1', source_id: EXAMPLE_SOURCE_ID });
+    expect(builds[1]).toMatchObject({ key: 'v2:B', pct: 33 });
+  });
+
+  it('ignores parses with no talent key', () => {
+    expect(aggregateTalents([gearParse({ talent_key: '' })])).toEqual([]);
+  });
+
+  it('keeps at most MAX_TALENT_BUILDS distinct builds', () => {
+    const parses = Array.from({ length: MAX_TALENT_BUILDS + 1 }, (_, i) => gearParse({ talent_key: `v2:${i}` }));
+    expect(aggregateTalents(parses)).toHaveLength(MAX_TALENT_BUILDS);
+  });
+});
+
+describe('aggregateTrinkets', () => {
+  it('buckets per slot 12/13 by frequency and ignores non-trinket slots and zero ids', () => {
+    const trinkets = aggregateTrinkets([
+      gearParse({ trinkets: [{ slot: TRINKET_1_SLOT, id: 100, name: 'A', icon: 'inv_a' }] }),
+      gearParse({ trinkets: [{ slot: TRINKET_1_SLOT, id: 100, name: 'A', icon: 'inv_a' }] }),
+      gearParse({ trinkets: [{ slot: TRINKET_1_SLOT, id: 200, name: 'B', icon: 'inv_b' }] }),
+      gearParse({ trinkets: [{ slot: TRINKET_2_SLOT, id: 300, name: 'C', icon: 'inv_c' }] }),
+    ]);
+    expect(trinkets[TRINKET_1_SLOT]).toEqual([
+      { id: 100, name: 'A', icon: 'inv_a', pct: 50 },
+      { id: 200, name: 'B', icon: 'inv_b', pct: 25 },
+    ]);
+    expect(trinkets[TRINKET_2_SLOT]).toEqual([{ id: 300, name: 'C', icon: 'inv_c', pct: 25 }]);
+  });
+
+  it('drops a non-trinket slot and a zero-id trinket, and is empty for no parses', () => {
+    expect(aggregateTrinkets([])).toEqual({});
+    const trinkets = aggregateTrinkets([
+      gearParse({ trinkets: [{ slot: 5, id: 1, name: 'X', icon: 'x' }, { slot: TRINKET_1_SLOT, id: 0, name: '', icon: '' }] }),
+    ]);
+    expect(trinkets).toEqual({});
+  });
+
+  it('keeps at most MAX_TRINKETS_PER_SLOT trinkets in a slot', () => {
+    const parses = Array.from({ length: MAX_TRINKETS_PER_SLOT + 1 }, (_, i) =>
+      gearParse({ trinkets: [{ slot: TRINKET_1_SLOT, id: 100 + i, name: `T${i}`, icon: `t${i}` }] }));
+    expect(aggregateTrinkets(parses)[TRINKET_1_SLOT]).toHaveLength(MAX_TRINKETS_PER_SLOT);
+  });
+});
+
+describe('aggregateEnchants', () => {
+  it('buckets per slot by frequency and ignores zero ids', () => {
+    const enchants = aggregateEnchants([
+      gearParse({ enchants: [{ slot: ENCHANT_SLOT, id: 8041, name: 'Soph' }] }),
+      gearParse({ enchants: [{ slot: ENCHANT_SLOT, id: 8041, name: 'Soph' }] }),
+      gearParse({ enchants: [{ slot: ENCHANT_SLOT, id: 9000, name: 'Other' }] }),
+      gearParse({ enchants: [{ slot: ENCHANT_SLOT, id: 0, name: '' }] }),
+    ]);
+    expect(enchants[ENCHANT_SLOT]).toEqual([
+      { id: 8041, name: 'Soph', pct: 50 },
+      { id: 9000, name: 'Other', pct: 25 },
+    ]);
+  });
+
+  it('is empty for no parses', () => {
+    expect(aggregateEnchants([])).toEqual({});
+  });
+
+  it('keeps at most MAX_ENCHANTS_PER_SLOT enchants in a slot', () => {
+    const parses = Array.from({ length: MAX_ENCHANTS_PER_SLOT + 1 }, (_, i) =>
+      gearParse({ enchants: [{ slot: ENCHANT_SLOT, id: 8041 + i, name: `E${i}` }] }));
+    expect(aggregateEnchants(parses)[ENCHANT_SLOT]).toHaveLength(MAX_ENCHANTS_PER_SLOT);
+  });
+});
+
+describe('aggregateParseGear', () => {
+  it('composes the three per-facet aggregators', () => {
+    const parses = [
+      gearParse({ talent_key: 'v2:A', trinkets: [{ slot: TRINKET_1_SLOT, id: 100, name: 'A', icon: 'inv_a' }], enchants: [{ slot: ENCHANT_SLOT, id: 8041, name: 'Soph' }] }),
+    ];
+    expect(aggregateParseGear(parses)).toEqual({
+      talent_builds: aggregateTalents(parses),
+      trinkets: aggregateTrinkets(parses),
+      enchants: aggregateEnchants(parses),
     });
   });
 });

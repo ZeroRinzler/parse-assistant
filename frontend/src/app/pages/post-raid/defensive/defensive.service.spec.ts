@@ -10,6 +10,7 @@ import {
   analyzeDefensives, analyzeDefensiveFindings, computePlayerDefensiveWindows,
   defensiveWindowStatus, defensiveMapAnchor, buildDefensiveWindows, buildDefensivePlanRows,
   playerCoveredWindow, playerUsefulTiming, windowMissFindings,
+  buildDefensiveUsageWindows, analyzeOneDefensive, gapDelayFindings, holdSuggestionFindings,
 } from './defensive.service';
 import { CLOAK_OF_SHADOWS } from '../../../../testing/spell-ids';
 
@@ -54,6 +55,122 @@ describe('analyzeDefensives', () => {
       [CLOAK_META], [], [applybuff(CLOAK_OF_SHADOWS, 10)], [dtaken(700, 50, 400)], 0, 300_000,
     );
     expect(out[0].windows[0]).toMatchObject({ start_s: 10, end_s: 300, dmg_during: 400 });
+  });
+});
+
+describe('buildDefensiveUsageWindows', () => {
+  // The buff/cast fight window the fixtures live inside.
+  const F_START = 0;
+  const F_END = 300_000;
+  const FIGHT_END_S = 300;
+  const rel = (ts: number): number => ts - F_START;
+  // A constant damage-in-window function so each span's dmg_during is predictable.
+  const FIXED_DMG = 500;
+  const dmg = (): number => FIXED_DMG;
+
+  it('builds a measured buff span with damage taken, open buff running to fight end', () => {
+    const BUFF_START_S = 10;
+    const out = buildDefensiveUsageWindows(CLOAK_OF_SHADOWS, [[BUFF_START_S, null]], [], dmg, rel, F_START, F_END, FIGHT_END_S);
+    expect(out).toEqual([{ start_s: BUFF_START_S, end_s: FIGHT_END_S, dmg_during: FIXED_DMG }]);
+  });
+
+  it('falls back to point casts (zero span, no damage) only when there is no buff span', () => {
+    const CAST_S = 20;
+    const out = buildDefensiveUsageWindows(
+      CLOAK_OF_SHADOWS, [], [{ type: 'cast', timestamp: CAST_S * 1000, abilityGameID: CLOAK_OF_SHADOWS }],
+      dmg, rel, F_START, F_END, FIGHT_END_S,
+    );
+    expect(out).toEqual([{ start_s: CAST_S, end_s: CAST_S, dmg_during: 0 }]);
+  });
+
+  it('ignores a cast outside the fight bounds (boundary)', () => {
+    const PAST_END_S = 301; // > FIGHT_END_S, so its timestamp is past F_END
+    const out = buildDefensiveUsageWindows(
+      CLOAK_OF_SHADOWS, [], [{ type: 'cast', timestamp: PAST_END_S * 1000, abilityGameID: CLOAK_OF_SHADOWS }],
+      dmg, rel, F_START, F_END, FIGHT_END_S,
+    );
+    expect(out).toEqual([]);
+  });
+});
+
+describe('gapDelayFindings', () => {
+  // avg_gap 60, stddev 5 -> +2sigma band is 70; a gap must STRICTLY exceed 70 to flag.
+  const AVG_GAP_S = 60;
+  const STDDEV_GAP_S = 5;
+  const benchWithGap = (overrides: Partial<PerDefensiveBenchmark> = {}): PerDefensiveBenchmark => ({
+    sample_count: 5, avg_first_cast_s: 10, stddev_first_cast_s: 2, avg_gap_s: AVG_GAP_S, stddev_gap_s: STDDEV_GAP_S,
+    hold_targets: {}, avg_uses: 2, avg_uses_per_min: 0.4, uses_per_min: { avg: 0.4, stddev: 0.05, min: 0.3, max: 0.5 },
+    majority_hold: false, ...overrides,
+  });
+
+  it('flags a gap beyond the +2sigma band', () => {
+    const GAP_OVER = 71; // 71 > 70
+    const out = gapDelayFindings('Cloak of Shadows', [0, GAP_OVER], benchWithGap());
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ severity: 'warning', category: 'cooldown_delay' });
+  });
+
+  it('does not flag a gap exactly at the band (strict boundary)', () => {
+    const GAP_AT_BAND = AVG_GAP_S + 2 * STDDEV_GAP_S; // 70, not an outlier
+    expect(gapDelayFindings('Cloak of Shadows', [0, GAP_AT_BAND], benchWithGap())).toEqual([]);
+  });
+
+  it('emits nothing when the bench has no gap statistic', () => {
+    expect(gapDelayFindings('Cloak of Shadows', [0, 999], benchWithGap({ avg_gap_s: null, stddev_gap_s: null }))).toEqual([]);
+  });
+});
+
+describe('holdSuggestionFindings', () => {
+  // Cast index 1 held to 100s with stddev 5 -> suggest when player < 95.
+  const TARGET_S = 100;
+  const STDDEV_S = 5;
+  const holdTargets: PerDefensiveBenchmark['hold_targets'] = {
+    1: { target_s: TARGET_S, stddev_s: STDDEV_S, count: 6, total_samples: 10 },
+  };
+
+  it('suggests a hold when the player pressed before the band', () => {
+    const EARLY_S = 80; // < 95
+    const out = holdSuggestionFindings('Cloak of Shadows', [EARLY_S], holdTargets);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ severity: 'info', category: 'hold_suggestion' });
+  });
+
+  it('does not suggest at the band edge (strict boundary)', () => {
+    const AT_BAND_S = TARGET_S - STDDEV_S; // 95, not strictly below
+    expect(holdSuggestionFindings('Cloak of Shadows', [AT_BAND_S], holdTargets)).toEqual([]);
+  });
+
+  it('skips a cast index the player never reached', () => {
+    expect(holdSuggestionFindings('Cloak of Shadows', [], holdTargets)).toEqual([]);
+  });
+});
+
+describe('analyzeOneDefensive', () => {
+  const bench: PerDefensiveBenchmark = {
+    sample_count: 10, avg_first_cast_s: 10, stddev_first_cast_s: 2, avg_gap_s: 60, stddev_gap_s: 5,
+    hold_targets: {}, avg_uses: 2, avg_uses_per_min: 0.4, uses_per_min: { avg: 0.4, stddev: 0.05, min: 0.3, max: 0.5 },
+    majority_hold: false,
+  };
+  const player = (overrides: Partial<PlayerDefensive>): PlayerDefensive =>
+    ({ name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS, cooldown: 120, uses: 0, cast_times_s: [], windows: [], ...overrides });
+
+  it('flags a never-used defensive as a critical lost cooldown', () => {
+    const out = analyzeOneDefensive(player({ uses: 0, cast_times_s: [] }), bench, 300);
+    expect(out[0]).toMatchObject({ severity: 'critical', category: 'lost_cooldown' });
+  });
+
+  it('returns a success (no issues) when usage matches', () => {
+    const out = analyzeOneDefensive(player({ uses: 2, cast_times_s: [10, 70] }), bench, 300);
+    expect(out.some(finding => finding.severity === 'success')).toBe(true);
+  });
+
+  it('skips a talent-gated defensive that was never used', () => {
+    expect(analyzeOneDefensive(player({ uses: 0, talent_gated: true }), bench, 300)).toEqual([]);
+  });
+
+  it('records a no-bench success only when used', () => {
+    expect(analyzeOneDefensive(player({ uses: 1, cast_times_s: [10] }), undefined, 300)[0]).toMatchObject({ severity: 'success' });
+    expect(analyzeOneDefensive(player({ uses: 0 }), undefined, 300)).toEqual([]);
   });
 });
 
@@ -193,7 +310,7 @@ describe('buildDefensiveWindows', () => {
     const player: PlayerBurstWindow[] = [{ time_s: 30, window_damage: 1150, ability_breakdown: [{ spell_id: 700, damage: 700 }] }];
     // Covered the window (span 30-35), mitigated under dmg_min, took above the avg band -> warn.
     const playerDef: PlayerDefensive[] = [{ name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS, cooldown: 120, uses: 1, windows: [{ start_s: 30, end_s: 35, dmg_during: 700 }] }];
-    const { windows, anchors } = buildDefensiveWindows([window], player, playerDef, 300, abilities);
+    const { windows, anchors } = buildDefensiveWindows({ topWindows: [window], playerWindows: player, playerDefensives: playerDef, fightDurationS: 300, abilities });
     expect(windows[0].overview.playerPct).toBe(1150);
     expect(windows[0].status).toBe('warn');
     expect(windows[0].spells).toEqual([{ id: CLOAK_OF_SHADOWS, icon: 'cloak', name: 'Cloak of Shadows' }]);
@@ -203,12 +320,12 @@ describe('buildDefensiveWindows', () => {
 
   it('marks an uncovered window bad', () => {
     const player: PlayerBurstWindow[] = [{ time_s: 30, window_damage: 900, ability_breakdown: [] }];
-    const { windows } = buildDefensiveWindows([window], player, [], 300, abilities);
+    const { windows } = buildDefensiveWindows({ topWindows: [window], playerWindows: player, playerDefensives: [], fightDurationS: 300, abilities });
     expect(windows[0].status).toBe('bad');
   });
 
   it('mutes and drops player data for a window the fight never reached', () => {
-    const { windows } = buildDefensiveWindows([window], [], [], 5, abilities);
+    const { windows } = buildDefensiveWindows({ topWindows: [window], playerWindows: [], playerDefensives: [], fightDurationS: 5, abilities });
     expect(windows[0].status).toBe('muted');
     expect(windows[0].overview.playerPct).toBeNull();
   });

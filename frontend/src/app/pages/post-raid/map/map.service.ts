@@ -127,6 +127,35 @@ export function listReferenceEnemies(positions: EncounterPositions): { gameId: n
   return [...map.values()].sort((a, b) => (b.isBoss ? 1 : 0) - (a.isBoss ? 1 : 0));
 }
 
+/** The live actor that stands in for the ingested boss, plus the gameID -> live-actor-id map. */
+export interface LiveReference {
+  bossActorId: number | null;
+  refActorByGameId: Map<number, number>;
+}
+
+/**
+ * Resolve the live pull's reference actors from the ingested bench: map each
+ * enemy's gameID to its live actor id, then look up the ingested boss's gameID to
+ * find this pull's boss actor. Shared by the overlay builder and the event fetch so
+ * the derivation lives in one place. Pure.
+ */
+export function resolveLiveReference(positions: EncounterPositions, enemies: MapEnemyActor[]): LiveReference {
+  const refActorByGameId = new Map<number, number>();
+  for (const enemy of enemies) if (enemy.gameID != null) refActorByGameId.set(enemy.gameID, enemy.id);
+  const bossGameId = listReferenceEnemies(positions).find(enemy => enemy.isBoss)?.gameId;
+  const bossActorId = bossGameId != null ? (refActorByGameId.get(bossGameId) ?? null) : null;
+  return { bossActorId, refActorByGameId };
+}
+
+/** Inputs for assembling the live player overlay from already-fetched position events. */
+export interface LiveOverlayInput {
+  positions: EncounterPositions;
+  events: WclEvent[];
+  fightStartMs: number;
+  playerId: number;
+  enemies: MapEnemyActor[];
+}
+
 /**
  * Assemble the live overlay from already-fetched, position-bearing live events:
  * per-actor timelines plus the live actor id for the ingested boss and a gameID
@@ -134,18 +163,9 @@ export function listReferenceEnemies(positions: EncounterPositions): { gameId: n
  * Reproduces the core of the legacy `MapContextService._buildLiveOverlay` minus
  * the fetching, so it stays pure and testable.
  */
-export function buildLiveOverlay(
-  positions: EncounterPositions,
-  events: WclEvent[],
-  fightStartMs: number,
-  playerId: number,
-  enemies: MapEnemyActor[],
-): MapLiveOverlay | null {
-  const refActorByGameId = new Map<number, number>();
-  for (const enemy of enemies) if (enemy.gameID != null) refActorByGameId.set(enemy.gameID, enemy.id);
-  const bossGameId = listReferenceEnemies(positions).find(enemy => enemy.isBoss)?.gameId;
-  const bossActorId = bossGameId != null ? (refActorByGameId.get(bossGameId) ?? null) : null;
-
+export function buildLiveOverlay(input: LiveOverlayInput): MapLiveOverlay | null {
+  const { positions, events, fightStartMs, playerId, enemies } = input;
+  const { bossActorId, refActorByGameId } = resolveLiveReference(positions, enemies);
   const timelines = buildActorTimelines(events, fightStartMs);
   if (!timelines.get(playerId)?.samples.length) return null;
   return { timelines, playerId, bossActorId, refActorByGameId };
@@ -200,7 +220,7 @@ export class MapFeatureService {
       const positions = await this.loadBench(spec, fight.encounterID);
       if (!positions) return;
       const events = await this.fetchLiveEvents(reportCode, fight, playerId, positions, enemies);
-      this.live.set(buildLiveOverlay(positions, events, fight.startTime, playerId, enemies));
+      this.live.set(buildLiveOverlay({ positions, events, fightStartMs: fight.startTime, playerId, enemies }));
     } catch (err) {
       logWarn(`MapFeatureService.prepare ${reportCode}:${fight?.id}`, err);
       this.live.set(null);
@@ -231,10 +251,7 @@ export class MapFeatureService {
     positions: EncounterPositions, enemies: MapEnemyActor[],
   ): Promise<WclEvent[]> {
     const { id, startTime, endTime } = fight;
-    const refActorByGameId = new Map<number, number>();
-    for (const enemy of enemies) if (enemy.gameID != null) refActorByGameId.set(enemy.gameID, enemy.id);
-    const bossGameId = listReferenceEnemies(positions).find(enemy => enemy.isBoss)?.gameId;
-    const bossActorId = bossGameId != null ? (refActorByGameId.get(bossGameId) ?? null) : null;
+    const { bossActorId } = resolveLiveReference(positions, enemies);
 
     const wclApi = this.injector.get(WclApiService);
     const [playerCasts, enemyCasts, bossDamage] = await Promise.all([

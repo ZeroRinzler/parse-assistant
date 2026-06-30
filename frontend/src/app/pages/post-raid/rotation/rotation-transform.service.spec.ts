@@ -5,7 +5,7 @@ import { DataFileApiService } from '../../../core/services/data-file-api';
 import { WclEvent } from '../../../core/models/wcl.models';
 import {
   RotationTransformService,
-  detectBloodlust, summarizeCooldownCasts, castGapListMs,
+  detectBloodlust, summarizeCooldownCasts, detectHoldWindows, castGapListMs,
   buildCdBenchmark, buildHoldTargets, computeEfficiencyThresholds, aggregateCdBenchmarks, rotationCdSpellIds,
   CdSummary,
 } from './rotation-transform.service';
@@ -67,6 +67,34 @@ describe('summarizeCooldownCasts', () => {
     expect(atBoundary[0].hold_windows).toHaveLength(0);
     const past = summarizeCooldownCasts([cast(SHADOW_BLADES, 0), cast(SHADOW_BLADES, 98.1)], cooldowns, 0, 200, null);
     expect(past[0].hold_windows).toHaveLength(1);
+  });
+});
+
+describe('detectHoldWindows', () => {
+  const EFFECTIVE_CD_S = 90;
+
+  it('flags a cast more than 8s past the prior cast + cooldown', () => {
+    // prior 0 + cd 90 = expected 90; actual 110 -> 20s hold.
+    const holds = detectHoldWindows([0, 110], EFFECTIVE_CD_S);
+    expect(holds).toHaveLength(1);
+    expect(holds[0]).toMatchObject({ cast_index: 2, actual_s: 110, delay_s: 20 });
+  });
+
+  it('does not flag a cast exactly at the threshold (strict)', () => {
+    // prior 0 + cd 90 + 8s threshold = 98; delay exactly 8 -> not a hold.
+    expect(detectHoldWindows([0, 98], EFFECTIVE_CD_S)).toHaveLength(0);
+    expect(detectHoldWindows([0, 98.1], EFFECTIVE_CD_S)).toHaveLength(1);
+  });
+
+  it('measures each hold from the prior cast, so one hold does not cascade', () => {
+    // cast 2 held (0 -> 200); cast 3 on cooldown after it (200 -> 290).
+    const holds = detectHoldWindows([0, 200, 290], EFFECTIVE_CD_S);
+    expect(holds).toHaveLength(1);
+    expect(holds[0].cast_index).toBe(2);
+  });
+
+  it('returns nothing with a single cast', () => {
+    expect(detectHoldWindows([5], EFFECTIVE_CD_S)).toEqual([]);
   });
 });
 

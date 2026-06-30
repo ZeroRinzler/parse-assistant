@@ -4,7 +4,8 @@ import { WclEvent } from '../../../core/models/wcl.models';
 import { EncounterPositions } from '../../../core/models/positioning.models';
 import { MAP_DATA_SOURCE, MapData, MapDataSource } from './map-data-source';
 import {
-  MapFeatureService, buildActorTimelines, listReferenceEnemies, buildLiveOverlay, FACING_OFFSET_RAD,
+  MapFeatureService, buildActorTimelines, listReferenceEnemies, buildLiveOverlay, resolveLiveReference,
+  FACING_OFFSET_RAD,
 } from './map.service';
 
 function posEvent(
@@ -89,7 +90,7 @@ describe('buildLiveOverlay', () => {
 
   it('maps the ingested boss gameId to the live actor id and keys enemies by gameId', () => {
     const events = [posEvent({ ts: 0, source: 5, x: 100, y: 0 })];
-    const overlay = buildLiveOverlay(positions, events, 0, 5, [{ id: 42, name: 'Boss', gameID: 100 }]);
+    const overlay = buildLiveOverlay({ positions, events, fightStartMs: 0, playerId: 5, enemies: [{ id: 42, name: 'Boss', gameID: 100 }] });
     expect(overlay).not.toBeNull();
     expect(overlay!.bossActorId).toBe(42);
     expect(overlay!.refActorByGameId.get(100)).toBe(42);
@@ -98,7 +99,31 @@ describe('buildLiveOverlay', () => {
 
   it('returns null when the player has no position samples', () => {
     const events = [posEvent({ ts: 0, source: 99, x: 1, y: 1 })];
-    expect(buildLiveOverlay(positions, events, 0, 5, [])).toBeNull();
+    expect(buildLiveOverlay({ positions, events, fightStartMs: 0, playerId: 5, enemies: [] })).toBeNull();
+  });
+});
+
+describe('resolveLiveReference', () => {
+  const positions: EncounterPositions = {
+    spec: 'X', encounter_id: 1, encounter_name: 'E', interval_s: 1.5, sample_count: 1,
+    parses: [{ report_code: 'a', fight_id: 1, player_name: 'P', duration_s: 10, interval_s: 1.5, player: [],
+      enemies: [
+        { game_id: 100, name: 'Boss', is_boss: true, samples: [] },
+        { game_id: 200, name: 'Add', is_boss: false, samples: [] },
+      ] }],
+  };
+
+  it('maps the ingested boss gameId to this pull boss actor and keys all enemies by gameId', () => {
+    const ref = resolveLiveReference(positions, [{ id: 42, name: 'Boss', gameID: 100 }, { id: 7, name: 'Add', gameID: 200 }]);
+    expect(ref.bossActorId).toBe(42);
+    expect(ref.refActorByGameId.get(100)).toBe(42);
+    expect(ref.refActorByGameId.get(200)).toBe(7);
+  });
+
+  it('has a null boss actor when the live pull has no matching boss gameId', () => {
+    const ref = resolveLiveReference(positions, [{ id: 7, name: 'Add', gameID: 200 }]);
+    expect(ref.bossActorId).toBeNull();
+    expect(ref.refActorByGameId.get(200)).toBe(7);
   });
 });
 

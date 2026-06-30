@@ -12,10 +12,11 @@
  * service itself contains no arithmetic.
  */
 import { Injectable, inject } from '@angular/core';
-import { CharacterGear, WclCombatantInfo, WclGearItem } from '../../../core/models/wcl.models';
+import { CharacterGear, WclCombatantInfo } from '../../../core/models/wcl.models';
 import { EncounterGearStats } from '../../../core/models/encounter.models';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { logWarn } from '../../../core/log';
+import { decodeHtmlEntities, extractGear } from './gear-extract';
 import {
   GearStatus,
   buildEnchantRows, enchantStatusOf, EnchantRow,
@@ -57,47 +58,6 @@ export function emptyGearView(): GearComparisonView {
 }
 
 /* ----------------------------- pure gear extraction (own, colocated) ----------------------------- */
-
-/** Normalize a WCL gear icon ("inv_x.jpg") to the bare filename used by zamimg. */
-export function iconFile(icon?: string): string {
-  return (icon ?? '').replace(/\.jpg$/i, '');
-}
-
-/** Decode HTML entities in a string returned by WCL's gameData queries. */
-export function decodeHtmlEntities(text: string): string {
-  return text
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
-}
-
-/** Extract trinkets (slots 12/13) and enchants from a CombatantInfo gear array. */
-export function extractGear(gear: WclGearItem[] | undefined): {
-  trinkets: NonNullable<CharacterGear['trinkets']>;
-  enchants: NonNullable<CharacterGear['enchants']>;
-} {
-  const trinkets: NonNullable<CharacterGear['trinkets']> = [];
-  const enchants: NonNullable<CharacterGear['enchants']> = [];
-
-  (gear ?? []).forEach((item, slotIndex) => {
-    if (item?.id == null) return;
-    const itemId = typeof item.id === 'string' ? parseInt(item.id, 10) : item.id;
-
-    if (slotIndex === 12 || slotIndex === 13) {
-      trinkets.push({ slot: slotIndex, id: itemId, name: item.name ?? '', icon: iconFile(item.icon) });
-    }
-
-    const enchant = item.permanentEnchant;
-    if (enchant) {
-      const enchantId = typeof enchant === 'string' ? parseInt(enchant, 10) : enchant;
-      enchants.push({ slot: slotIndex, id: enchantId, name: item.permanentEnchantName ?? '' });
-    }
-  });
-
-  return { trinkets, enchants };
-}
 
 /**
  * Build a `v2:`-prefixed talent key from a CombatantInfo `talentTree` array: the
