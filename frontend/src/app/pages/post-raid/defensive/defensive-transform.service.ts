@@ -25,8 +25,10 @@ const TOP_PARSE_COUNT = 10;
 // Over-fetch so a private/unfetchable top parse can be backfilled by the
 // next-best one; the break in the loop caps actual fetches at TOP_PARSE_COUNT.
 const CANDIDATE_POOL_COUNT = TOP_PARSE_COUNT * 2;
-/** Min cluster size as a fraction of samples to surface a defensive window. */
-const CLUSTER_MIN_FRAC = 0.35;
+/** A window must appear in at least this share of parses (a majority) to surface. */
+const CONSENSUS_FRAC = 0.5;
+/** A window's median damage-taken share of the parse total must clear this ("mitigate a lot"). */
+const WINDOW_MIN_DMG_PCT = 0.05;
 /** "At least this share of member parses" - ability inclusion in a cluster. */
 const MEMBER_MAJORITY_FRAC = 0.5;
 /** Defensive windows within this many seconds cluster together. */
@@ -35,8 +37,6 @@ const CLUSTER_MERGE_S = 20;
 const HOLD_TRIGGER_FRAC = 0.4;
 /** A gap beyond this past the expected on-cooldown time counts as a deliberate hold. */
 const HOLD_THRESHOLD_S = 8;
-/** Fallback window length (s) when a defensive has no rulebook duration. */
-const DEFAULT_WINDOW_S = 5;
 
 /* ----------------------------- pure helpers (own math) ----------------------------- */
 
@@ -118,6 +118,10 @@ export interface ParseDefWindow {
   time_s: number;
   window_length_s: number;
   window_damage: number;
+  /** window_damage as a share of the parse's total damage taken (mitigation magnitude). */
+  pct_of_total: number;
+  /** Index of the parse this window came from, so clustering counts DISTINCT parses. */
+  parse_index: number;
   defensive_name: string;
   spell_id: number;
   ref_game_id: number | null;
@@ -175,9 +179,13 @@ export function summarizeDefensiveCasts(
   return summaries;
 }
 
-/** Per-defensive windows for one parse: damage taken during each buff span + dominant enemy. */
+/**
+ * Per-defensive windows for one parse: the MEASURED buff span (apply -> remove, or to
+ * fight end for an open buff - never a rulebook duration) with the damage taken during
+ * it, its share of the parse's total damage taken, and the dominant enemy.
+ */
 export function findParseDefensiveWindows(
-  damageTaken: WclEvent[], fightStartMs: number,
+  damageTaken: WclEvent[], fightStartMs: number, fightDurationS: number,
   buffWindows: Map<number, [number, number | null][]>,
   defensives: RulebookDefensive[],
   gameIdByActorId: Map<number, number>,
@@ -187,15 +195,15 @@ export function findParseDefensiveWindows(
     .map(event => [event.timestamp, (event.amount ?? 0) + (event.absorbed ?? 0), event.abilityGameID ?? 0, event.sourceID ?? null] as [number, number, number, number | null])
     .sort((a, b) => a[0] - b[0]);
   if (!hits.length) return [];
+  const total = hits.reduce((sum, hit) => sum + hit[1], 0);
 
   const result: ParseDefWindow[] = [];
   for (const defensive of defensives) {
     const spellId = defensive.spell_id;
-    const duration = defensive.duration ?? DEFAULT_WINDOW_S;
 
     for (const buffWindow of (buffWindows.get(spellId) ?? [])) {
       const startS = buffWindow[0];
-      const endS = buffWindow[1] != null ? buffWindow[1] : startS + duration;
+      const endS = buffWindow[1] != null ? buffWindow[1] : fightDurationS;
       const startMs = fightStartMs + startS * 1000;
       const endMs = fightStartMs + endS * 1000;
       const windowHits = hits.filter(hit => hit[0] >= startMs && hit[0] <= endMs);
@@ -220,6 +228,8 @@ export function findParseDefensiveWindows(
         time_s: round(startS),
         window_length_s: round(endS - startS),
         window_damage: windowDmg,
+        pct_of_total: total > 0 ? windowDmg / total : 0,
+        parse_index: 0,
         defensive_name: defensive.name,
         spell_id: spellId,
         ref_game_id: refGameId,
@@ -247,7 +257,11 @@ function groupByTime<T extends { time_s: number }>(windows: T[], mergeS: number)
   return clusters;
 }
 
-/** Cluster per-parse defensive windows across parses into the bench `BurstWindow[]`. */
+/**
+ * Cluster per-parse defensive windows across parses into the bench `BurstWindow[]`.
+ * Surfaces a window only where a MAJORITY of distinct parses defended (consensus) AND
+ * the cluster's median damage-taken share clears the gate ("mitigate a lot").
+ */
 export function clusterDefensiveWindows(windows: ParseDefWindow[], sampleCount: number, mergeS = CLUSTER_MERGE_S): BurstWindow[] {
   if (!windows.length) return [];
   const byDefensive = new Map<string, ParseDefWindow[]>();
@@ -256,10 +270,16 @@ export function clusterDefensiveWindows(windows: ParseDefWindow[], sampleCount: 
     byDefensive.get(window.defensive_name)!.push(window);
   }
 
+  const minParses = Math.max(2, sampleCount * CONSENSUS_FRAC);
   const result: BurstWindow[] = [];
   for (const [defensiveName, group] of byDefensive.entries()) {
     for (const cluster of groupByTime(group, mergeS)) {
-      if (cluster.length < Math.max(2, sampleCount * CLUSTER_MIN_FRAC)) continue;
+      // Consensus: a majority of DISTINCT parses must defend here.
+      const distinctParses = new Set(cluster.map(member => member.parse_index)).size;
+      if (distinctParses < minParses) continue;
+      // "Mitigate a lot": the window's median damage-taken share must clear the gate.
+      const shares = cluster.map(member => member.pct_of_total);
+      if ((median(shares) ?? 0) < WINDOW_MIN_DMG_PCT) continue;
       const damages = cluster.map(member => member.window_damage);
 
       const abilityDamage = new Map<number, number[]>();
@@ -293,6 +313,7 @@ export function clusterDefensiveWindows(windows: ParseDefWindow[], sampleCount: 
         dmg_stddev: Math.round((deviation(damages) ?? 0)),
         dmg_min: Math.round(Math.min(...damages)),
         dmg_max: Math.round(Math.max(...damages)),
+        dmg_pct_avg: round((mean(shares) ?? 0), 3),
         window_length_s: round(mean(cluster.map(member => member.window_length_s)) ?? 0),
         defensive_name: defensiveName,
         spell_id: cluster[0].spell_id,
@@ -418,6 +439,7 @@ export class DefensiveTransformService implements DefensiveDataSource {
     for (const ranking of rankings) {
       const parse = await this.computeParse(ranking, defensives);
       if (!parse) continue;
+      for (const window of parse.windows) window.parse_index = sampleCount;
       allWindows.push(...parse.windows);
       perParseSummaries.push(parse.summaries);
       encounterName ||= parse.encounterName;
@@ -474,7 +496,7 @@ export class DefensiveTransformService implements DefensiveDataSource {
 
       const fightDurationS = (fight.endTime - fight.startTime) / 1000;
       const buffWindows = buildBuffWindows(buffs, fight.startTime);
-      const windows = findParseDefensiveWindows(dmgTaken, fight.startTime, buffWindows, defensives, gameIdByActorId);
+      const windows = findParseDefensiveWindows(dmgTaken, fight.startTime, fightDurationS, buffWindows, defensives, gameIdByActorId);
       const summaries = summarizeDefensiveCasts(defensives, buffWindows, casts, fight.startTime, fightDurationS);
       return { windows, summaries, encounterName: fight.name ?? '' };
     } catch (err) {

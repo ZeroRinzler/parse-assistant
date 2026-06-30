@@ -121,20 +121,21 @@ export function analyzeDefensives(
       return timeS >= windowStartS && timeS <= windowEndS ? sum + dmgOf(event) : sum;
     }, 0);
 
+  const fightEndS = (fEnd - fStart) / 1000;
   return defensives.map(defensive => {
     const spellId = defensive.spell_id;
-    const duration = defensive.duration ?? 0;
     let windows = (buffWin[spellId] || []).map(([windowStartS, windowEndS]) => {
-      const end = windowEndS ?? windowStartS + (duration || 5);
+      // Measured span; an open buff (no remove) runs to fight end - never a rulebook duration.
+      const end = windowEndS ?? fightEndS;
       return { start_s: Math.round(windowStartS * 10) / 10, end_s: Math.round(end * 10) / 10, dmg_during: Math.round(dmgInWindow(windowStartS, end)) };
     });
     if (!windows.length) {
+      // No self-buff: a cast is a point usage (no rulebook-duration span invented).
       windows = castEvents
         .filter(cast => cast.type === 'cast' && cast.abilityGameID === spellId && cast.timestamp >= fStart && cast.timestamp <= fEnd)
         .map(cast => {
           const timeS = rel(cast.timestamp) / 1000;
-          const windowEndS = timeS + (duration || 5);
-          return { start_s: Math.round(timeS * 10) / 10, end_s: Math.round(windowEndS * 10) / 10, dmg_during: Math.round(dmgInWindow(timeS, windowEndS)) };
+          return { start_s: Math.round(timeS * 10) / 10, end_s: Math.round(timeS * 10) / 10, dmg_during: 0 };
         });
     }
     const cast_times_s = windows.map(window => window.start_s).sort((a, b) => a - b);
@@ -251,6 +252,38 @@ export function computePlayerDefensiveWindows(topDefWindows: BurstWindow[], dtEv
   });
 }
 
+/** Slack (s) around a top window within which a player defensive still "covers" it. */
+const WINDOW_NEAR_S = 3;
+
+/**
+ * Did the player have `defensive` active at/near this top-parse window? Window-centric:
+ * any player defensive span (or point cast) overlapping [time_s - near, end + near].
+ */
+export function playerCoveredWindow(
+  window: BurstWindow, playerDefensive: PlayerDefensive | undefined, nearS = WINDOW_NEAR_S,
+): boolean {
+  if (!playerDefensive) return false;
+  const lo = window.time_s - nearS;
+  const hi = window.time_s + window.window_length_s + nearS;
+  return playerDefensive.windows.some(span => span.start_s <= hi && span.end_s >= lo);
+}
+
+/**
+ * Useful timing: the player covered the window AND faced a big hit under the defensive
+ * (their covering span took at least the window's top-parse minimum). Credits using the
+ * cooldown on real damage even when the exact alignment is off.
+ */
+export function playerUsefulTiming(
+  window: BurstWindow, playerDefensive: PlayerDefensive | undefined, nearS = WINDOW_NEAR_S,
+): boolean {
+  if (!playerDefensive) return false;
+  const lo = window.time_s - nearS;
+  const hi = window.time_s + window.window_length_s + nearS;
+  const covering = playerDefensive.windows.filter(span => span.start_s <= hi && span.end_s >= lo);
+  if (!covering.length) return false;
+  return Math.max(...covering.map(span => span.dmg_during)) >= window.dmg_min;
+}
+
 /* ----------------------------- defensive windows view ----------------------------- */
 
 /**
@@ -263,10 +296,16 @@ export function defensiveWindowStatus(
   topMax: number,
   stddev: number,
   notReached: boolean,
+  covered: boolean,
+  usefulTiming: boolean,
 ): { status: WindowStatus; icon: string } {
   if (notReached) return { status: 'muted', icon: 'schedule' };
   if (playerDamage === null) return { status: 'muted', icon: 'help_outline' };
-  if (playerDamage > topMax + stddev) return { status: 'bad', icon: 'error' };
+  // The window is where top parses mitigate a big hit. Not using the defensive here is
+  // the real miss; using it on a real hit (useful timing) is credited.
+  if (!covered) return { status: 'bad', icon: 'error' };
+  if (usefulTiming) return { status: 'good', icon: 'check_circle' };
+  if (playerDamage > topMax + stddev) return { status: 'warn', icon: 'warning_amber' };
   if (topAvg > 0 && playerDamage > topAvg + stddev) return { status: 'warn', icon: 'warning_amber' };
   return { status: 'good', icon: 'check_circle' };
 }
@@ -314,6 +353,7 @@ export function defensiveMapAnchor(window: BurstWindow, abilities: AbilityIcons)
 export function buildDefensiveWindows(
   topWindows: BurstWindow[],
   playerWindows: PlayerBurstWindow[],
+  playerDefensives: PlayerDefensive[],
   fightDurationS: number,
   abilities: AbilityIcons,
 ): { windows: ComparisonWindow[]; anchors: DefensiveMapAnchor[] } {
@@ -323,8 +363,11 @@ export function buildDefensiveWindows(
     const notReached = window.time_s > fightDurationS;
     const playerWindow = notReached ? null : (playerWindows[index] ?? null);
     const playerDamage = playerWindow?.window_damage ?? null;
-    const { status, icon } = defensiveWindowStatus(playerDamage, window.dmg_avg, window.dmg_max, window.dmg_stddev, notReached);
     const defensiveName = window.defensive_name ?? window.common_defensives?.[0] ?? '';
+    const playerDefensive = playerDefensives.find(entry => entry.name === defensiveName);
+    const covered = playerCoveredWindow(window, playerDefensive);
+    const useful = playerUsefulTiming(window, playerDefensive);
+    const { status, icon } = defensiveWindowStatus(playerDamage, window.dmg_avg, window.dmg_max, window.dmg_stddev, notReached, covered, useful);
     const labels = window.spell_id == null && defensiveName ? [defensiveName] : [];
     windows.push({
       timeStartS: window.time_s,
@@ -339,6 +382,31 @@ export function buildDefensiveWindows(
     anchors.push(defensiveMapAnchor(window, abilities));
   });
   return { windows, anchors };
+}
+
+/** One warning per consensus defensive window the player neither covered nor usefully pressed. */
+export function windowMissFindings(
+  topWindows: BurstWindow[],
+  playerDefensives: PlayerDefensive[],
+  fightDurationS: number,
+): AnalysisFinding[] {
+  const findings: AnalysisFinding[] = [];
+  for (const window of topWindows) {
+    if (window.time_s > fightDurationS) continue;
+    const name = window.defensive_name ?? window.common_defensives?.[0] ?? '';
+    if (!name) continue;
+    const playerDefensive = playerDefensives.find(entry => entry.name === name);
+    if (playerDefensive?.talent_gated && playerDefensive.uses === 0) continue;
+    if (playerCoveredWindow(window, playerDefensive)) continue;
+    findings.push({
+      severity: 'warning', category: 'defensive_window', cd_name: name,
+      timestamp_ms: Math.round(window.time_s * 1000),
+      measured: { value: 'none', unit: 'mitigated' },
+      message: `${name} window at ${fmtClock(window.time_s)} uncovered. Top parses mitigate here.`,
+      details: { remedy: `Use ${name} at ${fmtClock(window.time_s)}.` },
+    });
+  }
+  return findings;
 }
 
 /* ----------------------------- pre-fight plan ----------------------------- */
@@ -412,13 +480,16 @@ export class DefensiveFeatureService {
       const findings = bench.defensives.length && playerDefensives.length
         ? analyzeDefensiveFindings(playerDefensives, bench.per_defensive_benchmarks, fightDurationS)
         : [];
+      // A finding for each top-parse mitigation window the player did not cover.
+      findings.push(...windowMissFindings(bench.defensive_windows, playerDefensives, fightDurationS));
+      sortBySeverity(findings);
 
       const playerWindows = computePlayerDefensiveWindows(bench.defensive_windows, dtEvents, fStart);
       const iconByName: Record<string, string> = {};
       for (const [name, spellId] of Object.entries(bench.cd_spell_ids)) {
         iconByName[name] = bench.ability_icons[spellId].icon;
       }
-      const { windows, anchors } = buildDefensiveWindows(bench.defensive_windows, playerWindows, fightDurationS, bench.ability_icons);
+      const { windows, anchors } = buildDefensiveWindows(bench.defensive_windows, playerWindows, playerDefensives, fightDurationS, bench.ability_icons);
       return { findings, spellIdsByName: bench.cd_spell_ids, iconByName, windows, anchors };
     } catch (err) {
       logWarn(`DefensiveFeatureService.loadAnalysisView ${reportCode}:${fightId}`, err);

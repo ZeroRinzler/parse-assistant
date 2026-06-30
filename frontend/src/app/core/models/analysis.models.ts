@@ -50,6 +50,12 @@ export interface BurstWindow {
   spell_id?: number;
   /** Map reference for defensive windows: gameID of the enemy dealing the window's main damage. */
   ref_game_id?: number | null;
+  /**
+   * Defensive windows only: mean share of each parse's total damage taken that the window
+   * carried (window_damage / parse total), used to gate/rank windows by mitigation
+   * magnitude. Absent on burst windows.
+   */
+  dmg_pct_avg?: number;
 }
 
 export interface PlayerBurstWindow {

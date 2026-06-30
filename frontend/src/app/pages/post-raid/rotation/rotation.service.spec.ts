@@ -231,6 +231,43 @@ describe('analyzeRotationFindings', () => {
   });
 });
 
+describe('analyzeRotationFindings hold suggestions (prior-relative)', () => {
+  const holdBench = bench({
+    per_cd_benchmarks: { 'Shadow Blades': cdBench({
+      hold_targets: { '2': { target_s: 130, stddev_s: 5, delay_s: 30, delay_stddev_s: 3, band_s: 5, effective_cd_s: 90, count: 4, total_samples: 5 } },
+    }) },
+  });
+
+  it('flags an under-hold below the consensus band', () => {
+    // gap 100, effective_cd 90 -> playerDelay 10 < (delay 30 - band 5 = 25).
+    const casts = [cast(SHADOW_BLADES, 0), cast(SHADOW_BLADES, 100)];
+    const findings = analyzeRotationFindings(0, 120_000, casts, [], bench().major_cooldowns, [], holdBench);
+    expect(findings.some(f => f.category === 'hold_suggestion')).toBe(true);
+  });
+
+  it('does not flag a player exactly at the band edge (strict)', () => {
+    // gap 115 -> playerDelay 25, exactly delay - band; strict < so not flagged.
+    const casts = [cast(SHADOW_BLADES, 0), cast(SHADOW_BLADES, 115)];
+    const findings = analyzeRotationFindings(0, 120_000, casts, [], bench().major_cooldowns, [], holdBench);
+    expect(findings.some(f => f.category === 'hold_suggestion')).toBe(false);
+  });
+
+  it('does not flag an over-hold', () => {
+    const casts = [cast(SHADOW_BLADES, 0), cast(SHADOW_BLADES, 160)];
+    const findings = analyzeRotationFindings(0, 120_000, casts, [], bench().major_cooldowns, [], holdBench);
+    expect(findings.some(f => f.category === 'hold_suggestion')).toBe(false);
+  });
+
+  it('skips pre-v2 hold targets that lack the prior-relative band', () => {
+    const oldBench = bench({ per_cd_benchmarks: { 'Shadow Blades': cdBench({
+      hold_targets: { '2': { target_s: 130, stddev_s: 5, count: 4, total_samples: 5 } },
+    }) } });
+    const casts = [cast(SHADOW_BLADES, 0), cast(SHADOW_BLADES, 100)];
+    const findings = analyzeRotationFindings(0, 120_000, casts, [], bench().major_cooldowns, [], oldBench);
+    expect(findings.some(f => f.category === 'hold_suggestion')).toBe(false);
+  });
+});
+
 describe('bucketRotationFindings', () => {
   const abilities = { [SHADOW_BLADES]: { icon: 'sb', name: 'Shadow Blades' }, [VANISH]: { icon: 'vanish', name: 'Vanish' } };
   it('splits rule rows, cd issue rows and on-plan chips', () => {
@@ -274,6 +311,24 @@ describe('buildCdPlan', () => {
     expect(plan[0].holds).toEqual([{ castIndex: 2, targetS: 100 }]);
     expect(plan[0].bloodlust).toBe(true);
     expect(plan[0].bloodlustPct).toBe(100);
+  });
+
+  it('drives the Bloodlust badge from bl_pct, not the rulebook flag', () => {
+    const cooldowns = [
+      { name: 'Aligned', spell_id: SHADOW_BLADES, cooldown: 90, align_with_bloodlust: false },
+      { name: 'Unaligned', spell_id: VANISH, cooldown: 120, align_with_bloodlust: true },
+    ];
+    const benchmarks = {
+      Aligned: cdBench({ bl_pct: 50 }),    // flag false, but data says aligned -> badge on (50 boundary)
+      Unaligned: cdBench({ bl_pct: 49 }),  // flag true, but data says not -> badge off
+    };
+    const plan = buildCdPlan(cooldowns, benchmarks, abilities);
+    const aligned = plan.find(p => p.name === 'Aligned')!;
+    const unaligned = plan.find(p => p.name === 'Unaligned')!;
+    expect(aligned.bloodlust).toBe(true);
+    expect(aligned.bloodlustPct).toBe(50);
+    expect(unaligned.bloodlust).toBe(false);
+    expect(unaligned.bloodlustPct).toBeNull();
   });
 });
 

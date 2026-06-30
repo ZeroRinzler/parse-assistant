@@ -14,7 +14,7 @@ import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
 import { WclEvent, ParseRanking, WclRawRanking } from '../../../core/models/wcl.models';
 import { RulebookCooldown, RulebookDefensive } from '../../../core/models/rulebook.models';
-import { PerCdBenchmark, UsesPerMin } from '../../../core/models/encounter.models';
+import { PerCdBenchmark, UsesPerMin, HoldTargets } from '../../../core/models/encounter.models';
 import { logWarn } from '../../../core/log';
 import { mean, median, deviation, quantile } from 'd3-array';
 import { RotationBench, RotationDataSource } from './rotation-data-source';
@@ -34,8 +34,10 @@ const HOLD_THRESHOLD_S = 8.0;
 /** p90 of pooled cast gaps is the downtime floor. */
 const DOWNTIME_PERCENTILE = 0.9;
 const DEFAULT_DOWNTIME_THRESHOLD_MS = 1500;
-/** Cast index needs this share of parsers holding for it to surface as a hold target. */
-const HOLD_TRIGGER_FRAC = 0.4;
+/** A hold target surfaces only when a MAJORITY of sampled parses hold at that index. */
+const HOLD_CONSENSUS_FRAC = 0.5;
+/** Floor on the runtime tolerance band half-width, so a tight cluster still tolerates jitter. */
+const HOLD_BAND_MIN_S = 5.0;
 
 /* ----------------------------- pure stats helpers (own math) ----------------------------- */
 
@@ -87,7 +89,7 @@ export interface CdSummary {
   bl_aligned: boolean;
   bl_offset_s: number | null;
   cast_times_s: number[];
-  hold_windows: { cast_index: number; actual_s: number }[];
+  hold_windows: { cast_index: number; actual_s: number; delay_s: number }[];
   cast_pattern: 'hold' | 'on_cooldown';
   fight_duration_s: number;
 }
@@ -115,15 +117,18 @@ export function summarizeCooldownCasts(
       }
     }
 
-    const holdWindows: { cast_index: number; actual_s: number }[] = [];
+    // Hold detection is PRIOR-RELATIVE: each cast is measured against the prior ACTUAL
+    // cast + the cooldown, not a cumulative ideal schedule. So a single hold does not
+    // cascade into every later cast looking held.
+    const holdWindows: { cast_index: number; actual_s: number; delay_s: number }[] = [];
     if (castTimesS.length > 1) {
-      const cdSeconds = cooldown.cooldown ?? 90;
-      let expectedT = castTimesS[0];
+      const effectiveCd = cooldown.cooldown ?? 90;
       for (let castIndex = 1; castIndex < castTimesS.length; castIndex++) {
-        expectedT += cdSeconds;
+        const expected = castTimesS[castIndex - 1] + effectiveCd;
         const actual = castTimesS[castIndex];
-        if (actual - expectedT > HOLD_THRESHOLD_S) {
-          holdWindows.push({ cast_index: castIndex + 1, actual_s: round(actual) });
+        const delay = actual - expected;
+        if (delay > HOLD_THRESHOLD_S) {
+          holdWindows.push({ cast_index: castIndex + 1, actual_s: round(actual), delay_s: round(delay) });
         }
       }
     }
@@ -167,22 +172,33 @@ function benchUsesPerMin(entries: CdSummary[]): UsesPerMin {
   };
 }
 
-/** Per-cast-index hold targets where enough parsers delayed, with the median target. */
-function buildHoldTargets(entries: CdSummary[]): PerCdBenchmark['hold_targets'] {
-  const byIdx = new Map<number, number[]>();
+/**
+ * Per-cast-index hold targets where a MAJORITY of parses delayed past the natural reset.
+ * `target_s` is the absolute clock median (display); `delay_s`/`band_s`/`effective_cd_s`
+ * are the prior-relative band the runtime compares the player's own gap against.
+ */
+export function buildHoldTargets(entries: CdSummary[], effectiveCd: number): HoldTargets {
+  const byIdx = new Map<number, { actuals: number[]; delays: number[] }>();
   for (const entry of entries) {
     for (const hold of entry.hold_windows) {
-      if (!byIdx.has(hold.cast_index)) byIdx.set(hold.cast_index, []);
-      byIdx.get(hold.cast_index)!.push(hold.actual_s);
+      const bucket = byIdx.get(hold.cast_index) ?? { actuals: [], delays: [] };
+      bucket.actuals.push(hold.actual_s);
+      bucket.delays.push(hold.delay_s);
+      byIdx.set(hold.cast_index, bucket);
     }
   }
-  const targets: PerCdBenchmark['hold_targets'] = {};
-  for (const [castIndex, times] of byIdx.entries()) {
-    if (times.length >= Math.max(2, entries.length * HOLD_TRIGGER_FRAC)) {
+  const targets: HoldTargets = {};
+  for (const [castIndex, { actuals, delays }] of byIdx.entries()) {
+    if (actuals.length >= Math.max(2, entries.length * HOLD_CONSENSUS_FRAC)) {
+      const delayStddev = round(deviation(delays) ?? 0);
       targets[String(castIndex)] = {
-        target_s: round((median(times) ?? 0)),
-        stddev_s: round((deviation(times) ?? 0)),
-        count: times.length,
+        target_s: round((median(actuals) ?? 0)),
+        stddev_s: round((deviation(actuals) ?? 0)),
+        delay_s: round((median(delays) ?? 0)),
+        delay_stddev_s: delayStddev,
+        band_s: round(Math.max(delayStddev, HOLD_BAND_MIN_S)),
+        effective_cd_s: round(effectiveCd),
+        count: actuals.length,
         total_samples: entries.length,
       };
     }
@@ -191,7 +207,7 @@ function buildHoldTargets(entries: CdSummary[]): PerCdBenchmark['hold_targets'] 
 }
 
 /** Roll one cooldown's per-parse summaries into a `PerCdBenchmark`. */
-export function buildCdBenchmark(entries: CdSummary[]): PerCdBenchmark {
+export function buildCdBenchmark(entries: CdSummary[], effectiveCd: number): PerCdBenchmark {
   const firstCasts = entries.map(entry => entry.first_cast_s).filter((value): value is number => value != null);
   const gaps: number[] = [];
   for (const entry of entries) {
@@ -218,7 +234,7 @@ export function buildCdBenchmark(entries: CdSummary[]): PerCdBenchmark {
     uses_per_min: usesPerMin,
     bl_pct: entries.length ? Math.round((blCount / entries.length) * 100) : 0,
     majority_hold: entries.filter(entry => entry.cast_pattern === 'hold').length > entries.length * 0.5,
-    hold_targets: buildHoldTargets(entries),
+    hold_targets: buildHoldTargets(entries, effectiveCd),
   };
 }
 
@@ -248,7 +264,10 @@ export function computeEfficiencyThresholds(
 }
 
 /** Roll per-parse cooldown summaries into the per-cd benchmark map. */
-export function aggregateCdBenchmarks(perParse: CdSummary[][]): Record<string, PerCdBenchmark> {
+export function aggregateCdBenchmarks(
+  perParse: CdSummary[][], cooldowns: RulebookCooldown[],
+): Record<string, PerCdBenchmark> {
+  const cdSecondsByName = new Map(cooldowns.map(cooldown => [cooldown.name, cooldown.cooldown ?? 90]));
   const byCd = new Map<string, CdSummary[]>();
   for (const summaries of perParse) {
     for (const summary of summaries) {
@@ -257,7 +276,9 @@ export function aggregateCdBenchmarks(perParse: CdSummary[][]): Record<string, P
     }
   }
   const result: Record<string, PerCdBenchmark> = {};
-  for (const [name, entries] of byCd.entries()) result[name] = buildCdBenchmark(entries);
+  for (const [name, entries] of byCd.entries()) {
+    result[name] = buildCdBenchmark(entries, cdSecondsByName.get(name) ?? 90);
+  }
   return result;
 }
 
@@ -312,7 +333,7 @@ export class RotationTransformService implements RotationDataSource {
       downtime_threshold_ms: downtimeThresholdMs,
       top_avg_efficiency: topAvgEfficiency,
       top_efficiency_stddev: topEfficiencyStddev,
-      per_cd_benchmarks: aggregateCdBenchmarks(perParse),
+      per_cd_benchmarks: aggregateCdBenchmarks(perParse, cooldowns),
       major_cooldowns: cooldowns,
       rules,
       cd_spell_ids,

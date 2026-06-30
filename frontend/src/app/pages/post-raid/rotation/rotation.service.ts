@@ -113,6 +113,8 @@ export function benchExpectedUses(fightDurS: number, upm: UsesPerMin): { expecte
 /** Bloodlust ids + window grace (mirrors the analysis format module). */
 const BLOODLUST_IDS = new Set([2825, 32182, 80353, 90355, 264667, 390386]);
 const BLOODLUST_DURATION_S = 40;
+/** A cooldown is treated as Bloodlust-aligned when at least this share (%) of top parses align it. */
+const BL_CONSENSUS_PCT = 50;
 
 /** Format seconds as `mm:ss` (zero-padded). */
 export function fmtClock(seconds: number): string {
@@ -273,7 +275,6 @@ export function analyzeRotationFindings(
 
   for (const cd of cooldowns) {
     const { spell_id: sid, name: cdName } = cd;
-    const wantsBL = cd.align_with_bloodlust !== false;
     const cdCasts = casts.filter(cast => cast.abilityGameID === sid);
     const actual = cdCasts.length;
     const cdIssues: AnalysisFinding[] = [];
@@ -288,6 +289,8 @@ export function analyzeRotationFindings(
       continue;
     }
 
+    // BL alignment is data-driven: a cooldown "wants BL" when most top parses align it.
+    const wantsBL = cdBench.bl_pct >= BL_CONSENSUS_PCT;
     const { expected, floor } = benchExpectedUses(fightDurS, cdBench.uses_per_min);
 
     if (actual === 0 && expected >= 1) {
@@ -354,12 +357,17 @@ export function analyzeRotationFindings(
       const times = cdCasts.map(cast => rel(cast.timestamp) / 1000);
       for (const [idxStr, target] of Object.entries(cdBench.hold_targets)) {
         const index = parseInt(idxStr, 10) - 1;
-        if (index >= times.length) continue;
-        const playerT = times[index];
-        if (playerT < target.target_s - target.stddev_s) cdSugg.push({ severity: 'info', category: 'hold_suggestion',
+        // Need a prior cast to measure a gap; index 0 has none.
+        if (index < 1 || index >= times.length) continue;
+        // PR1 transition guard: pre-v2 hold targets lack the prior-relative band; skip them.
+        if (target.effective_cd_s == null || target.band_s == null || target.delay_s == null) continue;
+        // Compare the player's OWN gap from their prior cast (cascade-free). Flag only an
+        // under-hold clearly below the consensus band; over-holding is tolerated.
+        const playerDelay = times[index] - times[index - 1] - target.effective_cd_s;
+        if (playerDelay < target.delay_s - target.band_s) cdSugg.push({ severity: 'info', category: 'hold_suggestion',
           timestamp_ms: rel(cdCasts[index].timestamp),
-          measured: { value: fmtClock(playerT), unit: `top ~${fmtClock(target.target_s)}` },
-          message: `${cdName} cast ${idxStr} at ${fmtClock(playerT)}. ${target.count}/${target.total_samples} top parses hold to ${fmtClock(target.target_s)}.`,
+          measured: { value: fmtClock(times[index]), unit: `top ${fmtClock(target.target_s)}` },
+          message: `${cdName} cast ${idxStr} at ${fmtClock(times[index])}. ${target.count}/${target.total_samples} top parses hold to ${fmtClock(target.target_s)}.`,
           details: { remedy: `Hold ${cdName} to ${fmtClock(target.target_s)}.`, cd_name: cdName } });
       }
     }
@@ -500,8 +508,8 @@ export function buildCdPlan(
       firstCastS: cdBench?.avg_first_cast_s ?? null,
       uses: cdBench?.avg_uses ?? null,
       usesPerMin: cdBench?.uses_per_min.avg ?? null,
-      bloodlust: !!cd.align_with_bloodlust,
-      bloodlustPct: cd.align_with_bloodlust && cdBench && cdBench.bl_pct >= 40 ? cdBench.bl_pct : null,
+      bloodlust: (cdBench?.bl_pct ?? 0) >= BL_CONSENSUS_PCT,
+      bloodlustPct: (cdBench?.bl_pct ?? 0) >= BL_CONSENSUS_PCT ? cdBench!.bl_pct : null,
       holds,
       rule: cd.usage_rule ?? null,
     };
