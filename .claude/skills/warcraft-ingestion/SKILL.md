@@ -1,0 +1,40 @@
+---
+name: warcraft-ingestion
+description: warcraft-learner ingestion, rulebook, and scraping pipelines. Covers the orchestrator that boots a headless Angular runtime and drives the same five *TransformServices as the browser, the signature-skip + manual INGEST_VERSION bump rule (bump it whenever a change should produce different tailored data), spec/encounter work-ordering, and the rulebook CLI + guide scraping (Supadata for YouTube). The rulebook prompt and JSON schema (rulebook_skill.md, rulebook.schema.json) live in this skill's own directory. Load this before touching scripts/ingest/**, the rulebook flow, guide scraping, INGEST_VERSION, or data/specs file shapes.
+---
+
+# warcraft-learner ingestion & content pipelines
+
+The CLI scripts are TypeScript run via `tsx` (e.g. `tsx --tsconfig tsconfig.scripts.json scripts/ingest/orchestrator.ts`), not `.mjs`/`node`. `WCL_CLIENT_ID`/`WCL_CLIENT_SECRET` come from the [Warcraft Logs API clients](https://www.warcraftlogs.com/api/clients/) page and are only used server-side (GHA secrets), never in the browser. No Anthropic API key is needed - rulebook generation is a copy-prompt / paste-back flow that works with any LLM. The `npm run ingest` / `npm run scrape` / `npm run rulebook` invocations are listed in CLAUDE.md.
+
+## Ingestion (`npm run ingest`)
+Runs `frontend/scripts/ingest/orchestrator.ts`, which boots a headless Angular runtime (`scripts/ingest/angular-runtime.ts`: jsdom + Angular TestBed injector wired to the Node WCL + data-file transports) and drives the SAME five `*TransformService`s the browser uses, persisting through the SAME `DataFileApiService` (Node filesystem transport). There is no separate Node analysis pipeline. Also runs as the `ingest-parses.yml` GHA hourly (cron `23 * * * *`) and on manual `workflow_dispatch`. The same hourly workflow runs `npm run scrape` first to keep guide content fresh, then ingestion.
+
+1. Boots the Angular runtime and authenticates to WCL with client credentials (from `WCL_CLIENT_ID`/`WCL_CLIENT_SECRET` environment variables - server-side secret, only used in GHA, never in the browser).
+2. Discovers the specs that have a `rulebook.json` and the current live encounters (`getEncounters`: `worldData` discovery + a cheap rankings liveness probe). **Spec work-order** (`ordering.ts`, all cheap disk + git reads, zero WCL budget): empty specs first, then **old-version** specs (any on-disk file below the current `INGEST_VERSION`), then **current-version** specs, and within each group **oldest git-commit time first** (`git-mtime.ts` reads the last commit touching the spec's data dir - the workflow checks out with `fetch-depth: 0` so this is meaningful). So a budget-bounded run fixes the most out-of-date data first instead of starving the alphabetically-late specs.
+3. Per encounter: asserts remaining WCL budget, fetches rankings (cheap), computes a version+ranking `source_signature` (`sha256(INGEST_VERSION + parse-set fingerprint)`), and **skips** the encounter when the signature matches the stored stamp. `INGEST_VERSION` (`ingest-version.ts`) is a **manual integer** that replaced the old transform-source code-hash: bumping it invalidates every cached file. Because transform-file edits no longer auto-invalidate, **Claude bumps `INGEST_VERSION` (or suggests bumping it) as part of any change that should produce different tailored data** (transform math, rulebook semantics, a deliberate refresh). Currently `1` (the `source_id` change).
+4. Otherwise runs the five transform services (`burst`/`rotation`/`defensive`/`gear`/`map`) under bounded concurrency. Each fetches the parses it needs (`Casts`/`Buffs`/`DamageDone`/`DamageTaken`, plus `includeResources`/`hostilityType` events for positions) via the shared cached `WclApiService` and computes its slice.
+5. Writes the stamped per-slice tailored files (`{spec}/{burst,rotation,defensive,gear}/{enc_id}.json`) and per-parse position timelines (`positions/{enc_id}.json`); every file carries both `source_signature` and the bare `ingest_version` integer.
+6. Rebuilds the `{spec}/encounters.json` and top-level `index.json` indexes, then prunes stale encounters.
+
+GHA commits `frontend/public/data/specs/**`, which triggers `deploy-pages.yml` to rebuild and redeploy.
+
+> **Keep data shapes in sync.** Because ingestion runs the very same `*TransformService`s the browser uses, the tailored slice shapes are defined in exactly one place - each slice's `*Bench` interface (its `*-data-source.ts`) plus the relevant `core/models/*` - and ingestion writes precisely those, so the slice shapes stay in sync automatically. Changing a slice's `*Bench`/model therefore updates runtime and ingest at once (one implementation). You still keep the rulebook prompt + schema in sync (`rulebook_skill.md`, `rulebook.schema.json` in this skill's directory) since the transforms consume the rulebook (`duration`, `spell_id`s). The data-file shapes are defined in code - see "Data file shapes" below. Already-committed JSON under `data/specs/**` keeps stale fields until the next re-ingest - harmless, since consumers ignore unknown fields.
+
+## Rulebook management (`npm run rulebook` / `npm run scrape`)
+No web UI for rulebook management. Everything is CLI.
+
+1. **Add + scrape guides** - `npm run scrape` re-scrapes every existing guide across all specs (web/YouTube/SimC APL), refreshing `guides.json`; this is what the hourly ingest workflow runs. To add a new guide, `npm run scrape -- --spec Name --url URL [--type web|youtube|simc]` appends and scrapes it.
+   - **YouTube transcripts go through the Supadata API.** YouTube now gates caption/transcript data behind an authenticated, bot-checked session, so anonymous fetching (youtubei.js, yt-dlp) is refused from any IP. `scrapeYouTube` calls the [Supadata](https://supadata.ai) transcript API instead; set `SUPADATA_API_KEY` (env var locally, GHA secret for the hourly run). Transcripts are immutable, so the bulk refresh skips already-scraped YouTube guides - the metered API is only hit once per new/errored video. Without the key, YouTube guides record a non-fatal error; web/SimC are unaffected.
+2. **Build AI prompt** - `npm run rulebook` -> "Copy prompt": assembles this skill's `rulebook_skill.md` (with `rulebook.schema.json` inlined) + all scraped guide content into a clipboard-ready prompt.
+3. **Save rulebook** - paste AI output -> `npm run rulebook` -> "Save rulebook": writes to `rulebook.json`. No validation server needed - the CLI validates against `rulebook.schema.json` directly (`frontend/scripts/lib.ts`).
+
+## Data file shapes
+
+The data files ingestion writes are deliberately **not** schema-documented here - read each shape from its source of truth so the docs cannot drift:
+
+- **Rulebook** (`rulebook.json`) - `rulebook.schema.json` + `rulebook_skill.md` in this skill's directory. The schema is the authoritative contract (validated by `frontend/scripts/lib.ts`); all spell IDs come from the rulebook, never hardcode spec-specific IDs. The rule-engine condition kinds (`cast_without_prior`, `hold_cooldown_for_anchor`) are defined in the schema and the rotation rule-engine code.
+- **Slice benches** (`{burst,rotation,defensive,gear}/{enc}.json`) - each slice's `*Bench` interface in its `*-data-source.ts`, plus `core/models/*`.
+- **Indexes** (`index.json`, `{spec}/encounters.json`) and `guides.json` - `core/models/*` and the orchestrator's `rebuildSpecIndex`.
+- **Signature stamps** (`source_signature`, `ingest_version`, on every slice + positions file) - `scripts/ingest/ingest-version.ts` + `signature.ts`.
+- **Positions** (`positions/{enc}.json`) - `core/models/positioning.models.ts`; see the **warcraft-wcl-data** skill for the WCL position/facing-unit quirks behind it.

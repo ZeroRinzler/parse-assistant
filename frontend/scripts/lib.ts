@@ -32,13 +32,14 @@ export async function writeJson(filePath: string, data: unknown, compact = false
 
 // ── Rulebook schema validation ─────────────────────────────────────────────────
 //
-// One shared validator for prompts/rulebook.schema.json, used by both admin (before
-// saving a pasted rulebook) and ingest (pre-flight before consuming a rulebook).
-// ajv draft-07; strict:false silences warnings about the draft-2019 $defs/examples
-// annotation keywords, which ajv still resolves correctly.
+// One shared validator for .claude/skills/warcraft-ingestion/rulebook.schema.json, used
+// by both admin (before saving a pasted rulebook) and ingest (pre-flight before consuming
+// a rulebook). ajv draft-07; strict:false silences warnings about the draft-2019
+// $defs/examples annotation keywords, which ajv still resolves correctly.
 
 const SCHEMA_PATH = path.resolve(
-  fileURLToPath(import.meta.url), '..', '..', '..', 'prompts', 'rulebook.schema.json',
+  fileURLToPath(import.meta.url),
+  '..', '..', '..', '.claude', 'skills', 'warcraft-ingestion', 'rulebook.schema.json',
 );
 
 let _validator: ReturnType<Ajv['compile']> | null = null;

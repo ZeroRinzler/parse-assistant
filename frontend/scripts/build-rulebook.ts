@@ -33,7 +33,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const FRONTEND_ROOT = path.resolve(__dirname, '..');
 const DATA_DIR = path.join(FRONTEND_ROOT, 'public', 'data', 'specs');
-const PROMPTS_DIR = path.resolve(__dirname, '..', '..', 'prompts');
+const RULEBOOK_SKILL_DIR = path.resolve(__dirname, '..', '..', '.claude', 'skills', 'warcraft-ingestion');
 
 const { rl, ask, askList } = createPrompt();
 const getKnownSpecs = (): string[] => listSpecs(DATA_DIR);
@@ -90,7 +90,7 @@ interface GuideEntry {
 }
 
 async function buildPrompt(spec: string): Promise<string> {
-  const skillPath = path.join(PROMPTS_DIR, 'rulebook_skill.md');
+  const skillPath = path.join(RULEBOOK_SKILL_DIR, 'rulebook_skill.md');
   if (!fs.existsSync(skillPath)) throw new Error(`Skill file not found: ${skillPath}`);
 
   const schemaText = await readRulebookSchemaText();
