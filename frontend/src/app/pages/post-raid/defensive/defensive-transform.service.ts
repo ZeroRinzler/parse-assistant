@@ -29,8 +29,6 @@ const TOP_PARSE_COUNT = 10;
 const CANDIDATE_POOL_COUNT = TOP_PARSE_COUNT * 2;
 /** A window must appear in at least this share of parses (a majority) to surface. */
 const CONSENSUS_FRAC = 0.5;
-/** A window's median damage-taken share of the parse total must clear this ("mitigate a lot"). */
-const WINDOW_MIN_DMG_PCT = 0.05;
 /** "At least this share of member parses" - ability inclusion in a cluster. */
 const MEMBER_MAJORITY_FRAC = 0.5;
 /** Defensive windows within this many seconds cluster together. */
@@ -286,8 +284,8 @@ export function clusterAbilityBreakdown(cluster: ParseDefWindow[]): BurstWindow[
 
 /**
  * Cluster per-parse defensive windows across parses into the bench `BurstWindow[]`.
- * Surfaces a window only where a MAJORITY of distinct parses defended (consensus) AND
- * the cluster's median damage-taken share clears the gate ("mitigate a lot").
+ * Surfaces a window wherever a MAJORITY of distinct parses defended (consensus);
+ * incoming damage taken is reported for context but no longer gates the window.
  */
 export function clusterDefensiveWindows(windows: ParseDefWindow[], sampleCount: number, mergeS = CLUSTER_MERGE_S): BurstWindow[] {
   if (!windows.length) return [];
@@ -304,9 +302,8 @@ export function clusterDefensiveWindows(windows: ParseDefWindow[], sampleCount: 
       // Consensus: a majority of DISTINCT parses must defend here.
       const distinctParses = new Set(cluster.map(member => member.parse_index)).size;
       if (distinctParses < minParses) continue;
-      // "Mitigate a lot": the window's median damage-taken share must clear the gate.
+      // Damage-taken share is reported for context (dmg_pct_avg) but does not gate the window.
       const shares = cluster.map(member => member.pct_of_total);
-      if ((median(shares) ?? 0) < WINDOW_MIN_DMG_PCT) continue;
       const damages = cluster.map(member => member.window_damage);
 
       const refCounts = new Map<number, number>();

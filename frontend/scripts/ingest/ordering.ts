@@ -8,6 +8,9 @@
  * WCL budget); the ordering itself is pure and total.
  */
 
+/** Spec pinned to the front of its bracket, ahead of the time/alphabetical order. */
+export const PRIORITY_SPEC = 'SubtletyRogue';
+
 /** One spec's ordering inputs - all derived from cheap disk + git reads. */
 export interface SpecOrderEntry {
   spec: string;
@@ -24,18 +27,22 @@ export interface SpecOrderEntry {
  *   1. empty specs (never ingested),
  *   2. old-version specs (data not fully at the current INGEST_VERSION),
  *   3. current-version specs,
- * and within each group oldest git-commit time first (a null/absent time counts as oldest).
- * Alphabetical tiebreak keeps the order stable when times are equal. So a code/version bump
- * refreshes the stalest specs before re-checking the freshly-rewritten ones.
+ * PRIORITY_SPEC is pinned to the front of its own bracket (ahead of time/alphabetical), so it
+ * is always refreshed first among specs in the same version group. Otherwise, within each group
+ * oldest git-commit time first (a null/absent time counts as oldest), with an alphabetical
+ * tiebreak to keep the order stable when times are equal. So a code/version bump refreshes the
+ * stalest specs before re-checking the freshly-rewritten ones.
  */
 export function orderSpecsByVersionThenTime(entries: ReadonlyArray<SpecOrderEntry>): string[] {
   const group = (entry: SpecOrderEntry): number =>
     entry.dataCount === 0 ? 0 : entry.onCurrentVersion ? 2 : 1;
+  const priority = (entry: SpecOrderEntry): number => (entry.spec === PRIORITY_SPEC ? 0 : 1);
   const time = (entry: SpecOrderEntry): number => entry.lastChange ?? -Infinity;
   return entries
     .slice()
     .sort(
-      (a, b) => group(a) - group(b) || time(a) - time(b) || a.spec.localeCompare(b.spec),
+      (a, b) =>
+        group(a) - group(b) || priority(a) - priority(b) || time(a) - time(b) || a.spec.localeCompare(b.spec),
     )
     .map(entry => entry.spec);
 }

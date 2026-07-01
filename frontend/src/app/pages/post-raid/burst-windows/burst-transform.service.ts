@@ -29,9 +29,9 @@ const TOP_PARSE_COUNT = 10;
 // next-best one; the break in the loop caps actual fetches at TOP_PARSE_COUNT.
 const CANDIDATE_POOL_COUNT = TOP_PARSE_COUNT * 2;
 /** A window must carry at least this share of fight damage to count. */
-const SIGNIFICANCE_PCT = 0.03;
-/** Min cluster size as a fraction of samples to surface a window (majority of parses). */
-const CLUSTER_MIN_FRAC = 0.5;
+const SIGNIFICANCE_PCT = 0.015;
+/** Min cluster size as a fraction of samples to surface a window. */
+const CLUSTER_MIN_FRAC = 0.4;
 /** "At least half the member parses" - ability/cd inclusion in a cluster. */
 const MEMBER_MAJORITY_FRAC = 0.5;
 /** Windows within this many seconds cluster together. */

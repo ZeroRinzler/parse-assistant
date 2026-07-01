@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  orderSpecsByVersionThenTime, orderEncountersByMissingFirst, type SpecOrderEntry,
+  orderSpecsByVersionThenTime, orderEncountersByMissingFirst, PRIORITY_SPEC, type SpecOrderEntry,
 } from './ordering.ts';
 
 const entry = (over: Partial<SpecOrderEntry> & { spec: string }): SpecOrderEntry => ({
@@ -52,6 +52,32 @@ describe('orderSpecsByVersionThenTime', () => {
       entry({ spec: 'Bravo', lastChange: 200 }),
     ]);
     expect(order).toEqual(['Alpha', 'Bravo', 'Charlie']);
+  });
+
+  it('pins the priority spec first within its bracket, then alphabetical for the rest', () => {
+    const order = orderSpecsByVersionThenTime([
+      entry({ spec: 'OutlawRogue', lastChange: 200 }),
+      entry({ spec: PRIORITY_SPEC, lastChange: 200 }),
+      entry({ spec: 'AssassinationRogue', lastChange: 200 }),
+    ]);
+    expect(order).toEqual([PRIORITY_SPEC, 'AssassinationRogue', 'OutlawRogue']);
+  });
+
+  it('pins the priority spec ahead of an older spec within the same bracket (priority beats time)', () => {
+    const order = orderSpecsByVersionThenTime([
+      entry({ spec: 'AssassinationRogue', lastChange: 100 }),
+      entry({ spec: PRIORITY_SPEC, lastChange: 900 }),
+    ]);
+    expect(order).toEqual([PRIORITY_SPEC, 'AssassinationRogue']);
+  });
+
+  it('does not pull the priority spec ahead of an earlier (emptier/older-version) bracket', () => {
+    const order = orderSpecsByVersionThenTime([
+      entry({ spec: PRIORITY_SPEC, onCurrentVersion: true }),
+      entry({ spec: 'EmptySpec', dataCount: 0, onCurrentVersion: false, lastChange: null }),
+      entry({ spec: 'OldSpec', onCurrentVersion: false }),
+    ]);
+    expect(order).toEqual(['EmptySpec', 'OldSpec', PRIORITY_SPEC]);
   });
 
   it('does not mutate the input', () => {

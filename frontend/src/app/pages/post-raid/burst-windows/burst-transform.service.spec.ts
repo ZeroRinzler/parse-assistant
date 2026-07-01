@@ -333,16 +333,16 @@ describe('clusterParseWindows', () => {
     expect(clusterParseWindows([window(10), window(11)], 2)[0]).not.toHaveProperty('avg_targets');
   });
 
-  // Majority gate: survive only when a cluster holds at least max(2, CLUSTER_MIN_FRAC *
-  // sampleCount) member parses. With sampleCount = 10 the floor is 5.
-  it('keeps a cluster present in a majority of parses', () => {
-    const five = [window(10), window(11), window(12), window(13), window(14)];
-    expect(clusterParseWindows(five, 10)).toHaveLength(1);
+  // Consensus gate: survive only when a cluster holds at least max(2, CLUSTER_MIN_FRAC *
+  // sampleCount) member parses. With sampleCount = 10 the floor is 4.
+  it('keeps a cluster present in enough parses', () => {
+    const four = [window(10), window(11), window(12), window(13)];
+    expect(clusterParseWindows(four, 10)).toHaveLength(1);
   });
 
-  it('drops a cluster present in fewer than the majority of parses', () => {
-    const four = [window(10), window(11), window(12), window(13)];
-    expect(clusterParseWindows(four, 10)).toHaveLength(0);
+  it('drops a cluster present in fewer parses than the consensus floor', () => {
+    const three = [window(10), window(11), window(12)];
+    expect(clusterParseWindows(three, 10)).toHaveLength(0);
   });
 
   it('marks a clustered ability passive only when every member never cast it', () => {

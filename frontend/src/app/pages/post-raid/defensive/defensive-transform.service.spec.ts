@@ -172,9 +172,9 @@ describe('clusterDefensiveWindows', () => {
     expect(clusterDefensiveWindows(four, 10)).toHaveLength(0);
   });
 
-  it('drops a consensus window whose median damage share is below the gate', () => {
+  it('surfaces a consensus window regardless of how little damage was taken', () => {
     const low = [window(10, 0, 0.01), window(11, 1, 0.01)];
-    expect(clusterDefensiveWindows(low, 2)).toHaveLength(0);
+    expect(clusterDefensiveWindows(low, 2)).toHaveLength(1);
   });
 });
 
