@@ -14,7 +14,7 @@ import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
 import { WclEvent, ParseRanking, WclRawRanking } from '../../../core/models/wcl.models';
 import { RulebookCooldown, RulebookDefensive } from '../../../core/models/rulebook.models';
-import { PerCdBenchmark, UsesPerMin, HoldTargets } from '../../../core/models/encounter.models';
+import { PerCdBenchmark, UsesPerMin, CdHoldTargets } from '../../../core/models/encounter.models';
 import { logWarn } from '../../../core/log';
 import { mean, median, deviation, quantile } from 'd3-array';
 import { round } from '../../../shared/analysis/analysis-math';
@@ -187,7 +187,7 @@ function benchUsesPerMin(entries: CdSummary[]): UsesPerMin {
  * `target_s` is the absolute clock median (display); `delay_s`/`band_s`/`effective_cd_s`
  * are the prior-relative band the runtime compares the player's own gap against.
  */
-export function buildHoldTargets(entries: CdSummary[], effectiveCd: number): HoldTargets {
+export function buildHoldTargets(entries: CdSummary[], effectiveCd: number): CdHoldTargets {
   const byIdx = new Map<number, { actuals: number[]; delays: number[] }>();
   for (const entry of entries) {
     for (const hold of entry.hold_windows) {
@@ -197,7 +197,7 @@ export function buildHoldTargets(entries: CdSummary[], effectiveCd: number): Hol
       byIdx.set(hold.cast_index, bucket);
     }
   }
-  const targets: HoldTargets = {};
+  const targets: CdHoldTargets = {};
   for (const [castIndex, { actuals, delays }] of byIdx.entries()) {
     if (actuals.length >= Math.max(2, entries.length * HOLD_CONSENSUS_FRAC)) {
       const delayStddev = round(deviation(delays) ?? 0);

@@ -272,15 +272,6 @@ describe('analyzeRotationFindings hold suggestions (prior-relative)', () => {
     const findings = analyzeRotationFindings(scan({ castEvents: casts, bench: holdBench }));
     expect(findings.some(f => f.category === 'hold_suggestion')).toBe(false);
   });
-
-  it('skips pre-v2 hold targets that lack the prior-relative band', () => {
-    const oldBench = bench({ per_cd_benchmarks: { 'Shadow Blades': cdBench({
-      hold_targets: { '2': { target_s: 130, stddev_s: 5, count: 4, total_samples: 5 } },
-    }) } });
-    const casts = [cast(SHADOW_BLADES, 0), cast(SHADOW_BLADES, 100)];
-    const findings = analyzeRotationFindings(scan({ castEvents: casts, bench: oldBench }));
-    expect(findings.some(f => f.category === 'hold_suggestion')).toBe(false);
-  });
 });
 
 /* ----------------------------- per-cooldown checks ----------------------------- */
@@ -512,7 +503,7 @@ describe('buildCdPlan', () => {
       { name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 90, opener_priority: 1, align_with_bloodlust: true, usage_rule: 'open' },
     ];
     const benchmarks = {
-      'Shadow Blades': cdBench({ majority_hold: true, hold_targets: { '2': { target_s: 100, stddev_s: 5, count: 4, total_samples: 5 } } }),
+      'Shadow Blades': cdBench({ majority_hold: true, hold_targets: { '2': { target_s: 100, stddev_s: 5, delay_s: 10, delay_stddev_s: 2, band_s: 5, effective_cd_s: 90, count: 4, total_samples: 5 } } }),
       'Vanish': cdBench({ avg_first_cast_s: 20 }),
     };
     const plan = buildCdPlan(cooldowns, benchmarks, abilities);

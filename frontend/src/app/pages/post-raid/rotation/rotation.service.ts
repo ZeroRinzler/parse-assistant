@@ -326,8 +326,6 @@ export function checkHoldSuggestions(cdName: string, castTimesMs: number[], cdBe
     const index = parseInt(idxStr, 10) - 1;
     // Need a prior cast to measure a gap; index 0 has none.
     if (index < 1 || index >= times.length) continue;
-    // PR1 transition guard: pre-v2 hold targets lack the prior-relative band; skip them.
-    if (target.effective_cd_s == null || target.band_s == null || target.delay_s == null) continue;
     // Compare the player's OWN gap from their prior cast (cascade-free). Flag only an
     // under-hold clearly below the consensus band; over-holding is tolerated.
     const playerDelay = times[index] - times[index - 1] - target.effective_cd_s;

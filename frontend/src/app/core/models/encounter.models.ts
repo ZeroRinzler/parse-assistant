@@ -18,32 +18,37 @@ export interface UsesPerMin {
 
 /**
  * Per-cast-index hold target: a cooldown cast index where a majority of top parses
- * deliberately hold past the natural reset. `target_s` is the absolute clock median
- * (display); the `delay_*`/`band_s`/`effective_cd_s` group is the prior-relative
- * measurement the runtime compares against (cascade-free).
- *
- * The four prior-relative fields are TEMPORARILY OPTIONAL during the v2 ingest
- * migration: v2 data always writes them, but pre-v2 tailored files lack them, so the
- * runtime guards their absence. PR2 (after the full re-ingest) makes them required.
+ * deliberately hold past the natural reset. `target_s` is the absolute clock median,
+ * which the defensive plan surfaces for display.
  */
 export interface HoldTarget {
   /** Absolute clock target (median cast time), for display ("hold to 3:20"). */
   target_s: number;
   /** Std-dev of the absolute target. */
   stddev_s: number;
-  /** Prior-relative hold past natural reset (median of actual - (prior + effective_cd_s)). */
-  delay_s?: number;
-  /** Std-dev of `delay_s`. */
-  delay_stddev_s?: number;
-  /** Tolerance half-width the runtime compares against: max(delay_stddev_s, floor). */
-  band_s?: number;
-  /** Cadence zero-point used for `delay_s` (nominal rulebook cooldown). */
-  effective_cd_s?: number;
   count: number;
   total_samples: number;
 }
 
+/**
+ * Rotation hold target: the base plus the prior-relative band the runtime compares the
+ * player's own gap against (cascade-free). Every v2 rotation bench writes these.
+ */
+export interface CdHoldTarget extends HoldTarget {
+  /** Prior-relative hold past natural reset (median of actual - (prior + effective_cd_s)). */
+  delay_s: number;
+  /** Std-dev of `delay_s`. */
+  delay_stddev_s: number;
+  /** Tolerance half-width the runtime compares against: max(delay_stddev_s, floor). */
+  band_s: number;
+  /** Cadence zero-point used for `delay_s` (nominal rulebook cooldown). */
+  effective_cd_s: number;
+}
+
+/** Defensive hold targets (display-only absolute clock). */
 export type HoldTargets = Record<string, HoldTarget>;
+/** Rotation hold targets (base + prior-relative band). */
+export type CdHoldTargets = Record<string, CdHoldTarget>;
 
 export interface PerCdBenchmark {
   avg_first_cast_s: number;
@@ -57,7 +62,7 @@ export interface PerCdBenchmark {
   uses_per_min: UsesPerMin;
   bl_pct: number;
   majority_hold: boolean;
-  hold_targets: HoldTargets;
+  hold_targets: CdHoldTargets;
   sample_count: number;
 }
 
