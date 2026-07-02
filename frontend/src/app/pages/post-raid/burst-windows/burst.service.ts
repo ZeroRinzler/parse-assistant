@@ -12,6 +12,7 @@ import { BurstWindow, PlayerBurstWindow } from '../../../core/models/analysis.mo
 import { WclEvent } from '../../../core/models/wcl.models';
 import { ComparisonWindow, WindowStatus, RangeRow, WindowSpell } from '../../../core/models/window-comparison.models';
 import { logWarn } from '../../../core/log';
+import { windowSpells } from '../../../shared/analysis/wcl-projections';
 import { BURST_DATA_SOURCE } from './burst-data-source';
 
 /** Spell id -> baked icon + name, complete over every spell the card renders. */
@@ -89,11 +90,6 @@ export function burstDetailRows(
     topCasts: ability.avg_casts ?? null,
     passive: ability.is_passive ?? false,
   }));
-}
-
-/** Header chips for a window: each known cooldown with its baked icon + name. */
-function windowSpells(spellIds: number[], abilities: AbilityIcons): WindowSpell[] {
-  return spellIds.map(id => ({ id, icon: abilities[id].icon, name: abilities[id].name }));
 }
 
 /** Map anchor for a window: when to seek and which cooldowns to highlight. */

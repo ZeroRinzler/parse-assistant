@@ -7,8 +7,9 @@
  * `shared/gear/gear-comparison.ts` does - a blessed cross-slice presentational/stats
  * derivation - so each slice imports one implementation instead of re-declaring it.
  *
- * Deliberately NOT here: each slice's WCL-response projection (`toParseRankings`) and
- * its domain clustering/benchmark math, which CLAUDE.md keeps self-contained per slice.
+ * The generic cross-slice WCL-response projections (`toParseRankings`) and window
+ * view-row builders (`windowSpells`) live in the sibling `wcl-projections.ts`; each
+ * slice's own domain clustering/benchmark math stays self-contained per slice.
  */
 import { median } from 'd3-array';
 import { AnalysisFinding } from '../../core/models/analysis.models';

@@ -14,14 +14,19 @@
 import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
-import { WclEvent, ParseRanking, WclRawRanking } from '../../../core/models/wcl.models';
+import { WclEvent, ParseRanking } from '../../../core/models/wcl.models';
 import { RulebookCooldown, RulebookDefensive } from '../../../core/models/rulebook.models';
 import { BurstWindow } from '../../../core/models/analysis.models';
 import { logWarn } from '../../../core/log';
 import { mean, median, deviation, quantile } from 'd3-array';
 import { round, groupByTime } from '../../../shared/analysis/analysis-math';
+import { toParseRankings } from '../../../shared/analysis/wcl-projections';
 import { DataSource } from '../../../core/data-source/data-source';
 import { BurstBench } from './burst-data-source';
+
+// Re-exported from the shared blessed module so call sites / specs that import it
+// from the transform service keep working.
+export { toParseRankings } from '../../../shared/analysis/wcl-projections';
 
 /** How many top parses to sample (matches the ingest bench). */
 const TOP_PARSE_COUNT = 10;
@@ -51,23 +56,6 @@ const RATE_QUANTILE = 0.66;
 const MERGE_GAP_BINS = 2;
 
 /* ----------------------------- pure helpers (own math) ----------------------------- */
-
-// WCL anonymizes a privacy-protected parse's player name to "Character <id>-<id>",
-// which can never match a report actor (real names are letters only), so the parse
-// is unfetchable. Drop these before mapping.
-const ANONYMIZED_NAME = /^Character \d+-\d+$/;
-
-/** Map raw WCL rankings to the top `count` fetchable parses (report + fight + player). */
-export function toParseRankings(raw: WclRawRanking[], count: number): ParseRanking[] {
-  return raw
-    .filter(ranking => ranking.report?.code && !ANONYMIZED_NAME.test(ranking.name ?? ''))
-    .slice(0, count)
-    .map(ranking => ({
-      player: ranking.name ?? '',
-      report_code: ranking.report?.code ?? '',
-      fight_id: ranking.report?.fightID ?? 0,
-    }));
-}
 
 /** Cooldown name -> spell id, for the burst window header icons. */
 export function cdSpellIds(cooldowns: RulebookCooldown[], defensives: RulebookDefensive[]): Record<string, number> {

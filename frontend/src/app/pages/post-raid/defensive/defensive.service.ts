@@ -24,6 +24,7 @@ import { logWarn } from '../../../core/log';
 import {
   benchExpectedUses, fmtClock, isOutlierAbove, sortBySeverity,
 } from '../../../shared/analysis/analysis-math';
+import { windowSpells } from '../../../shared/analysis/wcl-projections';
 import {
   DEFENSIVE_DATA_SOURCE, DefensiveBench, DefensivePlanMeta, BakedAbility,
 } from './defensive-data-source';
@@ -348,18 +349,13 @@ export function defensiveDetailRows(
   }));
 }
 
-/** Header chip for a window's defensive spell, with its baked icon + name. */
-function windowSpells(spellId: number | null | undefined, abilities: AbilityIcons): WindowSpell[] {
-  return spellId != null ? [{ id: spellId, icon: abilities[spellId].icon, name: abilities[spellId].name }] : [];
-}
-
 /** Map anchor for a defensive window: when to seek, label, defensive spell, and the dominant enemy. */
 export function defensiveMapAnchor(window: BurstWindow, abilities: AbilityIcons): DefensiveMapAnchor {
   const label = window.defensive_name ?? window.common_defensives?.[0] ?? 'Defensive';
   return {
     timeS: window.time_s,
     label,
-    spells: windowSpells(window.spell_id, abilities),
+    spells: windowSpells(window.spell_id != null ? [window.spell_id] : [], abilities),
     refGameId: window.ref_game_id ?? null,
   };
 }
@@ -396,7 +392,7 @@ export function buildDefensiveWindows(
     windows.push({
       timeStartS: window.time_s,
       timeEndS: window.time_s + window.window_length_s,
-      spells: windowSpells(window.spell_id, abilities),
+      spells: windowSpells(window.spell_id != null ? [window.spell_id] : [], abilities),
       labels,
       status,
       statusIcon: icon,

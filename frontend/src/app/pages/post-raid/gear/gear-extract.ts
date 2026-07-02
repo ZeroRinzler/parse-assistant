@@ -29,6 +29,17 @@ export function decodeHtmlEntities(text: string): string {
     .replace(/&#39;/g, "'");
 }
 
+/**
+ * Build a `v2:`-prefixed talent key from a CombatantInfo `talentTree` array: the
+ * sorted (string order, no dedup) nodeIDs, matching ingestion's representation.
+ */
+export function talentKeyFromTree(tree: { nodeID?: number }[] | undefined): string {
+  if (!tree?.length) return '';
+  const ids = tree.filter(node => node.nodeID != null).map(node => String(node.nodeID));
+  if (!ids.length) return '';
+  return 'v2:' + ids.sort().join(',');
+}
+
 /** Extract trinkets (slots 12/13) and enchants from a CombatantInfo gear array. */
 export function extractGear(gear: WclGearItem[] | undefined): {
   trinkets: NonNullable<CharacterGear['trinkets']>;

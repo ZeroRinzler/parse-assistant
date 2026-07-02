@@ -16,7 +16,7 @@ import { CharacterGear, WclCombatantInfo } from '../../../core/models/wcl.models
 import { EncounterGearStats } from '../../../core/models/encounter.models';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { logWarn } from '../../../core/log';
-import { decodeHtmlEntities, extractGear } from './gear-extract';
+import { decodeHtmlEntities, extractGear, talentKeyFromTree } from './gear-extract';
 import {
   GearStatus,
   buildEnchantRows, enchantStatusOf, EnchantRow,
@@ -58,17 +58,6 @@ export function emptyGearView(): GearComparisonView {
 }
 
 /* ----------------------------- pure gear extraction (own, colocated) ----------------------------- */
-
-/**
- * Build a `v2:`-prefixed talent key from a CombatantInfo `talentTree` array: the
- * sorted (string order, no dedup) nodeIDs, matching ingestion's representation.
- */
-export function talentKeyFromTree(tree: { nodeID?: number }[] | undefined): string {
-  if (!tree?.length) return '';
-  const ids = tree.filter(node => node.nodeID != null).map(node => String(node.nodeID));
-  if (!ids.length) return '';
-  return 'v2:' + ids.sort().join(',');
-}
 
 /**
  * Assemble a `CharacterGear` from a raw CombatantInfo event + the resolved item /

@@ -22,11 +22,19 @@
 import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
-import { WclEvent, WclFight, ParseRanking, WclRawRanking } from '../../../core/models/wcl.models';
+import { WclEvent, WclFight, ParseRanking } from '../../../core/models/wcl.models';
 import { ParsePositions, PosRow } from '../../../core/models/positioning.models';
 import { logWarn } from '../../../core/log';
+import { toParseRankings } from '../../../shared/analysis/wcl-projections';
+import { posActorId } from './map-positions';
 import { DataSource } from '../../../core/data-source/data-source';
 import { MapData } from './map-data-source';
+
+// Re-exported so call sites / specs that import these from the transform service
+// keep working (`toParseRankings` from the shared blessed module, `posActorId` from
+// the slice-local projection module).
+export { toParseRankings } from '../../../shared/analysis/wcl-projections';
+export { posActorId } from './map-positions';
 
 /** How many top parses to sample (matches the ingest bench). */
 const TOP_PARSE_COUNT = 10;
@@ -44,23 +52,6 @@ const DECISECONDS_PER_S = 10;
 
 /* ----------------------------- pure helpers (own math) ----------------------------- */
 
-// WCL anonymizes a privacy-protected parse's player name to "Character <id>-<id>",
-// which can never match a report actor (real names are letters only), so the parse
-// is unfetchable. Drop these before mapping.
-const ANONYMIZED_NAME = /^Character \d+-\d+$/;
-
-/** Map raw WCL rankings to the top `count` fetchable parses (report + fight + player). */
-export function toParseRankings(raw: WclRawRanking[], count: number): ParseRanking[] {
-  return raw
-    .filter(ranking => ranking.report?.code && !ANONYMIZED_NAME.test(ranking.name ?? ''))
-    .slice(0, count)
-    .map(ranking => ({
-      player: ranking.name ?? '',
-      report_code: ranking.report?.code ?? '',
-      fight_id: ranking.report?.fightID ?? 0,
-    }));
-}
-
 /** One raw position sample before resampling (raw WCL units; HP for boss pick). */
 export interface RawPosSample {
   t: number;
@@ -69,12 +60,6 @@ export interface RawPosSample {
   facing: number | null;
   mapID: number | null;
   maxHp: number;
-}
-
-/** The actor a resource-bearing event's flattened position describes (1 = source, 2 = target). */
-export function posActorId(event: WclEvent): number | null {
-  if (typeof event.x !== 'number' || typeof event.y !== 'number') return null;
-  return event.resourceActor === 2 ? (event.sourceID === undefined ? null : event.targetID ?? null) : (event.sourceID ?? null);
 }
 
 /** `maxHitPoints` is on the wire with `includeResources` but not in the typed model. */

@@ -11,16 +11,18 @@
  */
 import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
-import { CharacterGear, ParseRanking, WclRawRanking } from '../../../core/models/wcl.models';
+import { CharacterGear, ParseRanking } from '../../../core/models/wcl.models';
 import { EncounterGearStats } from '../../../core/models/encounter.models';
 import { logWarn } from '../../../core/log';
-import { TRINKET_SLOTS, decodeHtmlEntities, extractGear } from './gear-extract';
+import { TRINKET_SLOTS, decodeHtmlEntities, extractGear, talentKeyFromTree } from './gear-extract';
+import { toParseRankings } from '../../../shared/analysis/wcl-projections';
 import { DataSource } from '../../../core/data-source/data-source';
 import { GearBench } from './gear-data-source';
 
-// Re-exported from the slice-local projection module so existing call sites /
-// specs that import these from the transform service keep working.
-export { iconFile, decodeHtmlEntities, extractGear } from './gear-extract';
+// Re-exported from the slice-local projection module + the shared blessed module so
+// existing call sites / specs that import these from the transform service keep working.
+export { iconFile, decodeHtmlEntities, extractGear, talentKeyFromTree } from './gear-extract';
+export { toParseRankings } from '../../../shared/analysis/wcl-projections';
 
 /** How many top parses to sample (matches the ingest bench). */
 const TOP_PARSE_COUNT = 10;
@@ -36,34 +38,6 @@ const MAX_ENCHANTS_PER_SLOT = 3;
 
 function pct(count: number, total: number): number {
   return total ? Math.round((count / total) * 100) : 0;
-}
-
-// WCL anonymizes a privacy-protected parse's player name to "Character <id>-<id>",
-// which can never match a report actor (real names are letters only), so the parse
-// is unfetchable. Drop these before mapping.
-const ANONYMIZED_NAME = /^Character \d+-\d+$/;
-
-/** Map raw WCL rankings to the top `count` fetchable parses (report + fight + player). */
-export function toParseRankings(raw: WclRawRanking[], count: number): ParseRanking[] {
-  return raw
-    .filter(ranking => ranking.report?.code && !ANONYMIZED_NAME.test(ranking.name ?? ''))
-    .slice(0, count)
-    .map(ranking => ({
-      player: ranking.name ?? '',
-      report_code: ranking.report?.code ?? '',
-      fight_id: ranking.report?.fightID ?? 0,
-    }));
-}
-
-/**
- * Build a `v2:`-prefixed talent key from a CombatantInfo `talentTree` array: the
- * sorted (string order, no dedup) nodeIDs, matching ingestion's representation.
- */
-export function talentKeyFromTree(tree: { nodeID?: number }[] | undefined): string {
-  if (!tree?.length) return '';
-  const ids = tree.filter(node => node.nodeID != null).map(node => String(node.nodeID));
-  if (!ids.length) return '';
-  return 'v2:' + ids.sort().join(',');
 }
 
 /**

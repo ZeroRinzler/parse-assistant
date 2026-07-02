@@ -10,10 +10,10 @@
  * individually-tested pure function below - no separate vm file.
  *
  * Per the slice self-containment rule it imports ONLY the two API services (here
- * via `MAP_DATA_SOURCE` + `WclApiService`), models, and `logWarn` - never
- * `positioning-core`, `map-context`, or any other domain service. The positioning
- * math (`buildActorTimelines`, `listReferenceEnemies`, the facing offset) is PORTED
- * here as pure fns rather than imported.
+ * via `MAP_DATA_SOURCE` + `WclApiService`), models, `logWarn`, and the slice-local
+ * `map-positions` projection - never `positioning-core`, `map-context`, or any other
+ * domain service. The positioning math (`buildActorTimelines`, `listReferenceEnemies`,
+ * the facing offset) is PORTED here as pure fns rather than imported.
  */
 import { Injectable, Injector, inject, signal } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
@@ -21,6 +21,7 @@ import { WclEvent, WclFight } from '../../../core/models/wcl.models';
 import { WindowSpell } from '../../../core/models/window-comparison.models';
 import { EncounterPositions, ReferenceSelector } from '../../../core/models/positioning.models';
 import { logWarn } from '../../../core/log';
+import { posActorId } from './map-positions';
 import { MAP_DATA_SOURCE, MapData } from './map-data-source';
 
 /**
@@ -74,12 +75,6 @@ export interface MapAnchor {
 }
 
 /* ----------------------------- pure functions ----------------------------- */
-
-/** The actor the event's flattened position describes (resourceActor: 1 = source, 2 = target). */
-function posActorId(event: WclEvent): number | undefined {
-  if (typeof event.x !== 'number' || typeof event.y !== 'number') return undefined;
-  return event.resourceActor === 2 ? event.targetID : event.sourceID;
-}
 
 /**
  * Build per-actor position timelines from events fetched with

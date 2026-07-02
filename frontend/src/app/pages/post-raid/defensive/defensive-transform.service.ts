@@ -12,15 +12,20 @@
 import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
-import { WclEvent, ParseRanking, WclReport, WclRawRanking } from '../../../core/models/wcl.models';
+import { WclEvent, ParseRanking, WclReport } from '../../../core/models/wcl.models';
 import { RulebookDefensive } from '../../../core/models/rulebook.models';
 import { BurstWindow, TopDefensiveSummary } from '../../../core/models/analysis.models';
 import { PerDefensiveBenchmark } from '../../../core/models/encounter.models';
 import { logWarn } from '../../../core/log';
 import { mean, median, deviation } from 'd3-array';
 import { round, groupByTime } from '../../../shared/analysis/analysis-math';
+import { toParseRankings } from '../../../shared/analysis/wcl-projections';
 import { DataSource } from '../../../core/data-source/data-source';
 import { DefensiveBench, DefensivePlanMeta } from './defensive-data-source';
+
+// Re-exported from the shared blessed module so call sites / specs that import it
+// from the transform service keep working.
+export { toParseRankings } from '../../../shared/analysis/wcl-projections';
 
 /** How many top parses to sample (matches the ingest bench). */
 const TOP_PARSE_COUNT = 10;
@@ -43,24 +48,6 @@ const ABILITY_BREAKDOWN_TOP_N = 6;
 const DEFAULT_DEFENSIVE_COOLDOWN_S = 90;
 
 /* ----------------------------- pure helpers (own math) ----------------------------- */
-
-// WCL anonymizes a privacy-protected parse's player name to "Character <id>-<id>",
-// which can never match a report actor (real names are letters only), so the parse
-// is unfetchable. Drop these before mapping.
-const ANONYMIZED_NAME = /^Character \d+-\d+$/;
-
-/** Map raw WCL rankings to the top `count` fetchable parses (report + fight + player). */
-export function toParseRankings(raw: WclRawRanking[], count: number): ParseRanking[] {
-  return raw
-    .filter(ranking => ranking.report?.code && !ANONYMIZED_NAME.test(ranking.name ?? ''))
-    .slice(0, count)
-    .map(ranking => ({
-      player: ranking.name ?? '',
-      report_code: ranking.report?.code ?? '',
-      fight_id: ranking.report?.fightID ?? 0,
-    }));
-}
-
 
 /** Defensive name -> spell id, for the defensive window header icons. */
 export function defensiveSpellIds(defensives: RulebookDefensive[]): Record<string, number> {
