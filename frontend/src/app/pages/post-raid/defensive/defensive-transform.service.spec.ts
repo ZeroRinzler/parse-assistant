@@ -11,7 +11,7 @@ import {
   windowDamageBreakdown, clusterDamageStats, clusterAbilityBreakdown,
   ParseDefWindow, ParseDefensiveSummary,
 } from './defensive-transform.service';
-import { CLOAK_OF_SHADOWS } from '../../../../testing/spell-ids';
+import { CLOAK_OF_SHADOWS, EVASION } from '../../../../testing/spell-ids';
 
 // Enemy-side identifiers for the damage-taken fixtures (not player abilities, so local).
 const BOSS_HIT = 700;       // an enemy ability id the player takes damage from
@@ -47,8 +47,8 @@ describe('defensiveSpellIds', () => {
 
 describe('defensivePlanMeta', () => {
   it('carries metadata with nullable defaults', () => {
-    expect(defensivePlanMeta([{ name: 'Evasion', spell_id: 5277, cooldown: 120 }]))
-      .toEqual([{ name: 'Evasion', spell_id: 5277, cooldown: 120, duration: null, usage_rule: null, talent_gated: false }]);
+    expect(defensivePlanMeta([{ name: 'Evasion', spell_id: EVASION, cooldown: 120 }]))
+      .toEqual([{ name: 'Evasion', spell_id: EVASION, cooldown: 120, duration: null, usage_rule: null, talent_gated: false }]);
   });
 });
 

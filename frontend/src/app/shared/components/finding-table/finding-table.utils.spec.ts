@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { bucketFindings, rowsFromEntries, onPlanFromEntries, CAT_LABEL, FindingEntry } from './finding-table.utils';
 import { AnalysisFinding } from '../../../core/models/analysis.models';
+import { SHADOW_BLADES, VANISH } from '../../../../testing/spell-ids';
 
 const spellId = (_name: string) => null;
 const icon = (_name: string) => '';
@@ -118,7 +119,7 @@ describe('bucketFindings', () => {
 describe('rowsFromEntries', () => {
   const issueEntry: FindingEntry = {
     name: 'Shadow Blades',
-    spellId: 121471,
+    spellId: SHADOW_BLADES,
     icon: '',
     hasIssue: true,
     hasCritical: true,
@@ -176,12 +177,12 @@ describe('rowsFromEntries', () => {
 describe('onPlanFromEntries', () => {
   it('returns only entries with hasIssue=false', () => {
     const entries: FindingEntry[] = [
-      { name: 'Shadow Blades', spellId: 121471, icon: '', hasIssue: true,  hasCritical: true,  metaItems: [], findings: [] },
-      { name: 'Vanish',        spellId: 1856,   icon: '', hasIssue: false, hasCritical: false, metaItems: [], findings: [] },
+      { name: 'Shadow Blades', spellId: SHADOW_BLADES, icon: '', hasIssue: true,  hasCritical: true,  metaItems: [], findings: [] },
+      { name: 'Vanish',        spellId: VANISH,   icon: '', hasIssue: false, hasCritical: false, metaItems: [], findings: [] },
     ];
     const chips = onPlanFromEntries(entries);
     expect(chips).toHaveLength(1);
-    expect(chips[0]).toEqual({ name: 'Vanish', spellId: 1856, icon: '' });
+    expect(chips[0]).toEqual({ name: 'Vanish', spellId: VANISH, icon: '' });
   });
 
   it('returns empty array when all entries have issues', () => {

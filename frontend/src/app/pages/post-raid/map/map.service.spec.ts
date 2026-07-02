@@ -8,6 +8,7 @@ import {
   MapFeatureService, buildActorTimelines, listReferenceEnemies, buildLiveOverlay, resolveLiveReference,
   FACING_OFFSET_RAD,
 } from './map.service';
+import { SHADOW_BLADES } from '../../../../testing/spell-ids';
 
 function posEvent(
   fields: { ts: number; source?: number; target?: number; resourceActor?: number; x: number; y: number; facing?: number; mapID?: number },
@@ -171,11 +172,11 @@ describe('MapFeatureService', () => {
 
   it('openAt sets the panel state and opens it', () => {
     const { service } = withData(sampleData);
-    service.openAt({ timeS: 42, label: 'Burst', spells: [{ id: 121471, icon: 'sb', name: 'Shadow Blades' }], reference: { kind: 'enemy', gameId: 200 } });
+    service.openAt({ timeS: 42, label: 'Burst', spells: [{ id: SHADOW_BLADES, icon: 'sb', name: 'Shadow Blades' }], reference: { kind: 'enemy', gameId: 200 } });
     expect(service.open()).toBe(true);
     expect(service.anchorTime()).toBe(42);
     expect(service.contextLabel()).toBe('Burst');
-    expect(service.contextSpells()).toEqual([{ id: 121471, icon: 'sb', name: 'Shadow Blades' }]);
+    expect(service.contextSpells()).toEqual([{ id: SHADOW_BLADES, icon: 'sb', name: 'Shadow Blades' }]);
     expect(service.reference()).toEqual({ kind: 'enemy', gameId: 200 });
   });
 

@@ -8,7 +8,7 @@ import {
   toParseRankings, bucketDamagePerBin, forwardRollingDamage, detectDenseRuns, trimRunToDamage,
   windowAbilityBreakdown, BinRun,
 } from './burst-transform.service';
-import { SHADOW_BLADES, SHADOW_BLADES_DAMAGE, EVISCERATE, BLACK_POWDER } from '../../../../testing/spell-ids';
+import { SHADOW_BLADES, SHADOW_BLADES_DAMAGE, EVISCERATE, BLACK_POWDER, CLOAK_OF_SHADOWS } from '../../../../testing/spell-ids';
 
 function cast(spellId: number, atS: number): WclEvent {
   return { type: 'cast', timestamp: atS * 1000, abilityGameID: spellId };
@@ -75,15 +75,15 @@ describe('toParseRankings', () => {
 describe('cdSpellIds', () => {
   it('maps cooldown + defensive names to spell ids, skipping missing ids', () => {
     expect(cdSpellIds(
-      [{ name: 'Shadow Blades', spell_id: 121471, cooldown: 90 }, { name: 'NoId', spell_id: 0, cooldown: 60 }],
-      [{ name: 'Cloak', spell_id: 31224, cooldown: 120 }],
-    )).toEqual({ 'Shadow Blades': 121471, 'Cloak': 31224 });
+      [{ name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 90 }, { name: 'NoId', spell_id: 0, cooldown: 60 }],
+      [{ name: 'Cloak', spell_id: CLOAK_OF_SHADOWS, cooldown: 120 }],
+    )).toEqual({ 'Shadow Blades': SHADOW_BLADES, 'Cloak': CLOAK_OF_SHADOWS });
   });
 });
 
 describe('cdTimings', () => {
   it('collects per-cooldown cast times in fight-relative seconds (no duration read)', () => {
-    const timings = cdTimings([cast(121471, 30), cast(121471, 10), cast(999, 5)], [{ name: 'Shadow Blades', spell_id: 121471, cooldown: 90 }], 0);
+    const timings = cdTimings([cast(SHADOW_BLADES, 30), cast(SHADOW_BLADES, 10), cast(999, 5)], [{ name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 90 }], 0);
     expect(timings).toEqual([{ name: 'Shadow Blades', castTimesS: [10, 30] }]);
   });
 });
