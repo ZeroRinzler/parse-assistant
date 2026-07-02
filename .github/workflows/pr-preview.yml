@@ -13,16 +13,9 @@ jobs:
   deploy-preview:
     runs-on: ubuntu-latest
     steps:
-      - name: Mint GitHub App token
-        id: app-token
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ secrets.INGEST_APP_ID }}
-          private-key: ${{ secrets.INGEST_APP_PRIVATE_KEY }}
-
       - uses: actions/checkout@v4
         with:
-          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: false
 
       - uses: actions/setup-node@v4
         with:
@@ -40,6 +33,13 @@ jobs:
 
       - name: Copy 404 fallback for SPA routing
         run: cp static/angular/browser/index.html static/angular/browser/404.html
+
+      - name: Mint GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.INGEST_APP_ID }}
+          private-key: ${{ secrets.INGEST_APP_PRIVATE_KEY }}
 
       - name: Create GitHub deployment
         id: create-deployment
