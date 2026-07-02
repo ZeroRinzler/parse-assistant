@@ -5,7 +5,7 @@ import {
   type SignatureRanking, type RawSignatureRanking,
 } from './signature.ts';
 
-const rankings = (...rows: Array<[string, number]>): SignatureRanking[] =>
+const rankings = (...rows: [string, number][]): SignatureRanking[] =>
   rows.map(([report_code, fight_id]) => ({ report_code, fight_id }));
 
 describe('encounterSignature', () => {
@@ -44,7 +44,7 @@ describe('parseKey', () => {
 });
 
 describe('selectSignatureRankings', () => {
-  const raw = (...rows: Array<[string, string, number]>): RawSignatureRanking[] =>
+  const raw = (...rows: [string, string, number][]): RawSignatureRanking[] =>
     rows.map(([name, code, fightID]) => ({ name, report: { code, fightID } }));
 
   it('drops anonymized "Character <id>-<id>" parses', () => {

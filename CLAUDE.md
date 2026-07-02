@@ -41,7 +41,7 @@ frontend/        # the entire Angular 22 app
 | `npm start` | Angular dev server on http://localhost:4200 |
 | `npm run build` | Production build to `../static/angular/` |
 | `npm test` | `ng test` (frontend Vitest) + scripts Vitest + scripts typecheck |
-| `npm run lint` | `ng lint` -> eslint over `src/**` |
+| `npm run lint` | `ng lint` over `src/**` then `eslint scripts` over `scripts/**` |
 | `npm run ingest` | Run the ingestion orchestrator (needs `WCL_CLIENT_ID`/`WCL_CLIENT_SECRET`) |
 | `npm run scrape` | Re-scrape all guides (or `--spec Name --url URL` to add one) |
 | `npm run rulebook` | Manage rulebooks (build AI prompt, save AI JSON) |

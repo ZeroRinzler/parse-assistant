@@ -130,7 +130,7 @@ const SUPADATA_TRANSCRIPT_URL = 'https://api.supadata.ai/v1/youtube/transcript';
 
 // Supadata returns the transcript either as a plain string (text=true) or as timed segments.
 interface SupadataTranscript {
-  content?: string | Array<{ text?: string }>;
+  content?: string | { text?: string }[];
 }
 
 async function scrapeYouTube(url: string): Promise<string> {

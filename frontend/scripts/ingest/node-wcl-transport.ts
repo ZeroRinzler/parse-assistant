@@ -10,7 +10,7 @@
  */
 import { WCL_API_URL, WclTransportError, type WclTransport } from '../../src/app/core/services/wcl-transport.ts';
 
-interface GraphQLResponse<TData> { data?: TData; errors?: Array<{ message: string }>; }
+interface GraphQLResponse<TData> { data?: TData; errors?: { message: string }[]; }
 
 export class FetchWclTransport implements WclTransport {
   private readonly cache = new Map<string, Promise<unknown>>();

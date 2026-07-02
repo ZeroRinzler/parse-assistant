@@ -13,7 +13,7 @@ import { fileURLToPath } from 'url';
 import Ajv from 'ajv';
 
 /** Max guide content length fed into the LLM prompt (admin) and stored per guide (scrape). */
-export const MAX_GUIDE_CHARS: number = 60_000;
+export const MAX_GUIDE_CHARS = 60_000;
 
 export async function readJson<T = unknown>(filePath: string): Promise<T | null> {
   try {

@@ -94,7 +94,7 @@ export async function getRankingsLite(
   if (!mapping) throw new Error(`Unknown spec: ${spec}`);
   const [className, specName] = mapping;
 
-  const attempts: Array<number | null> = partitionIds.length > 0 ? partitionIds : [null];
+  const attempts: (number | null)[] = partitionIds.length > 0 ? partitionIds : [null];
   for (const partition of attempts) {
     const variables: RankingsQueryVars = { encounterID: encounterId, className, specName };
     if (partition != null) variables.partition = partition;

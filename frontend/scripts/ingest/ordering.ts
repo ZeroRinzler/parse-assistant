@@ -33,7 +33,7 @@ export interface SpecOrderEntry {
  * tiebreak to keep the order stable when times are equal. So a code/version bump refreshes the
  * stalest specs before re-checking the freshly-rewritten ones.
  */
-export function orderSpecsByVersionThenTime(entries: ReadonlyArray<SpecOrderEntry>): string[] {
+export function orderSpecsByVersionThenTime(entries: readonly SpecOrderEntry[]): string[] {
   const group = (entry: SpecOrderEntry): number =>
     entry.dataCount === 0 ? 0 : entry.onCurrentVersion ? 2 : 1;
   const priority = (entry: SpecOrderEntry): number => (entry.spec === PRIORITY_SPEC ? 0 : 1);

@@ -27,7 +27,7 @@ export interface WclPartition { id: number; name: string; }
 // `frozen` is true once a zone's rankings are permanently locked - WCL flips it on
 // superseded tiers and aggregate/"complete raid" pseudo-zones. The live current tier
 // is `frozen: false`. Optional so an absent field is treated as not-frozen (keep).
-export interface WclZone { id: number; name: string; frozen?: boolean; partitions?: WclPartition[]; encounters?: Array<{ id: number; name: string }>; }
+export interface WclZone { id: number; name: string; frozen?: boolean; partitions?: WclPartition[]; encounters?: { id: number; name: string }[]; }
 export interface WclExpansion { id: number; name: string; zones?: WclZone[]; }
 
 export interface WclServerRef { id?: number; name?: string; region?: { slug?: string }; }
@@ -67,7 +67,7 @@ export interface WclCombatantInfoEvent {
   type: string;
   timestamp: number;
   sourceID?: number;
-  talentTree?: Array<{ id?: number; rank?: number; nodeID?: number }>;
+  talentTree?: { id?: number; rank?: number; nodeID?: number }[];
 }
 
 // Processed ranking entry (one top-parse row), with the raw response kept on
@@ -88,8 +88,8 @@ export interface EnrichedRanking {
   server_region: string;
   combatant_info: {
     talent_key: string;
-    trinkets: Array<{ slot: number; id: number | string; name: string }>;
-    enchants: Array<{ slot: number; id: number | string; name: string }>;
+    trinkets: { slot: number; id: number | string; name: string }[];
+    enchants: { slot: number; id: number | string; name: string }[];
   };
 }
 
