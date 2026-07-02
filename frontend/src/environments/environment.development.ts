@@ -9,4 +9,7 @@
  */
 export const environment = {
   useLiveTransform: true,
+  /** Empty resolves `data/specs/` relative to `document.baseURI` (per-folder copy);
+   * see `environment.ts` for the shared-copy override used by preview builds. */
+  dataBaseHref: '',
 };

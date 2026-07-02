@@ -17,21 +17,11 @@ jobs:
         with:
           persist-credentials: false
 
-      # Overlay the generated bench data so the preview ships parse data. The data lives on the
-      # public, always-squashed `data` branch; a plain read-only checkout is enough - we do NOT
-      # pass the app token here, so this step adds no new secret exposure to PR-triggered runs.
-      - name: Check out bench data (public data branch)
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          ref: data
-          path: _data-branch
-
-      - name: Overlay bench data into the build
-        run: |
-          mkdir -p frontend/public/data/specs
-          cp -a _data-branch/frontend/public/data/specs/. frontend/public/data/specs/
-          rm -rf _data-branch
-
+      # Previews intentionally do NOT overlay the bench data. The ~400 MB of ingested data
+      # is byte-for-byte identical across prod and every preview, so the `preview` build
+      # points the app at the single shared prod-root copy `/warcraft-learner/data/specs/`
+      # (which deploy-pages always ships) instead of duplicating it into each pr-N folder.
+      # The preview folder therefore carries only the app shell.
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22'
@@ -42,8 +32,12 @@ jobs:
         run: npm ci
         working-directory: frontend
 
+      # The `preview` config layers onto `production` (Angular merges the comma-separated
+      # configs left to right) and swaps in environment.preview.ts, which points the app at
+      # the shared prod-root /warcraft-learner/data/specs/ copy. No data is present at build
+      # time (it is gitignored on main and not overlaid), so the preview ships only the shell.
       - name: Build
-        run: npm run build -- --base-href /warcraft-learner/pr-${{ github.event.pull_request.number }}/
+        run: npm run build -- --configuration=production,preview --base-href /warcraft-learner/pr-${{ github.event.pull_request.number }}/
         working-directory: frontend
 
       - name: Copy 404 fallback for SPA routing

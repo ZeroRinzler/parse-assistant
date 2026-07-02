@@ -88,6 +88,14 @@
                   "with": "src/environments/environment.development.ts"
                 }
               ]
+            },
+            "preview": {
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.preview.ts"
+                }
+              ]
             }
           },
           "defaultConfiguration": "production"
