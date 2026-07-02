@@ -1,8 +1,10 @@
 /**
  * Live `DataSource<BurstBench>`: computes the burst bench live in the browser (no
- * ingestion). Self-contained per the slice rule - it imports ONLY the two API
- * services + models + `logWarn`, and reimplements its own burst math below (it does
- * NOT reference the ingest analysis). Bound by `environment.useLiveTransform`.
+ * ingestion). Self-contained per the slice rule - it imports the two API
+ * services + models + `logWarn` (plus generic `d3-array` stats and the blessed
+ * `shared/analysis/analysis-math` primitives such as `round`/`groupByTime`), and
+ * reimplements its own burst DOMAIN math below (it does NOT reference the ingest
+ * analysis). Bound by `environment.useLiveTransform`.
  *
  * It fetches the encounter's top parses, refetches each parse's Casts + DamageDone,
  * finds each parse's measured damage-density bursts (the stretches where the player's

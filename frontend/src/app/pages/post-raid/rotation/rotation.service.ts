@@ -11,10 +11,13 @@
  *   per-cooldown comparison rows.
  * - Pre-fight (`loadPlanView`): bench-only, returns the cooldown-plan rows.
  *
- * Per the slice rule it imports ONLY the two API services + its data-source token
- * + models + `logWarn`, and reimplements all of its analysis math as named, pure,
- * total functions below (it does NOT import core/analysis). Duplication with the
- * legacy cooldown-analysis / rule-engine is expected and accepted.
+ * Per the slice rule it imports the two API services + its data-source token +
+ * models + `logWarn`, plus the generic, non-domain primitives (outlier predicates,
+ * cast-efficiency %, expected-use arithmetic, clock formatting, severity ordering)
+ * from the blessed `shared/analysis/analysis-math` module. It owns all of its DOMAIN
+ * analysis math as named, pure, total functions below (it does NOT import
+ * core/analysis). Duplication with the legacy cooldown-analysis / rule-engine is
+ * expected and accepted.
  */
 import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';

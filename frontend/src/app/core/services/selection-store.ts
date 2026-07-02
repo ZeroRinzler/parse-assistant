@@ -19,8 +19,9 @@ const POST_RAID_KEY = 'wl.sel.postRaid';
 const PRE_FIGHT_KEY = 'wl.sel.preFight';
 
 /**
- * Sticky selection persistence. URL query params always take priority; this store is
- * the fallback layer (URL param > localStorage > default). Every localStorage access is
+ * Sticky selection persistence. There are no URL query params by design (a deliberate
+ * anti-abuse measure - see the "URL routing" section of the warcraft-architecture
+ * skill), so sticky state lives only in localStorage. Every localStorage access is
  * wrapped so a disabled / full / unavailable storage never crashes the page - a failure
  * logs a warning and is treated as "no stored selection".
  */

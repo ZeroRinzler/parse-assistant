@@ -1,9 +1,10 @@
 /**
  * Live `DataSource<RotationBench>`: computes the rotation bench live in the browser
- * (no ingestion). Self-contained per the slice rule - it imports ONLY the two API
- * services + models + `logWarn`, and reimplements its own per-cooldown statistics
- * below (it does NOT reference the ingest analysis). Bound by
- * `environment.useLiveTransform`.
+ * (no ingestion). Self-contained per the slice rule - it imports the two API
+ * services + models + `logWarn` (plus generic `d3-array` stats and the blessed
+ * `shared/analysis/analysis-math` primitives such as `round`), and reimplements its
+ * own per-cooldown DOMAIN statistics below (it does NOT reference the ingest
+ * analysis). Bound by `environment.useLiveTransform`.
  *
  * It fetches the encounter's top parses, refetches each parse's Casts + Buffs (for
  * Bloodlust) + DamageDone, summarizes each cooldown's casts, and rolls the per-cd

@@ -8,9 +8,11 @@
  *    windows card view-model against the prepared bench.
  *  - `loadPlan(...)` (pre-fight) returns the bench-only defensive-plan rows.
  *
- * Self-contained per the slice rule: imports ONLY the two API services / the slice
- * `DEFENSIVE_DATA_SOURCE` token + models + `logWarn`. Every calculated field is its
- * own small, exported, individually-tested pure function - no separate vm file.
+ * Self-contained per the slice rule: imports the two API services / the slice
+ * `DEFENSIVE_DATA_SOURCE` token + models + `logWarn`, plus the generic, non-domain
+ * primitives from the blessed `shared/analysis/analysis-math` module. Every DOMAIN
+ * calculated field is its own small, exported, individually-tested pure function -
+ * no separate vm file.
  */
 import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
