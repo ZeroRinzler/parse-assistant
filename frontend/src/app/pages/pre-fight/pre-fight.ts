@@ -4,9 +4,9 @@ import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
 import { MatCardModule } from '@angular/material/card';
-import { DataFileApiService } from '../../core/services/data-file-api';
 import { SelectionStore } from '../../core/services/selection-store';
 import { SpecEntry, EncounterEntry } from '../../core/models/encounter.models';
+import { EncounterSelectionService } from './encounter-selection.service';
 import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner/loading-spinner';
 import { ArtIconComponent } from '../../shared/components/art-icon/art-icon';
 import { FormatSpecPipe } from '../../shared/pipes/format-spec-pipe';
@@ -44,7 +44,7 @@ import { MapFeatureService, MapAnchor } from '../post-raid/map/map.service';
   templateUrl: './pre-fight.html',
 })
 export class PreFightComponent implements OnInit {
-  private readonly files = inject(DataFileApiService);
+  private readonly encounterSelection = inject(EncounterSelectionService);
   private readonly mapFeature = inject(MapFeatureService);
   private readonly selectionStore = inject(SelectionStore);
 
@@ -83,7 +83,7 @@ export class PreFightComponent implements OnInit {
   async ngOnInit(): Promise<void> {
     this.loading.set(true);
     try {
-      const specs = await this.files.getSpecs();
+      const specs = await this.encounterSelection.getSpecs();
       this.specs.set(specs);
       if (this.classes().length) this.classControl.enable({ emitEvent: false });
     } finally {
@@ -132,8 +132,7 @@ export class PreFightComponent implements OnInit {
   }
 
   private async _onSpecSelected(spec: string): Promise<void> {
-    const enc = await this.files.getEncounters(spec);
-    this.encounters.set(enc.filter(entry => entry.sample_count > 0));
+    this.encounters.set(await this.encounterSelection.getEncounters(spec));
     if (this.encounters().length) {
       this.encControl.enable({ emitEvent: false });
     } else {
