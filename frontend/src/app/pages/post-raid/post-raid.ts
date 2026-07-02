@@ -31,6 +31,7 @@ import { ClassIconPipe } from '../../shared/pipes/class-icon-pipe';
 import { BossIconPipe } from '../../shared/pipes/boss-icon-pipe';
 import { ArtIconComponent } from '../../shared/components/art-icon/art-icon';
 import { SelectionStore } from '../../core/services/selection-store';
+import { logWarn } from '../../core/log';
 
 /** Pull a report code out of a WCL report URL, or pass through a bare code. */
 export function extractCode(url: string): string {
@@ -329,6 +330,7 @@ export class PostRaidComponent {
       this._persistPlayerName();
       await this.resolveSelection();
     } catch (err) {
+      logWarn('PostRaidComponent.loadReport', err);
       this.error.set(err instanceof Error ? err.message : 'Failed to load report.');
     } finally {
       this.loadingReport.set(false);
@@ -370,6 +372,7 @@ export class PostRaidComponent {
       await this.resolveSelection();
       this.status.set(`Updated ${new Date().toLocaleTimeString()} · ${latest.name}`);
     } catch (err) {
+      logWarn('PostRaidComponent._pollOnce', err);
       this.error.set(err instanceof Error ? err.message : 'Poll failed.');
     }
   }
@@ -420,6 +423,7 @@ export class PostRaidComponent {
       const fight = this.fights().find(f => f.id === fightId);
       if (fight) void this.mapFeature.prepare(this.reportCode(), fight, playerId, spec, this._enemies);
     } catch (err) {
+      logWarn('PostRaidComponent.resolveSelection', err);
       this.error.set(err instanceof Error ? err.message : 'Failed to resolve selection.');
     } finally {
       this.loadingAnalysis.set(false);
