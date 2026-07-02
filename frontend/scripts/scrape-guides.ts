@@ -28,22 +28,31 @@ const DATA_DIR = path.join(FRONTEND_ROOT, 'public', 'data', 'specs');
 
 // ── CLI argument parsing ───────────────────────────────────────────────────────
 
-const program = new Command()
-  .name('scrape')
-  .description('Re-scrape every existing guide; or add one with --spec/--url.')
-  .option('--spec <spec>', 'spec name for add-and-scrape mode')
-  .option('--url <url>', 'guide URL to add (requires --spec)')
-  .option('--type <type>', 'guide type: web | youtube | simc (default: web)', 'web')
-  .addHelpText('after', '\nExamples:\n  npm run scrape\n  npm run scrape -- --spec SubtletyRogue --url https://example.com --type web')
-  .parse(process.argv);
-
-const opts = program.opts<{ spec?: string; url?: string; type: string }>();
-
-if (opts.url && !opts.spec) {
-  program.error('--url requires --spec');
+interface CliOptions {
+  spec?: string;
+  url?: string;
+  type: string;
 }
-if (!['web', 'youtube', 'simc'].includes(opts.type)) {
-  program.error(`invalid --type: "${opts.type}". Must be web, youtube, or simc.`);
+
+function parseCliArgs(argv: string[]): CliOptions {
+  const program = new Command()
+    .name('scrape')
+    .description('Re-scrape every existing guide; or add one with --spec/--url.')
+    .option('--spec <spec>', 'spec name for add-and-scrape mode')
+    .option('--url <url>', 'guide URL to add (requires --spec)')
+    .option('--type <type>', 'guide type: web | youtube | simc (default: web)', 'web')
+    .addHelpText('after', '\nExamples:\n  npm run scrape\n  npm run scrape -- --spec SubtletyRogue --url https://example.com --type web')
+    .parse(argv);
+
+  const opts = program.opts<CliOptions>();
+
+  if (opts.url && !opts.spec) {
+    program.error('--url requires --spec');
+  }
+  if (!['web', 'youtube', 'simc'].includes(opts.type)) {
+    program.error(`invalid --type: "${opts.type}". Must be web, youtube, or simc.`);
+  }
+  return opts;
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -97,7 +106,24 @@ function htmlToText(html: string): string {
   return text.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
 }
 
+// Guides in guides.json carry an arbitrary URL. Only fetch over TLS: a plain http:// URL would
+// pull guide content over an unencrypted, tamperable connection. Reject any non-https scheme
+// (and any unparseable URL) rather than silently upgrading it, so a bad entry fails loudly as a
+// per-guide error instead of quietly downgrading the fetch.
+function assertHttps(url: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(`Invalid guide URL: ${url}`);
+  }
+  if (parsed.protocol !== 'https:') {
+    throw new Error(`Refusing to fetch non-https guide URL (${parsed.protocol}): ${url}`);
+  }
+}
+
 async function scrapeWeb(url: string): Promise<string> {
+  assertHttps(url);
   const res = await fetch(url, {
     headers: { 'User-Agent': 'Mozilla/5.0 (compatible; warcraft-learner/1.0)' },
   });
@@ -111,6 +137,7 @@ async function scrapeSimC(url: string): Promise<string> {
   const rawUrl = url
     .replace('github.com', 'raw.githubusercontent.com')
     .replace('/blob/', '/');
+  assertHttps(rawUrl);
   const res = await fetch(rawUrl, {
     headers: { 'User-Agent': 'warcraft-learner/1.0' },
   });
@@ -137,6 +164,8 @@ async function scrapeYouTube(url: string): Promise<string> {
   if (!SUPADATA_API_KEY) {
     throw new Error('SUPADATA_API_KEY is not set; cannot fetch YouTube transcript.');
   }
+  // The video URL is forwarded to Supadata as a query param; hold it to the same https bar.
+  assertHttps(url);
 
   const query = new URLSearchParams({ url, text: 'true' });
   const res = await fetch(`${SUPADATA_TRANSCRIPT_URL}?${query}`, {
@@ -215,7 +244,7 @@ async function refreshAllGuides(): Promise<void> {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-async function main(): Promise<void> {
+async function main(opts: CliOptions): Promise<void> {
   console.log('warcraft-learner - Guide Scraper CLI');
 
   const cliSpec = opts.spec;
@@ -237,7 +266,12 @@ async function main(): Promise<void> {
   await refreshAllGuides();
 }
 
-main().catch(err => {
-  console.error('\nFatal error:', err instanceof Error ? err.message : String(err));
-  process.exit(1);
-});
+// Only run the CLI when invoked directly (not when imported, e.g. by tests).
+if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
+  main(parseCliArgs(process.argv)).catch(err => {
+    console.error('\nFatal error:', err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  });
+}
+
+export { assertHttps };

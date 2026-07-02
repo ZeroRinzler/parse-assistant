@@ -12,7 +12,15 @@ export class FsDataFileTransport implements DataFileTransport {
   constructor(private readonly root: string) {}
 
   private resolve(relPath: string): string {
-    return path.join(this.root, relPath);
+    // Contain every access to the data root: a crafted relPath with `..` segments would
+    // otherwise let a read/write/list escape `frontend/public/data/specs/**`. Normalize the
+    // join and reject anything that resolves outside the root.
+    const root = path.resolve(this.root);
+    const full = path.resolve(root, relPath);
+    if (full !== root && !full.startsWith(root + path.sep)) {
+      throw new Error(`Path escapes data root: ${relPath}`);
+    }
+    return full;
   }
 
   async readJson<T>(relPath: string): Promise<T | null> {
