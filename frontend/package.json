@@ -12,7 +12,8 @@
     "rulebook": "tsx --tsconfig tsconfig.scripts.json scripts/build-rulebook.ts",
     "ingest": "tsx --tsconfig tsconfig.scripts.json scripts/ingest/orchestrator.ts",
     "scrape": "tsx --tsconfig tsconfig.scripts.json scripts/scrape-guides.ts",
-    "lint": "ng lint && eslint scripts"
+    "lint": "ng lint && eslint scripts",
+    "data:pull": "git -C .. fetch origin data && git -C .. restore --source=origin/data --worktree -- frontend/public/data/specs"
   },
   "private": true,
   "packageManager": "npm@11.13.0",

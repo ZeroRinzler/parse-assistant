@@ -20,8 +20,11 @@ All thresholds are derived from real top-parse data for the same encounter and s
 ```bash
 cd frontend
 npm install
-npm start   # Angular dev server on http://localhost:4200
+npm run data:pull   # fetch the generated bench data from the `data` branch (see below)
+npm start           # Angular dev server on http://localhost:4200
 ```
+
+The ~400 MB of generated bench data under `frontend/public/data/specs/**` is not tracked on `main`; it lives on a dedicated, always-squashed `data` branch (one force-pushed orphan commit) so `main` history stays small. `npm run data:pull` fetches `origin/data` and restores those files into your working tree, where they remain gitignored. Re-run it whenever you want the latest parse data.
 
 The app is a fully static Angular SPA. It talks directly to the Warcraft Logs API from the browser using an OAuth2 client-credentials token (no user login); there is no backend.
 

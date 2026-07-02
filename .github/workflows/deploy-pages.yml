@@ -2,7 +2,11 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    # `data` is the always-squashed branch holding the generated bench data (see A3 /
+    # ingest-parses.yml). A fresh data snapshot must redeploy the site, so both branches
+    # trigger this build. The checkout below always pins the CODE to `main` and overlays the
+    # latest `data` snapshot, so the trigger branch does not change what gets built.
+    branches: [main, data]
   workflow_dispatch:
 
 permissions:
@@ -25,7 +29,17 @@ jobs:
 
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
+          # Always build the CODE from main, regardless of which branch triggered this run
+          # (main code push or a data-branch snapshot push).
+          ref: main
           token: ${{ steps.app-token.outputs.token }}
+
+      # The bench data is not tracked on main; overlay the latest `data`-branch snapshot into
+      # the working tree so the built site ships the parse data. --worktree only, never staged.
+      - name: Overlay bench data from the data branch
+        run: |
+          git fetch origin data
+          git restore --source=origin/data --worktree -- frontend/public/data/specs
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:

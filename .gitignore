@@ -14,6 +14,12 @@ data/*.db
 data/*.log
 data/tmp/
 
+# Generated bench data lives on the always-squashed `data` branch, not main.
+# It is fetched into the working tree for local dev via `npm run data:pull`
+# (from frontend/). Never tracked on main - the history there would grow without
+# bound. See CLAUDE.md and the ingest/deploy/pr-preview workflows.
+frontend/public/data/specs/
+
 # Logs
 *.log
 logs/

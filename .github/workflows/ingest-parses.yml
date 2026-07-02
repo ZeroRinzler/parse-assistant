@@ -35,6 +35,16 @@ jobs:
           # one commit, which would make all specs tie.
           fetch-depth: 0
 
+      # The generated bench data is NOT tracked on main - it lives on the always-squashed
+      # `data` branch (one orphan commit, force-pushed each run). Overlay that snapshot into
+      # the working tree BEFORE scrape/ingest so the orchestrator's signature-skip has the
+      # current data on disk to compare against. --worktree only (never staged), so the paths
+      # stay ignored and cannot leak back onto main.
+      - name: Overlay bench data from the data branch
+        run: |
+          git fetch origin data
+          git restore --source=origin/data --worktree -- frontend/public/data/specs
+
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22'
@@ -65,21 +75,39 @@ jobs:
         working-directory: frontend
         run: npm run ingest
 
-      - name: Pull latest before committing
-        env:
-          BRANCH: ${{ github.ref_name }}
-        # --autostash so the ingest's unstaged spec-file changes don't block the
-        # rebase ("cannot pull with rebase: You have unstaged changes"); they are
-        # stashed, the rebase runs, then they are reapplied for the commit step.
-        run: git pull --rebase --autostash origin "$BRANCH"
-
-      - name: Commit updated spec files
-        uses: stefanzweifel/git-auto-commit-action@b863ae1933cb653a53c021fe36dbb774e1fb9403 # v5.2.0
-        with:
-          # No [skip ci] - data commits should trigger deploy-pages so the live
-          # site reflects fresh parse data. git-auto-commit-action only pushes
-          # when files actually changed, so quiet hours produce no commit.
-          commit_message: 'chore: refresh parse samples'
-          file_pattern: 'frontend/public/data/specs/**'
-          commit_user_name: 'warcraft-learner-ingest[bot]'
-          commit_user_email: 'warcraft-learner-ingest[bot]@users.noreply.github.com'
+      # Publish the fresh data as a single orphan (root) commit, force-pushed to the `data`
+      # branch. History never grows: the branch tip is always exactly one commit holding the
+      # current frontend/public/data/specs snapshot. This replaces the old auto-commit-to-main
+      # step - main no longer carries multi-MB data churn. The force-push to `data` is itself a
+      # deploy-pages trigger (that workflow watches `main` and `data`), so a changed snapshot
+      # redeploys the live site with fresh parse data.
+      - name: Publish snapshot to the data branch
+        id: publish
+        run: |
+          set -euo pipefail
+          # Nothing to publish if ingest produced no directory (defensive).
+          if [ ! -d frontend/public/data/specs ]; then
+            echo "No data directory to publish."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name 'warcraft-learner-ingest[bot]'
+          git config user.email 'warcraft-learner-ingest[bot]@users.noreply.github.com'
+          # Build a fresh single-commit snapshot from a clean index. -f overrides .gitignore,
+          # which excludes this path on main. Starting from an orphan means the commit has no
+          # parent, so the branch history stays at exactly one commit.
+          git checkout --orphan data-new
+          git rm -rf --cached . >/dev/null 2>&1 || true
+          git add -f frontend/public/data/specs
+          git commit -q -m 'chore: refresh parse samples'
+          NEW_TREE=$(git rev-parse HEAD^{tree})
+          # Skip the force-push when the tree is byte-identical to the current data tip, so
+          # quiet hours produce no new commit and no needless deploy.
+          OLD_TREE=$(git rev-parse --verify --quiet origin/data^{tree} || true)
+          if [ "$NEW_TREE" = "$OLD_TREE" ]; then
+            echo "Data unchanged; nothing to publish."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git push --force origin HEAD:data
+          echo "changed=true" >> "$GITHUB_OUTPUT"

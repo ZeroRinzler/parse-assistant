@@ -17,6 +17,21 @@ jobs:
         with:
           persist-credentials: false
 
+      # Overlay the generated bench data so the preview ships parse data. The data lives on the
+      # public, always-squashed `data` branch; a plain read-only checkout is enough - we do NOT
+      # pass the app token here, so this step adds no new secret exposure to PR-triggered runs.
+      - name: Check out bench data (public data branch)
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: data
+          path: _data-branch
+
+      - name: Overlay bench data into the build
+        run: |
+          mkdir -p frontend/public/data/specs
+          cp -a _data-branch/frontend/public/data/specs/. frontend/public/data/specs/
+          rm -rf _data-branch
+
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22'

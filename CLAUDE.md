@@ -29,10 +29,12 @@ frontend/        # the entire Angular 22 app
   src/app/pages/ # post-raid (/), pre-fight (/pre), live (/live)
   src/app/core/  # the two API services, data-source token, models
   scripts/ingest # ingestion orchestrator + discovery helpers (run via tsx)
-  public/data/specs/  # static ingested data (slices, encounters, positions, rulebooks)
+  public/data/specs/  # static ingested data (slices, encounters, positions, rulebooks) - NOT tracked on main; see below
 .github/workflows/  # deploy-pages, ingest-parses (hourly), pr-preview, test
 .claude/skills/   # on-demand skills (incl. the rulebook LLM prompt + schema in warcraft-ingestion/)
 ```
+
+The ~400 MB of generated bench data under `frontend/public/data/specs/**` is **not tracked on `main`** (it is gitignored there). It lives on a dedicated, **always-squashed `data` branch**: a single orphan commit force-pushed on every hourly ingest, so `main` history never grows with multi-MB JSON churn. The `deploy-pages` and `pr-preview` workflows overlay that snapshot into the build; `ingest-parses` overlays it, re-ingests, and force-pushes the new snapshot back to `data`. For local dev, pull the data into your working tree with `npm run data:pull` (run from `frontend/`) - it fetches `origin/data` and restores the files (they stay ignored, so they never re-enter `main`).
 
 ## Commands (run from `frontend/`)
 
