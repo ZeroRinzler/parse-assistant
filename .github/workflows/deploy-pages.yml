@@ -63,6 +63,10 @@ jobs:
         with:
           token: ${{ steps.app-token.outputs.token }}
           branch: gh-pages
+          # Keep gh-pages at exactly one commit: each deploy snapshots the branch tree
+          # (prod site + pr-* previews per the clean rules) instead of growing history
+          # with a full ~400 MB built-site copy per deployment.
+          single-commit: true
           folder: static/angular/browser
           clean: true
           clean-exclude: |
