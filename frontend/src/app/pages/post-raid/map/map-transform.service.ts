@@ -13,11 +13,10 @@
  * `positions.ts` but are owned here (duplication over sharing).
  *
  * KNOWN LIMITATION: the WCL report's master `enemies[]` carries gameID + name but
- * the runtime `WclEvent` model does not type `maxHitPoints` (it is on the wire when
- * `includeResources` is on). The boss is therefore picked by the highest observed
- * `maxHitPoints` read defensively off the event, falling back to the most-sampled
- * enemy. This matches ingest closely but is not guaranteed identical for fights
- * where an add briefly out-HPs the boss in a snapshot.
+ * not HP. The boss is therefore picked by the highest observed `maxHitPoints`
+ * (flattened onto each event when `includeResources` is on), falling back to the
+ * most-sampled enemy. This matches ingest closely but is not guaranteed identical
+ * for fights where an add briefly out-HPs the boss in a snapshot.
  */
 import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
@@ -62,10 +61,9 @@ export interface RawPosSample {
   maxHp: number;
 }
 
-/** `maxHitPoints` is on the wire with `includeResources` but not in the typed model. */
+/** `maxHitPoints` is on the wire with `includeResources`; 0 when absent. */
 function eventMaxHp(event: WclEvent): number {
-  const hp = (event as unknown as { maxHitPoints?: number }).maxHitPoints;
-  return typeof hp === 'number' ? hp : 0;
+  return typeof event.maxHitPoints === 'number' ? event.maxHitPoints : 0;
 }
 
 /** Group raw position samples per actor id from resource-bearing events, sorted by time. */

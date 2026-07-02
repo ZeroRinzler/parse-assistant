@@ -32,12 +32,17 @@ interface ChartColors {
   dotOutline: string;
 }
 
-// Stashed on the Chart instance so the overlay plugin reads geometry + pre-resolved
-// colors instead of touching the DOM on every frame.
+// Associated with the Chart instance so the overlay plugin reads geometry +
+// pre-resolved colors instead of touching the DOM on every frame.
 interface OverlayState {
   points: OverlayPoint[];
   colors: Pick<ChartColors, 'avg' | 'you' | 'dotOutline'>;
 }
+
+// Per-chart overlay state, keyed by the Chart.js instance. A WeakMap keeps this
+// off the Chart type (no casts) and needs no explicit cleanup: an entry is
+// garbage-collected once its chart is destroyed and released.
+const overlayStates = new WeakMap<Chart, OverlayState>();
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -124,7 +129,7 @@ export class RangeChartComponent implements AfterViewInit, OnChanges, OnDestroy 
   private readonly overlayPlugin: Plugin<'bar'> = {
     id: 'rangeOverlay',
     afterDatasetsDraw: (chart) => {
-      const overlay = (chart as unknown as { _overlay?: OverlayState })._overlay;
+      const overlay = overlayStates.get(chart);
       if (!overlay) return;
       const { points, colors } = overlay;
       const { ctx } = chart;
@@ -264,10 +269,10 @@ export class RangeChartComponent implements AfterViewInit, OnChanges, OnDestroy 
     };
 
     this.chart = new Chart(canvas, config);
-    (this.chart as unknown as { _overlay: OverlayState })._overlay = {
+    overlayStates.set(this.chart, {
       points: rows.map(r => ({ avg: r.topAvg, player: r.playerPct })),
       colors: { avg: colors.avg, you: colors.you, dotOutline: colors.dotOutline },
-    };
+    });
     this.chart.update();
   }
 }

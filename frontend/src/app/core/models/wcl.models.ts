@@ -41,6 +41,9 @@ export interface WclEvent {
   y?: number;
   facing?: number;
   mapID?: number;
+  // Also flattened onto the event by `includeResources: true`; used to pick the
+  // boss (highest observed maxHitPoints) when building position benches.
+  maxHitPoints?: number;
 }
 
 export interface WclReport {
