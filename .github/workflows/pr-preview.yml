@@ -29,11 +29,12 @@ jobs:
           app-id: ${{ secrets.INGEST_APP_ID }}
           private-key: ${{ secrets.INGEST_APP_PRIVATE_KEY }}
 
-      # The set of previews that should exist is exactly the set of OPEN PRs. This job rebuilds
-      # all of them and clean-replaces the root pr-* dirs every run (clean-exclude keeps main/,
-      # data/ and the root files), so a closed PR's preview disappears simply by not being
-      # rebuilt - deletion is structural, no separate cleanup workflow and no way to leave a
-      # stale preview behind. Idempotent under any trigger (a PR event, the schedule, dispatch).
+      # The set of previews that should exist is exactly the set of OPEN PRs that target main.
+      # This job rebuilds all of them, then replaces the root pr-* dirs wholesale, so a closed
+      # PR's preview disappears simply by not being rebuilt - deletion is structural, no separate
+      # cleanup workflow and no way to leave a stale preview behind. Idempotent under any trigger
+      # (a PR event, the schedule, dispatch). Only base:main PRs are listed - a PR against another
+      # branch (e.g. a gh-pages data PR) has no buildable app and must not be treated as a preview.
       - name: List open PR numbers
         id: open-prs
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
@@ -43,10 +44,11 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               state: 'open',
+              base: 'main',
               per_page: 100,
             });
             const numbers = prs.map((pr) => pr.number);
-            core.info(`Open PRs: ${numbers.join(', ') || '(none)'}`);
+            core.info(`Open PRs (base main): ${numbers.join(', ') || '(none)'}`);
             core.setOutput('numbers', numbers.join(' '));
 
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -62,52 +64,72 @@ jobs:
 
       # Build each open PR's shell from its own head commit into preview-out/pr-N. Previews
       # ship the app shell only (no data overlay); they fetch the shared gh-pages-root data copy
-      # via the absolute dataBaseHref, so the production build config is all that is needed.
+      # via the absolute dataBaseHref, so the production build config is all that is needed. A
+      # single PR that fails to build is logged and skipped (it gets no preview this run) rather
+      # than aborting the job, so one bad PR can never block the reap of the others.
       - name: Build all open PR previews
         env:
           OPEN_PRS: ${{ steps.open-prs.outputs.numbers }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          rm -rf preview-out
           mkdir -p preview-out
-          # Guarantees a non-empty folder to deploy even when zero PRs are open, so the
-          # clean-replace still runs and reaps every previous preview. Stays at the root
-          # of every deploy, so it is preserved rather than churned.
-          touch preview-out/.gitkeep
           for n in $OPEN_PRS; do
             echo "::group::Build preview for PR #$n"
-            git fetch --no-tags --quiet origin "pull/$n/head"
-            git checkout --quiet --detach FETCH_HEAD
-            npm --prefix frontend ci
-            npm --prefix frontend run build -- --base-href "/warcraft-learner/pr-$n/"
-            rm -rf "preview-out/pr-$n"
-            mkdir -p "preview-out/pr-$n"
-            cp -a static/angular/browser/. "preview-out/pr-$n/"
+            if git fetch --no-tags --quiet origin "pull/$n/head" \
+              && git checkout --quiet --detach FETCH_HEAD \
+              && npm --prefix frontend ci \
+              && npm --prefix frontend run build -- --base-href "/warcraft-learner/pr-$n/"; then
+              rm -rf "preview-out/pr-$n"
+              mkdir -p "preview-out/pr-$n"
+              cp -a static/angular/browser/. "preview-out/pr-$n/"
+            else
+              echo "::warning::Preview build failed for PR #$n; it gets no preview this run."
+            fi
             echo "::endgroup::"
           done
 
-      # One atomic deploy of the pr-* dirs to the site root. clean:true replaces the root with
-      # exactly the open set, and clean-exclude protects the other territories: main/ (prod
-      # shell), data/ (the shared dataset), and the root index.html / 404.html. This static
-      # exclude list is the whole of the non-preview root - anything else at the root is stale.
+      # Reap and republish the previews explicitly, rather than via the deploy action's
+      # clean-exclude: at the repo root, single-commit + clean-exclude silently no-ops
+      # ("nothing to commit") and leaves stale dirs behind. Here the reap is unmistakable -
+      # check out gh-pages, delete every pr-* dir (and the legacy previews/ wrapper), drop in
+      # exactly the freshly built open previews, and force-push a single flat commit. main/,
+      # data/, index.html, 404.html and .git are never touched (owned by the other writers).
+      # The shared gh-pages concurrency group serializes this against those writers.
       - name: Publish previews
-        uses: JamesIves/github-pages-deploy-action@d92aa235d04922e8f08b40ce78cc5442fcfbfa2f # v4.8.0
-        with:
-          token: ${{ steps.app-token.outputs.token }}
-          branch: gh-pages
-          single-commit: true
-          folder: preview-out
-          clean: true
-          clean-exclude: |
-            main
-            data
-            index.html
-            404.html
+        env:
+          OPEN_PRS: ${{ steps.open-prs.outputs.numbers }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth 1 origin gh-pages
+          rm -rf ghp
+          git worktree add --detach ghp origin/gh-pages
+          (
+            cd ghp
+            rm -rf pr-* previews
+            if compgen -G "../preview-out/pr-*" > /dev/null; then
+              cp -a ../preview-out/pr-* .
+            fi
+            git checkout --quiet --orphan _deploy
+            git add -A
+            NEW_TREE=$(git write-tree)
+            OLD_TREE=$(git rev-parse origin/gh-pages^{tree})
+            if [ "$NEW_TREE" = "$OLD_TREE" ]; then
+              echo "Previews already up to date; nothing to publish."
+            else
+              git -c user.name="github-actions[bot]" \
+                  -c user.email="github-actions[bot]@users.noreply.github.com" \
+                  commit --quiet -m "Publish PR previews: ${OPEN_PRS:-(none)}"
+              git push --force origin _deploy:gh-pages
+            fi
+          )
+          git worktree remove --force ghp
 
       # Keep the per-PR GitHub deployment (the "View deployment" link) in sync for the PR that
       # triggered this run: mark it live on open/update, deactivate it on close. Schedule /
       # dispatch runs carry no single PR, so they only rebuild + reap and skip this.
       - name: Update deployment status for the triggering PR
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'main'
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
         with:
           script: |
