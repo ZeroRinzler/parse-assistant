@@ -11,7 +11,6 @@
 // ---------------------------------------------------------------------------
 
 export interface ReportQueryVars { code: string }
-export interface ReportAbilitiesQueryVars { code: string }
 export interface PlayerDetailsQueryVars { code: string; fightIDs: number[] }
 export interface EventsQueryVars {
   code: string;
@@ -40,9 +39,6 @@ query($code:String!){reportData{report(code:$code){
     abilities{gameID name icon}
   }
 }}}`;
-
-export const REPORT_ABILITIES_Q = `
-query($code:String!){reportData{report(code:$code){masterData{abilities{gameID name icon}}}}}`;
 
 export const PLAYER_DETAILS_Q = `
 query($code:String!,$fightIDs:[Int]!){

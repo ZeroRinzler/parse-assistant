@@ -16,17 +16,7 @@ import { routes } from './app.routes';
 import { WCL_TRANSPORT, WCL_API_URL } from './core/services/wcl-transport';
 import { ApolloWclTransport } from './core/services/apollo-wcl-transport';
 import { DATA_FILE_TRANSPORT, HttpDataFileTransport } from './core/services/data-file-transport';
-import { provideDataSource } from './core/data-source/provide-data-source';
-import { BURST_DATA_SOURCE } from './pages/post-raid/burst-windows/burst-data-source';
-import { BurstTransformService } from './pages/post-raid/burst-windows/burst-transform.service';
-import { ROTATION_DATA_SOURCE } from './pages/post-raid/rotation/rotation-data-source';
-import { RotationTransformService } from './pages/post-raid/rotation/rotation-transform.service';
-import { DEFENSIVE_DATA_SOURCE } from './pages/post-raid/defensive/defensive-data-source';
-import { DefensiveTransformService } from './pages/post-raid/defensive/defensive-transform.service';
-import { GEAR_DATA_SOURCE } from './pages/post-raid/gear/gear-data-source';
-import { GearTransformService } from './pages/post-raid/gear/gear-transform.service';
-import { MAP_DATA_SOURCE } from './pages/post-raid/map/map-data-source';
-import { MapTransformService } from './pages/post-raid/map/map-transform.service';
+import { dataSourceProviders } from '../environments/environment';
 
 const GITHUB_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
   <path d="M12 0C5.37 0 0 5.373 0 12c0 5.303 3.438 9.8 8.205 11.387.6.113.82-.258.82-.577
@@ -57,17 +47,16 @@ export const appConfig: ApplicationConfig = {
       iconRegistry.setDefaultFontSetClass('material-symbols-outlined');
       iconRegistry.addSvgIconLiteral('github', sanitizer.bypassSecurityTrustHtml(GITHUB_SVG));
     }),
-    // WCL GraphQL transport: apollo-angular in the browser (the Node ingestion binds a
-    // plain-fetch transport instead, since apollo-angular does not run headless).
+    // WCL GraphQL transport: apollo-angular in the browser (its InMemoryCache dedupes and
+    // memoises the cache-first reads, so the five feature cards share one report/event fetch).
+    // The Node ingestion binds a plain-fetch transport instead, since apollo-angular does not
+    // run headless.
     { provide: WCL_TRANSPORT, useExisting: ApolloWclTransport },
     // Data-file transport: HTTP read-only in the browser (Node ingestion binds a fs read+write one).
     { provide: DATA_FILE_TRANSPORT, useExisting: HttpDataFileTransport },
-    // Vertical-slice data sources: a FileDataSource for the slice in prod (the literal slice
-    // directory), the live transform under the dev flag. Map reads its positions file.
-    provideDataSource(BURST_DATA_SOURCE, 'burst', BurstTransformService),
-    provideDataSource(ROTATION_DATA_SOURCE, 'rotation', RotationTransformService),
-    provideDataSource(DEFENSIVE_DATA_SOURCE, 'defensive', DefensiveTransformService),
-    provideDataSource(GEAR_DATA_SOURCE, 'gear', GearTransformService),
-    provideDataSource(MAP_DATA_SOURCE, 'positions', MapTransformService),
+    // Vertical-slice data sources: file-backed in production, live transforms under the dev
+    // flag. The list is defined per-environment so a production build never imports (and thus
+    // tree-shakes out) the five `*TransformService`s.
+    ...dataSourceProviders,
   ],
 };

@@ -3,13 +3,13 @@ import { WclAuthService } from './wcl-auth';
 import { LiveModeState } from './live-mode-state';
 import { WCL_TRANSPORT, WCL_INGEST_MODE, WclTransportError } from './wcl-transport';
 import {
-  WclReport, WclAbility, WclEvent,
+  WclReport, WclEvent,
   PlayerDetailGroups, WclRankingsBlob, WclRawAbility, WclCombatantInfo,
 } from '../models/wcl.models';
 import {
-  REPORT_Q, REPORT_ABILITIES_Q, PLAYER_DETAILS_Q, EVENTS_Q,
+  REPORT_Q, PLAYER_DETAILS_Q, EVENTS_Q,
   COMBATANT_INFO_Q, RANKINGS_Q, buildGearNamesQuery, buildAbilityIconsQuery,
-  ReportQueryVars, ReportAbilitiesQueryVars, PlayerDetailsQueryVars,
+  ReportQueryVars, PlayerDetailsQueryVars,
   EventsQueryVars, CombatantInfoQueryVars, RankingsQueryVars,
 } from './wcl-queries';
 import { SPEC_META } from '../spec-meta';
@@ -63,15 +63,6 @@ export class WclApiService {
     // live-syncing does it go network-only, so a poll never hides newly-recorded fights.
     const result = await this.query<{ reportData: { report: WclReport } }>(REPORT_Q, vars, this.livePolicy());
     return result.reportData.report;
-  }
-
-  /** Lightweight fetch of just a report's ability icons, for seeding the icon cache. */
-  async getReportAbilities(code: string): Promise<WclAbility[]> {
-    const vars: ReportAbilitiesQueryVars = { code };
-    const result = await this.query<{ reportData: { report: { masterData: { abilities: WclAbility[] } } } }>(
-      REPORT_ABILITIES_Q, vars,
-    );
-    return result?.reportData?.report?.masterData?.abilities ?? [];
   }
 
   /** Raw `playerDetails` groups (dps / healers / tanks / unknown). Consumers map to spec. */
