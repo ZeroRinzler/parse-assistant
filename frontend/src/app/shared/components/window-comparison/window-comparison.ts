@@ -5,6 +5,7 @@ import { GameIconComponent } from '../game-icon/game-icon';
 import { CompactAbilityRowComponent } from '../compact-ability-row/compact-ability-row';
 import { FormatDurationPipe } from '../../pipes/format-duration-pipe';
 import { FormatDamagePipe } from '../../pipes/format-damage-pipe';
+import { SignedPercentPipe } from '../../pipes/signed-percent-pipe';
 import { RangeRow, ComparisonWindow } from '../../../core/models/window-comparison.models';
 
 @Component({
@@ -12,7 +13,7 @@ import { RangeRow, ComparisonWindow } from '../../../core/models/window-comparis
   selector: 'wl-window-comparison',
   // Angular custom elements default to display:inline; block keeps the card full-width.
   host: { class: 'block' },
-  imports: [MatIconModule, MatButtonModule, GameIconComponent, CompactAbilityRowComponent, FormatDurationPipe, FormatDamagePipe],
+  imports: [MatIconModule, MatButtonModule, GameIconComponent, CompactAbilityRowComponent, FormatDurationPipe, FormatDamagePipe, SignedPercentPipe],
   templateUrl: './window-comparison.html',
 })
 export class WindowComparisonComponent {
@@ -165,13 +166,6 @@ export class WindowComparisonComponent {
     const { playerPct, topAvg } = w.overview;
     if (playerPct == null || topAvg == null || topAvg === 0) return null;
     return ((playerPct - topAvg) / topAvg) * 100;
-  });
-
-  protected readonly overviewDeltaText = computed(() => {
-    const delta = this.overviewDelta();
-    if (delta == null) return '';
-    const sign = delta > 0 ? '+' : '';
-    return `${sign}${delta.toFixed(0)}%`;
   });
 
   // Semantic delta state only - the template maps it to a badge-* class.

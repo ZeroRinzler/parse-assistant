@@ -95,11 +95,11 @@
         @if (!activeIsMuted()) {
           <span class="tabular-nums text-xs flex items-baseline gap-2">
             <span class="text-[var(--muted)]">{{ w.overview.playerPct | formatDamage }}</span>
-            @if (overviewDeltaText()) {
+            @if (overviewDelta() !== null) {
               <span
                 [class.badge-muted]="overviewDeltaStatus() === 'muted'"
                 [class.badge-success]="overviewDeltaStatus() === 'better'"
-                [class.badge-critical]="overviewDeltaStatus() === 'worse'">{{ overviewDeltaText() }}</span>
+                [class.badge-critical]="overviewDeltaStatus() === 'worse'">{{ overviewDelta() | signedPercent }}</span>
             }
           </span>
         } @else if (activeIsBenchOnly()) {
