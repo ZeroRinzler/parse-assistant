@@ -65,6 +65,19 @@ export interface MapLiveOverlay {
 /** A friendly/enemy actor id + gameID, supplied by the page from the report master data. */
 export interface MapEnemyActor { id: number; name: string; gameID: number; }
 
+/**
+ * Everything the deferred live-overlay fetch needs, captured by `prepare` and consumed the
+ * first time the map panel opens. Holding these lets the expensive position-event fetch wait
+ * until the user actually opens the map (most analyses never do).
+ */
+interface PendingOverlay {
+  reportCode: string;
+  fight: WclFight;
+  playerId: number;
+  positions: EncounterPositions;
+  enemies: MapEnemyActor[];
+}
+
 /** The anchor a feature card emits (and the page forwards) to open the map. */
 export interface MapAnchor {
   timeS: number;
@@ -179,6 +192,13 @@ export class MapFeatureService {
   readonly positions = signal<EncounterPositions | null>(null);
   /** Live player overlay; null on pages with no pull (e.g. /pre) or before a pull loads. */
   readonly live = signal<MapLiveOverlay | null>(null);
+  /** True while the deferred live-overlay event fetch is in flight (drives the panel spinner). */
+  readonly overlayLoading = signal(false);
+
+  /** Params for the deferred overlay fetch (set by `prepare`, consumed on first open). */
+  private pendingOverlay: PendingOverlay | null = null;
+  /** True once the overlay has been built for the current pull, so a re-open never refetches. */
+  private overlayLoaded = false;
 
   /** Panel state - ported from the global `PositioningPanelService`. */
   readonly open = signal(false);
@@ -202,20 +222,24 @@ export class MapFeatureService {
   }
 
   /**
-   * Prepare the post-raid context: load the bench and build the live overlay from
-   * the analysed pull's position events. Self-contained - it fetches the events
-   * here and delegates the assembly to the pure `buildLiveOverlay`.
+   * Prepare the post-raid context: load the top-parse bench (so the map buttons can light
+   * up) but DEFER the live-overlay fetch. Building the overlay costs three full position-
+   * event streams (player casts, every enemy cast, boss damage), and most analyses never
+   * open the map - so the params are captured and the fetch waits until the panel first
+   * opens (see `ensureLiveOverlay`). If the panel is already open (a live-sync pull while
+   * the user is watching the map), the overlay refreshes immediately.
    */
   async prepare(
     reportCode: string, fight: WclFight, playerId: number, spec: string, enemies: MapEnemyActor[],
   ): Promise<void> {
     this.live.set(null);
+    this._resetOverlay();
     if (!fight?.encounterID) { this.positions.set(null); return; }
     try {
       const positions = await this.loadBench(spec, fight.encounterID);
       if (!positions) return;
-      const events = await this.fetchLiveEvents(reportCode, fight, playerId, positions, enemies);
-      this.live.set(buildLiveOverlay({ positions, events, fightStartMs: fight.startTime, playerId, enemies }));
+      this.pendingOverlay = { reportCode, fight, playerId, positions, enemies };
+      if (this.open()) await this.ensureLiveOverlay();
     } catch (err) {
       logWarn(`MapFeatureService.prepare ${reportCode}:${fight?.id}`, err);
       this.live.set(null);
@@ -229,6 +253,9 @@ export class MapFeatureService {
     this.contextLabel.set(anchor.label);
     this.contextSpells.set(anchor.spells);
     this.open.set(true);
+    // First open triggers the deferred overlay fetch; a no-op once loaded, or when there is
+    // no pending pull (bench-only /pre).
+    void this.ensureLiveOverlay();
   }
 
   close(): void { this.open.set(false); }
@@ -238,6 +265,36 @@ export class MapFeatureService {
     this.open.set(false);
     this.positions.set(null);
     this.live.set(null);
+    this._resetOverlay();
+  }
+
+  /** Forget any deferred overlay so a new pull (or a cleared map) starts cold. */
+  private _resetOverlay(): void {
+    this.pendingOverlay = null;
+    this.overlayLoaded = false;
+    this.overlayLoading.set(false);
+  }
+
+  /**
+   * Build the live overlay from the deferred `prepare` params, on demand. Idempotent and
+   * guarded: it fetches at most once per pull (a re-open is free) and no-ops when there is
+   * nothing pending (bench-only pages) or a fetch is already in flight.
+   */
+  private async ensureLiveOverlay(): Promise<void> {
+    const pending = this.pendingOverlay;
+    if (!pending || this.overlayLoaded || this.overlayLoading()) return;
+    this.overlayLoading.set(true);
+    try {
+      const { reportCode, fight, playerId, positions, enemies } = pending;
+      const events = await this.fetchLiveEvents(reportCode, fight, playerId, positions, enemies);
+      this.live.set(buildLiveOverlay({ positions, events, fightStartMs: fight.startTime, playerId, enemies }));
+      this.overlayLoaded = true;
+    } catch (err) {
+      logWarn(`MapFeatureService.ensureLiveOverlay ${pending.reportCode}:${pending.fight.id}`, err);
+      this.live.set(null);
+    } finally {
+      this.overlayLoading.set(false);
+    }
   }
 
   /** Fetch the position-bearing live events the overlay needs (player + enemy casts + boss damage). */

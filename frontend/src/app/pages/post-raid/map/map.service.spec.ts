@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { TestBed } from '@angular/core/testing';
-import { WclEvent } from '../../../core/models/wcl.models';
+import { WclEvent, WclFight } from '../../../core/models/wcl.models';
 import { EncounterPositions } from '../../../core/models/positioning.models';
+import { WclApiService } from '../../../core/services/wcl-api';
 import { MAP_DATA_SOURCE, MapData } from './map-data-source';
 import { DataSource } from '../../../core/data-source/data-source';
 import {
@@ -203,5 +204,75 @@ describe('MapFeatureService', () => {
     expect(service.open()).toBe(false);
     expect(service.positions()).toBeNull();
     expect(service.live()).toBeNull();
+  });
+});
+
+/**
+ * A WclApiService stub that only records `getAllEvents` calls - enough to assert WHEN the
+ * deferred position-event streams are fetched. It returns no events, so no overlay is built
+ * (the overlay content itself is covered by the buildLiveOverlay tests above).
+ */
+class RecordingWclApi {
+  getAllEventsCalls = 0;
+  getAllEvents(): Promise<WclEvent[]> {
+    this.getAllEventsCalls += 1;
+    return Promise.resolve([]);
+  }
+}
+
+/** A minimal fight; prepare only reads id / encounterID / startTime / endTime. */
+const sampleFight = { id: 1, encounterID: 3144, startTime: 0, endTime: 10_000, name: 'Test', kill: true } as WclFight;
+
+/** Drain microtasks + the macrotask queue so a fire-and-forget async load settles. */
+const settle = (): Promise<void> => new Promise(resolve => setTimeout(resolve, 0));
+
+describe('MapFeatureService deferred overlay', () => {
+  function setup(): { service: MapFeatureService; api: RecordingWclApi } {
+    const api = new RecordingWclApi();
+    const source: DataSource<MapData> = { getBench: () => Promise.resolve(sampleData) };
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: MAP_DATA_SOURCE, useValue: source },
+        { provide: WclApiService, useValue: api as unknown as WclApiService },
+      ],
+    });
+    return { service: TestBed.inject(MapFeatureService), api };
+  }
+
+  it('prepare loads the bench but defers the event fetch until the panel opens', async () => {
+    const { service, api } = setup();
+    await service.prepare('code', sampleFight, 5, 'SubtletyRogue', []);
+
+    // Bench is loaded (so map buttons can light up) but nothing has hit the wire yet.
+    expect(service.positions()).toBe(sampleData);
+    expect(service.ready()).toBe(true);
+    expect(service.live()).toBeNull();
+    expect(api.getAllEventsCalls).toBe(0);
+
+    service.openAt({ timeS: 1, label: '', spells: [] });
+    await settle();
+    expect(api.getAllEventsCalls).toBeGreaterThan(0); // opening the panel triggers the fetch
+  });
+
+  it('does not refetch the overlay when the panel is re-opened for the same pull', async () => {
+    const { service, api } = setup();
+    await service.prepare('code', sampleFight, 5, 'SubtletyRogue', []);
+
+    service.openAt({ timeS: 1, label: '', spells: [] });
+    await settle();
+    const afterFirstOpen = api.getAllEventsCalls;
+    expect(afterFirstOpen).toBeGreaterThan(0);
+
+    service.close();
+    service.openAt({ timeS: 2, label: '', spells: [] });
+    await settle();
+    expect(api.getAllEventsCalls).toBe(afterFirstOpen);
+  });
+
+  it('does not fetch when the map is never opened', async () => {
+    const { service, api } = setup();
+    await service.prepare('code', sampleFight, 5, 'SubtletyRogue', []);
+    await settle();
+    expect(api.getAllEventsCalls).toBe(0);
   });
 });
