@@ -13,7 +13,8 @@
     },
     "major_cooldowns": {
       "type": "array",
-      "description": "All major cooldowns: abilities with a cooldown >= 30s that meaningfully affect damage output (or healing/tanking if applicable). Include on-use trinkets when the guide mentions specific timing for them.",
+      "description": "REQUIRED and must be populated. All major cooldowns: abilities with a cooldown >= 30s that meaningfully affect damage output (or healing/tanking if applicable). Include on-use trinkets when the guide mentions specific timing for them. Every spec has at least one major cooldown; a spec with an empty list produces no burst/rotation bench, so this must contain at least one item.",
+      "minItems": 1,
       "items": { "$ref": "#/$defs/majorCooldown" }
     },
     "defensives": {

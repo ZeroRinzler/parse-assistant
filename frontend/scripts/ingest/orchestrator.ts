@@ -31,6 +31,7 @@ import {
 } from './wcl-client.ts';
 import { RATE_LIMIT_QUERY } from './wcl-queries.ts';
 import { INGEST_VERSION } from './ingest-version.ts';
+import { rulebookSpellIds, unresolvedSpellIds } from './rulebook-spell-ids.ts';
 import { specDataMtime } from './git-mtime.ts';
 import {
   orderSpecsByVersionThenTime, orderEncountersByMissingFirst, type SpecOrderEntry,
@@ -245,6 +246,22 @@ async function ingestSpec(
     console.error(`[${spec}] rulebook.json failed schema validation (${schemaErrors.length} error(s)) - skipping:`);
     schemaErrors.forEach(err => console.error(`  - ${err}`));
     return false;
+  }
+
+  // Integrity gate: every rulebook spell id must resolve on WCL. `gameData.ability(id)`
+  // returns null for a nonexistent id, and the runtime's `abilityIcons` skips nulls, so a
+  // bad (LLM-guessed) id would land in `cd_spell_ids` without matching art and throw when a
+  // card renders it. Fail the spec loudly here instead of shipping a card that blanks - the
+  // "complete ingested data, no fallbacks" principle. One cheap batched query per spec.
+  const spellIds = rulebookSpellIds(rulebook ?? { spec });
+  if (spellIds.length) {
+    const resolved = await runtime.wclApi.getAbilities(spellIds);
+    const unresolved = unresolvedSpellIds(spellIds, resolved);
+    if (unresolved.length) {
+      console.error(`[${spec}] rulebook references ${unresolved.length} spell id(s) WCL cannot resolve: ${unresolved.join(', ')} - skipping.`);
+      console.error('  Verify each on wowhead.com/spell=<id> and fix the rulebook.');
+      return false;
+    }
   }
 
   // Process never-ingested encounters first so a partial spec fills its remaining bosses

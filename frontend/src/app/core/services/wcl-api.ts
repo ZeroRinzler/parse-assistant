@@ -140,9 +140,11 @@ export class WclApiService {
    * Resolve each spell id via `gameData.ability(id)` in one batched round-trip.
    * Returns the raw aliased `gameData` map (`a<spellId>` -> { id, name, icon } | null,
    * the icon carrying its `.jpg`); consumers project it to the id-keyed art
-   * `wl-game-icon` expects (see `abilityIcons`). `gameData.ability` resolves EVERY id
-   * - including passives a report's `masterData.abilities` omits - so the map is
-   * complete by construction; there is no missing-data case to fall back on.
+   * `wl-game-icon` expects (see `abilityIcons`). `gameData.ability` resolves any REAL id
+   * - including passives a report's `masterData.abilities` omits - but returns `null` for
+   * a nonexistent id (which `abilityIcons` skips). Ability ids that come from live events
+   * are always real; the only hand-authored ids are the rulebook's, and the ingest
+   * integrity gate rejects an unresolvable one before it can reach a card.
    */
   async getAbilities(ids: number[]): Promise<Record<string, WclRawAbility | null>> {
     const unique = [...new Set(ids)].filter(id => id > 0);
