@@ -21,7 +21,7 @@ import { RulebookCooldown, RulebookDefensive } from '../../../core/models/rulebo
 import { BurstWindow } from '../../../core/models/analysis.models';
 import { logWarn } from '../../../core/log';
 import { mean, median, deviation, quantile } from 'd3-array';
-import { round, groupByTime } from '../../../shared/analysis/analysis-math';
+import { round, groupByTime, getOrInsert } from '../../../shared/analysis/analysis-math';
 import { abilityIcons, toParseRankings, unwrapRankings } from '../../../shared/analysis/wcl-projections';
 import { DataSource } from '../../../core/data-source/data-source';
 import { BurstBench } from './burst-data-source';
@@ -303,14 +303,9 @@ export function clusterParseWindows(windows: ParseWindow[], sampleCount: number,
     const abilityPassive = new Map<number, boolean[]>();
     for (const member of cluster) {
       for (const ability of member.ability_breakdown) {
-        if (!abilityDamage.has(ability.spell_id)) {
-          abilityDamage.set(ability.spell_id, []);
-          abilityCasts.set(ability.spell_id, []);
-          abilityPassive.set(ability.spell_id, []);
-        }
-        abilityDamage.get(ability.spell_id)!.push(ability.damage);
-        abilityCasts.get(ability.spell_id)!.push(ability.casts);
-        abilityPassive.get(ability.spell_id)!.push(ability.is_passive);
+        getOrInsert(abilityDamage, ability.spell_id, () => []).push(ability.damage);
+        getOrInsert(abilityCasts, ability.spell_id, () => []).push(ability.casts);
+        getOrInsert(abilityPassive, ability.spell_id, () => []).push(ability.is_passive);
       }
     }
     const ability_breakdown = [...abilityDamage.entries()]

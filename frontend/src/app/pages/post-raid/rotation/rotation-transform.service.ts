@@ -18,7 +18,7 @@ import { RulebookCooldown, RulebookDefensive } from '../../../core/models/rulebo
 import { PerCdBenchmark, UsesPerMin, CdHoldTargets } from '../../../core/models/encounter.models';
 import { logWarn } from '../../../core/log';
 import { mean, median, deviation, quantile } from 'd3-array';
-import { round } from '../../../shared/analysis/analysis-math';
+import { round, getOrInsert } from '../../../shared/analysis/analysis-math';
 import { abilityIcons, toParseRankings, unwrapRankings } from '../../../shared/analysis/wcl-projections';
 import { DataSource } from '../../../core/data-source/data-source';
 import { RotationBench } from './rotation-data-source';
@@ -270,8 +270,7 @@ export function aggregateCdBenchmarks(
   const byCd = new Map<string, CdSummary[]>();
   for (const summaries of perParse) {
     for (const summary of summaries) {
-      if (!byCd.has(summary.name)) byCd.set(summary.name, []);
-      byCd.get(summary.name)!.push(summary);
+      getOrInsert(byCd, summary.name, () => []).push(summary);
     }
   }
   const result: Record<string, PerCdBenchmark> = {};

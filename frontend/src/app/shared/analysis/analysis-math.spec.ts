@@ -1,5 +1,5 @@
 import {
-  round, groupByTime, isOutlierAbove, isOutlierBeyond, isCriticallyBelow,
+  round, getOrInsert, groupByTime, isOutlierAbove, isOutlierBeyond, isCriticallyBelow,
   castEfficiencyPct, closestToZero, benchExpectedUses, fmtClock, sortBySeverity,
 } from './analysis-math';
 import { AnalysisFinding } from '../../core/models/analysis.models';
@@ -10,6 +10,23 @@ describe('round', () => {
   });
   it('honours an explicit decimal count', () => {
     expect(round(1.2349, 3)).toBe(1.235);
+  });
+});
+
+describe('getOrInsert', () => {
+  it('inserts and returns the default when the key is absent', () => {
+    const map = new Map<string, number[]>();
+    const list = getOrInsert(map, 'a', () => []);
+    list.push(1);
+    expect(map.get('a')).toEqual([1]);
+  });
+  it('returns the existing value without calling the factory again', () => {
+    const map = new Map<string, number[]>();
+    getOrInsert(map, 'a', () => []).push(1);
+    let calls = 0;
+    getOrInsert(map, 'a', () => { calls += 1; return []; }).push(2);
+    expect(calls).toBe(0);
+    expect(map.get('a')).toEqual([1, 2]);
   });
 });
 

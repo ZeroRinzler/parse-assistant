@@ -16,6 +16,7 @@ import { EncounterGearStats } from '../../../core/models/encounter.models';
 import { logWarn } from '../../../core/log';
 import { TRINKET_SLOTS, decodeHtmlEntities, extractGear, selectCombatantInfo, talentKeyFromTree } from './gear-extract';
 import { toParseRankings, unwrapRankings } from '../../../shared/analysis/wcl-projections';
+import { getOrInsert } from '../../../shared/analysis/analysis-math';
 import { DataSource } from '../../../core/data-source/data-source';
 import { GearBench } from './gear-data-source';
 
@@ -80,14 +81,19 @@ export function toParseGear(gear: CharacterGear | null, ranking: ParseRanking, s
  */
 export function aggregateTalents(parses: ParseGear[]): EncounterGearStats['talent_builds'] {
   const total = parses.length;
-  const talentCounter = new Map<string, number>();
-  const talentExample = new Map<string, { report_code: string; fight_id: number; player_name: string; source_id: number }>();
+  // Count and first-seen example are aggregated together, so the example is carried
+  // alongside the count rather than re-looked-up under a non-null assertion later.
+  interface TalentAgg { count: number; report_code: string; fight_id: number; player_name: string; source_id: number }
+  const talentBuilds = new Map<string, TalentAgg>();
 
   for (const parse of parses) {
     if (!parse.talent_key) continue;
-    talentCounter.set(parse.talent_key, (talentCounter.get(parse.talent_key) ?? 0) + 1);
-    if (!talentExample.has(parse.talent_key)) {
-      talentExample.set(parse.talent_key, {
+    const existing = talentBuilds.get(parse.talent_key);
+    if (existing) {
+      existing.count += 1;
+    } else {
+      talentBuilds.set(parse.talent_key, {
+        count: 1,
         report_code: parse.report_code,
         fight_id: parse.fight_id,
         player_name: parse.player_name,
@@ -96,11 +102,11 @@ export function aggregateTalents(parses: ParseGear[]): EncounterGearStats['talen
     }
   }
 
-  return [...talentCounter.entries()]
-    .sort((a, b) => b[1] - a[1])
+  return [...talentBuilds.entries()]
+    .sort((a, b) => b[1].count - a[1].count)
     .slice(0, MAX_TALENT_BUILDS)
-    // talentExample is set in lockstep with talentCounter, so every counted key has an example.
-    .map(([key, count]) => ({ key, pct: pct(count, total), ...talentExample.get(key)! }));
+    .map(([key, { count, report_code, fight_id, player_name, source_id }]) =>
+      ({ key, pct: pct(count, total), report_code, fight_id, player_name, source_id }));
 }
 
 /**
@@ -117,8 +123,7 @@ export function aggregateTrinkets(parses: ParseGear[]): EncounterGearStats['trin
     for (const trinket of parse.trinkets) {
       const slot = trinket.slot;
       if ((TRINKET_SLOTS as readonly number[]).includes(slot) && trinket.id) {
-        if (!trinketCounters.has(slot)) trinketCounters.set(slot, new Map());
-        const slotMap = trinketCounters.get(slot)!;
+        const slotMap = getOrInsert(trinketCounters, slot, () => new Map<number, number>());
         slotMap.set(trinket.id, (slotMap.get(trinket.id) ?? 0) + 1);
         if (!trinketNames.has(trinket.id)) trinketNames.set(trinket.id, trinket.name ?? '');
         if (!trinketIcons.has(trinket.id)) trinketIcons.set(trinket.id, trinket.icon);
@@ -151,8 +156,7 @@ export function aggregateEnchants(parses: ParseGear[]): EncounterGearStats['ench
     for (const enchant of parse.enchants) {
       const slot = enchant.slot;
       if (slot != null && enchant.id) {
-        if (!enchantCounters.has(slot)) enchantCounters.set(slot, new Map());
-        const slotMap = enchantCounters.get(slot)!;
+        const slotMap = getOrInsert(enchantCounters, slot, () => new Map<number, number>());
         slotMap.set(enchant.id, (slotMap.get(enchant.id) ?? 0) + 1);
         if (!enchantNames.has(enchant.id)) enchantNames.set(enchant.id, enchant.name ?? '');
       }

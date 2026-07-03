@@ -20,7 +20,7 @@ import { BurstWindow, TopDefensiveSummary } from '../../../core/models/analysis.
 import { PerDefensiveBenchmark } from '../../../core/models/encounter.models';
 import { logWarn } from '../../../core/log';
 import { mean, median, deviation } from 'd3-array';
-import { round, groupByTime } from '../../../shared/analysis/analysis-math';
+import { round, groupByTime, getOrInsert } from '../../../shared/analysis/analysis-math';
 import { abilityIcons, toParseRankings, unwrapRankings } from '../../../shared/analysis/wcl-projections';
 import { DataSource } from '../../../core/data-source/data-source';
 import { DefensiveBench, DefensivePlanMeta } from './defensive-data-source';
@@ -78,8 +78,7 @@ export function buildBuffWindows(buffEvents: WclEvent[], fightStartMs: number): 
     if (spellId == null) continue;
     const timeS = (event.timestamp - fightStartMs) / 1000;
     if (event.type === 'applybuff') {
-      if (!buffWindows.has(spellId)) buffWindows.set(spellId, []);
-      buffWindows.get(spellId)!.push([timeS, null]);
+      getOrInsert(buffWindows, spellId, () => []).push([timeS, null]);
     } else if (event.type === 'removebuff') {
       const windows = buffWindows.get(spellId) ?? [];
       for (let i = windows.length - 1; i >= 0; i--) {
@@ -254,8 +253,7 @@ export function clusterAbilityBreakdown(cluster: ParseDefWindow[]): BurstWindow[
   const abilityDamage = new Map<number, number[]>();
   for (const member of cluster) {
     for (const ability of member.ability_breakdown) {
-      if (!abilityDamage.has(ability.spell_id)) abilityDamage.set(ability.spell_id, []);
-      abilityDamage.get(ability.spell_id)!.push(ability.damage);
+      getOrInsert(abilityDamage, ability.spell_id, () => []).push(ability.damage);
     }
   }
   return [...abilityDamage.entries()]
@@ -280,8 +278,7 @@ export function clusterDefensiveWindows(windows: ParseDefWindow[], sampleCount: 
   if (!windows.length) return [];
   const byDefensive = new Map<string, ParseDefWindow[]>();
   for (const window of windows) {
-    if (!byDefensive.has(window.defensive_name)) byDefensive.set(window.defensive_name, []);
-    byDefensive.get(window.defensive_name)!.push(window);
+    getOrInsert(byDefensive, window.defensive_name, () => []).push(window);
   }
 
   const minParses = Math.max(2, sampleCount * CONSENSUS_FRAC);
@@ -323,8 +320,7 @@ export function buildHoldTargets(summaries: ParseDefensiveSummary[]): PerDefensi
   const holdByCastIdx = new Map<number, number[]>();
   for (const summary of summaries) {
     for (const holdWindow of summary.hold_windows) {
-      if (!holdByCastIdx.has(holdWindow.cast_index)) holdByCastIdx.set(holdWindow.cast_index, []);
-      holdByCastIdx.get(holdWindow.cast_index)!.push(holdWindow.actual_s);
+      getOrInsert(holdByCastIdx, holdWindow.cast_index, () => []).push(holdWindow.actual_s);
     }
   }
   const holdTargets: PerDefensiveBenchmark['hold_targets'] = {};
@@ -385,8 +381,7 @@ export function aggregateDefensiveBenchmarks(
   const byName = new Map<string, ParseDefensiveSummary[]>();
   for (const parse of perParseSummaries) {
     for (const summary of parse) {
-      if (!byName.has(summary.name)) byName.set(summary.name, []);
-      byName.get(summary.name)!.push(summary);
+      getOrInsert(byName, summary.name, () => []).push(summary);
     }
   }
 

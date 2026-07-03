@@ -142,9 +142,11 @@ export function selectBossAndEnemies(
 ): SelectedEnemies {
   const enemies: EnemyCandidate[] = [];
   for (const [actorId, samples] of byActor) {
-    if (actorId === playerId || !enemyMetaById.has(actorId)) continue;
+    if (actorId === playerId) continue;
+    const meta = enemyMetaById.get(actorId);
+    if (meta === undefined) continue;
     const maxHp = samples.reduce((max, sample) => Math.max(max, sample.maxHp), 0);
-    enemies.push({ actorId, count: samples.length, maxHp, samples, meta: enemyMetaById.get(actorId)! });
+    enemies.push({ actorId, count: samples.length, maxHp, samples, meta });
   }
   enemies.sort((a, b) => b.count - a.count);
   const bossEntry = enemies.reduce<EnemyCandidate | null>(

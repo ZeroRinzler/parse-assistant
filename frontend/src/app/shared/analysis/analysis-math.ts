@@ -19,6 +19,21 @@ export function round(value: number, decimals = 1): number {
   return Math.round(value * 10 ** decimals) / 10 ** decimals;
 }
 
+/**
+ * Return `map`'s value for `key`, inserting `makeDefault()` first when absent.
+ * A single lookup that always yields a present value - it never returns undefined
+ * and never throws - so a caller can group-and-append with one call instead of a
+ * `has`/`set` guard followed by a non-null `get(key)!`.
+ */
+export function getOrInsert<K, V>(map: Map<K, V>, key: K, makeDefault: () => V): V {
+  let value = map.get(key);
+  if (value === undefined) {
+    value = makeDefault();
+    map.set(key, value);
+  }
+  return value;
+}
+
 /** Group windows whose time is within `mergeS` of the running cluster median. */
 export function groupByTime<T extends { time_s: number }>(windows: T[], mergeS: number): T[][] {
   const sorted = [...windows].sort((a, b) => a.time_s - b.time_s);
