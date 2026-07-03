@@ -6,8 +6,11 @@ on:
   # dropped most fires under load (3 fires in 7 hours observed) and ignores the set minute.
   workflow_dispatch:
 
+# Shared with deploy-pages and pr-preview - see the note there. This job owns the data/ tree
+# on gh-pages; serializing all gh-pages writers keeps their single-commit force-pushes from
+# reverting each other's folder.
 concurrency:
-  group: ingest-parses-${{ github.ref }}
+  group: gh-pages
   cancel-in-progress: false
 
 jobs:
@@ -28,22 +31,26 @@ jobs:
 
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
-          ref: ${{ github.ref }}
+          ref: main
           token: ${{ steps.app-token.outputs.token }}
           # Full history: the orchestrator orders specs by the git last-commit time of each
           # spec's data dir (git-mtime.ts). A shallow clone collapses every path's git log to
           # one commit, which would make all specs tie.
           fetch-depth: 0
 
-      # The generated bench data is NOT tracked on main - it lives on the always-squashed
-      # `data` branch (one orphan commit, force-pushed each run). Overlay that snapshot into
-      # the working tree BEFORE scrape/ingest so the orchestrator's signature-skip has the
-      # current data on disk to compare against. --worktree only (never staged), so the paths
-      # stay ignored and cannot leak back onto main.
-      - name: Overlay bench data from the data branch
+      # The generated bench data is NOT tracked on main - it lives once at the gh-pages root
+      # under data/specs/ (this workflow is its only writer). Overlay that copy into the working
+      # tree BEFORE scrape/ingest so the orchestrator's signature-skip has the current data on
+      # disk to compare against. Untracked worktree only, so the paths stay ignored on main. On
+      # the very first run gh-pages has no data yet, so the archive is a no-op and ingest starts
+      # from empty.
+      - name: Overlay bench data from gh-pages
         run: |
-          git fetch origin data
-          git restore --source=origin/data --worktree -- frontend/public/data/specs
+          set -euo pipefail
+          git fetch origin gh-pages || true
+          rm -rf frontend/public/data/specs
+          git archive origin/gh-pages data/specs 2>/dev/null | tar -x -C frontend/public || \
+            echo "No existing data on gh-pages; starting from empty."
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -75,39 +82,17 @@ jobs:
         working-directory: frontend
         run: npm run ingest
 
-      # Publish the fresh data as a single orphan (root) commit, force-pushed to the `data`
-      # branch. History never grows: the branch tip is always exactly one commit holding the
-      # current frontend/public/data/specs snapshot. This replaces the old auto-commit-to-main
-      # step - main no longer carries multi-MB data churn. The force-push to `data` is itself a
-      # deploy-pages trigger (that workflow watches `main` and `data`), so a changed snapshot
-      # redeploys the live site with fresh parse data.
-      - name: Publish snapshot to the data branch
-        id: publish
-        run: |
-          set -euo pipefail
-          # Nothing to publish if ingest produced no directory (defensive).
-          if [ ! -d frontend/public/data/specs ]; then
-            echo "No data directory to publish."
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          git config user.name 'warcraft-learner-ingest[bot]'
-          git config user.email 'warcraft-learner-ingest[bot]@users.noreply.github.com'
-          # Build a fresh single-commit snapshot from a clean index. -f overrides .gitignore,
-          # which excludes this path on main. Starting from an orphan means the commit has no
-          # parent, so the branch history stays at exactly one commit.
-          git checkout --orphan data-new
-          git rm -rf --cached . >/dev/null 2>&1 || true
-          git add -f frontend/public/data/specs
-          git commit -q -m 'chore: refresh parse samples'
-          NEW_TREE=$(git rev-parse HEAD^{tree})
-          # Skip the force-push when the tree is byte-identical to the current data tip, so
-          # quiet hours produce no new commit and no needless deploy.
-          OLD_TREE=$(git rev-parse --verify --quiet origin/data^{tree} || true)
-          if [ "$NEW_TREE" = "$OLD_TREE" ]; then
-            echo "Data unchanged; nothing to publish."
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          git push --force origin HEAD:data
-          echo "changed=true" >> "$GITHUB_OUTPUT"
+      # Publish the fresh (minified) data into the data/specs/ folder at the gh-pages root.
+      # clean:true is scoped to the target-folder, so it replaces data/specs/ only and never
+      # touches main/ or the pr-* previews. The action commits nothing when the tree is byte-identical,
+      # so quiet hours produce no push and no needless redeploy. The site reads this copy
+      # directly (no rebuild needed), so publishing the data IS the deploy.
+      - name: Publish data to gh-pages
+        uses: JamesIves/github-pages-deploy-action@d92aa235d04922e8f08b40ce78cc5442fcfbfa2f # v4.8.0
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          branch: gh-pages
+          single-commit: true
+          folder: frontend/public/data/specs
+          target-folder: data/specs
+          clean: true

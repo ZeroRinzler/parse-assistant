@@ -29,8 +29,9 @@ const BROWSER_READONLY = 'DataFileApiService is read-only in the browser';
 @Injectable({ providedIn: 'root' })
 export class HttpDataFileTransport implements DataFileTransport {
   private readonly http = inject(HttpClient);
-  // An absolute `dataBaseHref` (preview builds) resolves to the shared prod-root data
-  // copy; empty (prod/dev) keeps the per-folder relative behavior under `document.baseURI`.
+  // Deployed builds set an absolute `dataBaseHref` pointing at the single shared
+  // gh-pages-root data copy; empty (development) resolves `data/specs/` relative to
+  // `document.baseURI`.
   private readonly base = new URL(environment.dataBaseHref || 'data/specs/', document.baseURI).href;
 
   async readJson<T>(relPath: string): Promise<T | null> {

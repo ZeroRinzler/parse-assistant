@@ -1,48 +1,27 @@
-name: PR Preview
+name: PR Previews
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, closed]
+  workflow_dispatch:
+  schedule:
+    - cron: '0 4 * * *'
 
 permissions:
   contents: write
   pull-requests: write
   deployments: write
 
+# Shared with deploy-pages and ingest-parses - see the note there. Serializing every gh-pages
+# writer keeps the single-commit force-pushes from reverting each other's folder.
+concurrency:
+  group: gh-pages
+  cancel-in-progress: false
+
 jobs:
-  deploy-preview:
+  publish-previews:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-        with:
-          persist-credentials: false
-
-      # Previews intentionally do NOT overlay the bench data. The ~400 MB of ingested data
-      # is byte-for-byte identical across prod and every preview, so the `preview` build
-      # points the app at the single shared prod-root copy `/warcraft-learner/data/specs/`
-      # (which deploy-pages always ships) instead of duplicating it into each pr-N folder.
-      # The preview folder therefore carries only the app shell.
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-        working-directory: frontend
-
-      # The `preview` config layers onto `production` (Angular merges the comma-separated
-      # configs left to right) and swaps in environment.preview.ts, which points the app at
-      # the shared prod-root /warcraft-learner/data/specs/ copy. No data is present at build
-      # time (it is gitignored on main and not overlaid), so the preview ships only the shell.
-      - name: Build
-        run: npm run build -- --configuration=production,preview --base-href /warcraft-learner/pr-${{ github.event.pull_request.number }}/
-        working-directory: frontend
-
-      - name: Copy 404 fallback for SPA routing
-        run: cp static/angular/browser/index.html static/angular/browser/404.html
-
       - name: Mint GitHub App token
         id: app-token
         uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
@@ -50,48 +29,121 @@ jobs:
           app-id: ${{ secrets.INGEST_APP_ID }}
           private-key: ${{ secrets.INGEST_APP_PRIVATE_KEY }}
 
-      - name: Create GitHub deployment
-        id: create-deployment
+      # The set of previews that should exist is exactly the set of OPEN PRs. This job rebuilds
+      # all of them and clean-replaces the root pr-* dirs every run (clean-exclude keeps main/,
+      # data/ and the root files), so a closed PR's preview disappears simply by not being
+      # rebuilt - deletion is structural, no separate cleanup workflow and no way to leave a
+      # stale preview behind. Idempotent under any trigger (a PR event, the schedule, dispatch).
+      - name: List open PR numbers
+        id: open-prs
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        with:
+          script: |
+            const prs = await github.paginate(github.rest.pulls.list, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100,
+            });
+            const numbers = prs.map((pr) => pr.number);
+            core.info(`Open PRs: ${numbers.join(', ') || '(none)'}`);
+            core.setOutput('numbers', numbers.join(' '));
+
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: main
+          token: ${{ steps.app-token.outputs.token }}
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # Build each open PR's shell from its own head commit into preview-out/pr-N. Previews
+      # ship the app shell only (no data overlay); they fetch the shared gh-pages-root data copy
+      # via the absolute dataBaseHref, so the production build config is all that is needed.
+      - name: Build all open PR previews
+        env:
+          OPEN_PRS: ${{ steps.open-prs.outputs.numbers }}
+        run: |
+          set -euo pipefail
+          mkdir -p preview-out
+          # Guarantees a non-empty folder to deploy even when zero PRs are open, so the
+          # clean-replace still runs and reaps every previous preview. Stays at the root
+          # of every deploy, so it is preserved rather than churned.
+          touch preview-out/.gitkeep
+          for n in $OPEN_PRS; do
+            echo "::group::Build preview for PR #$n"
+            git fetch --no-tags --quiet origin "pull/$n/head"
+            git checkout --quiet --detach FETCH_HEAD
+            npm --prefix frontend ci
+            npm --prefix frontend run build -- --base-href "/warcraft-learner/pr-$n/"
+            rm -rf "preview-out/pr-$n"
+            mkdir -p "preview-out/pr-$n"
+            cp -a static/angular/browser/. "preview-out/pr-$n/"
+            echo "::endgroup::"
+          done
+
+      # One atomic deploy of the pr-* dirs to the site root. clean:true replaces the root with
+      # exactly the open set, and clean-exclude protects the other territories: main/ (prod
+      # shell), data/ (the shared dataset), and the root index.html / 404.html. This static
+      # exclude list is the whole of the non-preview root - anything else at the root is stale.
+      - name: Publish previews
+        uses: JamesIves/github-pages-deploy-action@d92aa235d04922e8f08b40ce78cc5442fcfbfa2f # v4.8.0
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          branch: gh-pages
+          single-commit: true
+          folder: preview-out
+          clean: true
+          clean-exclude: |
+            main
+            data
+            index.html
+            404.html
+
+      # Keep the per-PR GitHub deployment (the "View deployment" link) in sync for the PR that
+      # triggered this run: mark it live on open/update, deactivate it on close. Schedule /
+      # dispatch runs carry no single PR, so they only rebuild + reap and skip this.
+      - name: Update deployment status for the triggering PR
+        if: github.event_name == 'pull_request'
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
         with:
           script: |
             const pr = context.payload.pull_request.number;
+            const environment = `pr-preview-${pr}`;
+            if (context.payload.action === 'closed') {
+              const { data: deployments } = await github.rest.repos.listDeployments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                environment,
+              });
+              for (const deployment of deployments) {
+                await github.rest.repos.createDeploymentStatus({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  deployment_id: deployment.id,
+                  state: 'inactive',
+                });
+              }
+              return;
+            }
             const { data: deployment } = await github.rest.repos.createDeployment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               ref: context.payload.pull_request.head.sha,
-              environment: `pr-preview-${pr}`,
+              environment,
               description: `Preview for PR #${pr}`,
               auto_merge: false,
               required_contexts: [],
               transient_environment: true,
             });
-            core.setOutput('deployment_id', deployment.id);
-
-      - name: Deploy preview to gh-pages branch
-        uses: JamesIves/github-pages-deploy-action@d92aa235d04922e8f08b40ce78cc5442fcfbfa2f # v4.8.0
-        with:
-          token: ${{ steps.app-token.outputs.token }}
-          branch: gh-pages
-          # Keep gh-pages at exactly one commit: each deploy snapshots the branch tree
-          # (prod site + pr-* previews per the clean rules) instead of growing history
-          # with a full ~400 MB built-site copy per deployment.
-          single-commit: true
-          folder: static/angular/browser
-          target-folder: pr-${{ github.event.pull_request.number }}
-          clean: true
-
-      - name: Set deployment status to success
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
-        with:
-          script: |
-            const pr = context.payload.pull_request.number;
-            const url = `https://gpolcode.github.io/warcraft-learner/pr-${pr}/`;
             await github.rest.repos.createDeploymentStatus({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              deployment_id: Number('${{ steps.create-deployment.outputs.deployment_id }}'),
+              deployment_id: deployment.id,
               state: 'success',
-              environment_url: url,
+              environment_url: `https://gpolcode.github.io/warcraft-learner/pr-${pr}/`,
               description: 'Preview ready',
             });

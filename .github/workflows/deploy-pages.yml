@@ -2,18 +2,19 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    # `data` is the always-squashed branch holding the generated bench data (see A3 /
-    # ingest-parses.yml). A fresh data snapshot must redeploy the site, so both branches
-    # trigger this build. The checkout below always pins the CODE to `main` and overlays the
-    # latest `data` snapshot, so the trigger branch does not change what gets built.
-    branches: [main, data]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: write
 
+# All three gh-pages writers - this workflow (main shell), pr-preview (preview shells) and
+# ingest-parses (the data/ tree) - share ONE concurrency group. Each writes a disjoint folder
+# (main/, pr-*, data/), but every deploy force-pushes a single squashed commit built from
+# a start-of-job checkout of gh-pages, so two concurrent writers would revert each other's
+# folder. Serializing them (cancel-in-progress: false) keeps the branch consistent.
 concurrency:
-  group: pages
+  group: gh-pages
   cancel-in-progress: false
 
 jobs:
@@ -29,17 +30,7 @@ jobs:
 
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
-          # Always build the CODE from main, regardless of which branch triggered this run
-          # (main code push or a data-branch snapshot push).
-          ref: main
-          token: ${{ steps.app-token.outputs.token }}
-
-      # The bench data is not tracked on main; overlay the latest `data`-branch snapshot into
-      # the working tree so the built site ships the parse data. --worktree only, never staged.
-      - name: Overlay bench data from the data branch
-        run: |
-          git fetch origin data
-          git restore --source=origin/data --worktree -- frontend/public/data/specs
+          persist-credentials: false
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -51,23 +42,43 @@ jobs:
         run: npm ci
         working-directory: frontend
 
+      # The site is composed on gh-pages, not baked whole here: this build ships ONLY the app
+      # shell (no data overlay). The ~100 MB minified data lives once at the gh-pages root under
+      # data/specs/ (maintained solely by ingest-parses) and every environment fetches that one
+      # shared copy via the absolute dataBaseHref, so `main` never re-pushes the dataset.
       - name: Build
-        run: npm run build -- --base-href /warcraft-learner/
+        run: npm run build -- --base-href /warcraft-learner/main/
         working-directory: frontend
 
-      - name: Copy 404 fallback for SPA routing
-        run: cp static/angular/browser/index.html static/angular/browser/404.html
+      # Root of the site: a 3-line index.html that redirects `/warcraft-learner/` to the `main`
+      # environment, plus a 404.html copy of the built shell so GitHub Pages' site-wide 404
+      # boots the SPA for deep links under /main/ (client-side routes survive a hard refresh).
+      - name: Assemble root overlay
+        run: |
+          set -euo pipefail
+          mkdir -p root-overlay
+          cp .github/pages-root/index.html root-overlay/index.html
+          cp static/angular/browser/index.html root-overlay/404.html
 
-      - name: Deploy to gh-pages branch
+      # Publish the shell into its own environment folder. clean:true is scoped to the
+      # target-folder, so it replaces `main/` only and never touches data/ or the pr-* previews.
+      - name: Deploy main shell
         uses: JamesIves/github-pages-deploy-action@d92aa235d04922e8f08b40ce78cc5442fcfbfa2f # v4.8.0
         with:
           token: ${{ steps.app-token.outputs.token }}
           branch: gh-pages
-          # Keep gh-pages at exactly one commit: each deploy snapshots the branch tree
-          # (prod site + pr-* previews per the clean rules) instead of growing history
-          # with a full ~400 MB built-site copy per deployment.
           single-commit: true
           folder: static/angular/browser
+          target-folder: main
           clean: true
-          clean-exclude: |
-            pr-*
+
+      # Publish the root index.html / 404.html. clean:false so it only adds/updates those two
+      # files at the site root and leaves main/, data/ and the pr-* previews intact.
+      - name: Deploy root redirect and 404 fallback
+        uses: JamesIves/github-pages-deploy-action@d92aa235d04922e8f08b40ce78cc5442fcfbfa2f # v4.8.0
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          branch: gh-pages
+          single-commit: true
+          folder: root-overlay
+          clean: false

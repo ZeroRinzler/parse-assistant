@@ -13,7 +13,7 @@
     "ingest": "tsx --tsconfig tsconfig.scripts.json scripts/ingest/orchestrator.ts",
     "scrape": "tsx --tsconfig tsconfig.scripts.json scripts/scrape-guides.ts",
     "lint": "ng lint && eslint scripts",
-    "data:pull": "git -C .. fetch origin data && git -C .. restore --source=origin/data --worktree -- frontend/public/data/specs"
+    "data:pull": "git -C .. fetch origin gh-pages && rm -rf public/data/specs && git -C .. archive origin/gh-pages data/specs | tar -x -C public"
   },
   "private": true,
   "packageManager": "npm@11.13.0",

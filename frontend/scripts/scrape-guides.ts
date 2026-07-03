@@ -81,7 +81,9 @@ async function loadGuides(spec: string): Promise<Guide[]> {
 }
 
 async function saveGuides(spec: string, guides: Guide[]): Promise<void> {
-  await writeJson(guidesPath(spec), guides);
+  // Minified (compact): guides.json holds bulky scraped guide text and is machine-read,
+  // so it follows the same no-pretty-print rule as the tailored bench data under data/specs.
+  await writeJson(guidesPath(spec), guides, true);
 }
 
 // ── Scraping ──────────────────────────────────────────────────────────────────

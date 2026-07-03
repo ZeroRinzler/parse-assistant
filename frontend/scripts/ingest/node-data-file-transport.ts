@@ -35,7 +35,11 @@ export class FsDataFileTransport implements DataFileTransport {
   async writeJson(relPath: string, data: unknown): Promise<void> {
     const full = this.resolve(relPath);
     await fs.promises.mkdir(path.dirname(full), { recursive: true });
-    await fs.promises.writeFile(full, JSON.stringify(data, null, 2) + '\n');
+    // Minified: the tailored bench data is machine-read (fetched + JSON.parsed), never
+    // hand-edited, and there are thousands of files, so dropping the pretty-print
+    // indentation cuts the on-disk / deployed footprint by roughly 70%. Still valid JSON
+    // an IDE opens and can format on demand. The trailing newline keeps the file POSIX-tidy.
+    await fs.promises.writeFile(full, JSON.stringify(data) + '\n');
   }
 
   async remove(relPath: string): Promise<void> {
