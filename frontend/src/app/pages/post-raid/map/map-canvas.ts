@@ -2,7 +2,6 @@ import {
   ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, effect,
   inject, signal, viewChild,
 } from '@angular/core';
-import { DecimalPipe } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -34,7 +33,7 @@ const MAX_FRAME_DT_S = 0.1;
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-map-canvas',
-  imports: [MatButtonModule, MatIconModule, MatFormFieldModule, MatSelectModule, DecimalPipe, FormatDurationPipe, GameIconComponent],
+  imports: [MatButtonModule, MatIconModule, MatFormFieldModule, MatSelectModule, FormatDurationPipe, GameIconComponent],
   templateUrl: './map-canvas.html',
 })
 export class MapCanvasComponent {
@@ -104,7 +103,7 @@ export class MapCanvasComponent {
     return buildTrail(live.playerId, refId, live.timelines, this.anchorTime(), PRE_S, POST_S, STEP_S);
   });
 
-  /** Readout at the scrubbed moment: top-parse cluster + the player's offset from it. */
+  /** Readout at the scrubbed moment: the top-parse cluster centroid + the player's position. */
   protected readonly readout = computed(() => {
     if (!this.positions()) return null;
     const t = this.scrubT();
@@ -117,8 +116,7 @@ export class MapCanvasComponent {
       };
     }
     const player = this.livePlayerAt(t);
-    const deviation = centroid && player ? Math.hypot(player.fwd - centroid.fwd, player.right - centroid.right) : null;
-    return { topCount: points.length, centroid, player, deviation };
+    return { centroid, player };
   });
 
   constructor() {

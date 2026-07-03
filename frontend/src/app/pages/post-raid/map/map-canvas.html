@@ -34,14 +34,6 @@
     </div>
   </div>
 
-  @if (readout(); as read) {
-    @if (read.deviation !== null) {
-      <p class="mt-2 text-[12px] text-[var(--muted)]">
-        You are {{ read.deviation | number:'1.0-1' }}y from the top-parse centre.
-      </p>
-    }
-  }
-
   <div class="mt-2 flex items-center gap-2">
     <button mat-icon-button [attr.aria-label]="playing() ? 'Pause' : 'Play'" (click)="togglePlay()">
       <mat-icon>{{ playing() ? 'pause' : 'play_arrow' }}</mat-icon>
