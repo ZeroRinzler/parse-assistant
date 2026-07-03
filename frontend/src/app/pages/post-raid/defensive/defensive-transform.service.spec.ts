@@ -229,19 +229,22 @@ function reportFor(playerId: number, playerName: string, fightId: number) {
 }
 
 const wclFake = {
-  getRankings: async () => [
-    { name: 'P1', report: { code: 'r1', fightID: 1 } },
-    { name: 'P2', report: { code: 'r2', fightID: 2 } },
-  ],
+  // getRankings returns the raw WCL envelope ({ rankings }); the transform unwraps it.
+  getRankings: async () => ({
+    rankings: [
+      { name: 'P1', report: { code: 'r1', fightID: 1 } },
+      { name: 'P2', report: { code: 'r2', fightID: 2 } },
+    ],
+  }),
   getReport: async (code: string) => (code === 'r1' ? reportFor(10, 'P1', 1) : reportFor(20, 'P2', 2)),
   getAllEvents: async (_code: string, _fightId: number, dataType: string) => {
     if (dataType === 'Buffs') return [applybuff(CLOAK_OF_SHADOWS, 30), removebuff(CLOAK_OF_SHADOWS, 35)];
     if (dataType === 'Casts') return [cast(CLOAK_OF_SHADOWS, 30)];
     return [dtaken(700, 32, 1000, 9)]; // DamageTaken
   },
-  // Resolves a real icon + name for every requested spell id (gameData.ability).
+  // Raw gameData.ability map (id-keyed { id, icon, name }); the transform projects it.
   getAbilities: async (ids: number[]) =>
-    Object.fromEntries(ids.map(id => [id, id === 700 ? { icon: 'hit', name: 'Boss Hit' } : { icon: 'cloak', name: 'Cloak of Shadows' }])),
+    Object.fromEntries(ids.map(id => [id, id === 700 ? { id, icon: 'hit', name: 'Boss Hit' } : { id, icon: 'cloak', name: 'Cloak of Shadows' }])),
 };
 const filesFake = {
   getRulebook: async () => ({ spec: 'SubtletyRogue', major_cooldowns: [], defensives: [CLOAK] }),
@@ -271,7 +274,7 @@ describe('DefensiveTransformService (live, in-browser)', () => {
     const candidates = Array.from({ length: 11 }, (_, i) => ({ name: `P${i + 1}`, report: { code: `r${i + 1}`, fightID: i + 1 } }));
     const backfillWcl = {
       ...wclFake,
-      getRankings: async () => candidates,
+      getRankings: async () => ({ rankings: candidates }),
       getReport: async (code: string) => {
         if (code === 'r5') throw new Error('You do not have permission to view this report.');
         const idx = Number(code.slice(1));

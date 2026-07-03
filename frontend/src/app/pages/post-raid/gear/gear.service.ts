@@ -16,7 +16,7 @@ import { CharacterGear, WclCombatantInfo } from '../../../core/models/wcl.models
 import { EncounterGearStats } from '../../../core/models/encounter.models';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { logWarn } from '../../../core/log';
-import { decodeHtmlEntities, extractGear, talentKeyFromTree } from './gear-extract';
+import { decodeHtmlEntities, extractGear, selectCombatantInfo, talentKeyFromTree } from './gear-extract';
 import {
   GearStatus,
   buildEnchantRows, enchantStatusOf, EnchantRow,
@@ -170,7 +170,7 @@ export class GearFeatureService {
   ): Promise<CharacterGear | null> {
     if (!reportCode || !fightId || !playerId) return null;
     try {
-      const event = await this.wclApi.getCombatantInfo(reportCode, fightId, playerId);
+      const event = selectCombatantInfo(await this.wclApi.getCombatantInfo(reportCode, fightId, playerId), playerId);
       if (!event?.gear?.length) return null;
 
       const { trinkets, enchants } = extractGear(event.gear);

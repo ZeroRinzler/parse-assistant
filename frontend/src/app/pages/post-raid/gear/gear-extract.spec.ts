@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { WclGearItem } from '../../../core/models/wcl.models';
-import { TRINKET_SLOTS, iconFile, decodeHtmlEntities, extractGear } from './gear-extract';
+import { WclCombatantInfo, WclGearItem } from '../../../core/models/wcl.models';
+import { TRINKET_SLOTS, iconFile, decodeHtmlEntities, extractGear, selectCombatantInfo } from './gear-extract';
 
 // Named gear fixtures (no raw ids in assertions). Trinket slots are the WCL
 // quirk indices 12/13; an enchant can sit on any slot - 15 is Main Hand.
@@ -69,5 +69,25 @@ describe('extractGear', () => {
 
     expect(extractGear(gear).trinkets).toEqual([]);
     expect(extractGear(undefined)).toEqual({ trinkets: [], enchants: [] });
+  });
+});
+
+describe('selectCombatantInfo', () => {
+  const PLAYER_ID = 10;
+  const OTHER_ID = 20;
+  const forPlayer = (sourceID: number): WclCombatantInfo => ({ sourceID, gear: [] });
+
+  it('picks the event matching the player sourceID', () => {
+    const events = [forPlayer(OTHER_ID), forPlayer(PLAYER_ID)];
+    expect(selectCombatantInfo(events, PLAYER_ID)).toBe(events[1]);
+  });
+
+  it('falls back to the first event when none matches the player', () => {
+    const events = [forPlayer(OTHER_ID)];
+    expect(selectCombatantInfo(events, PLAYER_ID)).toBe(events[0]);
+  });
+
+  it('returns null for an empty events array', () => {
+    expect(selectCombatantInfo([], PLAYER_ID)).toBeNull();
   });
 });

@@ -249,12 +249,16 @@ const combatantInfo = (playerId: number): WclCombatantInfo => {
 };
 
 const wclFake = {
-  getRankings: async () => [
-    { name: 'P1', report: { code: 'r1', fightID: 1 } },
-    { name: 'P2', report: { code: 'r2', fightID: 2 } },
-  ],
+  // getRankings returns the raw WCL envelope ({ rankings }); the transform unwraps it.
+  getRankings: async () => ({
+    rankings: [
+      { name: 'P1', report: { code: 'r1', fightID: 1 } },
+      { name: 'P2', report: { code: 'r2', fightID: 2 } },
+    ],
+  }),
   getReport: async (code: string) => (code === 'r1' ? reportFor(10, 'P1', 1) : reportFor(20, 'P2', 2)),
-  getCombatantInfo: async (code: string) => combatantInfo(code === 'r1' ? 10 : 20),
+  // getCombatantInfo returns the raw events array; the transform selects the player's event.
+  getCombatantInfo: async (code: string) => [combatantInfo(code === 'r1' ? 10 : 20)],
   getGameNames: async () => ({}),
 };
 
@@ -281,13 +285,13 @@ describe('GearTransformService (live, in-browser)', () => {
     const candidates = Array.from({ length: 11 }, (_, i) => ({ name: `P${i + 1}`, report: { code: `r${i + 1}`, fightID: i + 1 } }));
     const backfillWcl = {
       ...wclFake,
-      getRankings: async () => candidates,
+      getRankings: async () => ({ rankings: candidates }),
       getReport: async (code: string) => {
         if (code === 'r5') throw new Error('You do not have permission to view this report.');
         const idx = Number(code.slice(1));
         return reportFor(idx * 10, `P${idx}`, idx);
       },
-      getCombatantInfo: async () => combatantInfo(10),
+      getCombatantInfo: async () => [combatantInfo(10)],
     };
     TestBed.configureTestingModule({
       providers: [
@@ -303,7 +307,7 @@ describe('GearTransformService (live, in-browser)', () => {
   it('returns null when there are no rankings', async () => {
     TestBed.configureTestingModule({
       providers: [
-        { provide: WclApiService, useValue: { getRankings: async () => [] } as unknown as WclApiService },
+        { provide: WclApiService, useValue: { getRankings: async () => ({ rankings: [] }) } as unknown as WclApiService },
         { provide: DataFileApiService, useValue: {} as unknown as DataFileApiService },
       ],
     });

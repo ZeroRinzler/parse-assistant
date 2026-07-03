@@ -22,7 +22,7 @@ import { BurstWindow } from '../../../core/models/analysis.models';
 import { logWarn } from '../../../core/log';
 import { mean, median, deviation, quantile } from 'd3-array';
 import { round, groupByTime } from '../../../shared/analysis/analysis-math';
-import { toParseRankings } from '../../../shared/analysis/wcl-projections';
+import { abilityIcons, toParseRankings, unwrapRankings } from '../../../shared/analysis/wcl-projections';
 import { DataSource } from '../../../core/data-source/data-source';
 import { BurstBench } from './burst-data-source';
 
@@ -362,7 +362,7 @@ export class BurstTransformService implements DataSource<BurstBench> {
     if (!cooldowns.length) return null;
     const defensives = rulebook?.defensives ?? [];
 
-    const rankings = toParseRankings(await this.wclApi.getRankings(spec, encounterId), CANDIDATE_POOL_COUNT);
+    const rankings = toParseRankings(unwrapRankings(await this.wclApi.getRankings(spec, encounterId)), CANDIDATE_POOL_COUNT);
     if (!rankings.length) return null;
 
     const allWindows: ParseWindow[] = [];
@@ -393,7 +393,7 @@ export class BurstTransformService implements DataSource<BurstBench> {
       sample_count: sampleCount,
       windows,
       cd_spell_ids,
-      ability_icons: await this.wclApi.getAbilities(referencedIds),
+      ability_icons: abilityIcons(await this.wclApi.getAbilities(referencedIds)),
     };
   }
 

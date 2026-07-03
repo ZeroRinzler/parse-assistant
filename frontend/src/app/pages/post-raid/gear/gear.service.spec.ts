@@ -101,7 +101,7 @@ function toRawEvent(gear: CharacterGear): WclCombatantInfo {
 function configure(bench: GearBench | null, gear: CharacterGear | null): GearFeatureService {
   const source: DataSource<GearBench> = { getBench: () => Promise.resolve(bench) };
   const wclFake = {
-    getCombatantInfo: async (): Promise<WclCombatantInfo | null> => (gear?.found ? toRawEvent(gear) : null),
+    getCombatantInfo: async (): Promise<WclCombatantInfo[]> => (gear?.found ? [toRawEvent(gear)] : []),
     getGameNames: async () => ({}),
   };
   TestBed.configureTestingModule({

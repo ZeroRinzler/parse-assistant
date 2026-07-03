@@ -41,6 +41,7 @@ import {
   type SignatureRanking, type SignedFile,
 } from './signature.ts';
 import { logWarn } from '../../src/app/core/log.ts';
+import { unwrapRankings } from '../../src/app/shared/analysis/wcl-projections.ts';
 import type { WclRateLimitData, WclResourceEvent, IngestEncounter } from './models/wcl.models.ts';
 import type { EncounterEntry, SpecEntry } from '../../src/app/core/models/encounter.models.ts';
 
@@ -106,7 +107,7 @@ class RuntimeWclClient implements WclQueryClient {
 /** The candidate parse pool the signature draws from (anonymized-filtered, top SIGNATURE_POOL_COUNT). */
 async function rankingPool(runtime: IngestRuntime, spec: string, encounterId: number): Promise<SignatureRanking[]> {
   const raw = await runtime.wclApi.getRankings(spec, encounterId);
-  return selectSignatureRankings(raw, SIGNATURE_POOL_COUNT);
+  return selectSignatureRankings(unwrapRankings(raw), SIGNATURE_POOL_COUNT);
 }
 
 /**

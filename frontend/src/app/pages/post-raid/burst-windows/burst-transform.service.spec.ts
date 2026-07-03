@@ -371,16 +371,19 @@ function reportFor(playerId: number, playerName: string, fightId: number) {
 // parse yields one measured window with Shadow Blades attributed inside it.
 const burstDamage = [damage(SHADOW_BLADES_DAMAGE, 10, BIN_DAMAGE), damage(SHADOW_BLADES_DAMAGE, 11, BIN_DAMAGE), damage(SHADOW_BLADES_DAMAGE, 12, BIN_DAMAGE)];
 const wclFake = {
-  getRankings: async () => [
-    { name: 'P1', report: { code: 'r1', fightID: 1 } },
-    { name: 'P2', report: { code: 'r2', fightID: 2 } },
-  ],
+  // getRankings returns the raw WCL envelope ({ rankings }); the transform unwraps it.
+  getRankings: async () => ({
+    rankings: [
+      { name: 'P1', report: { code: 'r1', fightID: 1 } },
+      { name: 'P2', report: { code: 'r2', fightID: 2 } },
+    ],
+  }),
   getReport: async (code: string) => (code === 'r1' ? reportFor(10, 'P1', 1) : reportFor(20, 'P2', 2)),
   getAllEvents: async (_code: string, _fightId: number, dataType: string) =>
     dataType === 'Casts' ? [cast(SHADOW_BLADES, 10)] : burstDamage,
-  // Resolves a real icon + name for every requested spell id (gameData.ability).
+  // Raw gameData.ability map (id-keyed { id, icon, name }); the transform projects it.
   getAbilities: async (ids: number[]) =>
-    Object.fromEntries(ids.map(id => [id, { icon: `icon_${id}`, name: `name_${id}` }])),
+    Object.fromEntries(ids.map(id => [id, { id, icon: `icon_${id}`, name: `name_${id}` }])),
 };
 const filesFake = {
   getRulebook: async () => ({
@@ -414,7 +417,7 @@ describe('BurstTransformService (live, in-browser)', () => {
     const candidates = Array.from({ length: 11 }, (_, i) => ({ name: `P${i + 1}`, report: { code: `r${i + 1}`, fightID: i + 1 } }));
     const backfillWcl = {
       ...wclFake,
-      getRankings: async () => candidates,
+      getRankings: async () => ({ rankings: candidates }),
       getReport: async (code: string) => {
         if (code === 'r5') throw new Error('You do not have permission to view this report.');
         const idx = Number(code.slice(1));

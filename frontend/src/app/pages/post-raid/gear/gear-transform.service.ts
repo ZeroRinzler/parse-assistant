@@ -14,8 +14,8 @@ import { WclApiService } from '../../../core/services/wcl-api';
 import { CharacterGear, ParseRanking } from '../../../core/models/wcl.models';
 import { EncounterGearStats } from '../../../core/models/encounter.models';
 import { logWarn } from '../../../core/log';
-import { TRINKET_SLOTS, decodeHtmlEntities, extractGear, talentKeyFromTree } from './gear-extract';
-import { toParseRankings } from '../../../shared/analysis/wcl-projections';
+import { TRINKET_SLOTS, decodeHtmlEntities, extractGear, selectCombatantInfo, talentKeyFromTree } from './gear-extract';
+import { toParseRankings, unwrapRankings } from '../../../shared/analysis/wcl-projections';
 import { DataSource } from '../../../core/data-source/data-source';
 import { GearBench } from './gear-data-source';
 
@@ -190,7 +190,7 @@ export class GearTransformService implements DataSource<GearBench> {
   private readonly wclApi = inject(WclApiService);
 
   async getBench(spec: string, encounterId: number): Promise<GearBench | null> {
-    const rankings = toParseRankings(await this.wclApi.getRankings(spec, encounterId), CANDIDATE_POOL_COUNT);
+    const rankings = toParseRankings(unwrapRankings(await this.wclApi.getRankings(spec, encounterId)), CANDIDATE_POOL_COUNT);
     if (!rankings.length) return null;
 
     const parses: ParseGear[] = [];
@@ -226,7 +226,7 @@ export class GearTransformService implements DataSource<GearBench> {
       const player = report.masterData?.actors?.find(actor => actor.name === ranking.player);
       if (!fight || !player) return null;
 
-      const event = await this.wclApi.getCombatantInfo(ranking.report_code, fight.id, player.id);
+      const event = selectCombatantInfo(await this.wclApi.getCombatantInfo(ranking.report_code, fight.id, player.id), player.id);
       if (!event?.gear?.length) return null;
 
       const { trinkets, enchants } = extractGear(event.gear);

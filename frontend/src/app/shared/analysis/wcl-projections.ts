@@ -9,13 +9,40 @@
  * `shared/gear/gear-comparison.ts` do) and each slice imports one implementation
  * instead of re-declaring it. No Angular / `inject()` / IO; pure functions only.
  */
-import { ParseRanking, WclRawRanking } from '../../core/models/wcl.models';
+import { ParseRanking, WclRankingsBlob, WclRawAbility, WclRawRanking } from '../../core/models/wcl.models';
 import { WindowSpell } from '../../core/models/window-comparison.models';
 
 // WCL anonymizes a privacy-protected parse's player name to "Character <id>-<id>",
 // which can never match a report actor (real names are letters only), so the parse
 // is unfetchable. Drop these before mapping.
 const ANONYMIZED_NAME = /^Character \d+-\d+$/;
+
+/**
+ * Unwrap WCL's `characterRankings` envelope into its ranking rows. WCL returns it
+ * either as a JSON blob (string) or an already-parsed object; both forms (and an
+ * absent blob) are handled, so the result is always an array.
+ */
+export function unwrapRankings(blob: WclRankingsBlob | null | undefined): WclRawRanking[] {
+  if (!blob) return [];
+  const parsed = typeof blob === 'string' ? JSON.parse(blob) as { rankings?: WclRawRanking[] } : blob;
+  return parsed.rankings ?? [];
+}
+
+/**
+ * Project WCL's aliased `gameData.ability` map into an id-keyed `{ icon, name }`
+ * record, stripping the trailing `.jpg` so the value is the bare zamimg filename
+ * `wl-game-icon` expects. WCL returns `null` for any alias it could not resolve;
+ * those are skipped.
+ */
+export function abilityIcons(
+  raw: Record<string, WclRawAbility | null>,
+): Record<number, { icon: string; name: string }> {
+  const icons: Record<number, { icon: string; name: string }> = {};
+  for (const entry of Object.values(raw)) {
+    if (entry) icons[entry.id] = { icon: entry.icon.replace(/\.jpg$/i, ''), name: entry.name };
+  }
+  return icons;
+}
 
 /** Map raw WCL rankings to the top `count` fetchable parses (report + fight + player). */
 export function toParseRankings(raw: WclRawRanking[], count: number): ParseRanking[] {

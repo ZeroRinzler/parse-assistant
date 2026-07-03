@@ -21,7 +21,7 @@ import { PerDefensiveBenchmark } from '../../../core/models/encounter.models';
 import { logWarn } from '../../../core/log';
 import { mean, median, deviation } from 'd3-array';
 import { round, groupByTime } from '../../../shared/analysis/analysis-math';
-import { toParseRankings } from '../../../shared/analysis/wcl-projections';
+import { abilityIcons, toParseRankings, unwrapRankings } from '../../../shared/analysis/wcl-projections';
 import { DataSource } from '../../../core/data-source/data-source';
 import { DefensiveBench, DefensivePlanMeta } from './defensive-data-source';
 
@@ -420,7 +420,7 @@ export class DefensiveTransformService implements DataSource<DefensiveBench> {
     const defensives = rulebook?.defensives ?? [];
     if (!defensives.length) return null;
 
-    const rankings = toParseRankings(await this.wclApi.getRankings(spec, encounterId), CANDIDATE_POOL_COUNT);
+    const rankings = toParseRankings(unwrapRankings(await this.wclApi.getRankings(spec, encounterId)), CANDIDATE_POOL_COUNT);
     if (!rankings.length) return null;
 
     const allWindows: ParseDefWindow[] = [];
@@ -458,7 +458,7 @@ export class DefensiveTransformService implements DataSource<DefensiveBench> {
       top_defensives_summary: topDefensivesSummary,
       defensives: defensivePlanMeta(defensives),
       cd_spell_ids,
-      ability_icons: await this.wclApi.getAbilities(referencedIds),
+      ability_icons: abilityIcons(await this.wclApi.getAbilities(referencedIds)),
     };
   }
 

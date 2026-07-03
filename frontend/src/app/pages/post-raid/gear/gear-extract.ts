@@ -5,7 +5,18 @@
  * `shared/gear/gear-comparison.ts` - so both files import one copy instead of
  * duplicating the projection. It owns no Angular / IO; pure functions only.
  */
-import { CharacterGear, WclGearItem } from '../../../core/models/wcl.models';
+import { CharacterGear, WclCombatantInfo, WclGearItem } from '../../../core/models/wcl.models';
+
+/**
+ * Pick the player's CombatantInfo from a fight's raw events. WCL keys the event by
+ * `sourceID`, so prefer the exact match; fall back to the first event (a fight has
+ * one CombatantInfo per player) and `null` when none was recorded.
+ */
+export function selectCombatantInfo(
+  events: WclCombatantInfo[], playerId: number,
+): WclCombatantInfo | null {
+  return events.find(event => event.sourceID === playerId) ?? events[0] ?? null;
+}
 
 /**
  * Trinket slots, per the WCL gear quirk: the CombatantInfo gear array is

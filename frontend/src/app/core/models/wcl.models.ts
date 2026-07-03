@@ -99,6 +99,24 @@ export interface WclRawRanking {
   report?: { code?: string; fightID?: number };
 }
 
+/**
+ * Raw `characterRankings` envelope as WCL returns it: either a JSON blob (string)
+ * or an already-parsed object carrying the `rankings` array. Consumers unwrap both
+ * forms (see `unwrapRankings`).
+ */
+export type WclRankingsBlob = string | { rankings?: WclRawRanking[] };
+
+/**
+ * One raw `gameData.ability` entry. The `icon` carries the trailing `.jpg` zamimg
+ * extension; consumers strip it (see `abilityIcons`). WCL returns `null` for an id
+ * it cannot resolve, so the batched map is `entry | null` per alias.
+ */
+export interface WclRawAbility {
+  id: number;
+  name: string;
+  icon: string;
+}
+
 export interface CharacterGear {
   found: boolean;
   spec?: string;

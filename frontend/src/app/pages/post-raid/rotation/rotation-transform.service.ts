@@ -19,7 +19,7 @@ import { PerCdBenchmark, UsesPerMin, CdHoldTargets } from '../../../core/models/
 import { logWarn } from '../../../core/log';
 import { mean, median, deviation, quantile } from 'd3-array';
 import { round } from '../../../shared/analysis/analysis-math';
-import { toParseRankings } from '../../../shared/analysis/wcl-projections';
+import { abilityIcons, toParseRankings, unwrapRankings } from '../../../shared/analysis/wcl-projections';
 import { DataSource } from '../../../core/data-source/data-source';
 import { RotationBench } from './rotation-data-source';
 
@@ -302,7 +302,7 @@ export class RotationTransformService implements DataSource<RotationBench> {
     const defensives = rulebook?.defensives ?? [];
     const rules = rulebook?.rules ?? [];
 
-    const rankings = toParseRankings(await this.wclApi.getRankings(spec, encounterId), CANDIDATE_POOL_COUNT);
+    const rankings = toParseRankings(unwrapRankings(await this.wclApi.getRankings(spec, encounterId)), CANDIDATE_POOL_COUNT);
     if (!rankings.length) return null;
 
     const perParse: CdSummary[][] = [];
@@ -337,7 +337,7 @@ export class RotationTransformService implements DataSource<RotationBench> {
       rules,
       cd_spell_ids,
       // Resolve a real icon for every cooldown + defensive by id (complete, no fallback).
-      ability_icons: await this.wclApi.getAbilities(Object.values(cd_spell_ids)),
+      ability_icons: abilityIcons(await this.wclApi.getAbilities(Object.values(cd_spell_ids))),
     };
   }
 

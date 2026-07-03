@@ -4,7 +4,7 @@ import { LiveModeState } from './live-mode-state';
 import { WCL_TRANSPORT, WCL_INGEST_MODE, WclTransportError } from './wcl-transport';
 import {
   WclReport, WclAbility, WclEvent,
-  PlayerDetailGroups, WclRawRanking, WclCombatantInfo,
+  PlayerDetailGroups, WclRankingsBlob, WclRawAbility, WclCombatantInfo,
 } from '../models/wcl.models';
 import {
   REPORT_Q, REPORT_ABILITIES_Q, PLAYER_DETAILS_Q, EVENTS_Q,
@@ -110,17 +110,17 @@ export class WclApiService {
   }
 
   /**
-   * Raw CombatantInfo event for one player actor in a fight (gear + talentTree).
-   * Returns null when the log carries no combatant info for the player. Consumers
-   * extract gear / talents and resolve names (see `getGameNames`).
+   * Raw CombatantInfo events for one player actor in a fight (gear + talentTree).
+   * Returns the events array as WCL returns it (empty when the log carries none);
+   * consumers pick the player's event (see `selectCombatantInfo`), extract gear /
+   * talents, and resolve names (see `getGameNames`).
    */
-  async getCombatantInfo(code: string, fightId: number, playerId: number): Promise<WclCombatantInfo | null> {
+  async getCombatantInfo(code: string, fightId: number, playerId: number): Promise<WclCombatantInfo[]> {
     const vars: CombatantInfoQueryVars = { code, fightIDs: [fightId], sourceID: playerId };
     const result = await this.query<{ reportData: { report: { events: { data: WclCombatantInfo[] } } } }>(
       COMBATANT_INFO_Q, vars,
     );
-    const events = result?.reportData?.report?.events?.data ?? [];
-    return events.find(event => event.sourceID === playerId) ?? events[0] ?? null;
+    return result?.reportData?.report?.events?.data ?? [];
   }
 
   /**
@@ -137,40 +137,35 @@ export class WclApiService {
   }
 
   /**
-   * Resolve icon + name for each spell id via `gameData.ability(id)` in one batched
-   * round-trip, keyed by spell id with the trailing `.jpg` stripped (the bare zamimg
-   * filename `wl-game-icon` expects). `gameData.ability` resolves EVERY id - including
-   * passives a report's `masterData.abilities` omits - so the result is complete by
-   * construction; there is no missing-data case to fall back on.
+   * Resolve each spell id via `gameData.ability(id)` in one batched round-trip.
+   * Returns the raw aliased `gameData` map (`a<spellId>` -> { id, name, icon } | null,
+   * the icon carrying its `.jpg`); consumers project it to the id-keyed art
+   * `wl-game-icon` expects (see `abilityIcons`). `gameData.ability` resolves EVERY id
+   * - including passives a report's `masterData.abilities` omits - so the map is
+   * complete by construction; there is no missing-data case to fall back on.
    */
-  async getAbilities(ids: number[]): Promise<Record<number, { icon: string; name: string }>> {
+  async getAbilities(ids: number[]): Promise<Record<string, WclRawAbility | null>> {
     const unique = [...new Set(ids)].filter(id => id > 0);
     if (!unique.length) return {};
-    const result = await this.query<{ gameData: Record<string, { id: number; name: string; icon: string } | null> }>(
+    const result = await this.query<{ gameData: Record<string, WclRawAbility | null> }>(
       buildAbilityIconsQuery(unique),
     );
-    const icons: Record<number, { icon: string; name: string }> = {};
-    for (const entry of Object.values(result?.gameData ?? {})) {
-      if (entry) icons[entry.id] = { icon: entry.icon.replace(/\.jpg$/i, ''), name: entry.name };
-    }
-    return icons;
+    return result?.gameData ?? {};
   }
 
   /**
-   * Raw top-DPS rankings for an encounter + spec. `characterRankings` comes back as
-   * a JSON blob (string or object) - both forms are handled. Returns `[]` for an
-   * unknown spec. Consumers map these to fetchable `ParseRanking` rows.
+   * Raw top-DPS rankings envelope for an encounter + spec. `characterRankings` comes
+   * back as a JSON blob (string or object); it is returned as-is (`null` for an
+   * unknown spec, since no query can be built). Consumers unwrap both forms and map
+   * to fetchable `ParseRanking` rows (see `unwrapRankings` / `toParseRankings`).
    */
-  async getRankings(spec: string, encounterId: number): Promise<WclRawRanking[]> {
+  async getRankings(spec: string, encounterId: number): Promise<WclRankingsBlob | null> {
     const meta = SPEC_META[spec];
-    if (!meta) return [];
+    if (!meta) return null;
     const vars: RankingsQueryVars = { encounterID: encounterId, className: meta.className, specName: meta.specName };
-    const result = await this.query<{ worldData: { encounter: { characterRankings: string | { rankings: WclRawRanking[] } } } }>(
+    const result = await this.query<{ worldData: { encounter: { characterRankings: WclRankingsBlob } } }>(
       RANKINGS_Q, vars,
     );
-    const raw = result?.worldData?.encounter?.characterRankings;
-    if (!raw) return [];
-    const parsed = typeof raw === 'string' ? JSON.parse(raw) as { rankings?: WclRawRanking[] } : raw;
-    return parsed.rankings ?? [];
+    return result?.worldData?.encounter?.characterRankings ?? null;
   }
 }

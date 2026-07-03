@@ -24,7 +24,7 @@ import { DataFileApiService } from '../../../core/services/data-file-api';
 import { WclEvent, WclFight, ParseRanking } from '../../../core/models/wcl.models';
 import { ParsePositions, PosRow } from '../../../core/models/positioning.models';
 import { logWarn } from '../../../core/log';
-import { toParseRankings } from '../../../shared/analysis/wcl-projections';
+import { toParseRankings, unwrapRankings } from '../../../shared/analysis/wcl-projections';
 import { posActorId } from './map-positions';
 import { DataSource } from '../../../core/data-source/data-source';
 import { MapData } from './map-data-source';
@@ -207,7 +207,7 @@ export class MapTransformService implements DataSource<MapData> {
   private readonly dataFiles = inject(DataFileApiService);
 
   async getBench(spec: string, encounterId: number): Promise<MapData | null> {
-    const rankings = toParseRankings(await this.wclApi.getRankings(spec, encounterId), CANDIDATE_POOL_COUNT);
+    const rankings = toParseRankings(unwrapRankings(await this.wclApi.getRankings(spec, encounterId)), CANDIDATE_POOL_COUNT);
     if (!rankings.length) return null;
 
     const parses: ParsePositions[] = [];
