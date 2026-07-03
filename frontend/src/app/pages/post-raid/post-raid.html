@@ -1,5 +1,5 @@
 <div class="mx-auto max-w-[860px] px-3 md:px-4 pt-6 pb-12">
-    <mat-card class="mb-5 p-4">
+    <mat-card appearance="outlined" class="mb-5 p-4">
       <mat-form-field appearance="outline" class="w-full">
         <mat-label>Warcraft Logs Report URL or Code</mat-label>
         <input matInput [formControl]="reportControl" placeholder="https://www.warcraftlogs.com/reports/AbCdEfGh…"
@@ -17,9 +17,10 @@
       @if (fights().length) {
         <div class="mt-4 border-t border-[var(--border)] pt-4">
           <div class="flex flex-wrap gap-[14px]">
-            <mat-form-field appearance="outline" class="flex-[1_1_200px]"
-                            [class.opacity-50]="liveSyncEnabled()"
-                            [class.pointer-events-none]="liveSyncEnabled()">
+            <!-- Disabled (via the form control) while live sync drives the selection:
+                 unlike an opacity/pointer-events fake, this also blocks keyboard
+                 changes and announces the state to assistive tech. -->
+            <mat-form-field appearance="outline" class="flex-[1_1_200px]">
               <mat-label>Fight</mat-label>
               <mat-select [formControl]="fightControl" (selectionChange)="onFightChange()">
                 <mat-select-trigger>

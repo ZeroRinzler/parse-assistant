@@ -4,7 +4,7 @@
   }
 
   <!-- Spec + encounter selector -->
-  <mat-card class="p-4">
+  <mat-card appearance="outlined" class="p-4">
     @if (loading()) {
       <wl-loading-spinner message="Loading specs…"></wl-loading-spinner>
     } @else if (specs().length === 0) {

@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
-import { MatFormFieldModule } from '@angular/material/form-field';
+import { MAT_FORM_FIELD_DEFAULT_OPTIONS, MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
 import { MatCardModule } from '@angular/material/card';
 import { SelectionStore } from '../../core/services/selection-store';
@@ -41,6 +41,9 @@ import { MapFeatureService, MapAnchor } from '../post-raid/map/map.service';
     RotationCdPlanComponent, DefensivePlanComponent, BurstWindowsComponent,
     GearComponent, MapPanelComponent,
   ],
+  // No reserved subscript strip under this page's form fields (see post-raid.ts;
+  // provided per lazy page so form-field stays out of the initial bundle).
+  providers: [{ provide: MAT_FORM_FIELD_DEFAULT_OPTIONS, useValue: { subscriptSizing: 'dynamic' } }],
   templateUrl: './pre-fight.html',
 })
 export class PreFightComponent implements OnInit {

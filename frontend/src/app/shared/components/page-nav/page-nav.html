@@ -1,4 +1,6 @@
-<mat-toolbar class="bg-[var(--surface)]! border-b border-[var(--border)] gap-2">
+<!-- Toolbar background comes from mat.toolbar-overrides in styles.scss (a plain
+     bg-* utility loses to Material's unlayered background rule). -->
+<mat-toolbar class="border-b border-[var(--border)] gap-2">
   <button mat-icon-button (click)="toggleNav()" aria-label="Toggle navigation menu">
     <mat-icon>menu</mat-icon>
   </button>

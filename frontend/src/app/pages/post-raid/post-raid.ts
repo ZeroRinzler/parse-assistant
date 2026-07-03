@@ -6,7 +6,7 @@ import { toObservable, toSignal, takeUntilDestroyed } from '@angular/core/rxjs-i
 import { AbstractControl, FormControl, ReactiveFormsModule, ValidationErrors } from '@angular/forms';
 import { EMPTY, combineLatest, from, merge, of } from 'rxjs';
 import { distinctUntilChanged, exhaustMap, map, switchMap, tap } from 'rxjs/operators';
-import { MatFormFieldModule } from '@angular/material/form-field';
+import { MAT_FORM_FIELD_DEFAULT_OPTIONS, MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatButtonModule } from '@angular/material/button';
@@ -171,6 +171,10 @@ export function specOf(groups: PlayerDetailGroups, playerId: number): string {
     DefensiveComponent, GearComponent, MapPanelComponent,
     FormatDurationPipe, FormatSpecPipe, SpecIconPipe, ClassIconPipe, BossIconPipe,
   ],
+  // No reserved subscript strip under this page's form fields; a field grows to
+  // show its mat-error only while one is active. Provided here (not app.config) so
+  // the form-field import stays out of the initial bundle - this page is lazy.
+  providers: [{ provide: MAT_FORM_FIELD_DEFAULT_OPTIONS, useValue: { subscriptSizing: 'dynamic' } }],
   templateUrl: './post-raid.html',
 })
 export class PostRaidComponent {
@@ -346,6 +350,11 @@ export class PostRaidComponent {
 
   protected onLiveToggle(): void {
     this.liveMode.active.set(this.liveControl.value);
+    // Live sync owns the fight selection: disable the control (setValue from the
+    // poll still works on a disabled control) instead of faking it with opacity +
+    // pointer-events, which left the select keyboard-operable.
+    if (this.liveControl.value) this.fightControl.disable();
+    else this.fightControl.enable();
   }
 
   private async _pollOnce(): Promise<void> {

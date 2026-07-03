@@ -205,7 +205,7 @@ export class MapCanvasComponent {
     const muted = token('--muted');
     const enemyColor = token('--critical');
     const rankedColor = token('--accent');
-    const outline = token('--chart-dot-outline');
+    const outline = token('--map-dot-outline');
 
     // Range rings.
     ctx.strokeStyle = border; ctx.fillStyle = muted; ctx.font = '11px system-ui, sans-serif'; ctx.lineWidth = 1;

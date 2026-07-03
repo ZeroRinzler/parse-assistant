@@ -1,5 +1,5 @@
 /**
- * View-model data shapes for the window-comparison + range-chart leaves.
+ * View-model data shapes for the window-comparison + compact-ability-row leaves.
  *
  * Kept in core/models (not in the component files) so feature/transform services can
  * import them as plain models without reaching into a UI component.

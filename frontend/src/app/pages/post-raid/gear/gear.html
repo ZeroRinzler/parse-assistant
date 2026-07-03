@@ -18,8 +18,8 @@
         <div class="text-xs text-[var(--muted)] mt-0.5">Top-parse gear consensus.</div>
       }
     </div>
-    <div class="hidden md:block text-[10px] uppercase tracking-widest text-[var(--border)] text-right">Measured</div>
-    <div class="hidden md:block text-[10px] uppercase tracking-widest text-[var(--border)] pl-[14px]">Fix</div>
+    <div class="hidden md:block text-[10px] uppercase tracking-widest text-[var(--muted)] text-right">Measured</div>
+    <div class="hidden md:block text-[10px] uppercase tracking-widest text-[var(--muted)] pl-[14px]">Fix</div>
   </div>
 
   <!-- ── TALENTS ─────────────────────────────────────────────────────── -->
@@ -37,7 +37,7 @@
         <!-- issue row: % in subline per design; top% col left empty -->
         <div class="grid grid-cols-[20px_minmax(0,1fr)] md:grid-cols-[20px_minmax(0,1fr)_96px_200px] gap-x-[14px] gap-y-2 md:gap-y-0 px-4 py-[10px] items-start md:items-center border-t border-[var(--border)]">
           <div class="flex items-center justify-center self-start md:self-center">
-            <mat-icon class="!text-[18px] !w-[18px] !h-[18px] !leading-[18px] badge-warning">warning_amber</mat-icon>
+            <mat-icon class="icon-18 badge-warning">warning_amber</mat-icon>
           </div>
           <div class="min-w-0">
             <span class="text-sm text-[var(--text)]">Off-meta build</span>
@@ -83,7 +83,7 @@
               <div class="text-[10px] opacity-60 mt-px tabular-nums">of top parsers</div>
             </div>
             <div class="col-start-2 md:col-auto text-right md:text-left text-[13px] text-[var(--muted)] leading-[1.45] md:border-l md:border-[var(--border)] md:pl-[14px]">
-              <a class="text-[var(--gold)] no-underline hover:brightness-125"
+              <a class="rounded-[3px] border border-[var(--accent)]/20 bg-[var(--accent)]/[0.08] px-[7px] py-[1px] font-mono text-[10px] text-[var(--accent)] no-underline whitespace-nowrap hover:brightness-125"
                  [href]="build.link" target="_blank" rel="noopener">View parse &#8599;</a>
             </div>
           </div>
@@ -113,7 +113,7 @@
           @if (row.status !== 'ok') {
             <div class="grid grid-cols-[20px_minmax(0,1fr)] md:grid-cols-[20px_minmax(0,1fr)_96px_200px] gap-x-[14px] gap-y-2 md:gap-y-0 px-4 py-[10px] items-start md:items-center border-t border-[var(--border)]">
               <div class="flex items-center justify-center self-start md:self-center">
-                <mat-icon class="!text-[18px] !w-[18px] !h-[18px] !leading-[18px]"
+                <mat-icon class="icon-18"
                   [class.badge-warning]="row.status === 'warn'"
                   [class.badge-info]="row.status === 'info'">
                   {{ row.status === 'info' ? 'info' : 'warning_amber' }}
@@ -214,7 +214,7 @@
         @for (row of enchantIssues(); track row.slotName) {
           <div class="grid grid-cols-[20px_minmax(0,1fr)] md:grid-cols-[20px_minmax(0,1fr)_96px_200px] gap-x-[14px] gap-y-2 md:gap-y-0 px-4 py-[10px] items-start md:items-center border-t border-[var(--border)]">
             <div class="flex items-center justify-center self-start md:self-center">
-              <mat-icon class="!text-[18px] !w-[18px] !h-[18px] !leading-[18px]"
+              <mat-icon class="icon-18"
                 [class.badge-warning]="row.status === 'warn'"
                 [class.badge-info]="row.status === 'info'">
                 {{ row.status === 'info' ? 'info' : 'warning_amber' }}
@@ -222,7 +222,7 @@
             </div>
             <!-- slot label inline-left of enchant name, per design -->
             <div class="min-w-0 flex items-baseline gap-2">
-              <span class="shrink-0 w-14 text-[10px] uppercase tracking-widest text-[var(--border)]">{{ row.slotName }}</span>
+              <span class="shrink-0 w-14 text-[10px] uppercase tracking-widest text-[var(--muted)]">{{ row.slotName }}</span>
               <span class="text-sm text-[var(--text)] truncate">{{ row.name }}</span>
             </div>
             <div class="col-start-2 md:col-auto flex items-baseline gap-2 md:block text-left md:text-right leading-[1.1]"
@@ -269,7 +269,7 @@
           <div class="grid grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[20px_minmax(0,1fr)_96px_200px] gap-x-[14px] gap-y-1 md:gap-y-0 items-center px-4 py-[10px] border-t border-[var(--border)]">
             <div class="hidden md:block"></div>
             <div class="min-w-0 flex items-baseline gap-2">
-              <span class="shrink-0 w-14 text-[10px] uppercase tracking-widest text-[var(--border)]">{{ row.slotName }}</span>
+              <span class="shrink-0 w-14 text-[10px] uppercase tracking-widest text-[var(--muted)]">{{ row.slotName }}</span>
               <span class="text-sm text-[var(--text)]">{{ row.name }}</span>
             </div>
             <div class="text-right leading-[1.1] text-[var(--muted)]">

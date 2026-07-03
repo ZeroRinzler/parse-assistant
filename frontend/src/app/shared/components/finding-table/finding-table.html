@@ -10,8 +10,8 @@
         <div class="text-xs text-[var(--muted)] mt-0.5">{{ subtitle() }}</div>
       }
     </div>
-    <div class="hidden md:block text-[10px] uppercase tracking-widest text-[var(--border)] tabular-nums text-right">Measured</div>
-    <div class="hidden md:block text-[10px] uppercase tracking-widest text-[var(--border)] pl-[14px]">Fix</div>
+    <div class="hidden md:block text-[10px] uppercase tracking-widest text-[var(--muted)] tabular-nums text-right">Measured</div>
+    <div class="hidden md:block text-[10px] uppercase tracking-widest text-[var(--muted)] pl-[14px]">Fix</div>
   </div>
 
   @for (row of rows(); track $index) {
@@ -20,7 +20,7 @@
 
       <!-- Severity icon -->
       <div class="flex items-center justify-center self-start md:self-center">
-        <mat-icon class="!text-[18px] !w-[18px] !h-[18px] !leading-[18px]"
+        <mat-icon class="icon-18"
           [class.badge-critical]="row.severity === 'critical'"
           [class.badge-warning]="row.severity === 'warning'">
           {{ row.severity === 'critical' ? 'error' : 'warning_amber' }}
@@ -41,8 +41,8 @@
             @if (row.timestampMs != null) {
               <span class="text-[11px] text-[var(--accent)] tabular-nums">{{ row.timestampMs / 1000 | formatDuration }}</span>
               @if (showMap()) {
-                <button mat-icon-button class="!w-5 !h-5 !p-0 !leading-5" aria-label="Open positioning map" (click)="onOpenMap(row)">
-                  <mat-icon class="!text-[16px] !w-[16px] !h-[16px]">my_location</mat-icon>
+                <button mat-icon-button class="icon-button-compact" aria-label="Open positioning map" (click)="onOpenMap(row)">
+                  <mat-icon class="icon-16">my_location</mat-icon>
                 </button>
               }
             }
@@ -92,7 +92,8 @@
             <!-- wl-game-icon renders icon + name; no extra name span needed -->
             <wl-game-icon [id]="spellId" [icon]="c.icon" [name]="c.name"></wl-game-icon>
           } @else {
-            <span class="inline-block bg-[var(--surface-alt)] border border-dashed border-[var(--border)] rounded w-[16px] h-[16px] shrink-0"></span>
+            <!-- No spell identity: a plain text chip (matches the gear card's
+                 "Most common build" / "All enchants" chips). -->
             <span class="text-[13px] text-[var(--muted)]">{{ c.name }}</span>
           }
         </span>

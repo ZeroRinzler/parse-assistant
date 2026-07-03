@@ -29,12 +29,22 @@ html {
   --info: #58a6ff;
   --gold: #e5cc80; /* Warcraft Logs 100-parse ("Astounding") gold - brand color */
 
-  /* Range-chart palette (shared by the SVG legend swatches and the Chart.js canvas) */
-  --chart-range: #4a9eff;
-  --chart-range-fill: rgba(74, 158, 255, 0.28);
-  --chart-avg: #60cfff;
-  --chart-you: #ffd700;
-  --chart-dot-outline: rgba(0, 0, 0, 0.55);
+  /* Positioning-map canvas: outline behind the player marker so it stays visible
+   * over any trail color. Read at draw time via getComputedStyle (map-canvas.ts). */
+  --map-dot-outline: rgba(0, 0, 0, 0.55);
+
+  /* Material component tokens, restyled with the app tokens above. Material injects
+   * its component styles unlayered while Tailwind v4 utilities live in
+   * `@layer utilities`, so plain utilities cannot restyle what Material sets;
+   * these override mixins are the supported mechanism (no `!important`). */
+  @include mat.card-overrides((
+    outlined-container-color: var(--surface),
+    outlined-outline-color: var(--border),
+    outlined-container-shape: 10px,
+  ));
+  @include mat.toolbar-overrides((
+    container-background-color: var(--surface),
+  ));
 }
 
 body {
@@ -50,34 +60,31 @@ body {
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
-/* Material overrides */
-.mat-mdc-card {
-  background-color: var(--surface) !important;
-  color: var(--text) !important;
-  border: 1px solid var(--border) !important;
-  border-radius: 10px !important;
+/* mat-icon sizes. Material injects an unlayered `.mat-icon { width/height: 24px }`
+ * and the Material Symbols font class sets `font-size: 24px`; Tailwind v4 utilities
+ * live in `@layer utilities` and always lose to those unlayered rules, so `w-*` /
+ * `text-*` utilities silently do nothing on a mat-icon. These mat-icon-scoped
+ * classes (specificity 0,1,1) beat both without `!important`. */
+mat-icon.icon-16 { font-size: 16px; width: 16px; height: 16px; line-height: 16px; }
+mat-icon.icon-18 { font-size: 18px; width: 18px; height: 18px; line-height: 18px; }
+
+/* window-comparison timeline glyphs: 22px inside the 42px mobile tap targets,
+ * 18px on the compact md rail (48rem mirrors Tailwind's `md` breakpoint). */
+mat-icon.icon-seg { font-size: 22px; width: 22px; height: 22px; line-height: 1; }
+@media (min-width: 48rem) {
+  mat-icon.icon-seg { font-size: 18px; width: 18px; height: 18px; }
 }
 
-/*
- * Compact "row" cards (window-comparison, burst-window headers):
- * status glyph - label - spell - chevron. Material's card-header padding is
- * asymmetric (16px top, 0 bottom) and doesn't reliably center its items, which
- * left header-only rows top-heavy and the spell/label out of line with the
- * glyph and chevron. Force symmetric padding + vertical centering so every row
- * reads the same whether or not it has a content block below.
- */
-.mat-mdc-card-header {
-  align-items: center !important;
-  padding: 10px 14px !important;
+/* Compact inline icon button (finding-table map jump). Sizing the button via the
+ * supported tokens keeps the inner padding math intact, and dropping the invisible
+ * 48px touch-target overlay stops it from stealing clicks from neighbouring text. */
+.icon-button-compact {
+  @include mat.icon-button-overrides((
+    state-layer-size: 20px,
+    icon-size: 16px,
+    touch-target-display: none,
+  ));
 }
-
-.mat-mdc-card-content {
-  padding: 0 14px 12px !important;
-
-  &:last-child { padding-bottom: 12px !important; }
-}
-
-.mat-mdc-form-field-subscript-wrapper { display: none; }
 
 /* Severity badges - text color by status. Templates select one via a
  * bracket-free [class.badge-*] binding driven by a status enum in the

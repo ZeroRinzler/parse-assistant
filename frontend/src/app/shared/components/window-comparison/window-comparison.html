@@ -45,7 +45,7 @@
                 [attr.aria-selected]="activeIndex() === i"
                 [attr.aria-label]="(w.timeStartS | formatDuration)"
                 (click)="select(i)">
-                <mat-icon class="text-[22px] md:text-[18px] h-[22px] w-[22px] md:h-[18px] md:w-[18px] leading-none">{{ w.statusIcon }}</mat-icon>
+                <mat-icon class="icon-seg">{{ w.statusIcon }}</mat-icon>
               </button>
             </div>
           }

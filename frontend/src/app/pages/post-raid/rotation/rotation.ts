@@ -1,8 +1,5 @@
-import { ChangeDetectionStrategy, Component, effect, inject, input, output, signal } from '@angular/core';
-import { MatIconModule } from '@angular/material/icon';
-import { GameIconComponent } from '../../../shared/components/game-icon/game-icon';
-import { CollapsibleTextComponent } from '../../../shared/components/collapsible-text/collapsible-text';
-import { FormatDurationPipe } from '../../../shared/pipes/format-duration-pipe';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal } from '@angular/core';
+import { FindingTableComponent, OnPlanChip } from '../../../shared/components/finding-table/finding-table';
 import { logWarn } from '../../../core/log';
 import {
   RotationFeatureService, RotationFindingRow, RotationOnPlanChip,
@@ -10,8 +7,8 @@ import {
 
 /**
  * Rotation card (post-raid). A feature component: it injects exactly one service
- * (`RotationFeatureService`). It reproduces the legacy "Rotation Rules" +
- * "Offensives" finding sections. Its bench
+ * (`RotationFeatureService`). It renders the "Rotation Rules" + "Offensives"
+ * finding sections as two `wl-finding-table` cards. Its bench
  * comes from the swappable `ROTATION_DATA_SOURCE` (file in prod, live transform
  * under the dev flag); the player findings are computed from the player's own log,
  * fetched by the service. Spell art is baked onto each row and passed explicitly
@@ -20,7 +17,7 @@ import {
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-rotation',
-  imports: [MatIconModule, GameIconComponent, CollapsibleTextComponent, FormatDurationPipe],
+  imports: [FindingTableComponent],
   templateUrl: './rotation.html',
 })
 export class RotationComponent {
@@ -39,6 +36,10 @@ export class RotationComponent {
   protected readonly ruleOnPlan = signal<string[]>([]);
   protected readonly offensiveRows = signal<RotationFindingRow[]>([]);
   protected readonly onPlan = signal<RotationOnPlanChip[]>([]);
+
+  /** Followed-rule labels as spell-less chips for the shared finding table. */
+  protected readonly ruleOnPlanChips = computed<OnPlanChip[]>(() =>
+    this.ruleOnPlan().map(label => ({ name: label, spellId: null, icon: '' })));
 
   // Bumped on every reload so a slow earlier response can't overwrite a newer one.
   private loadToken = 0;

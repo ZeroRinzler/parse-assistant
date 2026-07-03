@@ -1,27 +1,27 @@
 @if (items().length) {
   <div class="bg-[var(--surface)] border border-[var(--border)] rounded-[10px] overflow-hidden">
     <!-- Header -->
-    <div class="px-[18px] pt-[15px] pb-3">
+    <div class="px-4 pt-3 pb-2">
       <div class="text-[17px] font-semibold text-[var(--text)]">{{ title() }}</div>
       <div class="text-xs text-[var(--muted)] mt-0.5">{{ subtitle() }}</div>
     </div>
 
     <!-- Column labels (desktop only; mobile uses inline labels per cell) -->
-    <div class="hidden md:grid grid-cols-[1fr_190px_210px] gap-4 px-[18px] pb-[7px]">
+    <div class="hidden md:grid grid-cols-[1fr_190px_200px] gap-[14px] px-4 pb-1">
       <div></div>
-      <div class="font-mono text-[10px] uppercase tracking-widest text-[var(--border)] text-right">Plan</div>
-      <div class="font-mono text-[10px] uppercase tracking-widest text-[var(--border)] pl-[15px]">How to use</div>
+      <div class="text-[10px] uppercase tracking-widest text-[var(--muted)] text-right">Plan</div>
+      <div class="text-[10px] uppercase tracking-widest text-[var(--muted)] pl-[14px]">How to use</div>
     </div>
 
     <!-- Rows -->
     @for (defensive of items(); track defensive.name) {
-      <div class="grid grid-cols-1 md:grid-cols-[1fr_190px_210px] gap-3 md:gap-4 items-start md:items-center px-[18px] py-[13px] border-t border-[var(--border)]">
+      <div class="grid grid-cols-1 md:grid-cols-[1fr_190px_200px] gap-3 md:gap-[14px] items-start md:items-center px-4 py-[10px] border-t border-[var(--border)]">
         <!-- What -->
         <div class="flex items-center gap-[11px] min-w-0">
           @if (defensive.spellId; as spellId) {
             <wl-game-icon [id]="spellId" [icon]="defensive.icon" [name]="defensive.name"></wl-game-icon>
           } @else {
-            <span class="text-[15px] font-medium text-[var(--text)] whitespace-nowrap">{{ defensive.name }}</span>
+            <span class="text-sm text-[var(--text)] whitespace-nowrap">{{ defensive.name }}</span>
           }
         </div>
 
@@ -50,7 +50,7 @@
         </div>
 
         <!-- How to use -->
-        <div class="text-[13px] text-[var(--muted)] leading-[1.45] border-t md:border-t-0 md:border-l border-[var(--border)] pt-2.5 md:pt-0 pl-0 md:pl-[15px]">
+        <div class="text-[13px] text-[var(--muted)] leading-[1.45] border-t md:border-t-0 md:border-l border-[var(--border)] pt-2.5 md:pt-0 pl-0 md:pl-[14px]">
           <span class="md:hidden block font-mono text-[10px] uppercase tracking-wider text-[var(--muted)] mb-1">How to use</span>
           <wl-collapsible-text>{{ defensive.rule }}</wl-collapsible-text>
         </div>

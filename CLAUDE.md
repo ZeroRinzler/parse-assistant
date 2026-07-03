@@ -26,7 +26,7 @@ Ingestion runs the **same** `*TransformService`s the browser uses, headlessly. T
 
 ```
 frontend/        # the entire Angular 22 app
-  src/app/pages/ # post-raid (/), pre-fight (/pre), live (/live)
+  src/app/pages/ # post-raid (/, incl. the live-sync toggle), pre-fight (/pre)
   src/app/core/  # the two API services, data-source token, models
   scripts/ingest # ingestion orchestrator + discovery helpers (run via tsx)
   public/data/specs/  # static ingested data (slices, encounters, positions, rulebooks) - NOT tracked on main; see below

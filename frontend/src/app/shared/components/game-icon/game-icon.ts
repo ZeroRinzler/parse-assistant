@@ -1,6 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { NgOptimizedImage } from '@angular/common';
-import { MatTooltipModule } from '@angular/material/tooltip';
 
 export type GameIconKind = 'spell' | 'item';
 
@@ -17,7 +16,7 @@ export type GameIconKind = 'spell' | 'item';
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-game-icon',
   host: { class: 'inline-flex items-center' },
-  imports: [NgOptimizedImage, MatTooltipModule],
+  imports: [NgOptimizedImage],
   template: `
     <a
       [href]="wowheadUrl()"
@@ -27,7 +26,9 @@ export type GameIconKind = 'spell' | 'item';
       @if (iconUrl(); as src) {
         <img [ngSrc]="src" [width]="18" [height]="18" alt="" class="rounded-sm" />
       }
-      <span>{{ name() }}</span>
+      <!-- text-sm keeps names the same size as the no-icon fallback names next to
+           this component (finding-table, compact-ability-row, the plan cards). -->
+      <span class="text-sm">{{ name() }}</span>
     </a>
   `,
 })

@@ -8,14 +8,17 @@
     <!--
       Content-Security-Policy: this app has no backend, so the only script origins are
       'self' and the Wowhead tooltip CDN (wow.zamimg.com). style-src needs 'unsafe-inline'
-      because Angular and Angular Material inject <style> blocks at runtime - this is the
-      standard, unavoidable Angular CSP concession. connect-src covers the WCL API plus the
-      wowhead.com hosts that tooltips.js XHRs tooltip data from; img-src covers zamimg icons.
-      frame-ancestors / report-uri are omitted because they are ignored in a meta-tag CSP.
+      because Angular and Angular Material inject <style> blocks at runtime (the standard,
+      unavoidable Angular CSP concession) plus wow.zamimg.com, which is where tooltips.js
+      link-injects its universal.css stylesheet. connect-src covers the WCL API plus the
+      wowhead.com hosts that tooltips.js XHRs tooltip data from. img-src covers zamimg
+      spell/item icons plus assets.rpglogs.com, which serves the per-encounter boss icons
+      (see shared/boss-icon.ts). frame-ancestors / report-uri are omitted because they are
+      ignored in a meta-tag CSP.
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' https://wow.zamimg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://wow.zamimg.com; connect-src 'self' https://www.warcraftlogs.com https://www.wowhead.com https://nether.wowhead.com; base-uri 'self'; object-src 'none'"
+      content="default-src 'self'; script-src 'self' https://wow.zamimg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://wow.zamimg.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://wow.zamimg.com https://assets.rpglogs.com; connect-src 'self' https://www.warcraftlogs.com https://www.wowhead.com https://nether.wowhead.com; base-uri 'self'; object-src 'none'"
     />
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <link rel="icon" type="image/x-icon" href="favicon.ico" />
