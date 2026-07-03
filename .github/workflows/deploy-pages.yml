@@ -46,8 +46,12 @@ jobs:
       # shell (no data overlay). The ~100 MB minified data lives once at the gh-pages root under
       # data/specs/ (maintained solely by ingest-parses) and every environment fetches that one
       # shared copy via the absolute dataBaseHref, so `main` never re-pushes the dataset.
+      # The repo-name segment of the base-href is derived from the always-present
+      # GITHUB_REPOSITORY runner env (owner/repo); `${GITHUB_REPOSITORY#*/}` strips the
+      # owner so a rename or fork stays correct with no edit. For gpolcode/warcraft-learner
+      # this yields `/warcraft-learner/main/`, matching the frontend `dataBaseHref` root.
       - name: Build
-        run: npm run build -- --base-href /warcraft-learner/main/
+        run: npm run build -- --base-href "/${GITHUB_REPOSITORY#*/}/main/"
         working-directory: frontend
 
       # Root of the site: a 3-line index.html that redirects `/warcraft-learner/` to the `main`

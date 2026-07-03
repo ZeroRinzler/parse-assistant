@@ -79,7 +79,7 @@ jobs:
             if git fetch --no-tags --quiet origin "pull/$n/head" \
               && git checkout --quiet --detach FETCH_HEAD \
               && npm --prefix frontend ci \
-              && npm --prefix frontend run build -- --base-href "/warcraft-learner/pr-$n/"; then
+              && npm --prefix frontend run build -- --base-href "/${GITHUB_REPOSITORY#*/}/pr-$n/"; then
               rm -rf "preview-out/pr-$n"
               mkdir -p "preview-out/pr-$n"
               cp -a static/angular/browser/. "preview-out/pr-$n/"
@@ -166,6 +166,6 @@ jobs:
               repo: context.repo.repo,
               deployment_id: deployment.id,
               state: 'success',
-              environment_url: `https://gpolcode.github.io/warcraft-learner/pr-${pr}/`,
+              environment_url: `https://${context.repo.owner}.github.io/${context.repo.repo}/pr-${pr}/`,
               description: 'Preview ready',
             });

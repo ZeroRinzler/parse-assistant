@@ -19,7 +19,15 @@ export const environment = {
   /** When true, slices compute their prepared data live in the browser instead of
    * reading ingested files - lets the whole app run with no ingestion. */
   useLiveTransform: false,
-  /** Absolute base for the static data files. Empty (development) resolves
-   * `data/specs/` relative to `document.baseURI`. */
+  /**
+   * Absolute base for the static data files. Empty (development) resolves
+   * `data/specs/` relative to `document.baseURI`.
+   *
+   * The `/<repo>/` segment here is the single source of truth for the repo name on
+   * the frontend side. It MUST match the base-href repo segment the workflows derive
+   * from the `GITHUB_REPOSITORY` runner env in `.github/workflows/deploy-pages.yml` and
+   * `pr-preview.yml`, because every deployed shell fetches this one shared data copy at
+   * the gh-pages site root. On a rename or fork, update this one string to match.
+   */
   dataBaseHref: '/warcraft-learner/data/specs/',
 };
