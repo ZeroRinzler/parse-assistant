@@ -3,6 +3,7 @@ import { EncounterPositions } from '../../../core/models/positioning.models';
 import { ActorTimeline } from './map.service';
 import {
   positionAt, toReferenceLocal, rowsToTimeline, topParsePoints, topParseTrails,
+  buildParseTimelines, parsePointsAt, parseTrailsOf,
 } from './map-draw';
 
 const timeline = (samples: ActorTimeline['samples']): ActorTimeline => ({ id: 1, samples });
@@ -85,5 +86,41 @@ describe('topParsePoints / topParseTrails', () => {
   it('selects an enemy reference by gameId', () => {
     const points = topParsePoints(positions, { kind: 'enemy', gameId: 100 }, 0);
     expect(points).toHaveLength(2);
+  });
+});
+
+describe('buildParseTimelines / parsePointsAt / parseTrailsOf', () => {
+  const positions: EncounterPositions = {
+    spec: 'X', encounter_id: 1, encounter_name: 'E', interval_s: 1.5, sample_count: 2,
+    parses: [
+      { report_code: 'a', fight_id: 1, player_name: 'P', duration_s: 6, interval_s: 1.5,
+        player: [[0, 500, 0, null, null], [6, 500, 0, null, null]],
+        enemies: [{ game_id: 100, name: 'Boss', is_boss: true, samples: [[0, 0, 0, null, null], [6, 0, 0, null, null]] }] },
+      { report_code: 'b', fight_id: 2, player_name: 'Q', duration_s: 6, interval_s: 1.5,
+        player: [[0, 500, 0, null, null], [6, 500, 0, null, null]],
+        enemies: [{ game_id: 100, name: 'Boss', is_boss: true, samples: [[0, 0, 0, null, null], [6, 0, 0, null, null]] }] },
+    ],
+  };
+
+  it('builds one player + reference timeline pair per parse, scaled to yards', () => {
+    const timelines = buildParseTimelines(positions, { kind: 'boss' });
+    expect(timelines).toHaveLength(2);
+    expect(timelines[0].player.samples[0].x).toBeCloseTo(5, 6); // 500 raw -> 5 yards
+    expect(timelines[0].ref.samples[0].x).toBeCloseTo(0, 6);
+  });
+
+  it('skips a parse whose selected reference is absent', () => {
+    expect(buildParseTimelines(positions, { kind: 'enemy', gameId: 999 })).toHaveLength(0);
+  });
+
+  it('parsePointsAt on prebuilt timelines matches the all-in-one topParsePoints', () => {
+    const timelines = buildParseTimelines(positions, { kind: 'boss' });
+    expect(parsePointsAt(timelines, 3)).toEqual(topParsePoints(positions, { kind: 'boss' }, 3));
+  });
+
+  it('parseTrailsOf on prebuilt timelines matches the all-in-one topParseTrails', () => {
+    const timelines = buildParseTimelines(positions, { kind: 'boss' });
+    expect(parseTrailsOf(timelines, 3, 1.5, 1.5, 0.5))
+      .toEqual(topParseTrails(positions, { kind: 'boss' }, 3, 1.5, 1.5, 0.5));
   });
 });

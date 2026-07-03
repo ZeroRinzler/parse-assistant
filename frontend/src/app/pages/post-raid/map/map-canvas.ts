@@ -12,15 +12,16 @@ import { FormatDurationPipe } from '../../../shared/pipes/format-duration-pipe';
 import { GameIconComponent } from '../../../shared/components/game-icon/game-icon';
 import { MapFeatureService } from './map.service';
 import {
-  RelPos, buildTrail, positionAt, toReferenceLocal, topParsePoints, topParseTrails,
+  RelPos, ParseTimelines, buildParseTimelines, buildTrail, positionAt, toReferenceLocal,
+  parsePointsAt, parseTrailsOf,
 } from './map-draw';
 
 const STEP_S = 0.5;
 const PRE_S = 6;
 const POST_S = 3;
-/** Playback timer cadence and how much window-time advances per tick (roughly real time). */
-const PLAY_TICK_MS = 60;
-const PLAY_DT_S = 0.06;
+/** Playback advances the scrubber by real elapsed wall-time, clamped per frame so a
+ *  backgrounded-then-resumed tab does not jump the scrubber by the whole elapsed gap. */
+const MAX_FRAME_DT_S = 0.1;
 
 /**
  * The positioning map canvas: the top-parse benchmark (where the best players of
@@ -48,7 +49,8 @@ export class MapCanvasComponent {
   protected readonly selector = signal<ReferenceSelector>({ kind: 'boss' });
   protected readonly scrubT = signal(0);
   protected readonly playing = signal(false);
-  private timer: ReturnType<typeof setInterval> | null = null;
+  private rafId: number | null = null;
+  private lastFrameMs = 0;
   private readonly canvas = viewChild<ElementRef<HTMLCanvasElement>>('canvas');
 
   protected readonly refEnemies = computed(() => {
@@ -74,10 +76,19 @@ export class MapCanvasComponent {
   protected readonly windowStart = computed(() => this.anchorTime() - PRE_S);
   protected readonly windowEnd = computed(() => this.anchorTime() + POST_S);
 
-  private readonly benchTrails = computed(() => {
+  /**
+   * Player + reference timelines per parse, rebuilt only when the bench or the reference
+   * changes - never per scrubbed frame. Scaling every stored row into a sample object is the
+   * expensive step, so caching it here (rather than inside the old topParse* helpers) is what
+   * keeps playback cheap: each frame just interpolates the cached timelines.
+   */
+  private readonly parseTimelines = computed<ParseTimelines[]>(() => {
     const positions = this.positions();
-    return positions ? topParseTrails(positions, this.selector(), this.anchorTime(), PRE_S, POST_S, STEP_S) : [];
+    return positions ? buildParseTimelines(positions, this.selector()) : [];
   });
+
+  private readonly benchTrails = computed(() =>
+    parseTrailsOf(this.parseTimelines(), this.anchorTime(), PRE_S, POST_S, STEP_S));
 
   private readonly liveRefId = computed(() => {
     const live = this.live();
@@ -95,10 +106,9 @@ export class MapCanvasComponent {
 
   /** Readout at the scrubbed moment: top-parse cluster + the player's offset from it. */
   protected readonly readout = computed(() => {
-    const positions = this.positions();
-    if (!positions) return null;
+    if (!this.positions()) return null;
     const t = this.scrubT();
-    const points = topParsePoints(positions, this.selector(), t);
+    const points = parsePointsAt(this.parseTimelines(), t);
     let centroid: { fwd: number; right: number } | null = null;
     if (points.length) {
       centroid = {
@@ -142,10 +152,18 @@ export class MapCanvasComponent {
     if (this.scrubT() >= this.windowEnd() - 1e-6) this.scrubT.set(this.windowStart());
     this.playing.set(true);
     this.stopTimer();
-    this.timer = setInterval(() => {
-      const next = this.scrubT() + PLAY_DT_S;
+    this.lastFrameMs = 0;
+    // Drive playback off requestAnimationFrame (vs a 60ms setInterval): it aligns redraws to
+    // the display refresh and pauses automatically when the tab is hidden. The scrubber
+    // advances by real elapsed wall-time, so speed stays ~1x independent of the frame rate.
+    const step = (nowMs: number): void => {
+      const dt = this.lastFrameMs ? Math.min((nowMs - this.lastFrameMs) / 1000, MAX_FRAME_DT_S) : 0;
+      this.lastFrameMs = nowMs;
+      const next = this.scrubT() + dt;
       this.scrubT.set(next >= this.windowEnd() ? this.windowStart() : next);
-    }, PLAY_TICK_MS);
+      this.rafId = requestAnimationFrame(step);
+    };
+    this.rafId = requestAnimationFrame(step);
   }
 
   protected pause(): void {
@@ -154,7 +172,7 @@ export class MapCanvasComponent {
   }
 
   private stopTimer(): void {
-    if (this.timer != null) { clearInterval(this.timer); this.timer = null; }
+    if (this.rafId != null) { cancelAnimationFrame(this.rafId); this.rafId = null; }
   }
 
   private livePlayerAt(t: number): RelPos | null {
@@ -176,8 +194,15 @@ export class MapCanvasComponent {
     const dpr = globalThis.devicePixelRatio || 1;
     const cssW = canvas.clientWidth || 600;
     const cssH = canvas.clientHeight || 420;
-    canvas.width = Math.round(cssW * dpr);
-    canvas.height = Math.round(cssH * dpr);
+    // Only resize the backing buffer when it actually changed: assigning width/height
+    // reallocates + clears the buffer, so doing it every frame (playback redraws ~60x/s)
+    // is wasted work. setTransform + clearRect below still run each frame.
+    const bufW = Math.round(cssW * dpr);
+    const bufH = Math.round(cssH * dpr);
+    if (canvas.width !== bufW || canvas.height !== bufH) {
+      canvas.width = bufW;
+      canvas.height = bufH;
+    }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, cssW, cssH);
 
@@ -227,8 +252,7 @@ export class MapCanvasComponent {
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
-    const positions = this.positions();
-    const benchNow = positions ? topParsePoints(positions, this.selector(), t) : [];
+    const benchNow = parsePointsAt(this.parseTimelines(), t);
     ctx.fillStyle = muted;
     for (const point of benchNow) { const [x, y] = toScreen(point); ctx.beginPath(); ctx.arc(x, y, 3, 0, 2 * Math.PI); ctx.fill(); }
     if (read?.centroid) {

@@ -112,30 +112,44 @@ function refRows(parse: ParsePositions, selector: ReferenceSelector): PosRow[] |
   return parse.enemies.find(enemy => enemy.game_id === selector.gameId)?.samples ?? null;
 }
 
-/** Each top parse's player position relative to the chosen reference at time `t`. */
-export function topParsePoints(positions: EncounterPositions, selector: ReferenceSelector, t: number): RelPos[] {
-  const out: RelPos[] = [];
+/**
+ * One top parse's player + chosen-reference timelines, already scaled to yards/radians.
+ * Building these is the expensive part (it maps every stored row into a sample object), and
+ * it depends only on the bench + selector, never on the scrubbed time - so the map canvas
+ * builds them once per positions/selector and reuses them across every playback frame
+ * (`buildParseTimelines`), instead of rebuilding them per frame as the old
+ * `topParsePoints` / `topParseTrails` did.
+ */
+export interface ParseTimelines { player: ActorTimeline; ref: ActorTimeline; }
+
+/** Scale each parse's player + reference rows into timelines once, for the chosen reference. */
+export function buildParseTimelines(positions: EncounterPositions, selector: ReferenceSelector): ParseTimelines[] {
+  const out: ParseTimelines[] = [];
   for (const parse of positions.parses) {
     const rows = refRows(parse, selector);
     if (!rows) continue;
-    const ref = positionAt(rowsToTimeline(-2, rows), t);
-    const player = positionAt(rowsToTimeline(-1, parse.player), t);
+    out.push({ player: rowsToTimeline(-1, parse.player), ref: rowsToTimeline(-2, rows) });
+  }
+  return out;
+}
+
+/** Each parse's player position relative to the reference at `t`, from prebuilt timelines. */
+export function parsePointsAt(timelines: ParseTimelines[], t: number): RelPos[] {
+  const out: RelPos[] = [];
+  for (const { player: playerTl, ref: refTl } of timelines) {
+    const ref = positionAt(refTl, t);
+    const player = positionAt(playerTl, t);
     if (ref && player && sameMap(player, ref)) out.push(toReferenceLocal(player, ref, t));
   }
   return out;
 }
 
-/** Each top parse's player trail relative to the chosen reference across the window. */
-export function topParseTrails(
-  positions: EncounterPositions, selector: ReferenceSelector,
-  t: number, pre: number, post: number, step: number,
+/** Each parse's player trail across the window, from prebuilt timelines. */
+export function parseTrailsOf(
+  timelines: ParseTimelines[], t: number, pre: number, post: number, step: number,
 ): RelPos[][] {
   const trails: RelPos[][] = [];
-  for (const parse of positions.parses) {
-    const rows = refRows(parse, selector);
-    if (!rows) continue;
-    const refTl = rowsToTimeline(-2, rows);
-    const playerTl = rowsToTimeline(-1, parse.player);
+  for (const { player: playerTl, ref: refTl } of timelines) {
     const trail: RelPos[] = [];
     for (let tt = t - pre; tt <= t + post + 1e-6; tt += step) {
       const ref = positionAt(refTl, tt);
@@ -145,6 +159,19 @@ export function topParseTrails(
     if (trail.length) trails.push(trail);
   }
   return trails;
+}
+
+/** Each top parse's player position relative to the chosen reference at time `t`. */
+export function topParsePoints(positions: EncounterPositions, selector: ReferenceSelector, t: number): RelPos[] {
+  return parsePointsAt(buildParseTimelines(positions, selector), t);
+}
+
+/** Each top parse's player trail relative to the chosen reference across the window. */
+export function topParseTrails(
+  positions: EncounterPositions, selector: ReferenceSelector,
+  t: number, pre: number, post: number, step: number,
+): RelPos[][] {
+  return parseTrailsOf(buildParseTimelines(positions, selector), t, pre, post, step);
 }
 
 /**
