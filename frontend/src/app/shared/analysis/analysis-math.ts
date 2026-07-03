@@ -61,9 +61,9 @@ export function isOutlierBeyond(value: number, mean: number, stddev: number, sig
   return Math.abs(value - mean) > sigmas * stddev;
 }
 
-/** True when `value` is more than one stddev BELOW the mean (the critical band). */
-export function isCriticallyBelow(value: number, mean: number, stddev: number): boolean {
-  return value - mean < -stddev;
+/** True when `value` sits more than `sigmas` stddev BELOW the mean (strict). Mirror of `isOutlierAbove`. */
+export function isOutlierBelow(value: number, mean: number, stddev: number, sigmas = 2): boolean {
+  return value < mean - sigmas * stddev;
 }
 
 /** Cast efficiency percentage given total downtime in gaps (clamped to >= 0). */

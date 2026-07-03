@@ -19,7 +19,7 @@ export interface UsesPerMin {
 /**
  * Per-cast-index hold target: a cooldown cast index where a majority of top parses
  * deliberately hold past the natural reset. `target_s` is the absolute clock median,
- * which the defensive plan surfaces for display.
+ * which the plan surfaces for display; `count`/`total_samples` drive the "X/Y hold" copy.
  */
 export interface HoldTarget {
   /** Absolute clock target (median cast time), for display ("hold to 3:20"). */
@@ -31,8 +31,9 @@ export interface HoldTarget {
 }
 
 /**
- * Rotation hold target: the base plus the prior-relative band the runtime compares the
- * player's own gap against (cascade-free). Every v2 rotation bench writes these.
+ * Hold target with the prior-relative band the runtime compares the player's own gap
+ * against (cascade-free: measured from the player's OWN prior cast, not a cumulative
+ * ideal schedule). Both the rotation and defensive benches write these.
  */
 export interface CdHoldTarget extends HoldTarget {
   /** Prior-relative hold past natural reset (median of actual - (prior + effective_cd_s)). */
@@ -45,9 +46,7 @@ export interface CdHoldTarget extends HoldTarget {
   effective_cd_s: number;
 }
 
-/** Defensive hold targets (display-only absolute clock). */
-export type HoldTargets = Record<string, HoldTarget>;
-/** Rotation hold targets (base + prior-relative band). */
+/** Rotation + defensive hold targets (base + prior-relative band). */
 export type CdHoldTargets = Record<string, CdHoldTarget>;
 
 export interface PerCdBenchmark {
@@ -63,16 +62,27 @@ export interface PerCdBenchmark {
   bl_pct: number;
   majority_hold: boolean;
   hold_targets: CdHoldTargets;
+  /** Total top parses sampled for this cooldown. */
   sample_count: number;
+  /**
+   * Parses (of `sample_count`) that used this cooldown at least once. Drives the
+   * use-share gate: the lost/unused critical and the first-cast-delay warning fire only
+   * when a majority of top parses actually used the ability, so a situational cd most
+   * top parses skip is not flagged as "unused".
+   */
+  used_sample_count: number;
 }
 
 export interface PerDefensiveBenchmark {
+  /** Total top parses sampled (NOT users-only, so `used_sample_count` is comparable). */
   sample_count: number;
+  /** Parses (of `sample_count`) that used this defensive at least once (use-share gate). */
+  used_sample_count: number;
   avg_first_cast_s: number;
   stddev_first_cast_s: number;
   avg_gap_s: number | null;
   stddev_gap_s: number | null;
-  hold_targets: HoldTargets;
+  hold_targets: CdHoldTargets;
   avg_uses: number;
   avg_uses_per_min: number;
   uses_per_min: UsesPerMin;

@@ -1,5 +1,5 @@
 import {
-  round, getOrInsert, groupByTime, isOutlierAbove, isOutlierBeyond, isCriticallyBelow,
+  round, getOrInsert, groupByTime, isOutlierAbove, isOutlierBeyond, isOutlierBelow,
   castEfficiencyPct, closestToZero, benchExpectedUses, fmtClock, sortBySeverity,
 } from './analysis-math';
 import { AnalysisFinding } from '../../core/models/analysis.models';
@@ -69,15 +69,18 @@ describe('isOutlierBeyond', () => {
   });
 });
 
-describe('isCriticallyBelow', () => {
+describe('isOutlierBelow', () => {
   const MEAN = 10;
   const STDDEV = 2;
-  // mean - stddev = 8 is the strict boundary.
-  it('flags a value more than one sigma below the mean', () => {
-    expect(isCriticallyBelow(7.9, MEAN, STDDEV)).toBe(true);
+  it('flags a value more than the default two sigma below the mean', () => {
+    // mean - 2*stddev = 6 is the strict boundary.
+    expect(isOutlierBelow(5.9, MEAN, STDDEV)).toBe(true);
+    expect(isOutlierBelow(6, MEAN, STDDEV)).toBe(false);
   });
-  it('does not flag a value exactly at the one-sigma boundary', () => {
-    expect(isCriticallyBelow(8, MEAN, STDDEV)).toBe(false);
+  it('honors an explicit sigma count (one sigma below)', () => {
+    // mean - stddev = 8 is the strict boundary.
+    expect(isOutlierBelow(7.9, MEAN, STDDEV, 1)).toBe(true);
+    expect(isOutlierBelow(8, MEAN, STDDEV, 1)).toBe(false);
   });
 });
 

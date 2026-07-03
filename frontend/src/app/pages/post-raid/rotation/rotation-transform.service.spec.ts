@@ -116,11 +116,25 @@ describe('buildCdBenchmark', () => {
       entry(7, 2, 120, 4, true, [7, 97]),
     ], 90);
     expect(bench.sample_count).toBe(2);
+    expect(bench.used_sample_count).toBe(2);
     expect(bench.avg_first_cast_s).toBe(6);
     expect(bench.avg_bl_offset_s).toBe(3);
     expect(bench.bl_pct).toBe(100);
     expect(bench.avg_uses).toBe(2);
     expect(bench.uses_per_min.avg).toBeGreaterThan(0);
+  });
+
+  it('counts used_sample_count as the parses with at least one use (use-share gate)', () => {
+    const TOTAL_PARSES = 2;
+    const USERS = 1;  // one parse used it, one never did
+    const usedParse = entry(5, 2, 120, 2, true, [5, 95]);
+    const unusedParse: CdSummary = {
+      name: 'Shadow Blades', total_uses: 0, first_cast_s: null, bl_aligned: false, bl_offset_s: null,
+      cast_times_s: [], hold_windows: [], cast_pattern: 'on_cooldown', fight_duration_s: 120,
+    };
+    const bench = buildCdBenchmark([usedParse, unusedParse], 90);
+    expect(bench.sample_count).toBe(TOTAL_PARSES);
+    expect(bench.used_sample_count).toBe(USERS);
   });
 
   it('leaves gap + BL fields null when not applicable', () => {

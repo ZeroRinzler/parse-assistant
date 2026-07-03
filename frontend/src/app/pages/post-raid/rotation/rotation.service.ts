@@ -30,7 +30,7 @@ import {
 import { WclEvent } from '../../../core/models/wcl.models';
 import { logWarn } from '../../../core/log';
 import {
-  isOutlierAbove, isOutlierBeyond, isCriticallyBelow, castEfficiencyPct,
+  isOutlierAbove, isOutlierBeyond, isOutlierBelow, castEfficiencyPct,
   closestToZero, benchExpectedUses, fmtClock, sortBySeverity,
 } from '../../../shared/analysis/analysis-math';
 import { ROTATION_DATA_SOURCE, RotationBench } from './rotation-data-source';
@@ -219,8 +219,13 @@ export function rulesFollowed(rules: RulebookRule[], casts: WclEvent[], fStart: 
 
 /* ----------------------------- offensive cooldown analysis (ported) ----------------------------- */
 
-/** Idle-time floor (s) below which low cast efficiency is not worth surfacing. */
-const MIN_IDLE_FOR_EFFICIENCY_S = 5;
+/** A cooldown's lost/unused + first-cast checks run only when at least this share of top parses used it. */
+const MIN_USE_SHARE_FRAC = 0.5;
+
+/** Fraction of sampled top parses that used a cooldown at least once. */
+function usedShare(bench: PerCdBenchmark): number {
+  return bench.used_sample_count / bench.sample_count;
+}
 
 /** The named inputs `analyzeRotationFindings` scans (replaces 7 positional args). */
 export interface RotationScanInput {
@@ -352,13 +357,16 @@ export function checkCastEfficiency(
     if (gapMs > bench.downtime_threshold_ms) totalDtMs += gapMs;
   }
   const totalDtS = totalDtMs / 1000;
-  if (totalDtS <= MIN_IDLE_FOR_EFFICIENCY_S) return null;
   const topE = bench.top_avg_efficiency;
   const topSD = bench.top_efficiency_stddev;
   const effPct = castEfficiencyPct(totalDtS, fightDurS);
-  const severity: Severity = isCriticallyBelow(effPct, topE, topSD) ? 'critical' : 'warning';
+  // Flag only when the player sits more than 1 sigma BELOW the top-parse efficiency; within
+  // the +/-1 sigma band, or above it, is fine, so beating the top parses never trips a
+  // warning. Low cast efficiency is a nudge, always a warning, never critical.
+  const WARN_SIGMAS_BELOW = 1;
+  if (!isOutlierBelow(effPct, topE, topSD, WARN_SIGMAS_BELOW)) return null;
   return {
-    severity, category: 'cast_efficiency',
+    severity: 'warning', category: 'cast_efficiency',
     label: 'Low cast efficiency',
     measured: { value: `${effPct.toFixed(1)}%`, unit: `top ${topE.toFixed(0)}%` },
     message: `${effPct.toFixed(1)}% cast efficiency, ${totalDtS.toFixed(1)}s idle. Top: ${topE.toFixed(0)}%.`,
@@ -390,10 +398,16 @@ export function analyzeOneCooldown(
   const { expected, floor } = benchExpectedUses(fightDurS, cdBench.uses_per_min);
 
   const issues: AnalysisFinding[] = [];
-  const lost = checkLostUses(cdName, actual, expected, floor, fightDurS);
-  if (lost) issues.push(lost);
-  const lateOpener = checkFirstCastDelay(cdName, castTimesMs, cdBench);
-  if (lateOpener) issues.push(lateOpener);
+  // Only judge lost/unused casts and a late opener when a MAJORITY of top parses used this
+  // cooldown. A situational cd most top parses skip has a noisy expected count (and, if no
+  // top parse cast it, a meaningless avg_first_cast_s of 0), so flagging it would be a false
+  // positive - the player is matching the top parses by NOT pressing it.
+  if (usedShare(cdBench) >= MIN_USE_SHARE_FRAC) {
+    const lost = checkLostUses(cdName, actual, expected, floor, fightDurS);
+    if (lost) issues.push(lost);
+    const lateOpener = checkFirstCastDelay(cdName, castTimesMs, cdBench);
+    if (lateOpener) issues.push(lateOpener);
+  }
   const bl = checkBloodlustAlignment(cdName, castTimesMs, cdBench, blTimeS, wantsBL);
   issues.push(...bl.findings);
   issues.push(...checkGaps(cdName, castTimesMs, cdBench));

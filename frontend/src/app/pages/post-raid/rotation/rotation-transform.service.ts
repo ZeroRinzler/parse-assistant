@@ -222,6 +222,7 @@ export function buildCdBenchmark(entries: CdSummary[], effectiveCd: number): Per
 
   return {
     sample_count: entries.length,
+    used_sample_count: entries.filter(entry => entry.total_uses > 0).length,
     avg_first_cast_s: firstCasts.length ? round((mean(firstCasts) ?? 0)) : 0,
     stddev_first_cast_s: firstCasts.length ? round((deviation(firstCasts) ?? 0)) : 0,
     avg_gap_s: gaps.length ? round((mean(gaps) ?? 0)) : null,

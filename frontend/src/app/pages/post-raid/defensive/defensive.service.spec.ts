@@ -99,7 +99,7 @@ describe('gapDelayFindings', () => {
   const AVG_GAP_S = 60;
   const STDDEV_GAP_S = 5;
   const benchWithGap = (overrides: Partial<PerDefensiveBenchmark> = {}): PerDefensiveBenchmark => ({
-    sample_count: 5, avg_first_cast_s: 10, stddev_first_cast_s: 2, avg_gap_s: AVG_GAP_S, stddev_gap_s: STDDEV_GAP_S,
+    sample_count: 5, used_sample_count: 5, avg_first_cast_s: 10, stddev_first_cast_s: 2, avg_gap_s: AVG_GAP_S, stddev_gap_s: STDDEV_GAP_S,
     hold_targets: {}, avg_uses: 2, avg_uses_per_min: 0.4, uses_per_min: { avg: 0.4, stddev: 0.05, min: 0.3, max: 0.5 },
     majority_hold: false, ...overrides,
   });
@@ -122,42 +122,94 @@ describe('gapDelayFindings', () => {
 });
 
 describe('holdSuggestionFindings', () => {
-  // Cast index 1 held to 100s with stddev 5 -> suggest when player < 95.
-  const TARGET_S = 100;
-  const STDDEV_S = 5;
+  const NAME = 'Cloak of Shadows';
+  // Prior-relative band (mirrors rotation): the top parses hold this cast HOLD_DELAY_S past the
+  // reset, and the runtime flags an under-hold only when the player's own gap from their prior
+  // cast is more than HOLD_BAND_S below that. Over-holding is tolerated.
+  const HELD_CAST_INDEX = 2;      // the second use (1-based key)
+  const EFFECTIVE_CD_S = 60;      // the defensive's cooldown (cadence zero-point)
+  const HOLD_DELAY_S = 40;        // top parses hold ~40s past the reset
+  const HOLD_BAND_S = 5;          // tolerance half-width -> flag below HOLD_DELAY_S - HOLD_BAND_S
+  const TARGET_CLOCK_S = 130;     // display-only median clock target ("hold to 2:10")
+  const HELD_COUNT = 6;           // "6 of 10 top parses hold" copy
+  const TOTAL_SAMPLED = 10;
+  const PRIOR_CAST_S = 10;
+  // A gap of exactly EFFECTIVE_CD_S + HOLD_DELAY_S - HOLD_BAND_S past the prior cast sits on the
+  // band edge; below it flags, at/above it does not.
+  const BAND_EDGE_S = PRIOR_CAST_S + EFFECTIVE_CD_S + (HOLD_DELAY_S - HOLD_BAND_S);
+  const UNDER_HELD_S = BAND_EDGE_S - 5;  // clearly below the band edge
+  const OVER_HELD_S = PRIOR_CAST_S + EFFECTIVE_CD_S + HOLD_DELAY_S + 20; // past the band (tolerated)
+
   const holdTargets: PerDefensiveBenchmark['hold_targets'] = {
-    1: { target_s: TARGET_S, stddev_s: STDDEV_S, count: 6, total_samples: 10 },
+    [HELD_CAST_INDEX]: {
+      target_s: TARGET_CLOCK_S, stddev_s: HOLD_BAND_S,
+      delay_s: HOLD_DELAY_S, delay_stddev_s: 3, band_s: HOLD_BAND_S, effective_cd_s: EFFECTIVE_CD_S,
+      count: HELD_COUNT, total_samples: TOTAL_SAMPLED,
+    },
   };
 
-  it('suggests a hold when the player pressed before the band', () => {
-    const EARLY_S = 80; // < 95
-    const out = holdSuggestionFindings('Cloak of Shadows', [EARLY_S], holdTargets);
+  it('suggests a hold when the player under-held vs the prior-relative band', () => {
+    const out = holdSuggestionFindings(NAME, [PRIOR_CAST_S, UNDER_HELD_S], holdTargets);
     expect(out).toHaveLength(1);
     expect(out[0]).toMatchObject({ severity: 'info', category: 'hold_suggestion' });
   });
 
   it('does not suggest at the band edge (strict boundary)', () => {
-    const AT_BAND_S = TARGET_S - STDDEV_S; // 95, not strictly below
-    expect(holdSuggestionFindings('Cloak of Shadows', [AT_BAND_S], holdTargets)).toEqual([]);
+    expect(holdSuggestionFindings(NAME, [PRIOR_CAST_S, BAND_EDGE_S], holdTargets)).toEqual([]);
+  });
+
+  it('tolerates over-holding (a later-than-band press is fine)', () => {
+    expect(holdSuggestionFindings(NAME, [PRIOR_CAST_S, OVER_HELD_S], holdTargets)).toEqual([]);
+  });
+
+  it('skips index 0 - no prior cast to measure a gap against', () => {
+    const FIRST_CAST_INDEX = 1;
+    const PLAYER_FIRST_S = 80;
+    const firstOnly: PerDefensiveBenchmark['hold_targets'] = {
+      [FIRST_CAST_INDEX]: {
+        target_s: TARGET_CLOCK_S, stddev_s: HOLD_BAND_S,
+        delay_s: HOLD_DELAY_S, delay_stddev_s: 3, band_s: HOLD_BAND_S, effective_cd_s: EFFECTIVE_CD_S,
+        count: HELD_COUNT, total_samples: TOTAL_SAMPLED,
+      },
+    };
+    expect(holdSuggestionFindings(NAME, [PLAYER_FIRST_S], firstOnly)).toEqual([]);
   });
 
   it('skips a cast index the player never reached', () => {
-    expect(holdSuggestionFindings('Cloak of Shadows', [], holdTargets)).toEqual([]);
+    expect(holdSuggestionFindings(NAME, [PRIOR_CAST_S], holdTargets)).toEqual([]);
   });
 });
 
 describe('analyzeOneDefensive', () => {
   const bench: PerDefensiveBenchmark = {
-    sample_count: 10, avg_first_cast_s: 10, stddev_first_cast_s: 2, avg_gap_s: 60, stddev_gap_s: 5,
+    sample_count: 10, used_sample_count: 10, avg_first_cast_s: 10, stddev_first_cast_s: 2, avg_gap_s: 60, stddev_gap_s: 5,
     hold_targets: {}, avg_uses: 2, avg_uses_per_min: 0.4, uses_per_min: { avg: 0.4, stddev: 0.05, min: 0.3, max: 0.5 },
     majority_hold: false,
   };
   const player = (overrides: Partial<PlayerDefensive>): PlayerDefensive =>
     ({ name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS, cooldown: 120, uses: 0, cast_times_s: [], windows: [], ...overrides });
+  const FIGHT_DUR_S = 300;
 
   it('flags a never-used defensive as a critical lost cooldown', () => {
     const out = analyzeOneDefensive(player({ uses: 0, cast_times_s: [] }), bench, 300);
     expect(out[0]).toMatchObject({ severity: 'critical', category: 'lost_cooldown' });
+  });
+
+  // used_sample_count / sample_count below MIN_USE_SHARE_FRAC (0.5) -> a situational defensive.
+  const TOTAL_SAMPLED = 10;
+  const MINORITY_USERS = 3;       // 3/10 = 30% < 50%
+  const minorityUse: PerDefensiveBenchmark = { ...bench, sample_count: TOTAL_SAMPLED, used_sample_count: MINORITY_USERS };
+
+  it('does not flag an unused defensive that only a minority of top parses use (use-share gate)', () => {
+    // The player matching the top parses by not pressing it is not a lost cast.
+    expect(analyzeOneDefensive(player({ uses: 0, cast_times_s: [] }), minorityUse, FIGHT_DUR_S)).toEqual([]);
+  });
+
+  it('does not flag a late first use of a minority-use defensive (use-share gate)', () => {
+    // First use is well past avg 10 + 2*stddev 2 = 14s, but the first-cast check is gated off.
+    const LATE_FIRST_S = 40;
+    const out = analyzeOneDefensive(player({ uses: 1, cast_times_s: [LATE_FIRST_S] }), minorityUse, FIGHT_DUR_S);
+    expect(out.some(finding => finding.category === 'cooldown_delay')).toBe(false);
   });
 
   it('returns a success (no issues) when usage matches', () => {
@@ -178,7 +230,7 @@ describe('analyzeOneDefensive', () => {
 describe('analyzeDefensiveFindings', () => {
   const bench: Record<string, PerDefensiveBenchmark> = {
     'Cloak of Shadows': {
-      sample_count: 10, avg_first_cast_s: 10, stddev_first_cast_s: 2,
+      sample_count: 10, used_sample_count: 10, avg_first_cast_s: 10, stddev_first_cast_s: 2,
       avg_gap_s: 60, stddev_gap_s: 5, hold_targets: {},
       avg_uses: 2, avg_uses_per_min: 0.4, uses_per_min: { avg: 0.4, stddev: 0.05, min: 0.3, max: 0.5 },
       majority_hold: false,
@@ -377,7 +429,7 @@ describe('buildDefensivePlanRows', () => {
       ability_icons: { [CLOAK_OF_SHADOWS]: { icon: 'cloak', name: 'Cloak of Shadows' } },
       per_defensive_benchmarks: {
         'Cloak of Shadows': {
-          sample_count: 5, avg_first_cast_s: 12, stddev_first_cast_s: 2, avg_gap_s: null, stddev_gap_s: null,
+          sample_count: 5, used_sample_count: 5, avg_first_cast_s: 12, stddev_first_cast_s: 2, avg_gap_s: null, stddev_gap_s: null,
           hold_targets: {}, avg_uses: 2, avg_uses_per_min: 0.4, uses_per_min: { avg: 0.4, stddev: 0.05, min: 0.3, max: 0.5 },
           majority_hold: false,
         },
@@ -397,7 +449,7 @@ function fullBench(): DefensiveBench {
     spec: 'SubtletyRogue', encounter_id: 1, encounter_name: 'Boss', sample_count: 5,
     per_defensive_benchmarks: {
       'Cloak of Shadows': {
-        sample_count: 5, avg_first_cast_s: 10, stddev_first_cast_s: 2, avg_gap_s: 60, stddev_gap_s: 5,
+        sample_count: 5, used_sample_count: 5, avg_first_cast_s: 10, stddev_first_cast_s: 2, avg_gap_s: 60, stddev_gap_s: 5,
         hold_targets: {}, avg_uses: 2, avg_uses_per_min: 0.4, uses_per_min: { avg: 0.4, stddev: 0.05, min: 0.3, max: 0.5 },
         majority_hold: false,
       },

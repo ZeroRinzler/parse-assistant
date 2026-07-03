@@ -106,23 +106,24 @@ Each card is a self-contained vertical slice (see the layer rules above); the po
 
 1. The shell accepts a WCL report code + fight ID + player actor ID, fetches the report, and resolves spec from `playerDetails` (the reliable source since the Midnight `actor.subType` change - see WCL API quirks in the warcraft-wcl-data skill). It passes `spec`/`encounterId`/`report`/`fight`/`player` as inputs to each feature card; it does no domain analysis itself.
 2. Each `*FeatureService` reads its prepared bench via its `*DataSource` (the tailored file in prod, or the live `*TransformService` under `useLiveTransform`) and fetches the player's own log (`Casts`/`Buffs`/`DamageDone`/`DamageTaken`) via the cached `WclApiService`, then computes its slice with its colocated pure functions:
-   - **Rotation** (`rotation.service.ts`) - per offensive cooldown: lost casts (`expected` from top-parse `uses_per_min`), bloodlust alignment (gated by measured `bl_pct >= 50`, not the rulebook flag), first-cast delay (>2σ), held-past-reset (>2σ above `avg_gap_s`, skipped when null), hold suggestions (a majority of top parsers hold past the prior cast + cooldown; flagged when the player's own prior-relative gap falls below the consensus band), cast efficiency (downtime vs p90), and success. Plus the **rule engine** (`cast_without_prior`, `hold_cooldown_for_anchor`) and the per-cooldown comparison table. Findings split into **Needs Improvement** / **Timing Suggestions** / **Doing Well**.
-   - **Defensive** (`defensive.service.ts`) - lost/held/hold-suggestion findings per defensive plus **Defensive Windows**: the consensus high-mitigation windows where most top parses use a rulebook defensive on a big incoming-damage hit, scoring whether the player covered each (and mitigated well) plus a window-miss finding for uncovered windows.
+   - **Rotation** (`rotation.service.ts`) - per offensive cooldown: lost casts (`expected` from top-parse `uses_per_min`; the lost-cast and first-cast checks are gated on a use-share majority - `used_sample_count / sample_count >= MIN_USE_SHARE_FRAC` - so a situational cd most top parses skip is never flagged as "unused"), bloodlust alignment (gated by measured `bl_pct >= 50`, not the rulebook flag), first-cast delay (>2σ), held-past-reset (>2σ above `avg_gap_s`, skipped when null), hold suggestions (a majority of top parsers hold past the prior cast + cooldown; flagged when the player's own prior-relative gap falls below the consensus band), cast efficiency (downtime past the p90 floor; warns only when the player is >1σ **below** the top-parse efficiency - never critical, so beating the top parses never trips it), and success. Plus the **rule engine** (`cast_without_prior`, `hold_cooldown_for_anchor`) and the per-cooldown comparison table. Findings split into **Needs Improvement** / **Timing Suggestions** / **Doing Well**.
+   - **Defensive** (`defensive.service.ts`) - lost/held/hold-suggestion findings per defensive (the lost/first-cast checks share the rotation use-share gate; hold suggestions are prior-relative, using the same cascade-free `delay_s`/`band_s` bench fields as rotation - the hold-target cast index is 1-based on both sides) plus **Defensive Windows**: the consensus windows where most top parses use a rulebook defensive on a big incoming-damage hit, scoring whether the player covered each (and mitigated well) plus a window-miss finding for uncovered windows.
    - **Burst** (`burst.service.ts`) - **Burst Windows**: the recurring damage-density bursts (measured from DamageDone, not cooldown durations) that most top parses share, with the player's window damage computed from their own log.
    - **Gear** (`gear.service.ts`) - the player's combatant-info gear (talents/trinkets/enchants) vs the bench; bench-only on `/pre`.
    - **Map** (`map.service.ts`) - `MapFeatureService` owns the positioning panel state; other cards emit an `openMap` output the page forwards to it.
 3. Ability art is resolved from the report's `masterData.abilities`, since WCL removed `gameData.spell()`.
 
-### Pre-fight gear check (`/pre`)
-Entirely client-side. No backend calls.
+### Pre-fight plan (`/pre`)
+Entirely client-side and **bench-only** - no character input, no per-player WCL call. The page is a spec + encounter selector; every card reads only its ingested tailored file via its `*DataSource`.
 
-1. User enters a character name/server/region (or WCL character URL).
-2. `wcl-api.ts` queries `characterData.character.encounterRankings(includeCombatantInfo: true)` directly on WCL for the selected encounter - extracts gear, talents from the player's most recent ranked kill.
-3. Bench data (talent distributions, trinket usage, enchant usage) loaded from the static per-slice gear tailored file `/data/specs/{spec}/gear/{enc_id}.json`.
-4. A unified gear card rendered client-side (shared `wl-gear-section` in bench-only mode):
-   - **Talents** - compares player's `v2:` talent fingerprint against top-parse distribution.
-   - **Trinkets** - per-slot (12 = Trinket 1, 13 = Trinket 2) comparison.
-   - **Enchants** - per-slot; missing enchants on high-consensus slots (>=70% of top parsers) flagged as warnings.
+1. User picks a class, spec, and encounter (the last spec is restored from localStorage; the encounter is re-selected each visit).
+2. Each feature card loads its bench-only slice from `/data/specs/{spec}/{slice}/{enc_id}.json`: the cooldown plan (rotation), the defensive plan, the bench burst windows, the gear consensus, and the top-parse position trails (map).
+3. The gear card (shared `wl-gear-section` in bench-only mode) shows the top-parse consensus with no player overlay:
+   - **Talents** - the top-parse `v2:` talent-build distribution.
+   - **Trinkets** - the two distinct most-used trinkets (merged across slots 12/13).
+   - **Enchants** - the consensus enchant per slot (slots where >= 40% of top parsers enchant).
+
+(The post-raid gear card is the one that compares a specific player's combatant-info gear against this bench; the missing-enchant warning at >= 70% consensus lives there.)
 
 ### Encounter selection
 Encounters loaded from `/data/specs/{spec}/encounters.json` (static file). Filtered client-side to:
@@ -133,24 +134,25 @@ Encounters loaded from `/data/specs/{spec}/encounters.json` (static file). Filte
 
 > **Reference the code constant by name, never copy its literal value (hard requirement).** Each
 > threshold below names the `const` it comes from (`HOLD_CONSENSUS_FRAC`, `CLUSTER_MIN_FRAC`,
-> `WINDOW_MIN_DMG_PCT`, ...); the number lives in code so the doc stays correct when the constant is
+> `MIN_USE_SHARE_FRAC`, ...); the number lives in code so the doc stays correct when the constant is
 > tuned. Applies to the existing rows and every future one - cite the name, not the magic value.
 
 | Threshold | Derived from | Condition |
 |---|---|---|
-| First-cast delay | `avg_first_cast_s + 2σ` across top parses | Always runs when a bench entry exists (field is required, never null) |
+| Use-share gate (lost/unused + first-cast) | `used_sample_count / sample_count` per cd/defensive | The lost-cast/unused critical and the first-cast-delay check run only when at least `MIN_USE_SHARE_FRAC` of top parses used the ability - a situational cd most top parses skip is not flagged. Applies to both the rotation and defensive slices |
+| First-cast delay | `avg_first_cast_s + 2σ` across top parses | Runs when a bench entry exists AND the use-share gate passes (field is required, never null) |
 | Gap between CD uses | `avg_gap_s + 2σ` across top parses | Skipped when null - legitimately absent for single-cast CDs (cooldown > fight length) |
-| Hold suggestion trigger | Cast index where at least `HOLD_CONSENSUS_FRAC` of samples delay more than `HOLD_THRESHOLD_S` past the **prior actual cast + cooldown**; fires only when the player's own prior-relative gap is below `delay_s - band_s` (`band_s = max(σ, HOLD_BAND_MIN_S)`). Over-holding is not flagged | None emitted when `hold_targets` is empty (no parsers held at that index) |
+| Hold suggestion trigger | Cast index (1-based) where at least the consensus fraction of TOTAL sampled parses delay more than `HOLD_THRESHOLD_S` past the **prior actual cast + cooldown**; fires only when the player's own prior-relative gap is below `delay_s - band_s` (`band_s = max(σ, HOLD_BAND_MIN_S)`). Over-holding is not flagged. Rotation and defensive share this prior-relative shape (rotation `HOLD_CONSENSUS_FRAC`, defensive `HOLD_TRIGGER_FRAC`) | None emitted when `hold_targets` is empty (no parsers held at that index) |
 | Downtime gap floor | `DOWNTIME_PERCENTILE` of pooled `cast_gap_list_ms` | Always runs when bench exists (`downtime_threshold_ms` is required, defaults to `DEFAULT_DOWNTIME_THRESHOLD_MS`) |
-| Efficiency warning band | <1σ below Top average -> warning; deeper -> critical | Always runs when bench exists (`top_avg_efficiency` / `top_efficiency_stddev` are required) |
+| Efficiency warning band | more than 1σ **below** Top average -> warning | Runs when bench exists (`top_avg_efficiency` / `top_efficiency_stddev` are required). Never critical; within ±1σ or above the top average emits nothing |
 | BL timing | `avg_bl_offset_s ± 2σ` | Skipped when null - legitimately absent when a CD is never BL-aligned |
 
 > **Stddev is always emitted by ingestion alongside its mean** (`stdev()` returns 0 for a single sample), so all required `stddev_*` fields are always a number when the bench entry exists. The gap and BL-offset fields (`avg_gap_s`, `stddev_gap_s`, `avg_bl_offset_s`, `stddev_bl_offset_s`) are the only nullable bench fields - they are legitimately null when the statistic does not apply (single-cast CD or CD never aligned with BL). All other bench fields are required; if they are absent that is an ingestion problem, not an analysis problem.
 
 | Threshold | Derived from | Condition |
 |---|---|---|
-| Burst window clustering | damage-density bursts within `CLUSTER_MERGE_S` merged; present in at least `CLUSTER_MIN_FRAC` of parses | n/a |
-| Defensive window clustering | per-defensive grouping within `CLUSTER_MERGE_S`; present in at least `CONSENSUS_FRAC` of distinct parses AND median damage-taken share at least `WINDOW_MIN_DMG_PCT` of the parse total | n/a |
+| Burst window clustering | damage-density bursts within `CLUSTER_MERGE_S` merged; present in at least `CLUSTER_MIN_FRAC` of DISTINCT parses (each parse deduped to its biggest window in a cluster, so two dense runs from one parse count once) | n/a |
+| Defensive window clustering | per-defensive grouping within `CLUSTER_MERGE_S`; present in at least `CONSENSUS_FRAC` of distinct parses (usage consensus; the window's damage-taken share is reported for context but does not gate, so unavoidable hits top players tank through still surface) | n/a |
 | Comparison table (uses/min) | `top_stddev_uses_per_min` per CD | ±0.05 |
 | Comparison table (first cast) | `top_stddev_first_cast_s` per CD | ±3s |
 
@@ -165,8 +167,8 @@ Encounters loaded from `/data/specs/{spec}/encounters.json` (static file). Filte
 
 **Across parses** (`clusterParseWindows`):
 1. `groupByTime(windows, CLUSTER_MERGE_S)` - greedy: windows within `CLUSTER_MERGE_S` of the cluster median go in the same group.
-2. Discard clusters present in fewer than max(2, `CLUSTER_MIN_FRAC` × samples) - a majority ("most parses share it").
-3. Surface CDs and abilities present in at least `MEMBER_MAJORITY_FRAC` of member parses.
+2. `dedupeByParse` - keep one window per `parse_index` (the biggest by `window_damage`), so a parse that lands two dense runs in the cluster is counted once. Then discard clusters present in fewer than max(2, `CLUSTER_MIN_FRAC` × samples) DISTINCT parses - a majority ("most parses share it"). All cluster stats are computed over the deduped members.
+3. Surface CDs and abilities present in at least `MEMBER_MAJORITY_FRAC` of member (deduped) parses.
 4. `window_length_s` = mean of member (measured) window lengths.
 5. Emits **absolute damage** stats (`dmg_avg`/`dmg_min`/`dmg_max`/`dmg_stddev`, per-ability `avg_damage`/`min_damage`/`max_damage`) - **not** percentages. The player vs top-parse comparison and the Burst/Defensive Windows cards compare raw damage so the numbers stay meaningful on progression (a wipe's short fight-total would otherwise inflate every window's share).
 
@@ -178,7 +180,7 @@ Encounters loaded from `/data/specs/{spec}/encounters.json` (static file). Filte
 
 **Across parses** (`clusterDefensiveWindows`):
 1. Group by defensive name, then `groupByTime(group, CLUSTER_MERGE_S)`.
-2. Keep a window only where at least `CONSENSUS_FRAC` of **distinct** parses defended (max(2, `CONSENSUS_FRAC` × samples)) AND the cluster's median `pct_of_total` is at least `WINDOW_MIN_DMG_PCT` (the "mitigate a lot" gate - drops habitual zero-damage presses).
+2. Keep a window where at least `CONSENSUS_FRAC` of **distinct** parses defended (max(2, `CONSENSUS_FRAC` × samples)). Consensus is on defensive usage alone: `dmg_pct_avg` (the window's damage-taken share) is reported per window for context but does not gate, so unavoidable group-wide hits that top players tank through without a big personal-damage share still surface.
 3. Each cluster: `defensive_name`, `spell_id`, `window_length_s`, absolute damage stats (`dmg_avg`/`dmg_min`/`dmg_max`/`dmg_stddev`), `dmg_pct_avg`, ability breakdown of damage sources, and `ref_game_id` (the gameID of the enemy dealing the window's main damage). The runtime then scores the player on covering each window (and mitigating well) and emits a window-miss finding for uncovered windows.
 
 Both cluster functions share the `groupByTime()` helper.

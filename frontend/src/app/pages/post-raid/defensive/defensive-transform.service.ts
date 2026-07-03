@@ -17,7 +17,7 @@ import { DataFileApiService } from '../../../core/services/data-file-api';
 import { WclEvent, ParseRanking, WclReport } from '../../../core/models/wcl.models';
 import { RulebookDefensive } from '../../../core/models/rulebook.models';
 import { BurstWindow, TopDefensiveSummary } from '../../../core/models/analysis.models';
-import { PerDefensiveBenchmark } from '../../../core/models/encounter.models';
+import { PerDefensiveBenchmark, CdHoldTargets } from '../../../core/models/encounter.models';
 import { logWarn } from '../../../core/log';
 import { mean, median, deviation } from 'd3-array';
 import { round, groupByTime, getOrInsert } from '../../../shared/analysis/analysis-math';
@@ -44,10 +44,10 @@ const CLUSTER_MERGE_S = 20;
 const HOLD_TRIGGER_FRAC = 0.4;
 /** A gap beyond this past the expected on-cooldown time counts as a deliberate hold. */
 const HOLD_THRESHOLD_S = 8;
+/** Floor on the runtime hold tolerance band half-width, so a tight cluster still tolerates jitter. */
+const HOLD_BAND_MIN_S = 5.0;
 /** Keep only the top-N damage sources in a window's ability breakdown (UI row cap). */
 const ABILITY_BREAKDOWN_TOP_N = 6;
-/** Default defensive cooldown (s) when the rulebook entry omits one. */
-const DEFAULT_DEFENSIVE_COOLDOWN_S = 90;
 
 /* ----------------------------- pure helpers (own math) ----------------------------- */
 
@@ -96,7 +96,7 @@ export interface ParseDefensiveSummary {
   first_cast_s: number | null;
   uses: number;
   fight_duration_s: number;
-  hold_windows: { cast_index: number; actual_s: number }[];
+  hold_windows: { cast_index: number; actual_s: number; delay_s: number }[];
   cast_pattern: 'hold' | 'on_cooldown';
 }
 
@@ -130,7 +130,7 @@ export function summarizeDefensiveCasts(
   const summaries: ParseDefensiveSummary[] = [];
   for (const defensive of defensives) {
     const spellId = defensive.spell_id;
-    const cooldownS = defensive.cooldown ?? DEFAULT_DEFENSIVE_COOLDOWN_S;
+    const cooldownS = defensive.cooldown;
     const castTimes: number[] = [];
 
     for (const buffWindow of (buffWindows.get(spellId) ?? [])) castTimes.push(round(buffWindow[0]));
@@ -144,11 +144,15 @@ export function summarizeDefensiveCasts(
     }
 
     castTimes.sort((a, b) => a - b);
-    const holdWindows: { cast_index: number; actual_s: number }[] = [];
+    // cast_index is 1-based (the ordinal of the held cast), matching the rotation slice and the
+    // runtime's `parseInt(idx) - 1` decode. delay_s is the prior-relative hold past the natural
+    // reset, so the runtime compares the player's own gap (cascade-free).
+    const holdWindows: { cast_index: number; actual_s: number; delay_s: number }[] = [];
     for (let castIndex = 1; castIndex < castTimes.length; castIndex++) {
       const expectedS = castTimes[castIndex - 1] + cooldownS;
       const actualS = castTimes[castIndex];
-      if (actualS - expectedS > HOLD_THRESHOLD_S) holdWindows.push({ cast_index: castIndex, actual_s: round(actualS) });
+      const delayS = actualS - expectedS;
+      if (delayS > HOLD_THRESHOLD_S) holdWindows.push({ cast_index: castIndex + 1, actual_s: round(actualS), delay_s: round(delayS) });
     }
 
     if (castTimes.length) {
@@ -315,30 +319,52 @@ export function clusterDefensiveWindows(windows: ParseDefWindow[], sampleCount: 
   return result.sort((a, b) => a.time_s - b.time_s);
 }
 
-/** Cast positions where >= 40% of parsers held, with the median delay target. */
-export function buildHoldTargets(summaries: ParseDefensiveSummary[]): PerDefensiveBenchmark['hold_targets'] {
-  const holdByCastIdx = new Map<number, number[]>();
+/**
+ * Cast indices where a majority of parses deliberately held past the natural reset, with the
+ * prior-relative band the runtime compares the player's own gap against (mirrors the rotation
+ * slice, cascade-free). `effectiveCd` is the defensive's cooldown (the cadence zero-point);
+ * `totalParses` is every sampled parse (not users-only), so the consensus denominator and the
+ * "X/Y hold" copy match rotation.
+ */
+export function buildHoldTargets(
+  summaries: ParseDefensiveSummary[], effectiveCd: number, totalParses: number,
+): CdHoldTargets {
+  const byIndex = new Map<number, { actuals: number[]; delays: number[] }>();
   for (const summary of summaries) {
-    for (const holdWindow of summary.hold_windows) {
-      getOrInsert(holdByCastIdx, holdWindow.cast_index, () => []).push(holdWindow.actual_s);
+    for (const hold of summary.hold_windows) {
+      const bucket = getOrInsert(byIndex, hold.cast_index, () => ({ actuals: [] as number[], delays: [] as number[] }));
+      bucket.actuals.push(hold.actual_s);
+      bucket.delays.push(hold.delay_s);
     }
   }
-  const holdTargets: PerDefensiveBenchmark['hold_targets'] = {};
-  for (const [castIndex, times] of holdByCastIdx.entries()) {
-    if (times.length >= Math.max(2, summaries.length * HOLD_TRIGGER_FRAC)) {
+  const holdTargets: CdHoldTargets = {};
+  for (const [castIndex, { actuals, delays }] of byIndex.entries()) {
+    if (actuals.length >= Math.max(2, totalParses * HOLD_TRIGGER_FRAC)) {
+      const delayStddev = round(deviation(delays) ?? 0);
       holdTargets[String(castIndex)] = {
-        target_s: round((median(times) ?? 0)),
-        stddev_s: round((deviation(times) ?? 0)),
-        count: times.length,
-        total_samples: summaries.length,
+        target_s: round((median(actuals) ?? 0)),
+        stddev_s: round((deviation(actuals) ?? 0)),
+        delay_s: round((median(delays) ?? 0)),
+        delay_stddev_s: delayStddev,
+        band_s: round(Math.max(delayStddev, HOLD_BAND_MIN_S)),
+        effective_cd_s: round(effectiveCd),
+        count: actuals.length,
+        total_samples: totalParses,
       };
     }
   }
   return holdTargets;
 }
 
-/** Per-defensive benchmark from a defensive's per-parse summaries (excludes zero-use parses from uses-per-min). */
-export function buildDefensiveBenchmark(summaries: ParseDefensiveSummary[]): PerDefensiveBenchmark {
+/**
+ * Per-defensive benchmark from a defensive's per-parse summaries. `summaries` is users-only
+ * (parses that pressed it at least once); `totalParses` is every sampled parse, so
+ * `sample_count` (total) and `used_sample_count` (users) drive the runtime use-share gate.
+ * `effectiveCd` is the defensive's cooldown (the hold-band cadence zero-point).
+ */
+export function buildDefensiveBenchmark(
+  summaries: ParseDefensiveSummary[], effectiveCd: number, totalParses: number,
+): PerDefensiveBenchmark {
   const firstCasts = summaries.map(summary => summary.first_cast_s).filter((value): value is number => value != null);
   const gaps: number[] = [];
   for (const summary of summaries) {
@@ -353,12 +379,13 @@ export function buildDefensiveBenchmark(summaries: ParseDefensiveSummary[]): Per
     .map(summary => Math.round(summary.uses / summary.fight_duration_s * 60 * 1000) / 1000);
 
   return {
-    sample_count: summaries.length,
+    sample_count: totalParses,
+    used_sample_count: summaries.length,
     avg_first_cast_s: firstCasts.length ? round((mean(firstCasts) ?? 0)) : 0,
     stddev_first_cast_s: firstCasts.length ? round((deviation(firstCasts) ?? 0)) : 0,
     avg_gap_s: gaps.length ? round((mean(gaps) ?? 0)) : null,
     stddev_gap_s: gaps.length ? round((deviation(gaps) ?? 0)) : null,
-    hold_targets: buildHoldTargets(summaries),
+    hold_targets: buildHoldTargets(summaries, effectiveCd, totalParses),
     avg_uses: summaries.length ? round(mean(summaries.map(summary => summary.uses)) ?? 0) : 0,
     avg_uses_per_min: usesPerMinList.length ? Math.round((mean(usesPerMinList) ?? 0) * 100) / 100 : 0,
     uses_per_min: benchUsesPerMin.length
@@ -385,13 +412,16 @@ export function aggregateDefensiveBenchmarks(
     }
   }
 
+  // Every sampled parse contributes one array (possibly empty for a defensive it never used),
+  // so the array count is the total parse count - the use-share denominator for each defensive.
+  const totalParses = perParseSummaries.length;
   const perDefensiveBenchmarks: Record<string, PerDefensiveBenchmark> = {};
-  for (const [name, summaries] of byName.entries()) perDefensiveBenchmarks[name] = buildDefensiveBenchmark(summaries);
-
   const topDefensivesSummary: TopDefensiveSummary[] = [];
+  // Iterate the rulebook defensives so the name, cooldown, and spell id come from one source.
   for (const defensive of defensives) {
     const summaries = byName.get(defensive.name);
-    if (!summaries?.length) continue;
+    if (!summaries?.length) continue; // no sampled parse used this defensive
+    perDefensiveBenchmarks[defensive.name] = buildDefensiveBenchmark(summaries, defensive.cooldown, totalParses);
     const uses = summaries.map(summary => summary.uses);
     topDefensivesSummary.push({
       spell_id: defensive.spell_id,

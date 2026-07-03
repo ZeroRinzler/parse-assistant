@@ -70,6 +70,14 @@ export interface DefensivePlanRow {
 
 const dmgOf = (event: WclEvent): number => (event.amount || 0) + (event.absorbed || 0);
 
+/** A defensive's lost/unused + first-cast checks run only when at least this share of top parses used it. */
+const MIN_USE_SHARE_FRAC = 0.5;
+
+/** Fraction of sampled top parses that used a defensive at least once. */
+function defensiveUsedShare(bench: PerDefensiveBenchmark): number {
+  return bench.used_sample_count / bench.sample_count;
+}
+
 /* ----------------------------- player defensives ----------------------------- */
 
 /** One player defensive usage span (measured buff window or a point cast). */
@@ -166,20 +174,27 @@ export function gapDelayFindings(
   return findings;
 }
 
-/** Hold suggestions where the player pressed a cast index earlier than the top-parse hold band. */
+/**
+ * Hold suggestions where the player pressed a cast earlier than the top-parse consensus.
+ * Prior-relative (cascade-free, like the rotation slice): compare the player's own gap from
+ * their previous cast against the band. Flags only an under-hold clearly below the band;
+ * over-holding is tolerated.
+ */
 export function holdSuggestionFindings(
   name: string, castTimesS: number[], holdTargets: PerDefensiveBenchmark['hold_targets'],
 ): AnalysisFinding[] {
   const findings: AnalysisFinding[] = [];
+  if (!castTimesS.length) return findings;
   for (const [idxStr, target] of Object.entries(holdTargets)) {
-    const castIndex = parseInt(idxStr, 10) - 1;
-    if (castIndex >= castTimesS.length) continue;
-    const playerT = castTimesS[castIndex];
-    if (playerT < target.target_s - target.stddev_s) {
+    const index = parseInt(idxStr, 10) - 1;
+    // Need a prior cast to measure a prior-relative gap; index 0 has none.
+    if (index < 1 || index >= castTimesS.length) continue;
+    const playerDelay = castTimesS[index] - castTimesS[index - 1] - target.effective_cd_s;
+    if (playerDelay < target.delay_s - target.band_s) {
       findings.push({ severity: 'info', category: 'hold_suggestion',
-        timestamp_ms: Math.round(playerT * 1000),
-        measured: { value: fmtClock(playerT), unit: `top ~${fmtClock(target.target_s)}` },
-        message: `${name} use ${idxStr} at ${fmtClock(playerT)}. ${target.count}/${target.total_samples} top parses hold to ${fmtClock(target.target_s)}.`,
+        timestamp_ms: Math.round(castTimesS[index] * 1000),
+        measured: { value: fmtClock(castTimesS[index]), unit: `top ~${fmtClock(target.target_s)}` },
+        message: `${name} use ${idxStr} at ${fmtClock(castTimesS[index])}. ${target.count}/${target.total_samples} top parses hold to ${fmtClock(target.target_s)}.`,
         details: { remedy: `Hold ${name} to ${fmtClock(target.target_s)}.`, cd_name: name } });
     }
   }
@@ -205,12 +220,17 @@ export function analyzeOneDefensive(
   const { expected, floor } = benchExpectedUses(fightDurS, defBench.uses_per_min);
   const issues: AnalysisFinding[] = [];
 
-  if (uses === 0 && expected >= 1) {
+  // Only judge lost/unused uses and a late first-use when a MAJORITY of top parses used this
+  // defensive. A situational defensive most top parses skip has a noisy expected count (and a
+  // meaningless top first-cast), so flagging it would be a false positive.
+  const majorityUse = defensiveUsedShare(defBench) >= MIN_USE_SHARE_FRAC;
+
+  if (majorityUse && uses === 0 && expected >= 1) {
     issues.push({ severity: 'critical', category: 'lost_cooldown', cd_name: name, timestamp_ms: undefined,
       measured: { value: `0 / ${expected}`, unit: 'use(s)' },
       message: `${name} unused. Expected ${expected} on a ${fmtClock(fightDurS)} fight.`,
       details: { remedy: `Use ${name} ${expected}x this fight.` } });
-  } else if (uses > 0 && uses < floor) {
+  } else if (majorityUse && uses > 0 && uses < floor) {
     issues.push({ severity: 'critical', category: 'lost_cooldown', cd_name: name, timestamp_ms: undefined,
       measured: { value: `${uses} / ${expected}`, unit: 'use(s)' },
       message: `${name}: ${uses} uses, expected ${expected}. ${floor - uses} lost.`,
@@ -220,7 +240,7 @@ export function analyzeOneDefensive(
   const suggestions: AnalysisFinding[] = [];
   if (cast_times_s?.length) {
     const firstS = cast_times_s[0];
-    if (isOutlierAbove(firstS, defBench.avg_first_cast_s, defBench.stddev_first_cast_s)) {
+    if (majorityUse && isOutlierAbove(firstS, defBench.avg_first_cast_s, defBench.stddev_first_cast_s)) {
       issues.push({ severity: 'warning', category: 'cooldown_delay', cd_name: name,
         timestamp_ms: Math.round(firstS * 1000),
         measured: { value: `+${(firstS - defBench.avg_first_cast_s).toFixed(0)}s`, unit: `top ${fmtClock(defBench.avg_first_cast_s)}` },

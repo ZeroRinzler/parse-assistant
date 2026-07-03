@@ -87,6 +87,8 @@ export interface ParseWindow {
   window_damage: number;
   active_cds: string[];
   ability_breakdown: { spell_id: number; damage: number; casts: number; is_passive: boolean }[];
+  /** Index of the parse this window came from, so clustering counts DISTINCT parses (stamped in getBench). */
+  parse_index: number;
 }
 
 /** A `[startBin, endBin]` bin-index span (inclusive on both ends). */
@@ -282,9 +284,20 @@ export function findParseWindows(scan: ParseWindowScan): ParseWindow[] {
       window_damage: windowDmg,
       active_cds,
       ability_breakdown,
+      parse_index: 0, // stamped per-parse in getBench, like the defensive slice
     });
   }
   return windows.sort((a, b) => a.time_s - b.time_s);
+}
+
+/** Keep one window per parse (the biggest by window_damage), so a cluster counts DISTINCT parses. */
+export function dedupeByParse(cluster: ParseWindow[]): ParseWindow[] {
+  const byParse = new Map<number, ParseWindow>();
+  for (const window of cluster) {
+    const current = byParse.get(window.parse_index);
+    if (!current || window.window_damage > current.window_damage) byParse.set(window.parse_index, window);
+  }
+  return [...byParse.values()];
 }
 
 /**
@@ -295,13 +308,17 @@ export function findParseWindows(scan: ParseWindowScan): ParseWindow[] {
 export function clusterParseWindows(windows: ParseWindow[], sampleCount: number, mergeS = CLUSTER_MERGE_S): BurstWindow[] {
   const result: BurstWindow[] = [];
   for (const cluster of groupByTime(windows, mergeS)) {
-    if (cluster.length < Math.max(2, sampleCount * CLUSTER_MIN_FRAC)) continue;
-    const damages = cluster.map(member => member.window_damage);
+    // Reduce to one window per parse (its biggest) so the consensus gate and the damage stats
+    // count DISTINCT parses - a parse that lands two dense runs within CLUSTER_MERGE_S of the
+    // cluster counts once ("most parses share it"), like the defensive slice's parse_index dedupe.
+    const members = dedupeByParse(cluster);
+    if (members.length < Math.max(2, sampleCount * CLUSTER_MIN_FRAC)) continue;
+    const damages = members.map(member => member.window_damage);
 
     const abilityDamage = new Map<number, number[]>();
     const abilityCasts = new Map<number, number[]>();
     const abilityPassive = new Map<number, boolean[]>();
-    for (const member of cluster) {
+    for (const member of members) {
       for (const ability of member.ability_breakdown) {
         getOrInsert(abilityDamage, ability.spell_id, () => []).push(ability.damage);
         getOrInsert(abilityCasts, ability.spell_id, () => []).push(ability.casts);
@@ -309,7 +326,7 @@ export function clusterParseWindows(windows: ParseWindow[], sampleCount: number,
       }
     }
     const ability_breakdown = [...abilityDamage.entries()]
-      .filter(([, list]) => list.length >= cluster.length * MEMBER_MAJORITY_FRAC)
+      .filter(([, list]) => list.length >= members.length * MEMBER_MAJORITY_FRAC)
       .map(([spell_id, list]) => ({
         spell_id,
         avg_damage: Math.round((mean(list) ?? 0)),
@@ -324,20 +341,20 @@ export function clusterParseWindows(windows: ParseWindow[], sampleCount: number,
       .slice(0, 6);
 
     const cdCounts = new Map<string, number>();
-    for (const member of cluster) for (const name of member.active_cds) cdCounts.set(name, (cdCounts.get(name) ?? 0) + 1);
+    for (const member of members) for (const name of member.active_cds) cdCounts.set(name, (cdCounts.get(name) ?? 0) + 1);
     const common_cds = [...cdCounts.entries()]
       .sort((a, b) => b[1] - a[1])
-      .filter(([, count]) => count >= cluster.length * MEMBER_MAJORITY_FRAC)
+      .filter(([, count]) => count >= members.length * MEMBER_MAJORITY_FRAC)
       .map(([name]) => name);
 
     result.push({
-      time_s: round(median(cluster.map(member => member.time_s)) ?? 0),
+      time_s: round(median(members.map(member => member.time_s)) ?? 0),
       dmg_avg: Math.round((mean(damages) ?? 0)),
       dmg_stddev: Math.round((deviation(damages) ?? 0)),
       dmg_min: Math.round(Math.min(...damages)),
       dmg_max: Math.round(Math.max(...damages)),
       common_cds,
-      window_length_s: round(mean(cluster.map(member => member.window_length_s)) ?? 0),
+      window_length_s: round(mean(members.map(member => member.window_length_s)) ?? 0),
       ability_breakdown,
     });
   }
@@ -366,6 +383,8 @@ export class BurstTransformService implements DataSource<BurstBench> {
     for (const ranking of rankings) {
       const parse = await this.computeParseWindows(ranking, cooldowns);
       if (!parse) continue;
+      // Stamp the parse index so clustering counts distinct parses (mirrors the defensive slice).
+      for (const window of parse.windows) window.parse_index = sampleCount;
       allWindows.push(...parse.windows);
       encounterName ||= parse.encounterName;
       sampleCount += 1;
