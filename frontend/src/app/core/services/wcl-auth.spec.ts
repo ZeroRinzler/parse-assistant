@@ -7,6 +7,14 @@ import { WclAuthService } from './wcl-auth';
 /** The client-credentials token endpoint the service posts to (mirrors TOKEN_URL in the source). */
 const WCL_TOKEN_URL = 'https://www.warcraftlogs.com/oauth/token';
 
+/** sessionStorage key the token is persisted under (mirrors TOKEN_STORAGE_KEY in the source). */
+const TOKEN_STORAGE_KEY = 'wcl.token';
+
+/** The tab-scoped store, when the test environment provides one (absent under some runners). */
+function store(): Storage | null {
+  return (globalThis as { sessionStorage?: Storage }).sessionStorage ?? null;
+}
+
 /** Distinct tokens so a "reused vs refetched" assertion reads as documentation. */
 const FIRST_TOKEN = 'wcl-access-token-first';
 const SECOND_TOKEN = 'wcl-access-token-second';
@@ -45,11 +53,15 @@ describe('WclAuthService', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(START_TIME_MS);
+    // The token now persists in sessionStorage; clear it so each test starts with a cold
+    // cache and one test's persisted token never seeds the next service instance.
+    store()?.clear();
   });
 
   afterEach(() => {
     TestBed.inject(HttpTestingController).verify();
     vi.useRealTimers();
+    store()?.clear();
   });
 
   it('fetches a token via the client-credentials grant and returns it', async () => {
@@ -116,5 +128,44 @@ describe('WclAuthService', () => {
     flushToken(httpMock, SECOND_TOKEN);
 
     expect(await second).toBe(SECOND_TOKEN);
+  });
+
+  it('reuses a still-valid token persisted by an earlier visit, with no network call', async () => {
+    const sessionStore = store();
+    if (!sessionStore) return; // environment without sessionStorage: persistence is a no-op
+    // Simulate a prior page load having cached a token that is still inside its lifetime.
+    sessionStore.setItem(
+      TOKEN_STORAGE_KEY,
+      JSON.stringify({ token: FIRST_TOKEN, expiry: START_TIME_MS + TOKEN_LIFETIME_S * 1000 }),
+    );
+    const { service, httpMock } = setup();
+
+    expect(await service.getToken()).toBe(FIRST_TOKEN);
+    httpMock.expectNone(WCL_TOKEN_URL);
+  });
+
+  it('persists a freshly fetched token so a later visit can reuse it', async () => {
+    const sessionStore = store();
+    if (!sessionStore) return;
+    const { service, httpMock } = setup();
+    const first = service.getToken();
+    flushToken(httpMock, FIRST_TOKEN);
+    await first;
+
+    const raw = sessionStore.getItem(TOKEN_STORAGE_KEY);
+    expect(raw).toBeTruthy();
+    expect((JSON.parse(raw as string) as { token: string }).token).toBe(FIRST_TOKEN);
+  });
+
+  it('clears the persisted token on invalidate()', async () => {
+    const sessionStore = store();
+    if (!sessionStore) return;
+    const { service, httpMock } = setup();
+    const first = service.getToken();
+    flushToken(httpMock, FIRST_TOKEN);
+    await first;
+
+    service.invalidate();
+    expect(sessionStore.getItem(TOKEN_STORAGE_KEY)).toBeNull();
   });
 });
