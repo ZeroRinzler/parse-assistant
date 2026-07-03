@@ -223,8 +223,8 @@ export class MapFeatureService {
 
   /**
    * Prepare the post-raid context: load the top-parse bench (so the map buttons can light
-   * up) but DEFER the live-overlay fetch. Building the overlay costs three full position-
-   * event streams (player casts, every enemy cast, boss damage), and most analyses never
+   * up) but DEFER the live-overlay fetch. Building the overlay costs two full position-
+   * event streams (player casts, every enemy cast), and most analyses never
    * open the map - so the params are captured and the fetch waits until the panel first
    * opens (see `ensureLiveOverlay`). If the panel is already open (a live-sync pull while
    * the user is watching the map), the overlay refreshes immediately.
@@ -286,7 +286,7 @@ export class MapFeatureService {
     this.overlayLoading.set(true);
     try {
       const { reportCode, fight, playerId, positions, enemies } = pending;
-      const events = await this.fetchLiveEvents(reportCode, fight, playerId, positions, enemies);
+      const events = await this.fetchLiveEvents(reportCode, fight, playerId);
       this.live.set(buildLiveOverlay({ positions, events, fightStartMs: fight.startTime, playerId, enemies }));
       this.overlayLoaded = true;
     } catch (err) {
@@ -297,22 +297,22 @@ export class MapFeatureService {
     }
   }
 
-  /** Fetch the position-bearing live events the overlay needs (player + enemy casts + boss damage). */
+  /**
+   * Fetch the position-bearing live events the overlay needs: friendly player casts + enemy
+   * casts, both with `includeResources`. The enemy fetch passes `hostilityType: 'Enemies'`
+   * (the events query defaults to Friendlies, so an enemy-side fetch without it returns
+   * nothing). The boss and add trails come from the enemy casts, as in
+   * `MapTransformService.fetchPositionEvents`.
+   */
   private async fetchLiveEvents(
     reportCode: string, fight: WclFight, playerId: number,
-    positions: EncounterPositions, enemies: MapEnemyActor[],
   ): Promise<WclEvent[]> {
     const { id, startTime, endTime } = fight;
-    const { bossActorId } = resolveLiveReference(positions, enemies);
-
     const wclApi = this.injector.get(WclApiService);
-    const [playerCasts, enemyCasts, bossDamage] = await Promise.all([
+    const [playerCasts, enemyCasts] = await Promise.all([
       wclApi.getAllEvents(reportCode, id, 'Casts', startTime, endTime, playerId, true),
       wclApi.getAllEvents(reportCode, id, 'Casts', startTime, endTime, undefined, true, 'Enemies'),
-      bossActorId != null
-        ? wclApi.getAllEvents(reportCode, id, 'DamageDone', startTime, endTime, bossActorId, true)
-        : Promise.resolve([] as WclEvent[]),
     ]);
-    return [...playerCasts, ...enemyCasts, ...bossDamage];
+    return [...playerCasts, ...enemyCasts];
   }
 }

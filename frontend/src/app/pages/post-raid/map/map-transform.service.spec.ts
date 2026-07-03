@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest';
+import { TestBed } from '@angular/core/testing';
 import { WclEvent } from '../../../core/models/wcl.models';
+import { WclApiService } from '../../../core/services/wcl-api';
+import { DataFileApiService } from '../../../core/services/data-file-api';
 import {
+  MapTransformService,
   posActorId, collectPositionSamples, resampleTimeline, buildParsePositions, selectBossAndEnemies,
   RawPosSample, EnemyMeta, POSITIONS_INTERVAL_S,
 } from './map-transform.service';
@@ -197,5 +201,58 @@ describe('buildParsePositions', () => {
     });
     expect(parse.enemies.some(e => e.game_id === 200)).toBe(false);
     expect(parse.enemies.some(e => e.is_boss)).toBe(true);
+  });
+});
+
+/* ----------------------------- service (fetch pattern) ----------------------------- */
+
+/** One recorded getAllEvents call, reduced to the fields that decide what WCL returns. */
+interface RecordedFetch { dataType: string; sourceId?: number; includeResources?: boolean; hostilityType?: string; }
+
+describe('MapTransformService.getBench (position event fetch)', () => {
+  const SPEC = 'SubtletyRogue';
+  const ENCOUNTER_ID = 3144;
+  const REPORT_CODE = 'r1';
+  const FIGHT_ID = 1;
+  const SIX_SEC_MS = 6000;                 // short fight span [0, endTime)
+  const PLAYER_ACTOR_ID = 5;
+  const BOSS_ACTOR_ID = 10;
+  const BOSS_GAME_ID = 100;
+  const EXPECTED_FETCH_COUNT = 2;          // player casts + enemy casts, nothing else
+
+  const report = {
+    title: 't',
+    fights: [{ id: FIGHT_ID, name: 'Boss', startTime: 0, endTime: SIX_SEC_MS, kill: true, encounterID: ENCOUNTER_ID, friendlyPlayers: [] }],
+    masterData: {
+      actors: [{ id: PLAYER_ACTOR_ID, name: 'P1', subType: 'Rogue', server: '' }],
+      enemies: [{ id: BOSS_ACTOR_ID, name: 'Boss', gameID: BOSS_GAME_ID }],
+      abilities: [],
+    },
+  };
+
+  it('fetches player casts (Friendlies) + enemy casts (Enemies), never DamageDone', async () => {
+    const calls: RecordedFetch[] = [];
+    const wclFake = {
+      getRankings: async () => ({ rankings: [{ name: 'P1', report: { code: REPORT_CODE, fightID: FIGHT_ID } }] }),
+      getReport: async () => report,
+      getAllEvents: async (
+        _code: string, _fightId: number, dataType: string, _start: number, _end: number,
+        sourceId?: number, includeResources?: boolean, hostilityType?: string,
+      ): Promise<WclEvent[]> => {
+        calls.push({ dataType, sourceId, includeResources, hostilityType });
+        return [];
+      },
+    };
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: WclApiService, useValue: wclFake as unknown as WclApiService },
+        { provide: DataFileApiService, useValue: {} as unknown as DataFileApiService },
+      ],
+    });
+    await TestBed.inject(MapTransformService).getBench(SPEC, ENCOUNTER_ID);
+    expect(calls).toHaveLength(EXPECTED_FETCH_COUNT);
+    expect(calls).toContainEqual({ dataType: 'Casts', sourceId: PLAYER_ACTOR_ID, includeResources: true, hostilityType: undefined });
+    expect(calls).toContainEqual({ dataType: 'Casts', sourceId: undefined, includeResources: true, hostilityType: 'Enemies' });
+    expect(calls.some(call => call.dataType === 'DamageDone')).toBe(false);
   });
 });

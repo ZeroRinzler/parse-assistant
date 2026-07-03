@@ -6,11 +6,10 @@
  * by `environment.useLiveTransform`.
  *
  * It fetches the encounter's top parses, refetches each parse's position-bearing
- * events (Casts with `includeResources` for friendlies + enemies, plus the same
- * for the boss's damage so its trail is dense), groups raw samples per actor,
- * resamples to a fixed cadence, and emits the same `EncounterPositions` shape the
- * ingest `savePositions` writes. The colocated pure fns mirror ingest's
- * `positions.ts` but are owned here (duplication over sharing).
+ * events (Casts with `includeResources` for friendlies + enemies), groups raw
+ * samples per actor, resamples to a fixed cadence, and emits the same
+ * `EncounterPositions` shape the ingest position writer emits. The colocated pure
+ * fns mirror the ingest position math but are owned here (duplication over sharing).
  *
  * KNOWN LIMITATION: the WCL report's master `enemies[]` carries gameID + name but
  * not HP. The boss is therefore picked by the highest observed `maxHitPoints`
@@ -246,7 +245,7 @@ export class MapTransformService implements DataSource<MapData> {
       const enemyMetaById = new Map<number, EnemyMeta>(
         (report.masterData?.enemies ?? []).map(enemy => [enemy.id, { gameID: enemy.gameID, name: enemy.name }]),
       );
-      const posEvents = await this.fetchPositionEvents(ranking.report_code, fight, player.id, enemyMetaById);
+      const posEvents = await this.fetchPositionEvents(ranking.report_code, fight, player.id);
 
       const positions = buildParsePositions({
         reportCode: ranking.report_code,
@@ -265,19 +264,21 @@ export class MapTransformService implements DataSource<MapData> {
     }
   }
 
-  /** Friendly player casts + enemy casts (both with positions), so player + enemies have trails. */
+  /**
+   * Friendly player casts + enemy casts, both with positions (`includeResources`), so the
+   * player and every notable enemy get a trail. The enemy fetch passes `hostilityType:
+   * 'Enemies'` - the events query defaults to Friendlies, so an enemy-side fetch without it
+   * returns nothing. The boss and add trails come from these enemy casts; the boss is
+   * identified afterward by observed maxHitPoints in `selectBossAndEnemies`.
+   */
   private async fetchPositionEvents(
-    reportCode: string, fight: WclFight, playerId: number, enemyMetaById: Map<number, EnemyMeta>,
+    reportCode: string, fight: WclFight, playerId: number,
   ): Promise<WclEvent[]> {
     const { id, startTime, endTime } = fight;
-    const bossActorId = enemyMetaById.size ? [...enemyMetaById.keys()][0] : undefined;
-    const [playerCasts, enemyCasts, bossDamage] = await Promise.all([
+    const [playerCasts, enemyCasts] = await Promise.all([
       this.wclApi.getAllEvents(reportCode, id, 'Casts', startTime, endTime, playerId, true),
       this.wclApi.getAllEvents(reportCode, id, 'Casts', startTime, endTime, undefined, true, 'Enemies'),
-      bossActorId != null
-        ? this.wclApi.getAllEvents(reportCode, id, 'DamageDone', startTime, endTime, bossActorId, true)
-        : Promise.resolve([] as WclEvent[]),
     ]);
-    return [...playerCasts, ...enemyCasts, ...bossDamage];
+    return [...playerCasts, ...enemyCasts];
   }
 }

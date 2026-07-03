@@ -207,21 +207,32 @@ describe('MapFeatureService', () => {
   });
 });
 
+/** One recorded getAllEvents call, reduced to the fields that decide what WCL returns. */
+interface RecordedFetch { dataType: string; sourceId?: number; includeResources?: boolean; hostilityType?: string; }
+
 /**
- * A WclApiService stub that only records `getAllEvents` calls - enough to assert WHEN the
- * deferred position-event streams are fetched. It returns no events, so no overlay is built
- * (the overlay content itself is covered by the buildLiveOverlay tests above).
+ * A WclApiService stub that records every `getAllEvents` call - enough to assert both WHEN the
+ * deferred position-event streams are fetched (call count) and WHAT each fetch asks for
+ * (dataType / source / hostility). It returns no events, so no overlay is built (the overlay
+ * content itself is covered by the buildLiveOverlay tests above).
  */
 class RecordingWclApi {
-  getAllEventsCalls = 0;
-  getAllEvents(): Promise<WclEvent[]> {
-    this.getAllEventsCalls += 1;
+  readonly calls: RecordedFetch[] = [];
+  get getAllEventsCalls(): number { return this.calls.length; }
+  getAllEvents(
+    _code: string, _fightId: number, dataType: string, _start: number, _end: number,
+    sourceId?: number, includeResources?: boolean, hostilityType?: string,
+  ): Promise<WclEvent[]> {
+    this.calls.push({ dataType, sourceId, includeResources, hostilityType });
     return Promise.resolve([]);
   }
 }
 
 /** A minimal fight; prepare only reads id / encounterID / startTime / endTime. */
 const sampleFight = { id: 1, encounterID: 3144, startTime: 0, endTime: 10_000, name: 'Test', kill: true } as WclFight;
+
+/** This pull's player actor, whose casts are one of the two position-event streams. */
+const PLAYER_ACTOR_ID = 5;
 
 /** Drain microtasks + the macrotask queue so a fire-and-forget async load settles. */
 const settle = (): Promise<void> => new Promise(resolve => setTimeout(resolve, 0));
@@ -274,5 +285,22 @@ describe('MapFeatureService deferred overlay', () => {
     await service.prepare('code', sampleFight, 5, 'SubtletyRogue', []);
     await settle();
     expect(api.getAllEventsCalls).toBe(0);
+  });
+
+  it('fetches player casts (Friendlies) + enemy casts (Enemies) on open, never DamageDone', async () => {
+    const { service, api } = setup();
+    await service.prepare('code', sampleFight, PLAYER_ACTOR_ID, 'SubtletyRogue', []);
+    service.openAt({ timeS: 1, label: '', spells: [] });
+    await settle();
+
+    const EXPECTED_FETCH_COUNT = 2; // player casts + enemy casts, nothing else
+    expect(api.calls).toHaveLength(EXPECTED_FETCH_COUNT);
+    // Player casts: own source, positions on, default (Friendlies) hostility.
+    expect(api.calls).toContainEqual({ dataType: 'Casts', sourceId: PLAYER_ACTOR_ID, includeResources: true, hostilityType: undefined });
+    // Enemy casts: no source filter, positions on, explicit Enemies hostility (the query
+    // defaults to Friendlies, so an enemy-side fetch without it returns nothing).
+    expect(api.calls).toContainEqual({ dataType: 'Casts', sourceId: undefined, includeResources: true, hostilityType: 'Enemies' });
+    // The boss and add trails come from those enemy casts, so nothing fetches DamageDone.
+    expect(api.calls.some(call => call.dataType === 'DamageDone')).toBe(false);
   });
 });
