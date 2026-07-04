@@ -62,16 +62,6 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      # Re-scrape every existing guide first so guides.json stays fresh on the same cadence.
-      # Per-guide errors are recorded, not fatal. YouTube transcripts go through the Supadata
-      # API (SUPADATA_API_KEY secret); already-scraped YouTube guides are skipped, so the
-      # metered API is only hit once per new/errored video. Web/SimC need no secret.
-      - name: Refresh guide content
-        working-directory: frontend
-        env:
-          SUPADATA_API_KEY: ${{ secrets.SUPADATA_API_KEY }}
-        run: npm run scrape
-
       # Ingestion self-selects the current live raids from WCL (current expansion,
       # non-frozen zones confirmed live by a rankings probe) and self-prunes data for
       # encounters that are no longer current. No manual per-patch edits needed.

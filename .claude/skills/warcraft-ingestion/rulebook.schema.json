@@ -5,11 +5,16 @@
   "description": "AI-generated rulebook for a single WoW specialization. Extract all major offensive cooldowns, all personal defensive cooldowns, and 5-10 high-signal rotation/cooldown usage rules from the supplied guide content. Output ONLY the raw JSON object - no markdown fences, no preamble. The first character must be '{' and the last must be '}'.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["spec", "major_cooldowns", "defensives", "rules", "source_summary"],
+  "required": ["spec", "spec_icon", "major_cooldowns", "defensives", "rules", "source_summary"],
   "properties": {
     "spec": {
       "type": "string",
       "description": "WCL spec name, e.g. SubtletyRogue. Must match the spec being analysed."
+    },
+    "spec_icon": {
+      "type": "string",
+      "description": "Required. The spec's zamimg icon file stem (no extension), e.g. 'ability_stealth'. Read it from the spec's guide page; it becomes the spec's dropdown art. Must be set on every rulebook.",
+      "minLength": 1
     },
     "major_cooldowns": {
       "type": "array",

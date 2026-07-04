@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { mapRankings, filterEncounters, groupEncountersByZone, protectedEncounterIds, SPEC_TO_WCL } from './wcl-mappers.ts';
-import type { WclRawRanking, WclExpansion, IngestEncounter } from './models/wcl.models.ts';
+import { mapRankings, filterEncounters, groupEncountersByZone, protectedEncounterIds, mapClassesToSpecMeta, specWclFromMetas } from './wcl-mappers.ts';
+import type { WclRawRanking, WclExpansion, IngestEncounter, WclGameClass } from './models/wcl.models.ts';
 
 describe('mapRankings', () => {
   const raw: WclRawRanking[] = [
@@ -102,8 +102,45 @@ describe('protectedEncounterIds', () => {
   });
 });
 
-describe('SPEC_TO_WCL', () => {
-  it('maps a spec folder name to [className, specName]', () => {
-    expect(SPEC_TO_WCL['SubtletyRogue']).toEqual(['Rogue', 'Subtlety']);
+describe('mapClassesToSpecMeta', () => {
+  const classes: WclGameClass[] = [
+    { id: 4, name: 'Rogue', slug: 'Rogue', specs: [
+      { id: 259, name: 'Assassination', slug: 'Assassination' },
+      { id: 261, name: 'Subtlety', slug: 'Subtlety' },
+    ] },
+    { id: 3, name: 'Hunter', slug: 'Hunter', specs: [
+      { id: 253, name: 'Beast Mastery', slug: 'BeastMastery' },
+    ] },
+    { id: 12, name: 'Demon Hunter', slug: 'DemonHunter', specs: [
+      { id: 1473, name: 'Devourer', slug: 'Devourer' }, // a new spec absent from the curated icon map
+    ] },
+  ];
+
+  it('composes the folder key as spec.slug + class.slug and carries the WCL slugs + labels', () => {
+    const metas = mapClassesToSpecMeta(classes);
+    expect(metas.find(meta => meta.spec === 'SubtletyRogue')).toMatchObject(
+      { className: 'Rogue', specName: 'Subtlety', classLabel: 'Rogue', specLabel: 'Subtlety' });
+    expect(metas.find(meta => meta.spec === 'BeastMasteryHunter')).toMatchObject(
+      { className: 'Hunter', specName: 'BeastMastery', specLabel: 'Beast Mastery' });
+  });
+
+  it('derives the class icon formulaically from the lowercased class slug', () => {
+    const metas = mapClassesToSpecMeta(classes);
+    expect(metas.find(meta => meta.spec === 'SubtletyRogue')?.classIcon).toBe('class_rogue');
+    expect(metas.find(meta => meta.spec === 'DevourerDemonHunter')?.classIcon).toBe('class_demonhunter');
+  });
+
+  it('leaves the spec icon empty (the orchestrator fills it from the rulebook)', () => {
+    const metas = mapClassesToSpecMeta(classes);
+    expect(metas.every(meta => meta.specIcon === '')).toBe(true);
+  });
+});
+
+describe('specWclFromMetas', () => {
+  it('projects each spec to [className, specName]', () => {
+    const metas = mapClassesToSpecMeta([
+      { id: 4, name: 'Rogue', slug: 'Rogue', specs: [{ id: 261, name: 'Subtlety', slug: 'Subtlety' }] },
+    ]);
+    expect(specWclFromMetas(metas)['SubtletyRogue']).toEqual(['Rogue', 'Subtlety']);
   });
 });

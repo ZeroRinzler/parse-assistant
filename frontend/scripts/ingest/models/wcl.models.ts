@@ -30,6 +30,10 @@ export interface WclPartition { id: number; name: string; }
 export interface WclZone { id: number; name: string; frozen?: boolean; partitions?: WclPartition[]; encounters?: { id: number; name: string }[]; }
 export interface WclExpansion { id: number; name: string; zones?: WclZone[]; }
 
+/** A WCL `gameData.classes` entry: the spec universe (class + its specs, with slugs). */
+export interface WclGameSpec { id: number; name: string; slug: string; }
+export interface WclGameClass { id: number; name: string; slug: string; specs?: WclGameSpec[]; }
+
 export interface WclServerRef { id?: number; name?: string; region?: { slug?: string }; }
 export interface WclReportRef { code?: string; fightID?: number; }
 

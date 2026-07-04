@@ -1,7 +1,13 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { SpecIconPipe } from './spec-icon-pipe';
+import { hydrateSpecMeta } from '../../core/spec-meta';
 
 const pipe = new SpecIconPipe();
+
+// The spec icon comes from the hydrated spec universe; seed the spec this row uses.
+beforeAll(() => hydrateSpecMeta([
+  { spec: 'SubtletyRogue', className: 'Rogue', specName: 'Subtlety', classLabel: 'Rogue', specLabel: 'Subtlety', classIcon: 'class_rogue', specIcon: 'ability_stealth' },
+]));
 
 describe('SpecIconPipe', () => {
   it.each([

@@ -9,9 +9,7 @@
     "test": "ng test && vitest run --config vitest.scripts.config.ts && tsc -p tsconfig.scripts.json --noEmit",
     "test:ci": "ng test --configuration ci && vitest run --config vitest.scripts.config.ts && tsc -p tsconfig.scripts.json --noEmit",
     "test:watch": "ng test --watch",
-    "rulebook": "tsx --tsconfig tsconfig.scripts.json scripts/build-rulebook.ts",
     "ingest": "tsx --tsconfig tsconfig.scripts.json scripts/ingest/orchestrator.ts",
-    "scrape": "tsx --tsconfig tsconfig.scripts.json scripts/scrape-guides.ts",
     "lint": "ng lint && eslint scripts",
     "data:pull": "git -C .. fetch origin gh-pages && rm -rf public/data/specs && git -C .. archive origin/gh-pages data/specs | tar -x -C public"
   },
@@ -44,7 +42,6 @@
     "@types/d3-array": "^3.2.2",
     "@types/jsdom": "^28.0.3",
     "@types/node": "^26.0.1",
-    "ajv": "^8.20.0",
     "angular-eslint": "22.0.0",
     "commander": "^13.1.0",
     "eslint": "^10.3.0",

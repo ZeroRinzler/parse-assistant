@@ -9,6 +9,10 @@
 
 export const RATE_LIMIT_QUERY = `query { rateLimitData { limitPerHour pointsSpentThisHour pointsResetIn } }`;
 
+// The full spec universe: all classes and their specs. `class.slug`/`spec.slug` are the exact
+// `className`/`specName` the rankings query takes; the folder key is `spec.slug + class.slug`.
+export const CLASSES_QUERY = `query { gameData { classes { id name slug specs { id name slug } } } }`;
+
 export const ENCOUNTERS_QUERY = `
 query {
   worldData {

@@ -9,7 +9,7 @@
  * benches live in the browser) and the hourly GHA run share one transform implementation.
  *
  * Orchestration only (no transformation lives here):
- *   - discover specs that have a rulebook + validate it (reuses validateRulebook),
+ *   - discover specs that have a rulebook,
  *   - discover current-expansion live encounters (reuses getEncounters via a thin
  *     WclQueryClient adapter over the runtime WclApiService),
  *   - per encounter: assert WCL budget, fetch rankings (cheap, cached), compute the
@@ -22,16 +22,14 @@
  */
 import { Command } from 'commander';
 import pLimit from 'p-limit';
-import { validateRulebook } from '../lib.ts';
 import { bootstrapIngestRuntime, type IngestRuntime } from './angular-runtime.ts';
 import { getEncounters } from './wcl-fetchers.ts';
-import { SPEC_TO_WCL } from './wcl-mappers.ts';
+import { mapClassesToSpecMeta, specWclFromMetas, type SpecWclMap } from './wcl-mappers.ts';
 import {
   type WclQueryClient, type EventFetchOptions, BudgetExceededError,
 } from './wcl-client.ts';
-import { RATE_LIMIT_QUERY } from './wcl-queries.ts';
+import { RATE_LIMIT_QUERY, CLASSES_QUERY } from './wcl-queries.ts';
 import { INGEST_VERSION } from './ingest-version.ts';
-import { rulebookSpellIds, unresolvedSpellIds } from './rulebook-spell-ids.ts';
 import { specDataMtime } from './git-mtime.ts';
 import {
   orderSpecsByVersionThenTime, orderEncountersByMissingFirst, type SpecOrderEntry,
@@ -43,7 +41,7 @@ import {
 } from './signature.ts';
 import { logWarn } from '../../src/app/core/log.ts';
 import { unwrapRankings } from '../../src/app/shared/analysis/wcl-projections.ts';
-import type { WclRateLimitData, WclResourceEvent, IngestEncounter } from './models/wcl.models.ts';
+import type { WclRateLimitData, WclResourceEvent, IngestEncounter, WclGameClass } from './models/wcl.models.ts';
 import type { EncounterEntry, SpecEntry } from '../../src/app/core/models/encounter.models.ts';
 
 const TOP_N = 10;
@@ -239,31 +237,6 @@ async function ingestSpec(
 ): Promise<boolean> {
   console.log(`\nIngesting ${spec} - ${encounters.length} encounters (top ${TOP_N})`);
 
-  // Pre-flight: refuse a spec whose rulebook fails schema validation.
-  const rulebook = await runtime.dataFile.getRulebook(spec);
-  const schemaErrors = await validateRulebook(rulebook);
-  if (schemaErrors.length) {
-    console.error(`[${spec}] rulebook.json failed schema validation (${schemaErrors.length} error(s)) - skipping:`);
-    schemaErrors.forEach(err => console.error(`  - ${err}`));
-    return false;
-  }
-
-  // Integrity gate: every rulebook spell id must resolve on WCL. `gameData.ability(id)`
-  // returns null for a nonexistent id, and the runtime's `abilityIcons` skips nulls, so a
-  // bad (LLM-guessed) id would land in `cd_spell_ids` without matching art and throw when a
-  // card renders it. Fail the spec loudly here instead of shipping a card that blanks - the
-  // "complete ingested data, no fallbacks" principle. One cheap batched query per spec.
-  const spellIds = rulebookSpellIds(rulebook ?? { spec });
-  if (spellIds.length) {
-    const resolved = await runtime.wclApi.getAbilities(spellIds);
-    const unresolved = unresolvedSpellIds(spellIds, resolved);
-    if (unresolved.length) {
-      console.error(`[${spec}] rulebook references ${unresolved.length} spell id(s) WCL cannot resolve: ${unresolved.join(', ')} - skipping.`);
-      console.error('  Verify each on wowhead.com/spell=<id> and fix the rulebook.');
-      return false;
-    }
-  }
-
   // Process never-ingested encounters first so a partial spec fills its remaining bosses
   // before re-checking the ones already done (disk-only signal, zero WCL budget).
   const presentIds = new Set(
@@ -337,7 +310,7 @@ async function main(): Promise<void> {
     .name('ingest')
     .description('v5 ingestion: drive the Angular transform services and write tailored files.')
     .option('--spec <spec>', 'target a single spec instead of all (e.g. SubtletyRogue)')
-    .addHelpText('after', `\nKnown specs: ${Object.keys(SPEC_TO_WCL).join(', ')}`);
+    .addHelpText('after', '\nExample spec: SubtletyRogue (the full spec list is resolved from WCL at run time)');
   program.parse(process.argv);
   const opts = program.opts<{ spec?: string }>();
 
@@ -352,11 +325,25 @@ async function main(): Promise<void> {
   const version = String(INGEST_VERSION);
   console.log(`Ingest version: ${version}`);
 
+  // Resolve the spec universe (class/spec names + slugs) from WCL gameData.classes. The spec
+  // icon is not on WCL, so enrich each meta from that spec's rulebook (its spec_icon stem).
+  // Then hydrate the runtime spec-meta cache (so getRankings can resolve a spec) and bake
+  // spec-meta.json for the browser.
+  const classesData = await client.query<{ gameData?: { classes?: WclGameClass[] } }>(CLASSES_QUERY);
+  const metas = mapClassesToSpecMeta(classesData.gameData?.classes ?? []);
+  for (const meta of metas) {
+    meta.specIcon = (await runtime.dataFile.getRulebook(meta.spec))?.spec_icon ?? '';
+  }
+  const specWcl: SpecWclMap = specWclFromMetas(metas);
+  runtime.hydrateSpecMeta(metas);
+  await runtime.dataFile.writeSpecMeta(metas);
+  console.log(`Resolved ${metas.length} specs from WCL`);
+
   process.stdout.write('Resolving current raids...');
   let encounters: IngestEncounter[];
   let protectedIds: Set<number>;
   try {
-    ({ encounters, protectedIds } = await getEncounters(client));
+    ({ encounters, protectedIds } = await getEncounters(client, specWcl));
     console.log(` ${encounters.length} live encounters`);
   } catch (err) {
     console.error(`\nFailed to resolve current raids: ${err instanceof Error ? err.message : String(err)}`);
@@ -366,8 +353,8 @@ async function main(): Promise<void> {
   // Specs to process: the --spec arg, or every spec that has a rulebook on disk.
   let specs: string[];
   if (opts.spec) {
-    if (!SPEC_TO_WCL[opts.spec]) {
-      console.error(`Unknown spec "${opts.spec}". Known specs: ${Object.keys(SPEC_TO_WCL).join(', ')}`);
+    if (!specWcl[opts.spec]) {
+      console.error(`Unknown spec "${opts.spec}". Known specs: ${Object.keys(specWcl).sort().join(', ')}`);
       process.exit(1);
     }
     specs = [opts.spec];

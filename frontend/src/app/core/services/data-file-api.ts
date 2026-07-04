@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { Rulebook } from '../models/rulebook.models';
 import { EncounterEntry, SpecEntry } from '../models/encounter.models';
+import { SpecMeta } from '../models/spec-meta.models';
 import { EncounterPositions } from '../models/positioning.models';
 import { DATA_FILE_TRANSPORT } from './data-file-transport';
 
@@ -35,6 +36,11 @@ export class DataFileApiService {
     return (await this.io.readJson<SpecEntry[]>('index.json')) ?? [];
   }
 
+  /** Raw read of the WCL-derived spec universe (`spec-meta.json`). Empty when not yet generated. */
+  async getSpecMeta(): Promise<SpecMeta[]> {
+    return (await this.io.readJson<SpecMeta[]>('spec-meta.json')) ?? [];
+  }
+
   /** Raw read of a spec's encounter index (`{spec}/encounters.json`). */
   async getEncounters(spec: string): Promise<EncounterEntry[]> {
     return (await this.io.readJson<EncounterEntry[]>(`${spec}/encounters.json`)) ?? [];
@@ -65,6 +71,11 @@ export class DataFileApiService {
   /** Write the top-level spec manifest. */
   writeSpecs(entries: SpecEntry[]): Promise<void> {
     return this.io.writeJson('index.json', entries);
+  }
+
+  /** Write the WCL-derived spec universe (`spec-meta.json`). */
+  writeSpecMeta(metas: SpecMeta[]): Promise<void> {
+    return this.io.writeJson('spec-meta.json', metas);
   }
 
   /**

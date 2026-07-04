@@ -18,7 +18,7 @@ The `src/**` specs cannot run under a bare `npx vitest` - they need the `@angula
 | `*-transform.service.spec.ts` | the slice's bench math (clustering / aggregation) as pure fns, **plus** an end-to-end pass through the `*TransformService` with a fake `WclApiService` |
 | `*.service.spec.ts` | the `*FeatureService`'s pure view-model fns (table-driven), **plus** an end-to-end pass with a fake `*_DATA_SOURCE` (and a fake `WclApiService` where the slice fetches the player log) |
 
-Ingestion runs these very `*TransformService`s headlessly, so the specs under `scripts/**` cover only the Node-side helpers: discovery (`wcl-fetchers`, `wcl-mappers`), `signature`, `ordering`, `node-data-file-transport`, `rulebook-spell-ids`, and `scrape-guides`.
+Ingestion runs these very `*TransformService`s headlessly, so the specs under `scripts/**` cover only the Node-side helpers: discovery (`wcl-fetchers`, `wcl-mappers`), `signature`, `ordering`, and `node-data-file-transport`.
 
 **Conventions: tests as documentation.** Colocate specs next to the unit (`burst.service.spec.ts` beside `burst.service.ts`). For rule/threshold tests, pair every "triggers" case with a "does not trigger at the boundary" case - boundary comparisons are strict (a value exactly at `mean + 2*stddev` is **not** an outlier).
 

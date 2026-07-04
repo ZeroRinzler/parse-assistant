@@ -2,7 +2,16 @@ import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } fr
 import { getEncounters, getRankingsLite } from './wcl-fetchers.ts';
 import { BudgetExceededError } from './wcl-client.ts';
 import type { WclQueryClient, EventFetchOptions } from './wcl-client.ts';
+import type { SpecWclMap } from './wcl-mappers.ts';
 import type { WclResourceEvent, WclRawRanking } from './models/wcl.models.ts';
+
+// Folder -> [className, specName] for the probe specs plus the specs these tests query.
+const SPEC_WCL: SpecWclMap = {
+  FireMage: ['Mage', 'Fire'],
+  RetributionPaladin: ['Paladin', 'Retribution'],
+  FuryWarrior: ['Warrior', 'Fury'],
+  SubtletyRogue: ['Rogue', 'Subtlety'],
+};
 
 interface FakeHandlers {
   query?: (gql: string, vars?: object) => unknown;
@@ -63,7 +72,7 @@ describe('getEncounters', () => {
   }
 
   it('keeps live zones, drops frozen / name-excluded / no-ranking zones', async () => {
-    const { encounters, protectedIds } = await getEncounters(contentClient());
+    const { encounters, protectedIds } = await getEncounters(contentClient(), SPEC_WCL);
     expect(encounters.map(encounter => encounter.id).sort((a, b) => a - b)).toEqual([3159, 3176, 3177]);
     // protected set = all non-frozen ids (includes the name-excluded M+ and test zone), excludes the frozen tier.
     expect([...protectedIds].sort((a, b) => a - b)).toEqual([3159, 3176, 3177, 3591, 112526]);
@@ -73,14 +82,14 @@ describe('getEncounters', () => {
 
   it('probes per zone (once per live zone via early-exit), not per spec', async () => {
     const probeCounter = { count: 0 };
-    await getEncounters(contentClient({}, probeCounter));
+    await getEncounters(contentClient({}, probeCounter), SPEC_WCL);
     // zone 46 + zone 50 early-exit after 1 spec each (1 + 1); zone 52 has no rankings so all 3 probe specs run (3). Total 5.
     expect(probeCounter.count).toBe(5);
   });
 
   it('propagates a BudgetExceededError raised while probing', async () => {
     const client = contentClient({ assertBudget: () => { throw new BudgetExceededError('low'); } });
-    await expect(getEncounters(client)).rejects.toThrow(BudgetExceededError);
+    await expect(getEncounters(client, SPEC_WCL)).rejects.toThrow(BudgetExceededError);
   });
 
   it('drops a zone whose only parses are privacy-anonymized (the "Dummy Dome" case)', async () => {
@@ -95,7 +104,7 @@ describe('getEncounters', () => {
         return { worldData: { encounter: { name: 'Sinister Single', characterRankings: { rankings: anonymized } } } };
       },
     });
-    const { encounters } = await getEncounters(client);
+    const { encounters } = await getEncounters(client, SPEC_WCL);
     expect(encounters).toHaveLength(0);
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('getEncounters'), expect.stringContaining('Dummy Dome'));
   });
@@ -111,7 +120,7 @@ describe('getEncounters', () => {
         return { worldData: { encounter: { name: 'Boss', characterRankings: { rankings: className === 'Mage' ? ranks(2) : [] } } } };
       },
     });
-    const { encounters } = await getEncounters(client);
+    const { encounters } = await getEncounters(client, SPEC_WCL);
     expect(encounters).toHaveLength(0);
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('getEncounters'), expect.stringContaining('Thin Raid'));
   });
@@ -119,7 +128,7 @@ describe('getEncounters', () => {
 
 describe('getRankingsLite', () => {
   it('throws on an unknown spec', async () => {
-    await expect(getRankingsLite(fakeClient({}), 'NotASpec', 100, 10, [])).rejects.toThrow('Unknown spec');
+    await expect(getRankingsLite(fakeClient({}), 'NotASpec', 100, SPEC_WCL, 10, [])).rejects.toThrow('Unknown spec');
   });
 
   it('tries partitions newest-first and falls back when one is empty', async () => {
@@ -130,7 +139,7 @@ describe('getRankingsLite', () => {
         return { worldData: { encounter: { name: 'Boss', characterRankings: { rankings } } } };
       },
     });
-    const ranked = await getRankingsLite(client, 'SubtletyRogue', 100, 10, [3, 2]);
+    const ranked = await getRankingsLite(client, 'SubtletyRogue', 100, SPEC_WCL, 10, [3, 2]);
     expect(ranked).toHaveLength(1);
     expect(ranked[0].player).toBe('A');
   });
@@ -139,7 +148,7 @@ describe('getRankingsLite', () => {
     const client = fakeClient({
       query: () => ({ worldData: { encounter: { name: 'Boss', characterRankings: JSON.stringify({ rankings: [{ name: 'A', report: { code: 'r', fightID: 1 } }] }) } } }),
     });
-    const ranked = await getRankingsLite(client, 'SubtletyRogue', 100, 10, []);
+    const ranked = await getRankingsLite(client, 'SubtletyRogue', 100, SPEC_WCL, 10, []);
     expect(ranked[0].player).toBe('A');
   });
 });

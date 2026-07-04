@@ -34,7 +34,7 @@ frontend/        # the entire Angular 22 app
   scripts/ingest # ingestion orchestrator + discovery helpers (run via tsx)
   public/data/specs/  # static ingested data (slices, encounters, positions, rulebooks) - NOT tracked on main; see below
 .github/workflows/  # deploy-pages, ingest-parses (hourly), pr-preview, test
-.claude/skills/   # on-demand skills (incl. the rulebook LLM prompt + schema in warcraft-ingestion/)
+.claude/skills/   # on-demand skills (rulebook schema in warcraft-ingestion/, generation in warcraft-rulebook/)
 ```
 
 The ~100 MB of minified bench data under `frontend/public/data/specs/**` is **not tracked on `main`** (gitignored). The deployed site is composed on **`gh-pages`** from disjoint single-owner folders at the site root: `data/specs/` (shared dataset, written by `ingest-parses`), `main/` (prod shell, `deploy-pages`), `pr-N/` (per-PR shells, `pr-preview`); a root `index.html` redirects to `/main/`. Every environment ships only the shell and reads the one shared dataset via an absolute `dataBaseHref`, so code deploys never re-push data. The three writers share one `gh-pages` concurrency group (serialized single-commit force-pushes). `pr-preview` rebuilds all open PRs and clean-replaces the root `pr-*` dirs (a static `clean-exclude` guards `main`/`data`/root files), so closed previews vanish structurally (no cleanup workflow). Local dev: `npm run data:pull` (from `frontend/`) fetches the data from `origin/gh-pages`.
@@ -48,8 +48,6 @@ The ~100 MB of minified bench data under `frontend/public/data/specs/**` is **no
 | `npm test` | `ng test` (frontend Vitest) + scripts Vitest + scripts typecheck |
 | `npm run lint` | `ng lint` over `src/**` then `eslint scripts` over `scripts/**` |
 | `npm run ingest` | Run the ingestion orchestrator (needs `WCL_CLIENT_ID`/`WCL_CLIENT_SECRET`) |
-| `npm run scrape` | Re-scrape all guides (or `--spec Name --url URL` to add one) |
-| `npm run rulebook` | Manage rulebooks (build AI prompt, save AI JSON) |
 
 ## Development workflow router
 
@@ -62,7 +60,8 @@ Load the matching skill(s) **before** you start that step. The `warcraft-*` skil
 | Writing user-facing copy, findings, microcopy, or anything branded (titles, nav, banners, READMEs, favicon) | **warcraft-copy** |
 | Working on a vertical slice, a transform, analysis math, or layer boundaries | **warcraft-architecture** |
 | Touching WCL queries, gear / spec / talent / enchant extraction, positions, or `wcl-auth` / the embedded secret | **warcraft-wcl-data** |
-| Ingestion, rulebooks, scraping, `data/specs` file shapes, or `INGEST_VERSION` | **warcraft-ingestion** |
+| Generating or refreshing a spec's `rulebook.json` (one, some, or all specs) | **warcraft-rulebook** |
+| Ingestion, `data/specs` file shapes, rulebook consumption/schema, or `INGEST_VERSION` | **warcraft-ingestion** |
 | Writing or changing tests | **warcraft-testing** |
 | General refactor / code-quality cleanup | **solid** + `/simplify` (project rules win on conflict) |
 | Reviewing code, a diff, or a PR | `/code-review` + **solid** + the domain skill(s) for the changed area |

@@ -2,6 +2,7 @@ import {
   ApplicationConfig,
   provideBrowserGlobalErrorListeners,
   provideEnvironmentInitializer,
+  provideAppInitializer,
   inject,
 } from '@angular/core';
 import { provideRouter, withComponentInputBinding } from '@angular/router';
@@ -16,6 +17,8 @@ import { routes } from './app.routes';
 import { WCL_TRANSPORT, WCL_API_URL } from './core/services/wcl-transport';
 import { ApolloWclTransport } from './core/services/apollo-wcl-transport';
 import { DATA_FILE_TRANSPORT, HttpDataFileTransport } from './core/services/data-file-transport';
+import { DataFileApiService } from './core/services/data-file-api';
+import { hydrateSpecMeta } from './core/spec-meta';
 import { dataSourceProviders } from '../environments/environment';
 
 const GITHUB_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
@@ -35,6 +38,13 @@ export const appConfig: ApplicationConfig = {
     provideRouter(routes, withComponentInputBinding()),
     provideAnimationsAsync(),
     provideHttpClient(withFetch()),
+    provideAppInitializer(async () => {
+      // Hydrate the spec-meta cache (folder -> class/spec names + icons) from the baked
+      // spec-meta.json before anything renders, so the class/spec dropdowns, the icon pipes,
+      // and getRankings resolve. One tiny (~40-entry) file fetch, blocking bootstrap.
+      const dataFile = inject(DataFileApiService);
+      hydrateSpecMeta(await dataFile.getSpecMeta());
+    }),
     provideApollo(() => {
       // HttpLink rides on Angular's HttpClient; the per-request bearer token is supplied
       // via operation context in WclApiService, so no auth link is configured here.

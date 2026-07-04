@@ -22,6 +22,7 @@ import type { RotationTransformService } from '../../src/app/pages/post-raid/rot
 import type { DefensiveTransformService } from '../../src/app/pages/post-raid/defensive/defensive-transform.service.ts';
 import type { GearTransformService } from '../../src/app/pages/post-raid/gear/gear-transform.service.ts';
 import type { MapTransformService } from '../../src/app/pages/post-raid/map/map-transform.service.ts';
+import type { SpecMeta } from '../../src/app/core/models/spec-meta.models.ts';
 
 const __dirname_ = path.dirname(fileURLToPath(import.meta.url));
 /** `frontend/public/data/specs` - the data root the runtime serves and ingestion writes. */
@@ -41,6 +42,8 @@ export interface IngestRuntime {
   clearWclCache(): void;
   /** Return + clear the report codes that hit a permission-denied error since the last call. */
   takeInaccessibleReportCodes(): string[];
+  /** Populate the spec-meta cache the runtime services read (must run before any getRankings). */
+  hydrateSpecMeta(metas: SpecMeta[]): void;
 }
 
 let booted: IngestRuntime | null = null;
@@ -74,6 +77,7 @@ export async function bootstrapIngestRuntime(dataDir: string = DATA_SPECS_DIR): 
   const { FsDataFileTransport } = await import('./node-data-file-transport.ts');
   const { WclApiService: WclApi } = await import('../../src/app/core/services/wcl-api.ts');
   const { DataFileApiService: DataFileApi } = await import('../../src/app/core/services/data-file-api.ts');
+  const { hydrateSpecMeta } = await import('../../src/app/core/spec-meta.ts');
   const { BurstTransformService: Burst } = await import('../../src/app/pages/post-raid/burst-windows/burst-transform.service.ts');
   const { RotationTransformService: Rotation } = await import('../../src/app/pages/post-raid/rotation/rotation-transform.service.ts');
   const { DefensiveTransformService: Defensive } = await import('../../src/app/pages/post-raid/defensive/defensive-transform.service.ts');
@@ -107,6 +111,7 @@ export async function bootstrapIngestRuntime(dataDir: string = DATA_SPECS_DIR): 
     },
     clearWclCache: () => wclTransport.clearCache(),
     takeInaccessibleReportCodes: () => wclTransport.takeInaccessibleCodes(),
+    hydrateSpecMeta,
   }));
   return booted;
 }

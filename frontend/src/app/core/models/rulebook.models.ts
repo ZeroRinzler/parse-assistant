@@ -53,6 +53,8 @@ export interface RulebookRule {
 
 export interface Rulebook {
   spec: string;
+  /** Required. zamimg spec-icon file stem, e.g. 'ability_stealth'; read from the guide, used for dropdown art. */
+  spec_icon: string;
   major_cooldowns?: RulebookCooldown[];
   defensives?: RulebookDefensive[];
   rules?: RulebookRule[];

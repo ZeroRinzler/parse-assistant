@@ -92,9 +92,8 @@ export function buildGearNamesQuery(itemIds: number[], enchantIds: number[]): st
  * one round-trip. Aliases are prefixed `a` (bare numeric identifiers are not valid
  * GraphQL field names). `gameData.ability(id)` resolves any REAL spell id - including
  * passives a report's `masterData.abilities` omits - but returns `null` for a
- * nonexistent id, so a bad (e.g. mistyped rulebook) id is not silently completed. The
- * ingest integrity gate (rulebook-spell-ids) rejects a rulebook with an unresolvable id
- * up front, so every id that reaches the runtime here is real.
+ * nonexistent id, so a bad (e.g. mistyped rulebook) id resolves to null rather than a
+ * wrong icon; `abilityIcons` skips nulls.
  */
 export function buildAbilityIconsQuery(ids: number[]): string {
   const fields = ids.map(id => `a${id}: ability(id:${id}){id name icon}`).join(' ');

@@ -12,7 +12,7 @@ import {
   ReportQueryVars, PlayerDetailsQueryVars,
   EventsQueryVars, CombatantInfoQueryVars, RankingsQueryVars,
 } from './wcl-queries';
-import { SPEC_META } from '../spec-meta';
+import { specMetaOf } from '../spec-meta';
 
 @Injectable({ providedIn: 'root' })
 export class WclApiService {
@@ -153,7 +153,7 @@ export class WclApiService {
    * to fetchable `ParseRanking` rows (see `unwrapRankings` / `toParseRankings`).
    */
   async getRankings(spec: string, encounterId: number): Promise<WclRankingsBlob | null> {
-    const meta = SPEC_META[spec];
+    const meta = specMetaOf(spec);
     if (!meta) return null;
     const vars: RankingsQueryVars = { encounterID: encounterId, className: meta.className, specName: meta.specName };
     const result = await this.query<{ worldData: { encounter: { characterRankings: WclRankingsBlob } } }>(

@@ -1,5 +1,5 @@
 /**
- * Extract layer - pure response-to-model mappers and the spec lookup table.
+ * Extract layer - pure response-to-model mappers and the spec-universe derivation.
  *
  * No network, no filesystem, no client: every function takes a raw WCL response
  * fragment and returns an ingest model. The frontend runtime owns its own copy of
@@ -8,53 +8,46 @@
  */
 
 import type {
-  WclRawRanking, WclExpansion, ParseRanking, IngestEncounter,
+  WclRawRanking, WclExpansion, ParseRanking, IngestEncounter, WclGameClass,
 } from './models/wcl.models.ts';
+import type { SpecMeta } from '../../src/app/core/models/spec-meta.models.ts';
 
-// WCL spec folder name -> [WCL className, WCL specName].
-export const SPEC_TO_WCL_FORWARD: Record<string, [string, string]> = {
-  RetributionPaladin:    ['Paladin',    'Retribution'],
-  HolyPaladin:           ['Paladin',    'Holy'],
-  ProtectionPaladin:     ['Paladin',    'Protection'],
-  FireMage:              ['Mage',       'Fire'],
-  ArcaneMage:            ['Mage',       'Arcane'],
-  FrostMage:             ['Mage',       'Frost'],
-  HavocDemonHunter:      ['DemonHunter','Havoc'],
-  VengeanceDemonHunter:  ['DemonHunter','Vengeance'],
-  FuryWarrior:           ['Warrior',    'Fury'],
-  ArmsWarrior:           ['Warrior',    'Arms'],
-  ProtectionWarrior:     ['Warrior',    'Protection'],
-  UnholyDeathKnight:     ['DeathKnight','Unholy'],
-  FrostDeathKnight:      ['DeathKnight','Frost'],
-  BloodDeathKnight:      ['DeathKnight','Blood'],
-  BalanceDruid:          ['Druid',      'Balance'],
-  FeralDruid:            ['Druid',      'Feral'],
-  GuardianDruid:         ['Druid',      'Guardian'],
-  RestorationDruid:      ['Druid',      'Restoration'],
-  BeastMasteryHunter:    ['Hunter',     'BeastMastery'],
-  MarksmanshipHunter:    ['Hunter',     'Marksmanship'],
-  SurvivalHunter:        ['Hunter',     'Survival'],
-  BrewmasterMonk:        ['Monk',       'Brewmaster'],
-  WindwalkerMonk:        ['Monk',       'Windwalker'],
-  MistweaverMonk:        ['Monk',       'Mistweaver'],
-  DisciplinePriest:      ['Priest',     'Discipline'],
-  HolyPriest:            ['Priest',     'Holy'],
-  ShadowPriest:          ['Priest',     'Shadow'],
-  AssassinationRogue:    ['Rogue',      'Assassination'],
-  OutlawRogue:           ['Rogue',      'Outlaw'],
-  SubtletyRogue:         ['Rogue',      'Subtlety'],
-  ElementalShaman:       ['Shaman',     'Elemental'],
-  EnhancementShaman:     ['Shaman',     'Enhancement'],
-  RestorationShaman:     ['Shaman',     'Restoration'],
-  AfflictionWarlock:     ['Warlock',    'Affliction'],
-  DemonologyWarlock:     ['Warlock',    'Demonology'],
-  DestructionWarlock:    ['Warlock',    'Destruction'],
-  DevastationEvoker:     ['Evoker',     'Devastation'],
-  PreservationEvoker:    ['Evoker',     'Preservation'],
-  AugmentationEvoker:    ['Evoker',     'Augmentation'],
-};
+/** Folder key -> [WCL className, WCL specName] - the small map the discovery fetchers read. */
+export type SpecWclMap = Record<string, [string, string]>;
 
-export const SPEC_TO_WCL = SPEC_TO_WCL_FORWARD;
+/**
+ * Derive the full spec universe from a WCL `gameData.classes` response. The folder key is
+ * `spec.slug + class.slug` (e.g. 'SubtletyRogue'); `className`/`specName` are the class/spec
+ * slugs (exactly what the rankings query takes); labels are WCL display names; the class icon
+ * is formulaic. The spec icon is left empty here - the orchestrator fills it from the spec's
+ * rulebook (`spec_icon`).
+ */
+export function mapClassesToSpecMeta(classes: WclGameClass[]): SpecMeta[] {
+  const metas: SpecMeta[] = [];
+  for (const cls of classes) {
+    const classIcon = `class_${cls.slug.toLowerCase()}`;
+    for (const spec of cls.specs ?? []) {
+      const folder = `${spec.slug}${cls.slug}`;
+      metas.push({
+        spec: folder,
+        className: cls.slug,
+        specName: spec.slug,
+        classLabel: cls.name,
+        specLabel: spec.name,
+        classIcon,
+        specIcon: '',
+      });
+    }
+  }
+  return metas;
+}
+
+/** Project the spec metas to the folder -> [className, specName] map the fetchers read. */
+export function specWclFromMetas(metas: SpecMeta[]): SpecWclMap {
+  const map: SpecWclMap = {};
+  for (const meta of metas) map[meta.spec] = [meta.className, meta.specName];
+  return map;
+}
 
 export const EXCLUDE_ZONE_PATTERNS = ['beta', 'ptr', 'mythic+', 'complete raids', 'delves', 'torghast'];
 

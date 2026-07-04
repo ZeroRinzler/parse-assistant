@@ -16,7 +16,7 @@ import {
   ENCOUNTERS_QUERY, RANKINGS_QUERY, type RankingsQueryVars,
 } from './wcl-queries.ts';
 import {
-  SPEC_TO_WCL, mapRankings, filterEncounters, groupEncountersByZone, protectedEncounterIds,
+  mapRankings, filterEncounters, groupEncountersByZone, protectedEncounterIds, type SpecWclMap,
 } from './wcl-mappers.ts';
 import type {
   WclExpansion, WclRawRanking, ParseRanking, IngestEncounter,
@@ -45,14 +45,14 @@ export interface CurrentContent {
 // Probe one representative encounter of a zone across PROBE_SPECS; the zone is live if
 // the summed non-anonymous ranking count reaches LIVE_RANKINGS_THRESHOLD. BudgetExceeded
 // propagates (stop cleanly); other per-spec errors are logged and treated as zero.
-async function isZoneLive(client: WclQueryClient, zoneEncounters: IngestEncounter[]): Promise<boolean> {
+async function isZoneLive(client: WclQueryClient, zoneEncounters: IngestEncounter[], specWcl: SpecWclMap): Promise<boolean> {
   const probeEncounter = zoneEncounters[0];
   if (!probeEncounter) return false;
   let realCount = 0;
   for (const probeSpec of PROBE_SPECS) {
     await client.assertBudget(PROBE_BUDGET_MARGIN);
     try {
-      const ranked = await getRankingsLite(client, probeSpec, probeEncounter.id, PROBE_COUNT, probeEncounter.partitionIds);
+      const ranked = await getRankingsLite(client, probeSpec, probeEncounter.id, specWcl, PROBE_COUNT, probeEncounter.partitionIds);
       realCount += ranked.length;
       if (realCount >= LIVE_RANKINGS_THRESHOLD) return true;
     } catch (err) {
@@ -67,7 +67,7 @@ async function isZoneLive(client: WclQueryClient, zoneEncounters: IngestEncounte
 // per-candidate-zone rankings probe). Returns the live encounters to ingest plus the
 // prune-protected id set. The probe runs once here, not per spec, so beta/PTR/test
 // zones cost a handful of queries total instead of one per spec per run.
-export async function getEncounters(client: WclQueryClient): Promise<CurrentContent> {
+export async function getEncounters(client: WclQueryClient, specWcl: SpecWclMap): Promise<CurrentContent> {
   const data = await client.query<{ worldData: { expansions: WclExpansion[] } }>(ENCOUNTERS_QUERY);
   const expansions = data.worldData.expansions;
   const candidates = filterEncounters(expansions);
@@ -75,7 +75,7 @@ export async function getEncounters(client: WclQueryClient): Promise<CurrentCont
 
   const encounters: IngestEncounter[] = [];
   for (const zoneEncounters of groupEncountersByZone(candidates).values()) {
-    if (await isZoneLive(client, zoneEncounters)) {
+    if (await isZoneLive(client, zoneEncounters, specWcl)) {
       encounters.push(...zoneEncounters);
     } else {
       logWarn('getEncounters', `zone "${zoneEncounters[0].zone}" dropped as non-live (no real rankings) - skipping ${zoneEncounters.length} encounter(s)`);
@@ -88,9 +88,9 @@ export async function getEncounters(client: WclQueryClient): Promise<CurrentCont
 // (current) when a zone has none. Server slug resolution is deferred to
 // enrichRanking; talent key comes from the parse's CombatantInfo.
 export async function getRankingsLite(
-  client: WclQueryClient, spec: string, encounterId: number, count = 10, partitionIds: number[] = [],
+  client: WclQueryClient, spec: string, encounterId: number, specWcl: SpecWclMap, count = 10, partitionIds: number[] = [],
 ): Promise<ParseRanking[]> {
-  const mapping = SPEC_TO_WCL[spec];
+  const mapping = specWcl[spec];
   if (!mapping) throw new Error(`Unknown spec: ${spec}`);
   const [className, specName] = mapping;
 
