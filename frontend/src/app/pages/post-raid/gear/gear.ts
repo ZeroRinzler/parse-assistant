@@ -3,7 +3,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { GameIconComponent } from '../../../shared/components/game-icon/game-icon';
 import { CollapsibleTextComponent } from '../../../shared/components/collapsible-text/collapsible-text';
 import { slotName, statusIcon } from '../../../shared/gear/gear-comparison';
-import { logWarn } from '../../../core/log';
+import { LatestLoad } from '../../../shared/latest-load';
 import { GearFeatureService, GearComparisonView, emptyGearView } from './gear.service';
 
 /**
@@ -44,8 +44,7 @@ export class GearComponent {
   protected readonly slotName = slotName;
   protected readonly statusIcon = statusIcon;
 
-  // Bumped on every reload so a slow earlier response can't overwrite a newer one.
-  private loadToken = 0;
+  private readonly loader = new LatestLoad();
 
   constructor() {
     effect(() => {
@@ -54,14 +53,14 @@ export class GearComponent {
       const report = this.report();
       const fight = this.fight();
       const player = this.player();
-      const token = ++this.loadToken;
       const load = report && fight && player
         ? this.gear.loadComparisonView(spec, encounterId, report, fight, player)
         : this.gear.loadBenchView(spec, encounterId);
-      void load
-        .then(view => { if (token === this.loadToken) this._view.set(view); })
-        .catch(err => logWarn('gear.loadComparisonView', err))
-        .finally(() => { if (token === this.loadToken) this.busyChange.emit(false); });
+      this.loader.run(load, {
+        context: 'gear.loadComparisonView',
+        apply: view => this._view.set(view),
+        settled: () => this.busyChange.emit(false),
+      });
     });
   }
 }

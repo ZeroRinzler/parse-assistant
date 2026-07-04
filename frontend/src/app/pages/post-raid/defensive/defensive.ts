@@ -5,7 +5,7 @@ import {
   bucketFindings, CAT_LABEL, FindingRow, FindingTableComponent, onPlanFromEntries, rowsFromEntries,
 } from '../../../shared/components/finding-table/finding-table';
 import { WindowComparisonComponent } from '../../../shared/components/window-comparison/window-comparison';
-import { logWarn } from '../../../core/log';
+import { LatestLoad } from '../../../shared/latest-load';
 import { DefensiveFeatureService, DefensiveMapAnchor } from './defensive.service';
 
 /**
@@ -46,8 +46,7 @@ export class DefensiveComponent {
   private readonly _anchors = signal<DefensiveMapAnchor[]>([]);
   protected readonly windows = this._windows.asReadonly();
 
-  // Bumped on every reload so a slow earlier response can't overwrite a newer one.
-  private loadToken = 0;
+  private readonly loader = new LatestLoad();
 
   constructor() {
     effect(() => {
@@ -56,18 +55,17 @@ export class DefensiveComponent {
       const report = this.report();
       const fight = this.fight();
       const player = this.player();
-      const token = ++this.loadToken;
-      void this.defensive.loadAnalysisView(spec, encounterId, report, fight, player)
-        .then(view => {
-          if (token !== this.loadToken) return;
+      this.loader.run(this.defensive.loadAnalysisView(spec, encounterId, report, fight, player), {
+        context: 'defensive.loadAnalysisView',
+        apply: view => {
           this._findings.set(view.findings);
           this._spellIdsByName.set(view.spellIdsByName);
           this._iconByName.set(view.iconByName);
           this._windows.set(view.windows);
           this._anchors.set(view.anchors);
-        })
-        .catch(err => logWarn('defensive.loadAnalysisView', err))
-        .finally(() => { if (token === this.loadToken) this.busyChange.emit(false); });
+        },
+        settled: () => this.busyChange.emit(false),
+      });
     });
   }
 

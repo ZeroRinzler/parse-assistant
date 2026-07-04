@@ -3,6 +3,7 @@ import { DecimalPipe } from '@angular/common';
 import { GameIconComponent } from '../../../shared/components/game-icon/game-icon';
 import { CollapsibleTextComponent } from '../../../shared/components/collapsible-text/collapsible-text';
 import { FormatDurationPipe } from '../../../shared/pipes/format-duration-pipe';
+import { LatestLoad } from '../../../shared/latest-load';
 import { RotationFeatureService, CdPlanRow } from './rotation.service';
 
 /**
@@ -27,16 +28,15 @@ export class RotationCdPlanComponent {
 
   protected readonly items = signal<CdPlanRow[]>([]);
 
-  private loadToken = 0;
+  private readonly loader = new LatestLoad();
 
   constructor() {
     effect(() => {
       const spec = this.spec();
       const encounterId = this.encounterId();
-      const token = ++this.loadToken;
-      void this.rotation.loadPlanView(spec, encounterId).then(rows => {
-        if (token !== this.loadToken) return;
-        this.items.set(rows);
+      this.loader.run(this.rotation.loadPlanView(spec, encounterId), {
+        context: 'rotation.loadPlanView',
+        apply: rows => this.items.set(rows),
       });
     });
   }

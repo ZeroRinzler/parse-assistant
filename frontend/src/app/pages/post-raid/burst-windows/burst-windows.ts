@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, effect, inject, input, output, signal } from '@angular/core';
 import { WindowComparisonComponent } from '../../../shared/components/window-comparison/window-comparison';
 import { ComparisonWindow } from '../../../core/models/window-comparison.models';
-import { logWarn } from '../../../core/log';
+import { LatestLoad } from '../../../shared/latest-load';
 import { BurstFeatureService, BurstMapAnchor } from './burst.service';
 
 /**
@@ -40,8 +40,7 @@ export class BurstWindowsComponent {
   private readonly _anchors = signal<BurstMapAnchor[]>([]);
   protected readonly windows = this._windows.asReadonly();
 
-  // Bumped on every reload so a slow earlier response can't overwrite a newer one.
-  private loadToken = 0;
+  private readonly loader = new LatestLoad();
 
   constructor() {
     effect(() => {
@@ -50,18 +49,17 @@ export class BurstWindowsComponent {
       const report = this.report();
       const fight = this.fight();
       const player = this.player();
-      const token = ++this.loadToken;
       const load = report && fight && player
         ? this.burst.loadPlayerView(spec, encounterId, report, fight, player)
         : this.burst.loadBenchView(spec, encounterId);
-      void load
-        .then(view => {
-          if (token !== this.loadToken) return;
+      this.loader.run(load, {
+        context: 'burst.loadPlayerView',
+        apply: view => {
           this._windows.set(view.windows);
           this._anchors.set(view.anchors);
-        })
-        .catch(err => logWarn('burst.loadPlayerView', err))
-        .finally(() => { if (token === this.loadToken) this.busyChange.emit(false); });
+        },
+        settled: () => this.busyChange.emit(false),
+      });
     });
   }
 

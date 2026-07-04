@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal } from '@angular/core';
 import { FindingTableComponent, OnPlanChip } from '../../../shared/components/finding-table/finding-table';
-import { logWarn } from '../../../core/log';
+import { LatestLoad } from '../../../shared/latest-load';
 import {
   RotationFeatureService, RotationFindingRow, RotationOnPlanChip,
 } from './rotation.service';
@@ -41,8 +41,7 @@ export class RotationComponent {
   protected readonly ruleOnPlanChips = computed<OnPlanChip[]>(() =>
     this.ruleOnPlan().map(label => ({ name: label, spellId: null, icon: '' })));
 
-  // Bumped on every reload so a slow earlier response can't overwrite a newer one.
-  private loadToken = 0;
+  private readonly loader = new LatestLoad();
 
   constructor() {
     effect(() => {
@@ -51,17 +50,16 @@ export class RotationComponent {
       const reportCode = this.reportCode();
       const fightId = this.fightId();
       const playerId = this.playerId();
-      const token = ++this.loadToken;
-      void this.rotation.loadPlayerView(spec, encounterId, reportCode, fightId, playerId)
-        .then(view => {
-          if (token !== this.loadToken) return;
+      this.loader.run(this.rotation.loadPlayerView(spec, encounterId, reportCode, fightId, playerId), {
+        context: 'rotation.loadPlayerView',
+        apply: view => {
           this.ruleRows.set(view.ruleRows);
           this.ruleOnPlan.set(view.ruleOnPlan);
           this.offensiveRows.set(view.offensiveRows);
           this.onPlan.set(view.onPlan);
-        })
-        .catch(err => logWarn('rotation.loadPlayerView', err))
-        .finally(() => { if (token === this.loadToken) this.busyChange.emit(false); });
+        },
+        settled: () => this.busyChange.emit(false),
+      });
     });
   }
 }

@@ -3,6 +3,7 @@ import { DecimalPipe } from '@angular/common';
 import { GameIconComponent } from '../../../shared/components/game-icon/game-icon';
 import { CollapsibleTextComponent } from '../../../shared/components/collapsible-text/collapsible-text';
 import { FormatDurationPipe } from '../../../shared/pipes/format-duration-pipe';
+import { LatestLoad } from '../../../shared/latest-load';
 import { DefensiveFeatureService, DefensivePlanRow } from './defensive.service';
 
 /**
@@ -29,17 +30,15 @@ export class DefensivePlanComponent {
   private readonly _items = signal<DefensivePlanRow[]>([]);
   protected readonly items = this._items.asReadonly();
 
-  // Bumped on every reload so a slow earlier response can't overwrite a newer one.
-  private loadToken = 0;
+  private readonly loader = new LatestLoad();
 
   constructor() {
     effect(() => {
       const spec = this.spec();
       const encounterId = this.encounterId();
-      const token = ++this.loadToken;
-      void this.defensive.loadPlan(spec, encounterId).then(rows => {
-        if (token !== this.loadToken) return;
-        this._items.set(rows);
+      this.loader.run(this.defensive.loadPlan(spec, encounterId), {
+        context: 'defensive.loadPlan',
+        apply: rows => this._items.set(rows),
       });
     });
   }
