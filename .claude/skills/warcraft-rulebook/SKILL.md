@@ -9,7 +9,9 @@ A rulebook (`rulebook.json`) is the per-spec contract the ingestion transforms c
 major offensive cooldowns, personal defensives, a handful of machine-checkable usage rules - each with a
 **real WoW spell id** - and the spec's icon stem. One file per spec under
 `frontend/public/data/specs/{spec}/rulebook.json`. The agent reads the sources and writes the JSON
-directly - no copy-paste, no `guides.json`, no CLI.
+directly - no copy-paste, no `guides.json`, no CLI. Every run is a **clean-slate regeneration**: build each
+rulebook fresh from the sources below and overwrite the existing file - never read, copy, or patch the old
+`rulebook.json`.
 
 The schema is the authoritative shape: **`.claude/skills/warcraft-ingestion/rulebook.schema.json`**. Read
 it first and make the output conform to it - the schema is the only contract, since ingestion consumes
@@ -53,10 +55,13 @@ syncs, and the opener, plus a `talents=` string. Fetch the raw profile:
 https://raw.githubusercontent.com/simulationcraft/simc/<branch>/profiles/<TIER>/<TIER>_<ClassName>_<SpecName>.simc
 ```
 
-- `<branch>` is the current-expansion dev branch: **`midnight`** now. Fall back to `thewarwithin` if it 404s.
-- `<TIER>` is the latest tier profile dir, e.g. **`MID1`**. Do not hard-trust it across tiers - list
-  `https://api.github.com/repos/simulationcraft/simc/contents/profiles?ref=<branch>` and pick the highest
-  `MID<n>` (or `TWW<n>`). The path moves every tier; discover it.
+- `<branch>` is SimC's **current-expansion branch** - `midnight` now (`thewarwithin` was the prior one).
+  **Never use `main` or the repo default: they carry no current profiles (`.../simc/main/profiles/...` 404s).**
+  If unsure of the name, it is the current WoW expansion lowercased with no spaces; confirm it resolves by
+  checking `https://raw.githubusercontent.com/simulationcraft/simc/<branch>/profiles/` before fetching.
+- `<TIER>` is the latest tier profile dir on that branch, e.g. **`MID1`**. Do not hard-trust it across tiers -
+  list `https://api.github.com/repos/simulationcraft/simc/contents/profiles?ref=<branch>` and pick the highest
+  `MID<n>`. The path moves every tier; discover it.
 - `<ClassName>_<SpecName>` are the no-space forms (e.g. `Rogue_Subtlety`, `Hunter_BeastMastery`,
   `DeathKnight_Frost`). If a fetch 404s, list the tier dir to confirm the exact filename (SimC sometimes
   suffixes hero-talent variants; take the base spec file).
@@ -93,13 +98,15 @@ logs rather than memory. Ground the ids here, at authoring time - ingestion does
 
 ## Step 3 - fan out one isolated subagent per spec
 
-Spawn one subagent per selected spec. **Each subagent runs in a clean, empty context with exactly one
-job: produce that single spec's rulebook.** Give it only its own folder key + `[className, specName]` +
-the schema + the source recipe + the output path - nothing about any other spec. Subagents share no
-context and must never see or reference another spec, so rulebooks cannot mix (a Fury Warrior rulebook
-contains only Fury Warrior abilities, never Arms). Batch the subagents for concurrency.
+**Always spawn one subagent per selected spec - even when only a single spec is chosen.** The main agent
+never generates a rulebook inline; its whole job is to pick the specs (Step 1), spawn the subagents, and
+collect their reports. **Each subagent runs in a clean, empty context with exactly one job: produce that
+single spec's rulebook from scratch.** Give it only its own folder key + `[className, specName]` + the
+schema + the source recipe + the output path - nothing about any other spec, and nothing about the existing
+rulebook. Subagents share no context and must never see or reference another spec, so rulebooks cannot mix
+(a Fury Warrior rulebook contains only Fury Warrior abilities, never Arms). Batch the subagents for concurrency.
 
-Each subagent:
+Each subagent (starting from a clean slate - it does not read or reuse the existing `rulebook.json`):
 1. Fetches its SimC profile (skip for the healer specs SimC omits - go straight to Wowhead + WCL kit enumeration).
 2. Fetches its Wowhead guide, captures the spec icon stem, and grounds ids against WCL.
 3. Extracts the rulebook JSON to the schema (all `major_cooldowns`, all `defensives` with cooldown >= 15s,
@@ -112,7 +119,7 @@ examples in the schema's `$defs`.
 
 ## Step 4 - write
 
-Write to `frontend/public/data/specs/{spec}/rulebook.json` (pretty-printed; set `spec` to the folder key
+Write (overwriting any existing file) to `frontend/public/data/specs/{spec}/rulebook.json` (pretty-printed; set `spec` to the folder key
 and the **required** `spec_icon` to the captured stem - never leave it empty; leave `guide_count`/`saved_at` out). Conform to the schema - it is
 the only contract. Ingestion consumes the rulebook directly with no code-side check, so every id must be
 real; that is what the WCL grounding in Step 2 is for.
