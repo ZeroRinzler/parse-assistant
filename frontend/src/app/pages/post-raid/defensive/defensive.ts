@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal } from '@angular/core';
 import { AnalysisFinding } from '../../../core/models/analysis.models';
-import { ComparisonWindow, WindowSpell } from '../../../core/models/window-comparison.models';
+import { ComparisonWindow } from '../../../core/models/window-comparison.models';
 import {
   bucketFindings, CAT_LABEL, FindingRow, FindingTableComponent, onPlanFromEntries, rowsFromEntries,
 } from '../../../shared/components/finding-table/finding-table';
@@ -89,13 +89,8 @@ export class DefensiveComponent {
   /** A timed finding's map button: open the map at that cast time (boss reference). */
   protected onFindingMap(row: FindingRow): void {
     if (row.timestampMs == null) return;
-    const spells: WindowSpell[] = row.spellId != null && row.name != null
-      ? [{ id: row.spellId, icon: row.icon, name: row.name }]
-      : [];
     this.openMap.emit({
       timeS: row.timestampMs / 1000,
-      label: row.name ?? 'Defensive',
-      spells,
       refGameId: null,
     });
   }

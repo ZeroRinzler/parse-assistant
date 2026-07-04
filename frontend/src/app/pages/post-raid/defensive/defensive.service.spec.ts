@@ -292,17 +292,14 @@ describe('playerUsefulTiming', () => {
 });
 
 describe('defensiveMapAnchor', () => {
-  const abilities = { [CLOAK_OF_SHADOWS]: { icon: 'cloak', name: 'Cloak of Shadows' } };
-  it('carries seek time, label, defensive spell and the dominant enemy game id', () => {
+  it('carries seek time and the dominant enemy game id', () => {
     const window = { time_s: 30, window_length_s: 5, defensive_name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS, ref_game_id: 6666 } as BurstWindow;
-    expect(defensiveMapAnchor(window, abilities)).toEqual({
-      timeS: 30, label: 'Cloak of Shadows', spells: [{ id: CLOAK_OF_SHADOWS, icon: 'cloak', name: 'Cloak of Shadows' }], refGameId: 6666,
-    });
+    expect(defensiveMapAnchor(window)).toEqual({ timeS: 30, refGameId: 6666 });
   });
 
-  it('falls back to a generic label and null ref when absent', () => {
+  it('falls back to a null ref when absent', () => {
     const window = { time_s: 5, window_length_s: 5 } as BurstWindow;
-    expect(defensiveMapAnchor(window, {})).toEqual({ timeS: 5, label: 'Defensive', spells: [], refGameId: null });
+    expect(defensiveMapAnchor(window)).toEqual({ timeS: 5, refGameId: null });
   });
 });
 
@@ -323,7 +320,7 @@ describe('buildDefensiveWindows', () => {
     expect(windows[0].status).toBe('warn');
     expect(windows[0].spells).toEqual([{ id: CLOAK_OF_SHADOWS, icon: 'cloak', name: 'Cloak of Shadows' }]);
     expect(windows[0].detailRows[0]).toMatchObject({ spellId: 700, label: 'Boss Hit', icon: 'hit', playerPct: 700, topAvg: 600 });
-    expect(anchors[0]).toEqual({ timeS: 30, label: 'Cloak of Shadows', spells: [{ id: CLOAK_OF_SHADOWS, icon: 'cloak', name: 'Cloak of Shadows' }], refGameId: 6666 });
+    expect(anchors[0]).toEqual({ timeS: 30, refGameId: 6666 });
   });
 
   it('marks an uncovered window bad', () => {

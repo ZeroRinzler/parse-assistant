@@ -3,16 +3,7 @@
     No position data for this encounter.
   </p>
 } @else {
-  <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
-    @if (contextSpells().length) {
-      <div class="flex flex-wrap items-center gap-2">
-        @for (spell of contextSpells(); track spell.id) {
-          <wl-game-icon [id]="spell.id" [icon]="spell.icon" [name]="spell.name" />
-        }
-      </div>
-    } @else if (contextLabel()) {
-      <span class="text-[12px] text-[var(--muted)]">{{ contextLabel() }}</span>
-    }
+  <div class="mb-2 flex flex-wrap items-center justify-end gap-2">
     <mat-form-field appearance="outline" class="w-[200px]">
       <mat-label>Reference</mat-label>
       <mat-select [value]="refValue()" (selectionChange)="onRefChange($event.value)">

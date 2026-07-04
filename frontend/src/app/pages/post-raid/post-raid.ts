@@ -269,7 +269,7 @@ export class PostRaidComponent {
   /** Defensive cards carry a reference enemy gameID; convert it to a MapAnchor reference. */
   protected onDefensiveOpenMap(anchor: DefensiveMapAnchor): void {
     this.mapFeature.openAt({
-      timeS: anchor.timeS, label: anchor.label, spells: anchor.spells,
+      timeS: anchor.timeS,
       reference: anchor.refGameId != null ? { kind: 'enemy', gameId: anchor.refGameId } : { kind: 'boss' },
     });
   }

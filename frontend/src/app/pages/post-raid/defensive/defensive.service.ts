@@ -21,7 +21,7 @@ import {
   AnalysisFinding, BurstWindow, PlayerBurstWindow, PlayerDefensive,
 } from '../../../core/models/analysis.models';
 import { PerDefensiveBenchmark } from '../../../core/models/encounter.models';
-import { ComparisonWindow, WindowStatus, RangeRow, WindowSpell } from '../../../core/models/window-comparison.models';
+import { ComparisonWindow, WindowStatus, RangeRow } from '../../../core/models/window-comparison.models';
 import { logWarn } from '../../../core/log';
 import {
   benchExpectedUses, fmtClock, isOutlierAbove, sortBySeverity,
@@ -37,8 +37,6 @@ type AbilityIcons = Record<number, BakedAbility>;
 /** Anchor for opening the positioning map on a defensive window (emitted as an output). */
 export interface DefensiveMapAnchor {
   timeS: number;
-  label: string;
-  spells: WindowSpell[];
   refGameId: number | null;
 }
 
@@ -371,13 +369,10 @@ export function defensiveDetailRows(
   }));
 }
 
-/** Map anchor for a defensive window: when to seek, label, defensive spell, and the dominant enemy. */
-export function defensiveMapAnchor(window: BurstWindow, abilities: AbilityIcons): DefensiveMapAnchor {
-  const label = window.defensive_name ?? window.common_defensives?.[0] ?? 'Defensive';
+/** Map anchor for a defensive window: when to seek and the dominant enemy. */
+export function defensiveMapAnchor(window: BurstWindow): DefensiveMapAnchor {
   return {
     timeS: window.time_s,
-    label,
-    spells: windowSpells(window.spell_id != null ? [window.spell_id] : [], abilities),
     refGameId: window.ref_game_id ?? null,
   };
 }
@@ -421,7 +416,7 @@ export function buildDefensiveWindows(
       overview: { label: '', icon: '', playerPct: playerDamage, topAvg: window.dmg_avg, topMin: window.dmg_min, topMax: window.dmg_max },
       detailRows: defensiveDetailRows(window.ability_breakdown, playerWindow, abilities),
     });
-    anchors.push(defensiveMapAnchor(window, abilities));
+    anchors.push(defensiveMapAnchor(window));
   });
   return { windows, anchors };
 }

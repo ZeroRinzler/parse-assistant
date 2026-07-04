@@ -2,9 +2,8 @@
  * Map slice runtime shell + its pure positioning functions, colocated.
  *
  * `MapFeatureService` is the imperative shell (the components inject only it). It
- * owns the positioning-panel state that the global `PositioningPanelService` used
- * to hold (open / anchorTime / reference / contextLabel / contextSpells plus the
- * loaded bench and the optional live overlay), reads the prepared bench via the
+ * owns the positioning-panel state (open / anchorTime / reference
+ * plus the loaded bench and the optional live overlay), reads the prepared bench via the
  * swappable `MAP_DATA_SOURCE`, and builds the live overlay from `WclApiService`
  * position events. Every calculated field is its own small, exported,
  * individually-tested pure function below - no separate vm file.
@@ -18,7 +17,6 @@
 import { Injectable, Injector, inject, signal } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { WclEvent, WclFight } from '../../../core/models/wcl.models';
-import { WindowSpell } from '../../../core/models/window-comparison.models';
 import { EncounterPositions, ReferenceSelector } from '../../../core/models/positioning.models';
 import { logWarn } from '../../../core/log';
 import { posActorId } from './map-positions';
@@ -81,8 +79,6 @@ interface PendingOverlay {
 /** The anchor a feature card emits (and the page forwards) to open the map. */
 export interface MapAnchor {
   timeS: number;
-  label: string;
-  spells: WindowSpell[];
   /** Optional reference override; defaults to the boss. */
   reference?: ReferenceSelector;
 }
@@ -204,8 +200,6 @@ export class MapFeatureService {
   readonly open = signal(false);
   readonly anchorTime = signal(0);
   readonly reference = signal<ReferenceSelector>({ kind: 'boss' });
-  readonly contextLabel = signal('');
-  readonly contextSpells = signal<WindowSpell[]>([]);
 
   /** True once top-parse positions are available, so the page can show map buttons. */
   ready(): boolean { return !!this.positions(); }
@@ -250,8 +244,6 @@ export class MapFeatureService {
   openAt(anchor: MapAnchor): void {
     this.anchorTime.set(anchor.timeS);
     this.reference.set(anchor.reference ?? { kind: 'boss' });
-    this.contextLabel.set(anchor.label);
-    this.contextSpells.set(anchor.spells);
     this.open.set(true);
     // First open triggers the deferred overlay fetch; a no-op once loaded, or when there is
     // no pending pull (bench-only /pre).
