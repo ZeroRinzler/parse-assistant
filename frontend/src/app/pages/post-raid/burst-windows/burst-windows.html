@@ -2,7 +2,9 @@
   [windows]="windows()"
   [higherIsBetter]="true"
   [showMap]="showMap()"
+  [showClip]="showClip()"
   heading="Burst Windows"
   subtitle="Damage in each burst window vs top parses."
-  (openMap)="onOpenMap($event)">
+  (openMap)="onOpenMap($event)"
+  (openClip)="onOpenClip($event)">
 </wl-window-comparison>

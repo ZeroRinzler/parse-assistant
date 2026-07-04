@@ -79,9 +79,18 @@ interface PendingOverlay {
 /** The anchor a feature card emits (and the page forwards) to open the map. */
 export interface MapAnchor {
   timeS: number;
+  /**
+   * Length of the bench window this anchor represents, in seconds. A burst/defensive window
+   * plays its exact span (`timeS` to `timeS + windowLengthS`); a point-in-time cast omits it
+   * (0/undefined) and gets pre/post padding instead.
+   */
+  windowLengthS?: number;
   /** Optional reference override; defaults to the boss. */
   reference?: ReferenceSelector;
 }
+
+/** Seconds of padding on each side of a point-in-time map anchor (a single cast). */
+export const MAP_POINT_PAD_S = 5;
 
 /* ----------------------------- pure functions ----------------------------- */
 
@@ -200,6 +209,9 @@ export class MapFeatureService {
   readonly open = signal(false);
   readonly anchorTime = signal(0);
   readonly reference = signal<ReferenceSelector>({ kind: 'boss' });
+  /** Seconds of the scrub window before / after `anchorTime`, set per anchor by `openAt`. */
+  readonly preS = signal(MAP_POINT_PAD_S);
+  readonly postS = signal(MAP_POINT_PAD_S);
 
   /** True once top-parse positions are available, so the page can show map buttons. */
   ready(): boolean { return !!this.positions(); }
@@ -244,6 +256,11 @@ export class MapFeatureService {
   openAt(anchor: MapAnchor): void {
     this.anchorTime.set(anchor.timeS);
     this.reference.set(anchor.reference ?? { kind: 'boss' });
+    // A bench window scrubs its exact span (0 before, its length after); a point-in-time
+    // cast gets symmetric padding on each side.
+    const isWindow = (anchor.windowLengthS ?? 0) > 0;
+    this.preS.set(isWindow ? 0 : MAP_POINT_PAD_S);
+    this.postS.set(isWindow ? anchor.windowLengthS! : MAP_POINT_PAD_S);
     this.open.set(true);
     // First open triggers the deferred overlay fetch; a no-op once loaded, or when there is
     // no pending pull (bench-only /pre).

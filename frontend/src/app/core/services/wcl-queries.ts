@@ -32,6 +32,7 @@ export interface RankingsQueryVars { encounterID: number; className: string; spe
 export const REPORT_Q = `
 query($code:String!){reportData{report(code:$code){
   title
+  startTime
   fights(killType:All){id name startTime endTime kill encounterID difficulty friendlyPlayers}
   masterData{
     actors(type:"Player"){id name subType server}

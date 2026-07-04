@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, effect, inject, input, output, signal } from '@angular/core';
 import { WindowComparisonComponent } from '../../../shared/components/window-comparison/window-comparison';
 import { ComparisonWindow } from '../../../core/models/window-comparison.models';
+import { ClipAnchor } from '../../../core/models/capture.models';
 import { LatestLoad } from '../../../shared/latest-load';
 import { BurstFeatureService, BurstMapAnchor } from './burst.service';
 
@@ -31,13 +32,17 @@ export class BurstWindowsComponent {
   readonly player = input<number>(0);
   /** Map button is available once the page has loaded top-parse positions. */
   readonly showMap = input<boolean>(false);
+  /** Clip button is available once the page's rolling buffer covers this fight. */
+  readonly showClip = input<boolean>(false);
 
   readonly openMap = output<BurstMapAnchor>();
+  readonly openClip = output<ClipAnchor>();
   /** Emits false when the card has finished loading; the page gates its spinner on it. */
   readonly busyChange = output<boolean>();
 
   private readonly _windows = signal<ComparisonWindow[]>([]);
   private readonly _anchors = signal<BurstMapAnchor[]>([]);
+  private readonly _clipAnchors = signal<ClipAnchor[]>([]);
   protected readonly windows = this._windows.asReadonly();
 
   private readonly loader = new LatestLoad();
@@ -57,6 +62,7 @@ export class BurstWindowsComponent {
         apply: view => {
           this._windows.set(view.windows);
           this._anchors.set(view.anchors);
+          this._clipAnchors.set(view.clipAnchors);
         },
         settled: () => this.busyChange.emit(false),
       });
@@ -66,5 +72,10 @@ export class BurstWindowsComponent {
   protected onOpenMap(index: number): void {
     const anchor = this._anchors()[index];
     if (anchor) this.openMap.emit(anchor);
+  }
+
+  protected onOpenClip(index: number): void {
+    const anchor = this._clipAnchors()[index];
+    if (anchor) this.openClip.emit(anchor);
   }
 }

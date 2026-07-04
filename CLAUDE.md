@@ -15,7 +15,7 @@ This file is the always-on **router**: the few rules that apply on every turn, p
 
 ## Architecture at a glance
 
-The app is built as **per-use-case vertical slices** (rotation / burst / defensive / gear / map), functional-core / imperative-shell, fed by exactly **two pass-through API services** at runtime (`WclApiService`, `DataFileApiService`). Two symmetric pipelines meet at the static data files in `frontend/public/data/specs/**`:
+The app is built as **per-use-case vertical slices** (rotation / burst / defensive / gear / map / live), functional-core / imperative-shell, fed by exactly **two pass-through API services** at runtime (`WclApiService`, `DataFileApiService`). Two symmetric pipelines meet at the static data files in `frontend/public/data/specs/**`. The `live` slice (`pages/post-raid/live/`) is the exception to the data pipeline: it owns the live-sync + screen-recording toggles and the per-window clip replay (a `getDisplayMedia` rolling buffer; clips are cut from it and memoized in memory), so it reads no bench data and keeps all footage in the browser session.
 
 ```
 INGEST (Node, scripts/ingest)            RUNTIME (browser, Angular)
@@ -29,7 +29,7 @@ Ingestion runs the **same** `*TransformService`s the browser uses, headlessly. T
 
 ```
 frontend/        # the entire Angular 22 app
-  src/app/pages/ # post-raid (/, incl. the live-sync toggle), pre-fight (/pre)
+  src/app/pages/ # post-raid (/, incl. the live/ slice: live-sync + recording toggles, clip replay), pre-fight (/pre)
   src/app/core/  # the two API services, data-source token, models
   scripts/ingest # ingestion orchestrator + discovery helpers (run via tsx)
   public/data/specs/  # static ingested data (slices, encounters, positions, rulebooks) - NOT tracked on main; see below
@@ -60,6 +60,7 @@ Load the matching skill(s) **before** you start that step. The `warcraft-*` skil
 | Writing user-facing copy, findings, microcopy, or anything branded (titles, nav, banners, READMEs, favicon) | **warcraft-copy** |
 | Working on a vertical slice, a transform, analysis math, or layer boundaries | **warcraft-architecture** |
 | Touching WCL queries, gear / spec / talent / enchant extraction, positions, or `wcl-auth` / the embedded secret | **warcraft-wcl-data** |
+| Working on the live slice (live-sync, screen recording, the clip replay flyover) | **warcraft-frontend** + **warcraft-architecture** |
 | Generating or refreshing a spec's `rulebook.json` (one, some, or all specs) | **warcraft-rulebook** |
 | Ingestion, `data/specs` file shapes, rulebook consumption/schema, or `INGEST_VERSION` | **warcraft-ingestion** |
 | Writing or changing tests | **warcraft-testing** |

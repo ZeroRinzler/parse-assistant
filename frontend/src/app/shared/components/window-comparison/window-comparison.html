@@ -92,6 +92,11 @@
             <mat-icon>my_location</mat-icon>
           </button>
         }
+        @if (showClip()) {
+          <button mat-icon-button aria-label="Watch clip" (click)="openClip.emit(activeIndex())">
+            <mat-icon>videocam</mat-icon>
+          </button>
+        }
         @if (!activeIsMuted()) {
           <span class="tabular-nums text-xs flex items-baseline gap-2">
             <span class="text-[var(--muted)]">{{ w.overview.playerPct | formatDamage }}</span>

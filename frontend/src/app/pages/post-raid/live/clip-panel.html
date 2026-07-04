@@ -1,0 +1,5 @@
+@if (clip.open()) {
+  <wl-flyover-panel heading="Replay" closeLabel="Close replay" (closed)="clip.close()">
+    <wl-clip-player />
+  </wl-flyover-panel>
+}

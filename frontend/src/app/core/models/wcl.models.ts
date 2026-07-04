@@ -48,6 +48,8 @@ export interface WclEvent {
 
 export interface WclReport {
   title: string;
+  /** Unix epoch ms of the report's first logged event; the shared clock for clip correlation. */
+  startTime: number;
   fights: WclFight[];
   masterData: {
     actors: { id: number; name: string; subType: string; server: string }[];

@@ -21,11 +21,15 @@ export class WindowComparisonComponent {
   readonly higherIsBetter = input<boolean>(true);
   readonly fightDuration = input<number>(0);
   readonly showMap = input<boolean>(false);
+  /** Whether a "watch clip" button shows (the page owns recording + the clip panel). */
+  readonly showClip = input<boolean>(false);
   // Casts column is meaningful for burst (offensive) windows only; hidden for defensives.
   readonly showCasts = input<boolean>(true);
   readonly heading = input<string>('');
   readonly subtitle = input<string>('');
   readonly openMap = output<number>();
+  /** Emits the active window index when its clip button is clicked; the page forwards it. */
+  readonly openClip = output<number>();
 
   // Minimum center-to-center gap between adjacent segments, as a percentage of
   // the track width, so buttons never visually collide on a crowded timeline.

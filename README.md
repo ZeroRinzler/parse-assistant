@@ -12,6 +12,7 @@ A web-based diagnostic tool for Mythic WoW raiders. It fetches your combat data 
 - **Maps burst windows** - surfaces recurring damage windows across top parses and the cooldowns active in them.
 - **Evaluates rotation rules** - a rulebook-driven engine, not hardcoded spec logic.
 - **Pre-fight gear check** - compares your trinkets, talents, and enchants against top parsers for each boss.
+- **Replays your pull** - opt-in screen recording during a live raid, then a clip of each burst/defensive window cut to the WCL timeline. Everything stays in the browser; nothing is uploaded.
 
 All thresholds are derived from real top-parse data for the same encounter and spec, not arbitrary constants.
 

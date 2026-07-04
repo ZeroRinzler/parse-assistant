@@ -1,6 +1,6 @@
 import {
   ChangeDetectionStrategy, Component,
-  inject, signal, computed,
+  inject, signal, computed, effect,
 } from '@angular/core';
 import { toObservable, toSignal, takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { AbstractControl, FormControl, ReactiveFormsModule, ValidationErrors } from '@angular/forms';
@@ -11,11 +11,10 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
-import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { WclApiService } from '../../core/services/wcl-api';
-import { LiveModeState } from '../../core/services/live-mode-state';
 import { LiveReportSyncService, POLL_INTERVAL_MS } from '../../core/services/live-report-sync';
 import { WclFight, WclPlayer, WclReport, PlayerDetailGroups } from '../../core/models/wcl.models';
+import { ClipAnchor } from '../../core/models/capture.models';
 import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner/loading-spinner';
 import { RotationComponent } from './rotation/rotation';
 import { BurstWindowsComponent } from './burst-windows/burst-windows';
@@ -24,6 +23,9 @@ import { DefensiveMapAnchor } from './defensive/defensive.service';
 import { GearComponent } from './gear/gear';
 import { MapPanelComponent } from './map/map-panel';
 import { MapFeatureService, MapAnchor } from './map/map.service';
+import { LiveCaptureFeatureService } from './live/live-capture.service';
+import { LiveControlsComponent } from './live/live-controls';
+import { ClipPanelComponent } from './live/clip-panel';
 import { FormatDurationPipe } from '../../shared/pipes/format-duration-pipe';
 import { FormatSpecPipe } from '../../shared/pipes/format-spec-pipe';
 import { SpecIconPipe } from '../../shared/pipes/spec-icon-pipe';
@@ -166,9 +168,9 @@ export function specOf(groups: PlayerDetailGroups, playerId: number): string {
   selector: 'wl-post-raid',
   imports: [
     ReactiveFormsModule, MatFormFieldModule, MatInputModule, MatSelectModule,
-    MatButtonModule, MatCardModule, MatSlideToggleModule,
+    MatButtonModule, MatCardModule,
     LoadingSpinnerComponent, ArtIconComponent, RotationComponent, BurstWindowsComponent,
-    DefensiveComponent, GearComponent, MapPanelComponent,
+    DefensiveComponent, GearComponent, MapPanelComponent, LiveControlsComponent, ClipPanelComponent,
     FormatDurationPipe, FormatSpecPipe, SpecIconPipe, ClassIconPipe, BossIconPipe,
   ],
   // No reserved subscript strip under this page's form fields; a field grows to
@@ -180,14 +182,23 @@ export function specOf(groups: PlayerDetailGroups, playerId: number): string {
 export class PostRaidComponent {
   private readonly wclApi = inject(WclApiService);
   private readonly mapFeature = inject(MapFeatureService);
-  private readonly liveMode = inject(LiveModeState);
+  protected readonly liveCapture = inject(LiveCaptureFeatureService);
   private readonly liveSync = inject(LiveReportSyncService);
   private readonly selectionStore = inject(SelectionStore);
 
   protected readonly reportControl = new FormControl('', { nonNullable: true, validators: [reportCodeValidator] });
   protected readonly fightControl = new FormControl<number | null>(null);
   protected readonly playerControl = new FormControl<number | null>(null);
-  protected readonly liveControl = new FormControl(false, { nonNullable: true });
+
+  constructor() {
+    // Live sync owns the fight selection: disable the control while it drives the fight
+    // (setValue from the poll still works on a disabled control). The record toggle is
+    // independent and does not touch selection.
+    effect(() => {
+      if (this.liveCapture.liveEnabled()) this.fightControl.disable();
+      else this.fightControl.enable();
+    });
+  }
 
   protected readonly loadingReport = signal(false);
   protected readonly loadingAnalysis = signal(false);
@@ -205,13 +216,13 @@ export class PostRaidComponent {
   protected readonly cardsBusy = computed(() =>
     this.rotationBusy() || this.burstBusy() || this.defensiveBusy() || this.gearBusy());
   protected readonly error = signal('');
-  protected readonly status = signal('');
 
   protected readonly fights = signal<WclFight[]>([]);
   protected readonly players = signal<WclPlayer[]>([]);
   protected readonly selectedFightId = toSignal(this.fightControl.valueChanges, { initialValue: this.fightControl.value });
   protected readonly selectedPlayerId = toSignal(this.playerControl.valueChanges, { initialValue: this.playerControl.value });
-  protected readonly liveSyncEnabled = toSignal(this.liveControl.valueChanges, { initialValue: this.liveControl.value });
+  /** Live-sync on/off is owned by the live slice; the polling pipeline keys off it. */
+  protected readonly liveSyncEnabled = this.liveCapture.liveEnabled;
 
   /** Resolved spec of the selected player; drives every feature card. Empty until resolved. */
   protected readonly spec = signal('');
@@ -223,6 +234,9 @@ export class PostRaidComponent {
 
   /** Current report code, driven by loadReport(). Used by the polling pipeline. */
   protected readonly reportCode = signal('');
+
+  /** Report clock (unix epoch ms), the shared timebase for correlating clips to fights. */
+  protected readonly reportStartTime = signal(0);
 
   private _enemies: { id: number; name: string; gameID: number }[] = [];
 
@@ -270,8 +284,17 @@ export class PostRaidComponent {
   protected onDefensiveOpenMap(anchor: DefensiveMapAnchor): void {
     this.mapFeature.openAt({
       timeS: anchor.timeS,
+      windowLengthS: anchor.windowLengthS,
       reference: anchor.refGameId != null ? { kind: 'enemy', gameId: anchor.refGameId } : { kind: 'boss' },
     });
+  }
+
+  /** Clip is offered once the rolling buffer covers this fight (recording on or already stopped). */
+  protected clipReady(): boolean { return this.liveCapture.clipReady(); }
+
+  /** A feature card asked to open a clip; the page forwards it to the live feature. */
+  protected onOpenClip(anchor: ClipAnchor): void {
+    this.liveCapture.openClip(anchor);
   }
 
   // Declarative polling pipeline. Must live in a field initializer so that
@@ -281,8 +304,8 @@ export class PostRaidComponent {
     toObservable(this.reportCode),
   ]).pipe(
     tap(([live, code]) => {
-      if (live && !code) this.status.set('Load a report to start live sync.');
-      else if (!live) this.status.set('');
+      if (live && !code) this.liveCapture.setStatus('Load a report to start live sync.');
+      else if (!live) this.liveCapture.setStatus('');
     }),
     map(([live, code]) => live && !!code),
     distinctUntilChanged(),
@@ -320,6 +343,7 @@ export class PostRaidComponent {
     this.spec.set('');
     this.playerDetailGroups.set({});
     this.mapFeature.clear();
+    this.liveCapture.clear();
 
     try {
       this.loadingMsg.set('Fetching report from WCL…');
@@ -345,31 +369,23 @@ export class PostRaidComponent {
   private _applyReport(report: WclReport): void {
     this.fights.set(buildFights(report.fights));
     this.players.set(buildPlayers(report.masterData?.actors));
+    this.reportStartTime.set(report.startTime);
     this._enemies = report.masterData?.enemies ?? [];
-  }
-
-  protected onLiveToggle(): void {
-    this.liveMode.active.set(this.liveControl.value);
-    // Live sync owns the fight selection: disable the control (setValue from the
-    // poll still works on a disabled control) instead of faking it with opacity +
-    // pointer-events, which left the select keyboard-operable.
-    if (this.liveControl.value) this.fightControl.disable();
-    else this.fightControl.enable();
   }
 
   private async _pollOnce(): Promise<void> {
     this.error.set('');
-    this.status.set('Checking for new pulls…');
+    this.liveCapture.setStatus('Checking for new pulls…');
     try {
       const report = await this.wclApi.getReport(this.reportCode());
       this._applyReport(report);
 
       const latest = this.fights()[this.fights().length - 1];
-      if (!latest) { this.status.set('No boss pulls found.'); return; }
+      if (!latest) { this.liveCapture.setStatus('No boss pulls found.'); return; }
 
       // Cheap-diff: latest pull unchanged and already analyzed - skip re-analysis.
       if (this.selectedFightId() === latest.id && this.ready()) {
-        this.status.set(`Last updated ${new Date().toLocaleTimeString()} · Polling every ${POLL_INTERVAL_MS / 1000}s`);
+        this.liveCapture.setStatus(`Last updated ${new Date().toLocaleTimeString()} · Polling every ${POLL_INTERVAL_MS / 1000}s`);
         return;
       }
 
@@ -379,7 +395,7 @@ export class PostRaidComponent {
       this.playerControl.setValue(pickLivePlayerId(visible, currentName));
       this._persistPlayerName();
       await this.resolveSelection();
-      this.status.set(`Updated ${new Date().toLocaleTimeString()} · ${latest.name}`);
+      this.liveCapture.setStatus(`Updated ${new Date().toLocaleTimeString()} · ${latest.name}`);
     } catch (err) {
       logWarn('PostRaidComponent._pollOnce', err);
       this.error.set(err instanceof Error ? err.message : 'Poll failed.');
@@ -410,6 +426,7 @@ export class PostRaidComponent {
     const playerId = this.selectedPlayerId();
     this.spec.set('');
     this.mapFeature.clear();
+    this.liveCapture.clear();
     if (!fightId || !playerId) return;
 
     this.loadingAnalysis.set(true);
@@ -430,7 +447,10 @@ export class PostRaidComponent {
       this.loadingMsg.set('Analyzing your log…');
 
       const fight = this.fights().find(f => f.id === fightId);
-      if (fight) void this.mapFeature.prepare(this.reportCode(), fight, playerId, spec, this._enemies);
+      if (fight) {
+        void this.mapFeature.prepare(this.reportCode(), fight, playerId, spec, this._enemies);
+        this.liveCapture.prepare(this.reportCode(), this.reportStartTime(), fight);
+      }
     } catch (err) {
       logWarn('PostRaidComponent.resolveSelection', err);
       this.error.set(err instanceof Error ? err.message : 'Failed to resolve selection.');

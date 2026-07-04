@@ -8,7 +8,7 @@ import { DataSource } from '../../../core/data-source/data-source';
 import {
   DefensiveFeatureService,
   analyzeDefensives, analyzeDefensiveFindings, computePlayerDefensiveWindows,
-  defensiveWindowStatus, defensiveMapAnchor, buildDefensiveWindows, buildDefensivePlanRows,
+  defensiveWindowStatus, defensiveMapAnchor, defensiveClipAnchor, defensiveFindingClipAnchor, buildDefensiveWindows, buildDefensivePlanRows,
   playerCoveredWindow, playerUsefulTiming, windowMissFindings,
   buildDefensiveUsageWindows, analyzeOneDefensive, gapDelayFindings, holdSuggestionFindings,
 } from './defensive.service';
@@ -294,12 +294,29 @@ describe('playerUsefulTiming', () => {
 describe('defensiveMapAnchor', () => {
   it('carries seek time and the dominant enemy game id', () => {
     const window = { time_s: 30, window_length_s: 5, defensive_name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS, ref_game_id: 6666 } as BurstWindow;
-    expect(defensiveMapAnchor(window)).toEqual({ timeS: 30, refGameId: 6666 });
+    expect(defensiveMapAnchor(window)).toEqual({ timeS: 30, refGameId: 6666, windowLengthS: 5 });
   });
 
   it('falls back to a null ref when absent', () => {
     const window = { time_s: 5, window_length_s: 5 } as BurstWindow;
-    expect(defensiveMapAnchor(window)).toEqual({ timeS: 5, refGameId: null });
+    expect(defensiveMapAnchor(window)).toEqual({ timeS: 5, refGameId: null, windowLengthS: 5 });
+  });
+});
+
+describe('defensiveClipAnchor', () => {
+  it('carries the window span and a stable indexed key', () => {
+    const window = { time_s: 30, window_length_s: 5 } as BurstWindow;
+    expect(defensiveClipAnchor(window, 1)).toEqual({ timeS: 30, windowLengthS: 5, key: 'defensive-1' });
+  });
+});
+
+describe('defensiveFindingClipAnchor', () => {
+  it('is a point anchor at the cast time, keyed by the exact millisecond', () => {
+    expect(defensiveFindingClipAnchor(30_200)).toEqual({ timeS: 30.2, windowLengthS: 0, key: 'defensive-find-30200' });
+  });
+
+  it('keeps two findings within the same second on distinct clip keys', () => {
+    expect(defensiveFindingClipAnchor(30_200).key).not.toBe(defensiveFindingClipAnchor(30_600).key);
   });
 });
 
@@ -315,12 +332,13 @@ describe('buildDefensiveWindows', () => {
     const player: PlayerBurstWindow[] = [{ time_s: 30, window_damage: 1150, ability_breakdown: [{ spell_id: 700, damage: 700 }] }];
     // Covered the window (span 30-35), mitigated under dmg_min, took above the avg band -> warn.
     const playerDef: PlayerDefensive[] = [{ name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS, cooldown: 120, uses: 1, windows: [{ start_s: 30, end_s: 35, dmg_during: 700 }] }];
-    const { windows, anchors } = buildDefensiveWindows({ topWindows: [window], playerWindows: player, playerDefensives: playerDef, fightDurationS: 300, abilities });
+    const { windows, anchors, clipAnchors } = buildDefensiveWindows({ topWindows: [window], playerWindows: player, playerDefensives: playerDef, fightDurationS: 300, abilities });
     expect(windows[0].overview.playerPct).toBe(1150);
     expect(windows[0].status).toBe('warn');
     expect(windows[0].spells).toEqual([{ id: CLOAK_OF_SHADOWS, icon: 'cloak', name: 'Cloak of Shadows' }]);
     expect(windows[0].detailRows[0]).toMatchObject({ spellId: 700, label: 'Boss Hit', icon: 'hit', playerPct: 700, topAvg: 600 });
-    expect(anchors[0]).toEqual({ timeS: 30, refGameId: 6666 });
+    expect(anchors[0]).toEqual({ timeS: 30, refGameId: 6666, windowLengthS: 5 });
+    expect(clipAnchors[0]).toEqual({ timeS: 30, windowLengthS: 5, key: 'defensive-0' });
   });
 
   it('marks an uncovered window bad', () => {
@@ -423,7 +441,7 @@ describe('DefensiveFeatureService.loadAnalysisView (post-raid)', () => {
   it('returns an empty view when the bench file is absent', async () => {
     const service = serviceWith(null);
     expect(await service.loadAnalysisView('SubtletyRogue', 1, 'r1', 1, 10))
-      .toEqual({ findings: [], spellIdsByName: {}, iconByName: {}, windows: [], anchors: [] });
+      .toEqual({ findings: [], spellIdsByName: {}, iconByName: {}, windows: [], anchors: [], clipAnchors: [] });
   });
 
   it('computes player findings + windows from the player log', async () => {

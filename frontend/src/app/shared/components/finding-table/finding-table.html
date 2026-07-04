@@ -45,6 +45,11 @@
                   <mat-icon class="icon-16">my_location</mat-icon>
                 </button>
               }
+              @if (showClip()) {
+                <button mat-icon-button class="icon-button-compact" aria-label="Watch clip" (click)="onOpenClip(row)">
+                  <mat-icon class="icon-16">videocam</mat-icon>
+                </button>
+              }
             }
             @if (row.chip) {
               @if (row.severity === 'critical') {

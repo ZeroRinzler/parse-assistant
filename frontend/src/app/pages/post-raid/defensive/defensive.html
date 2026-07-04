@@ -6,7 +6,9 @@
     [rows]="findingRows()"
     [onPlan]="onPlan()"
     [showMap]="showMap()"
-    (openMap)="onFindingMap($event)">
+    [showClip]="showClip()"
+    (openMap)="onFindingMap($event)"
+    (openClip)="onFindingClip($event)">
   </wl-finding-table>
 }
 
@@ -19,8 +21,10 @@
     [fightDuration]="fightDuration()"
     [showCasts]="false"
     [showMap]="showMap()"
+    [showClip]="showClip()"
     heading="Defensive Windows"
     subtitle="Damage taken in top-parse defensive windows vs top parses."
-    (openMap)="onOpenMap($event)">
+    (openMap)="onOpenMap($event)"
+    (openClip)="onOpenClip($event)">
   </wl-window-comparison>
 }

@@ -6,7 +6,7 @@ import { BURST_DATA_SOURCE, BurstBench } from './burst-data-source';
 import { DataSource } from '../../../core/data-source/data-source';
 import {
   BurstFeatureService,
-  burstWindowStatus, splitCommonCds, burstMapAnchor, buildBurstView, findPlayerBurstWindows,
+  burstWindowStatus, splitCommonCds, burstMapAnchor, burstClipAnchor, buildBurstView, findPlayerBurstWindows,
 } from './burst.service';
 import { SHADOW_BLADES, SHADOW_BLADES_DAMAGE } from '../../../../testing/spell-ids';
 import { cast, damage } from '../../../../testing/builders/events';
@@ -46,7 +46,14 @@ describe('splitCommonCds', () => {
 describe('burstMapAnchor', () => {
   it('carries the window seek time', () => {
     const window = { time_s: 12, window_length_s: 18, common_cds: ['Shadow Blades', 'Mystery'] } as BurstWindow;
-    expect(burstMapAnchor(window)).toEqual({ timeS: 12 });
+    expect(burstMapAnchor(window)).toEqual({ timeS: 12, windowLengthS: 18 });
+  });
+});
+
+describe('burstClipAnchor', () => {
+  it('carries the window span and a stable indexed key', () => {
+    const window = { time_s: 12, window_length_s: 18 } as BurstWindow;
+    expect(burstClipAnchor(window, 2)).toEqual({ timeS: 12, windowLengthS: 18, key: 'burst-2' });
   });
 });
 
@@ -69,7 +76,8 @@ describe('buildBurstView', () => {
     expect(view.windows[0].overview.playerPct).toBe(950);
     expect(view.windows[0].spells).toEqual([{ id: SHADOW_BLADES, icon: 'sb', name: 'Shadow Blades' }]);
     expect(view.windows[0].detailRows[0]).toMatchObject({ spellId: SHADOW_BLADES_DAMAGE, label: 'Eviscerate', icon: 'evis', playerPct: 550, topAvg: 600 });
-    expect(view.anchors[0]).toEqual({ timeS: 10 });
+    expect(view.anchors[0]).toEqual({ timeS: 10, windowLengthS: 20 });
+    expect(view.clipAnchors[0]).toEqual({ timeS: 10, windowLengthS: 20, key: 'burst-0' });
   });
 
   it('flags a detail row passive when the bench ability is passive', () => {
@@ -159,7 +167,7 @@ const benchFixture: BurstBench = {
 describe('BurstFeatureService', () => {
   it('returns an empty view when the bench file is absent', async () => {
     const view = await withBench(null).loadBenchView('SubtletyRogue', 1);
-    expect(view).toEqual({ windows: [], anchors: [] });
+    expect(view).toEqual({ windows: [], anchors: [], clipAnchors: [] });
   });
 
   it('bench-only: shows the top windows with no player overlay (neutral info status)', async () => {
@@ -168,7 +176,7 @@ describe('BurstFeatureService', () => {
     expect(view.windows[0].overview.playerPct).toBeNull();
     expect(view.windows[0].status).toBe('info');
     expect(view.windows[0].statusIcon).toBe('insights');
-    expect(view.anchors[0]).toEqual({ timeS: 10 });
+    expect(view.anchors[0]).toEqual({ timeS: 10, windowLengthS: 20 });
   });
 
   it('player view: fetches the log and compares the player damage against the bench', async () => {
@@ -176,6 +184,6 @@ describe('BurstFeatureService', () => {
     expect(view.windows).toHaveLength(1);
     expect(view.windows[0].overview.playerPct).toBe(950);
     expect(view.windows[0].detailRows[0].label).toBe('Eviscerate');
-    expect(view.anchors[0]).toEqual({ timeS: 10 });
+    expect(view.anchors[0]).toEqual({ timeS: 10, windowLengthS: 20 });
   });
 });

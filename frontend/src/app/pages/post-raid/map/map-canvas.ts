@@ -15,8 +15,6 @@ import {
 } from './map-draw';
 
 const STEP_S = 0.5;
-const PRE_S = 6;
-const POST_S = 3;
 /** Playback advances the scrubber by real elapsed wall-time, clamped per frame so a
  *  backgrounded-then-resumed tab does not jump the scrubber by the whole elapsed gap. */
 const MAX_FRAME_DT_S = 0.1;
@@ -69,8 +67,10 @@ export class MapCanvasComponent {
     return selector.kind === 'boss' ? 'boss' : selector.gameId;
   });
 
-  protected readonly windowStart = computed(() => this.anchorTime() - PRE_S);
-  protected readonly windowEnd = computed(() => this.anchorTime() + POST_S);
+  protected readonly preS = this.map.preS;
+  protected readonly postS = this.map.postS;
+  protected readonly windowStart = computed(() => this.anchorTime() - this.preS());
+  protected readonly windowEnd = computed(() => this.anchorTime() + this.postS());
 
   /**
    * Player + reference timelines per parse, rebuilt only when the bench or the reference
@@ -84,7 +84,7 @@ export class MapCanvasComponent {
   });
 
   private readonly benchTrails = computed(() =>
-    parseTrailsOf(this.parseTimelines(), this.anchorTime(), PRE_S, POST_S, STEP_S));
+    parseTrailsOf(this.parseTimelines(), this.anchorTime(), this.preS(), this.postS(), STEP_S));
 
   private readonly liveRefId = computed(() => {
     const live = this.live();
@@ -97,7 +97,7 @@ export class MapCanvasComponent {
     const live = this.live();
     const refId = this.liveRefId();
     if (!live || refId == null) return [];
-    return buildTrail(live.playerId, refId, live.timelines, this.anchorTime(), PRE_S, POST_S, STEP_S);
+    return buildTrail(live.playerId, refId, live.timelines, this.anchorTime(), this.preS(), this.postS(), STEP_S);
   });
 
   /** Readout at the scrubbed moment: the top-parse cluster centroid + the player's position. */

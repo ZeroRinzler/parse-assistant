@@ -22,6 +22,7 @@ import {
 } from '../../../core/models/analysis.models';
 import { PerDefensiveBenchmark } from '../../../core/models/encounter.models';
 import { ComparisonWindow, WindowStatus, RangeRow } from '../../../core/models/window-comparison.models';
+import { ClipAnchor } from '../../../core/models/capture.models';
 import { logWarn } from '../../../core/log';
 import {
   benchExpectedUses, fmtClock, isOutlierAbove, sortBySeverity,
@@ -38,9 +39,11 @@ type AbilityIcons = Record<number, BakedAbility>;
 export interface DefensiveMapAnchor {
   timeS: number;
   refGameId: number | null;
+  /** Window length in seconds; 0/undefined for a point-in-time finding cast. */
+  windowLengthS?: number;
 }
 
-/** The defensive card view-model: findings + per-window comparison + map anchors. */
+/** The defensive card view-model: findings + per-window comparison + map/clip anchors. */
 export interface DefensiveView {
   findings: AnalysisFinding[];
   /** Defensive name -> spell id, so the findings table links to the right spell. */
@@ -49,6 +52,7 @@ export interface DefensiveView {
   iconByName: Record<string, string>;
   windows: ComparisonWindow[];
   anchors: DefensiveMapAnchor[];
+  clipAnchors: ClipAnchor[];
 }
 
 /** One /pre defensive-plan row (bench-only). */
@@ -374,7 +378,22 @@ export function defensiveMapAnchor(window: BurstWindow): DefensiveMapAnchor {
   return {
     timeS: window.time_s,
     refGameId: window.ref_game_id ?? null,
+    windowLengthS: window.window_length_s,
   };
+}
+
+/** Clip anchor for a defensive window: its exact span plus the stable key clips are memoized under. */
+export function defensiveClipAnchor(window: BurstWindow, index: number): ClipAnchor {
+  return { timeS: window.time_s, windowLengthS: window.window_length_s, key: `defensive-${index}` };
+}
+
+/**
+ * Clip anchor for a timed finding cast: a point anchor (the player gets pre/post roll)
+ * keyed by the exact cast millisecond, so two findings within the same second resolve
+ * two distinct clips.
+ */
+export function defensiveFindingClipAnchor(timestampMs: number): ClipAnchor {
+  return { timeS: timestampMs / 1000, windowLengthS: 0, key: `defensive-find-${timestampMs}` };
 }
 
 /** Inputs to the defensive windows card view-model build (top bench + the player's log). */
@@ -393,9 +412,10 @@ export interface DefensiveWindowsInput {
  */
 export function buildDefensiveWindows(
   { topWindows, playerWindows, playerDefensives, fightDurationS, abilities }: DefensiveWindowsInput,
-): { windows: ComparisonWindow[]; anchors: DefensiveMapAnchor[] } {
+): { windows: ComparisonWindow[]; anchors: DefensiveMapAnchor[]; clipAnchors: ClipAnchor[] } {
   const windows: ComparisonWindow[] = [];
   const anchors: DefensiveMapAnchor[] = [];
+  const clipAnchors: ClipAnchor[] = [];
   topWindows.forEach((window, index) => {
     const notReached = window.time_s > fightDurationS;
     const playerWindow = notReached ? null : (playerWindows[index] ?? null);
@@ -417,8 +437,9 @@ export function buildDefensiveWindows(
       detailRows: defensiveDetailRows(window.ability_breakdown, playerWindow, abilities),
     });
     anchors.push(defensiveMapAnchor(window));
+    clipAnchors.push(defensiveClipAnchor(window, index));
   });
-  return { windows, anchors };
+  return { windows, anchors, clipAnchors };
 }
 
 /** One warning per consensus defensive window the player neither covered nor usefully pressed. */
@@ -497,12 +518,12 @@ export class DefensiveFeatureService {
     playerId: number,
   ): Promise<DefensiveView> {
     const bench = await this.source.getBench(spec, encounterId);
-    if (!bench) return { findings: [], spellIdsByName: {}, iconByName: {}, windows: [], anchors: [] };
+    if (!bench) return { findings: [], spellIdsByName: {}, iconByName: {}, windows: [], anchors: [], clipAnchors: [] };
 
     try {
       const report: WclReport = await this.wclApi.getReport(reportCode);
       const fight = report.fights.find(entry => entry.id === fightId);
-      if (!fight) return { findings: [], spellIdsByName: bench.cd_spell_ids, iconByName: {}, windows: [], anchors: [] };
+      if (!fight) return { findings: [], spellIdsByName: bench.cd_spell_ids, iconByName: {}, windows: [], anchors: [], clipAnchors: [] };
       const fStart = fight.startTime;
       const fEnd = fight.endTime;
       const fightDurationS = (fEnd - fStart) / 1000;
@@ -526,13 +547,13 @@ export class DefensiveFeatureService {
       for (const [name, spellId] of Object.entries(bench.cd_spell_ids)) {
         iconByName[name] = bench.ability_icons[spellId].icon;
       }
-      const { windows, anchors } = buildDefensiveWindows({
+      const { windows, anchors, clipAnchors } = buildDefensiveWindows({
         topWindows: bench.defensive_windows, playerWindows, playerDefensives, fightDurationS, abilities: bench.ability_icons,
       });
-      return { findings, spellIdsByName: bench.cd_spell_ids, iconByName, windows, anchors };
+      return { findings, spellIdsByName: bench.cd_spell_ids, iconByName, windows, anchors, clipAnchors };
     } catch (err) {
       logWarn(`DefensiveFeatureService.loadAnalysisView ${reportCode}:${fightId}`, err);
-      return { findings: [], spellIdsByName: bench.cd_spell_ids, iconByName: {}, windows: [], anchors: [] };
+      return { findings: [], spellIdsByName: bench.cd_spell_ids, iconByName: {}, windows: [], anchors: [], clipAnchors: [] };
     }
   }
 

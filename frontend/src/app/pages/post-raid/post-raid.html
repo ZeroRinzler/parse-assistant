@@ -10,9 +10,7 @@
         <mat-error>Paste a Warcraft Logs report URL or a 16-character report code.</mat-error>
       </mat-form-field>
 
-      <mat-slide-toggle [formControl]="liveControl" (change)="onLiveToggle()" class="mt-2">
-        Live sync (follow latest pull)
-      </mat-slide-toggle>
+      <wl-live-controls></wl-live-controls>
 
       @if (fights().length) {
         <div class="mt-4 border-t border-[var(--border)] pt-4">
@@ -76,12 +74,6 @@
       }
     </mat-card>
 
-    @if (liveSyncEnabled() && status()) {
-      <div class="mb-4 rounded-lg border-l-[3px] border-[var(--accent)] px-3 py-2 text-[13px] text-[var(--muted)]">
-        {{ status() }}
-      </div>
-    }
-
     @if (error()) {
       <div class="mb-4 rounded-lg border border-[var(--critical)]/30 bg-[var(--critical)]/10 px-4 py-3.5 text-[13px] text-[var(--critical)]">{{ error() }}</div>
     }
@@ -111,7 +103,9 @@
           [fight]="selectedFightId()!"
           [player]="selectedPlayerId()!"
           [showMap]="mapReady()"
+          [showClip]="clipReady()"
           (openMap)="onOpenMap($event)"
+          (openClip)="onOpenClip($event)"
           (busyChange)="burstBusy.set($event)">
         </wl-burst-windows>
 
@@ -123,7 +117,9 @@
           [player]="selectedPlayerId()!"
           [fightDuration]="selectedFightDuration()"
           [showMap]="mapReady()"
+          [showClip]="clipReady()"
           (openMap)="onDefensiveOpenMap($event)"
+          (openClip)="onOpenClip($event)"
           (busyChange)="defensiveBusy.set($event)">
         </wl-defensive>
 
@@ -139,4 +135,5 @@
     }
 
     <wl-map-panel></wl-map-panel>
+    <wl-clip-panel></wl-clip-panel>
 </div>

@@ -1,12 +1,13 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal } from '@angular/core';
 import { AnalysisFinding } from '../../../core/models/analysis.models';
 import { ComparisonWindow } from '../../../core/models/window-comparison.models';
+import { ClipAnchor } from '../../../core/models/capture.models';
 import {
   bucketFindings, CAT_LABEL, FindingRow, FindingTableComponent, onPlanFromEntries, rowsFromEntries,
 } from '../../../shared/components/finding-table/finding-table';
 import { WindowComparisonComponent } from '../../../shared/components/window-comparison/window-comparison';
 import { LatestLoad } from '../../../shared/latest-load';
-import { DefensiveFeatureService, DefensiveMapAnchor } from './defensive.service';
+import { DefensiveFeatureService, DefensiveMapAnchor, defensiveFindingClipAnchor } from './defensive.service';
 
 /**
  * Defensive card. A feature component: it injects exactly one service
@@ -33,9 +34,12 @@ export class DefensiveComponent {
   readonly player = input.required<number>();
   /** Map button is available once the page has loaded top-parse positions. */
   readonly showMap = input<boolean>(false);
+  /** Clip button is available once the page's rolling buffer covers this fight. */
+  readonly showClip = input<boolean>(false);
   readonly fightDuration = input<number>(0);
 
   readonly openMap = output<DefensiveMapAnchor>();
+  readonly openClip = output<ClipAnchor>();
   /** Emits false when the card has finished loading; the page gates its spinner on it. */
   readonly busyChange = output<boolean>();
 
@@ -44,6 +48,7 @@ export class DefensiveComponent {
   private readonly _iconByName = signal<Record<string, string>>({});
   private readonly _windows = signal<ComparisonWindow[]>([]);
   private readonly _anchors = signal<DefensiveMapAnchor[]>([]);
+  private readonly _clipAnchors = signal<ClipAnchor[]>([]);
   protected readonly windows = this._windows.asReadonly();
 
   private readonly loader = new LatestLoad();
@@ -63,6 +68,7 @@ export class DefensiveComponent {
           this._iconByName.set(view.iconByName);
           this._windows.set(view.windows);
           this._anchors.set(view.anchors);
+          this._clipAnchors.set(view.clipAnchors);
         },
         settled: () => this.busyChange.emit(false),
       });
@@ -86,6 +92,11 @@ export class DefensiveComponent {
     if (anchor) this.openMap.emit(anchor);
   }
 
+  protected onOpenClip(index: number): void {
+    const anchor = this._clipAnchors()[index];
+    if (anchor) this.openClip.emit(anchor);
+  }
+
   /** A timed finding's map button: open the map at that cast time (boss reference). */
   protected onFindingMap(row: FindingRow): void {
     if (row.timestampMs == null) return;
@@ -93,5 +104,11 @@ export class DefensiveComponent {
       timeS: row.timestampMs / 1000,
       refGameId: null,
     });
+  }
+
+  /** A timed finding's clip button: a clip centered on that cast instant (roll on each side). */
+  protected onFindingClip(row: FindingRow): void {
+    if (row.timestampMs == null) return;
+    this.openClip.emit(defensiveFindingClipAnchor(row.timestampMs));
   }
 }

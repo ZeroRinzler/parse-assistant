@@ -25,11 +25,20 @@ export class FindingTableComponent {
   readonly onPlan = input<OnPlanChip[]>([]);
   /** Whether timed cooldown rows show an "open map" button (the page owns the map). */
   readonly showMap = input<boolean>(false);
+  /** Whether timed cooldown rows show a "watch clip" button (the page owns recording). */
+  readonly showClip = input<boolean>(false);
   /** Emitted when a timed finding's map button is clicked; the page forwards it. */
   readonly openMap = output<FindingRow>();
+  /** Emitted when a timed finding's clip button is clicked; the page forwards it. */
+  readonly openClip = output<FindingRow>();
 
   protected onOpenMap(row: FindingRow): void {
     if (row.timestampMs == null || !row.name) return;
     this.openMap.emit(row);
+  }
+
+  protected onOpenClip(row: FindingRow): void {
+    if (row.timestampMs == null || !row.name) return;
+    this.openClip.emit(row);
   }
 }
