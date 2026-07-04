@@ -71,4 +71,10 @@ describe('abilityIcons', () => {
     const raw = { [`a${SHADOW_BLADES}`]: { id: SHADOW_BLADES, name: 'Shadow Blades', icon: 'ability_sb' } };
     expect(abilityIcons(raw)).toEqual({ [SHADOW_BLADES]: { icon: 'ability_sb', name: 'Shadow Blades' } });
   });
+
+  it('relabels the melee sentinel (id 1) that gameData resolves to "Word of Recall (OLD)"', () => {
+    const MELEE = 1;
+    const raw = { a1: { id: MELEE, name: 'Word of Recall (OLD)', icon: 'trade_engineering.jpg' } };
+    expect(abilityIcons(raw)).toEqual({ [MELEE]: { icon: 'inv_sword_04', name: 'Melee' } });
+  });
 });

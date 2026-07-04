@@ -17,6 +17,11 @@ import { WindowSpell } from '../../core/models/window-comparison.models';
 // is unfetchable. Drop these before mapping.
 const ANONYMIZED_NAME = /^Character \d+-\d+$/;
 
+// The melee auto-attack event id and its canonical Auto Attack art (see the warcraft-wcl-data
+// skill's "Melee auto-attack is event ability id 1" quirk).
+const WCL_MELEE_ABILITY_ID = 1;
+const MELEE_AUTO_ATTACK_ART = { icon: 'inv_sword_04', name: 'Melee' };
+
 /**
  * Unwrap WCL's `characterRankings` envelope into its ranking rows. WCL returns it
  * either as a JSON blob (string) or an already-parsed object; both forms (and an
@@ -32,7 +37,7 @@ export function unwrapRankings(blob: WclRankingsBlob | null | undefined): WclRaw
  * Project WCL's aliased `gameData.ability` map into an id-keyed `{ icon, name }`
  * record, stripping the trailing `.jpg` so the value is the bare zamimg filename
  * `wl-game-icon` expects. WCL returns `null` for any alias it could not resolve;
- * those are skipped.
+ * those are skipped, and the melee auto-attack sentinel is relabeled to its Auto Attack art.
  */
 export function abilityIcons(
   raw: Record<string, WclRawAbility | null>,
@@ -41,6 +46,7 @@ export function abilityIcons(
   for (const entry of Object.values(raw)) {
     if (entry) icons[entry.id] = { icon: entry.icon.replace(/\.jpg$/i, ''), name: entry.name };
   }
+  if (icons[WCL_MELEE_ABILITY_ID]) icons[WCL_MELEE_ABILITY_ID] = { ...MELEE_AUTO_ATTACK_ART };
   return icons;
 }
 
