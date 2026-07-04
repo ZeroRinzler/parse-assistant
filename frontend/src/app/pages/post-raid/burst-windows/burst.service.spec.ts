@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { BurstWindow, PlayerBurstWindow } from '../../../core/models/analysis.models';
 import { WclApiService } from '../../../core/services/wcl-api';
-import { WclEvent } from '../../../core/models/wcl.models';
 import { BURST_DATA_SOURCE, BurstBench } from './burst-data-source';
 import { DataSource } from '../../../core/data-source/data-source';
 import {
@@ -10,6 +9,7 @@ import {
   burstWindowStatus, splitCommonCds, burstMapAnchor, buildBurstView, findPlayerBurstWindows,
 } from './burst.service';
 import { SHADOW_BLADES, SHADOW_BLADES_DAMAGE } from '../../../../testing/spell-ids';
+import { cast, damage } from '../../../../testing/builders/events';
 
 /* ----------------------------- pure functions ----------------------------- */
 
@@ -110,9 +110,6 @@ describe('buildBurstView', () => {
 /* ----------------------------- feature service ---------------------------- */
 
 describe('findPlayerBurstWindows', () => {
-  const cast = (spellId: number, atS: number): WclEvent => ({ type: 'cast', timestamp: atS * 1000, abilityGameID: spellId });
-  const damage = (spellId: number, atS: number, amount: number): WclEvent =>
-    ({ type: 'damage', timestamp: atS * 1000, abilityGameID: spellId, amount });
   const window: BurstWindow = {
     time_s: 10, window_length_s: 20, dmg_avg: 0, dmg_min: 0, dmg_max: 0, dmg_stddev: 0, common_cds: [], ability_breakdown: [],
   };
@@ -142,9 +139,7 @@ const wclFake = {
     masterData: { actors: [], abilities: [{ gameID: SHADOW_BLADES_DAMAGE, name: 'Eviscerate', icon: 'inv' }] },
   }),
   getAllEvents: async (_code: string, _fightId: number, dataType: string) =>
-    dataType === 'Casts'
-      ? [{ type: 'cast', timestamp: 11_000, abilityGameID: SHADOW_BLADES } as WclEvent]
-      : [{ type: 'damage', timestamp: 12_000, abilityGameID: SHADOW_BLADES_DAMAGE, amount: 950 } as WclEvent],
+    dataType === 'Casts' ? [cast(SHADOW_BLADES, 11)] : [damage(SHADOW_BLADES_DAMAGE, 12, 950)],
 };
 
 function withBench(bench: BurstBench | null): BurstFeatureService {

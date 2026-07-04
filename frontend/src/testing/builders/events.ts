@@ -1,137 +1,89 @@
 /**
- * Fluent builder for WCL event streams.
+ * Plain factory functions for WCL combat-log event fixtures.
  *
- * WCL combat-log rows are massive and full of domain quirks (ms timestamps,
- * `resourceActor` source/target mapping, coordinates in hundredths of a yard,
- * facing in milliradians). This builder hides all of that behind a readable,
- * chainable API so a test reads as a sentence:
+ * Each factory returns a single `WclEvent` and hides the two WCL wire quirks
+ * every spec would otherwise repeat: timestamps are in milliseconds (factories
+ * take fight-relative *seconds* and convert), and event kinds are lowercase
+ * wire strings (`'cast'`, `'applybuff'`, `'removebuff'`, `'damage'`). Optional
+ * actor and absorb fields exist on the event only when the caller provides
+ * them; an omitted opt leaves the field absent, not `undefined`.
  *
  * ```ts
- * const casts = Events.cast(SHADOW_BLADES, "0:01").cast(SHADOW_BLADES, "1:30").build();
- * const buffs = Events.start().applyBuff(BLOODLUST, "0:15").build();
+ * const events = [cast(SHADOW_BLADES, 1), ...buffWindow(FEINT, 10, 16)];
  * ```
- *
- * Defaults: the player is actor `1`, the boss is actor `2`. Times are "m:ss"
- * strings (or seconds) relative to fight start; with `FIGHT_START = 0` they map
- * straight onto the fight-relative timestamps the analysis engine computes.
  */
 import { WclEvent } from '../../app/core/models/wcl.models';
-import { parseClock } from '../time';
 
-/** Default actor IDs the builder wires events to. */
-export const PLAYER = 1;
-export const BOSS = 2;
+/** WCL timestamps are milliseconds; factory times are fight-relative seconds. */
+const MS_PER_SECOND = 1000;
 
-export class Events {
-  private readonly rows: WclEvent[] = [];
+/** A player ability cast (`type: 'cast'`). */
+export function cast(spellId: number, atS: number, opts?: { source?: number; target?: number }): WclEvent {
+  return {
+    type: 'cast',
+    timestamp: atS * MS_PER_SECOND,
+    abilityGameID: spellId,
+    ...(opts?.source !== undefined && { sourceID: opts.source }),
+    ...(opts?.target !== undefined && { targetID: opts.target }),
+  };
+}
 
-  private constructor() {}
+/** A buff gained (`type: 'applybuff'`). A self-buff lands on its target, so `target` sets both actor fields. */
+export function applyBuff(spellId: number, atS: number, opts?: { target?: number }): WclEvent {
+  return {
+    type: 'applybuff',
+    timestamp: atS * MS_PER_SECOND,
+    abilityGameID: spellId,
+    ...(opts?.target !== undefined && { sourceID: opts.target, targetID: opts.target }),
+  };
+}
 
-  /** Start an empty stream. */
-  static start(): Events {
-    return new Events();
-  }
+/** A buff lost (`type: 'removebuff'`). Same actor handling as {@link applyBuff}. */
+export function removeBuff(spellId: number, atS: number, opts?: { target?: number }): WclEvent {
+  return {
+    type: 'removebuff',
+    timestamp: atS * MS_PER_SECOND,
+    abilityGameID: spellId,
+    ...(opts?.target !== undefined && { sourceID: opts.target, targetID: opts.target }),
+  };
+}
 
-  /** Start a stream with a first cast in one call: `Events.cast(SB, "0:01")`. */
-  static cast(spellId: number, t: string | number, opts?: { source?: number; target?: number }): Events {
-    return new Events().cast(spellId, t, opts);
-  }
+/** A buff active from `fromS` until `toS`: the applybuff / removebuff pair. */
+export function buffWindow(spellId: number, fromS: number, toS: number, opts?: { target?: number }): WclEvent[] {
+  return [applyBuff(spellId, fromS, opts), removeBuff(spellId, toS, opts)];
+}
 
-  /** A player ability cast (`type: 'cast'`). */
-  cast(spellId: number, t: string | number, opts?: { source?: number; target?: number }): this {
-    this.rows.push({
-      type: 'cast',
-      timestamp: parseClock(t),
-      abilityGameID: spellId,
-      sourceID: opts?.source ?? PLAYER,
-      targetID: opts?.target ?? BOSS,
-    });
-    return this;
-  }
+/** Damage the player deals (`type: 'damage'`). */
+export function damage(
+  spellId: number,
+  atS: number,
+  amount: number,
+  opts?: { source?: number; target?: number; absorbed?: number },
+): WclEvent {
+  return {
+    type: 'damage',
+    timestamp: atS * MS_PER_SECOND,
+    abilityGameID: spellId,
+    amount,
+    ...(opts?.absorbed !== undefined && { absorbed: opts.absorbed }),
+    ...(opts?.source !== undefined && { sourceID: opts.source }),
+    ...(opts?.target !== undefined && { targetID: opts.target }),
+  };
+}
 
-  /** Buff gained (`type: 'applybuff'`), e.g. a defensive or Bloodlust starting. */
-  applyBuff(spellId: number, t: string | number, opts?: { target?: number }): this {
-    const actor = opts?.target ?? PLAYER;
-    this.rows.push({ type: 'applybuff', timestamp: parseClock(t), abilityGameID: spellId, sourceID: actor, targetID: actor });
-    return this;
-  }
-
-  /** Buff lost (`type: 'removebuff'`). */
-  removeBuff(spellId: number, t: string | number, opts?: { target?: number }): this {
-    const actor = opts?.target ?? PLAYER;
-    this.rows.push({ type: 'removebuff', timestamp: parseClock(t), abilityGameID: spellId, sourceID: actor, targetID: actor });
-    return this;
-  }
-
-  /** Convenience: a buff that is active from `from` until `to` (apply + remove). */
-  buffWindow(spellId: number, from: string | number, to: string | number, opts?: { target?: number }): this {
-    return this.applyBuff(spellId, from, opts).removeBuff(spellId, to, opts);
-  }
-
-  /** Damage the player deals (`type: 'damage'`, source = player -> target = boss). */
-  damage(spellId: number, t: string | number, amount: number, opts?: { absorbed?: number; target?: number }): this {
-    this.rows.push({
-      type: 'damage',
-      timestamp: parseClock(t),
-      abilityGameID: spellId,
-      amount,
-      absorbed: opts?.absorbed ?? 0,
-      sourceID: PLAYER,
-      targetID: opts?.target ?? BOSS,
-    });
-    return this;
-  }
-
-  /** Damage taken BY the player (`type: 'damage'`, source = boss -> target = player). */
-  damageTaken(spellId: number, t: string | number, amount: number, opts?: { absorbed?: number; source?: number }): this {
-    this.rows.push({
-      type: 'damage',
-      timestamp: parseClock(t),
-      abilityGameID: spellId,
-      amount,
-      absorbed: opts?.absorbed ?? 0,
-      sourceID: opts?.source ?? BOSS,
-      targetID: PLAYER,
-    });
-    return this;
-  }
-
-  /**
-   * A positioned cast. Inputs are human units (yards and degrees); the builder
-   * encodes the WCL wire units (hundredths of a yard, milliradians) and the
-   * `resourceActor` flag so positioning-core tests read in plain coordinates.
-   */
-  positioned(
-    spellId: number,
-    t: string | number,
-    x: number,
-    y: number,
-    facingDeg = 0,
-    opts?: { source?: number; target?: number; mapID?: number },
-  ): this {
-    this.rows.push({
-      type: 'cast',
-      timestamp: parseClock(t),
-      abilityGameID: spellId,
-      sourceID: opts?.source ?? PLAYER,
-      targetID: opts?.target ?? BOSS,
-      resourceActor: 1,
-      x: Math.round(x * 100),
-      y: Math.round(y * 100),
-      facing: Math.round(((facingDeg * Math.PI) / 180) * 1000),
-      mapID: opts?.mapID ?? 0,
-    });
-    return this;
-  }
-
-  /** Append an arbitrary raw event (escape hatch for exotic cases). */
-  raw(event: WclEvent): this {
-    this.rows.push(event);
-    return this;
-  }
-
-  /** Materialize the accumulated events as a fresh array. */
-  build(): WclEvent[] {
-    return this.rows.slice();
-  }
+/** Damage dealt TO the player (`type: 'damage'`): `source` is the attacker, and no target actor is set. */
+export function damageTaken(
+  spellId: number,
+  atS: number,
+  amount: number,
+  opts?: { source?: number; absorbed?: number },
+): WclEvent {
+  return {
+    type: 'damage',
+    timestamp: atS * MS_PER_SECOND,
+    abilityGameID: spellId,
+    amount,
+    ...(opts?.absorbed !== undefined && { absorbed: opts.absorbed }),
+    ...(opts?.source !== undefined && { sourceID: opts.source }),
+  };
 }

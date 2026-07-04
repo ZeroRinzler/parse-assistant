@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from 'vitest';
 import { getEncounters, getRankingsLite } from './wcl-fetchers.ts';
 import { BudgetExceededError } from './wcl-client.ts';
 import type { WclQueryClient, EventFetchOptions } from './wcl-client.ts';
@@ -27,6 +27,12 @@ const ranks = (count: number): WclRawRanking[] =>
   Array.from({ length: count }, (_unused, index) => ({ name: `P${index}`, report: { code: `r${index}`, fightID: index } }));
 
 describe('getEncounters', () => {
+  // Each dropped zone is reported via logWarn -> console.warn; the spy keeps the runner
+  // output clean and lets the drop tests assert on the warning.
+  let warnSpy: MockInstance<typeof console.warn>;
+  beforeEach(() => { warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined); });
+  afterEach(() => { warnSpy.mockRestore(); });
+
   // Live raids (frozen:false + real rankings) are kept; a frozen tier, a name-excluded
   // Mythic+ zone, and a frozen:false-but-no-rankings test zone are all dropped. Modeled
   // on the real Midnight worldData.
@@ -61,6 +67,8 @@ describe('getEncounters', () => {
     expect(encounters.map(encounter => encounter.id).sort((a, b) => a - b)).toEqual([3159, 3176, 3177]);
     // protected set = all non-frozen ids (includes the name-excluded M+ and test zone), excludes the frozen tier.
     expect([...protectedIds].sort((a, b) => a - b)).toEqual([3159, 3176, 3177, 3591, 112526]);
+    // logWarn(context, message) lands as two console.warn args: '[warcraft-learner] <context>:', message.
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('getEncounters'), expect.stringContaining('Dummy Dome'));
   });
 
   it('probes per zone (once per live zone via early-exit), not per spec', async () => {
@@ -89,6 +97,7 @@ describe('getEncounters', () => {
     });
     const { encounters } = await getEncounters(client);
     expect(encounters).toHaveLength(0);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('getEncounters'), expect.stringContaining('Dummy Dome'));
   });
 
   it('drops a zone whose probe stays below the liveness threshold', async () => {
@@ -104,6 +113,7 @@ describe('getEncounters', () => {
     });
     const { encounters } = await getEncounters(client);
     expect(encounters).toHaveLength(0);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('getEncounters'), expect.stringContaining('Thin Raid'));
   });
 });
 

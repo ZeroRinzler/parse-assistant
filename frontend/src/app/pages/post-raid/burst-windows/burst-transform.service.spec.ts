@@ -5,17 +5,13 @@ import { DataFileApiService } from '../../../core/services/data-file-api';
 import { WclEvent } from '../../../core/models/wcl.models';
 import {
   BurstTransformService, cdTimings, findParseWindows, clusterParseWindows, cdSpellIds, ParseWindow,
-  toParseRankings, bucketDamagePerBin, forwardRollingDamage, detectDenseRuns, trimRunToDamage,
+  bucketDamagePerBin, forwardRollingDamage, detectDenseRuns, trimRunToDamage,
   windowAbilityBreakdown, BinRun,
 } from './burst-transform.service';
 import { SHADOW_BLADES, SHADOW_BLADES_DAMAGE, EVISCERATE, BLACK_POWDER, CLOAK_OF_SHADOWS } from '../../../../testing/spell-ids';
+import { cast, damage } from '../../../../testing/builders/events';
+import { rulebook } from '../../../../testing/builders/rulebook';
 
-function cast(spellId: number, atS: number): WclEvent {
-  return { type: 'cast', timestamp: atS * 1000, abilityGameID: spellId };
-}
-function damage(spellId: number, atS: number, amount: number): WclEvent {
-  return { type: 'damage', timestamp: atS * 1000, abilityGameID: spellId, amount };
-}
 /** Call `findParseWindows` with the common fixed-fight defaults, overriding per case. */
 function scanWindows(
   damageEvents: WclEvent[], fightEndMs: number,
@@ -48,29 +44,6 @@ function burstAt(startS: number): WclEvent[] {
 }
 
 /* ----------------------------- pure functions ----------------------------- */
-
-describe('toParseRankings', () => {
-  it('maps raw rankings to fetchable parses and caps at count', () => {
-    const raw = [
-      { name: 'P1', report: { code: 'r1', fightID: 1 } },
-      { name: 'P2', report: { code: 'r2', fightID: 2 } },
-      { name: 'P3', report: { code: 'r3', fightID: 3 } },
-    ];
-    expect(toParseRankings(raw, 2)).toEqual([
-      { player: 'P1', report_code: 'r1', fight_id: 1 },
-      { player: 'P2', report_code: 'r2', fight_id: 2 },
-    ]);
-  });
-
-  it('drops anonymized "Character N-N" names and rows without a report code', () => {
-    const raw = [
-      { name: 'Character 123-456', report: { code: 'r1', fightID: 1 } },
-      { name: 'Real', report: { fightID: 2 } },
-      { name: 'Keep', report: { code: 'r3', fightID: 3 } },
-    ];
-    expect(toParseRankings(raw, 10)).toEqual([{ player: 'Keep', report_code: 'r3', fight_id: 3 }]);
-  });
-});
 
 describe('cdSpellIds', () => {
   it('maps cooldown + defensive names to spell ids, skipping missing ids', () => {
@@ -417,10 +390,9 @@ const wclFake = {
     Object.fromEntries(ids.map(id => [id, { id, icon: `icon_${id}`, name: `name_${id}` }])),
 };
 const filesFake = {
-  getRulebook: async () => ({
+  getRulebook: async () => rulebook({
     spec: 'SubtletyRogue',
-    major_cooldowns: [{ name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 90, duration: 20 }],
-    defensives: [],
+    cooldowns: [{ name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 90, duration: 20 }],
   }),
 };
 

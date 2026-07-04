@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
-import { WclEvent } from '../../../core/models/wcl.models';
 import {
   DefensiveTransformService,
   defensiveSpellIds, defensivePlanMeta, buildBuffWindows, summarizeDefensiveCasts,
@@ -11,6 +10,8 @@ import {
   windowDamageBreakdown, clusterDamageStats, clusterAbilityBreakdown,
   ParseDefWindow, ParseDefensiveSummary,
 } from './defensive-transform.service';
+import { applyBuff, removeBuff, damageTaken, cast } from '../../../../testing/builders/events';
+import { rulebook } from '../../../../testing/builders/rulebook';
 import { CLOAK_OF_SHADOWS, EVASION } from '../../../../testing/spell-ids';
 
 // Enemy-side identifiers for the damage-taken fixtures (not player abilities, so local).
@@ -20,19 +21,6 @@ const BOSS_ACTOR = 9;       // report actor id of the boss
 const ADD_ACTOR = 8;        // report actor id of an add
 const BOSS_GAME_ID = 6666;  // stable gameID the boss actor maps to
 const ADD_GAME_ID = 5555;   // stable gameID the add actor maps to
-
-function applybuff(spellId: number, atS: number): WclEvent {
-  return { type: 'applybuff', timestamp: atS * 1000, abilityGameID: spellId };
-}
-function removebuff(spellId: number, atS: number): WclEvent {
-  return { type: 'removebuff', timestamp: atS * 1000, abilityGameID: spellId };
-}
-function cast(spellId: number, atS: number): WclEvent {
-  return { type: 'cast', timestamp: atS * 1000, abilityGameID: spellId };
-}
-function dtaken(spellId: number, atS: number, amount: number, sourceId?: number): WclEvent {
-  return { type: 'damage', timestamp: atS * 1000, abilityGameID: spellId, amount, sourceID: sourceId };
-}
 
 const CLOAK = { name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS, cooldown: 120, duration: 5 };
 const FIGHT_DUR_S = 300;  // standard fight length used across the per-parse summary fixtures
@@ -55,11 +43,11 @@ describe('defensivePlanMeta', () => {
 
 describe('buildBuffWindows', () => {
   it('pairs apply with the latest open remove', () => {
-    const windows = buildBuffWindows([applybuff(CLOAK_OF_SHADOWS, 10), removebuff(CLOAK_OF_SHADOWS, 15)], 0);
+    const windows = buildBuffWindows([applyBuff(CLOAK_OF_SHADOWS, 10), removeBuff(CLOAK_OF_SHADOWS, 15)], 0);
     expect(windows.get(CLOAK_OF_SHADOWS)).toEqual([[10, 15]]);
   });
   it('leaves an unmatched apply open (null end)', () => {
-    const windows = buildBuffWindows([applybuff(CLOAK_OF_SHADOWS, 10)], 0);
+    const windows = buildBuffWindows([applyBuff(CLOAK_OF_SHADOWS, 10)], 0);
     expect(windows.get(CLOAK_OF_SHADOWS)).toEqual([[10, null]]);
   });
 });
@@ -72,8 +60,8 @@ describe('summarizeDefensiveCasts', () => {
     // The second use lands SECOND_USE_S - (FIRST_USE_S + cooldown) past its reset, well over 8s.
     const EXPECTED_DELAY_S = SECOND_USE_S - (FIRST_USE_S + CLOAK.cooldown);
     const windows = buildBuffWindows([
-      applybuff(CLOAK_OF_SHADOWS, FIRST_USE_S), removebuff(CLOAK_OF_SHADOWS, FIRST_REMOVE_S),
-      applybuff(CLOAK_OF_SHADOWS, SECOND_USE_S), removebuff(CLOAK_OF_SHADOWS, SECOND_REMOVE_S),
+      applyBuff(CLOAK_OF_SHADOWS, FIRST_USE_S), removeBuff(CLOAK_OF_SHADOWS, FIRST_REMOVE_S),
+      applyBuff(CLOAK_OF_SHADOWS, SECOND_USE_S), removeBuff(CLOAK_OF_SHADOWS, SECOND_REMOVE_S),
     ], 0);
     const summaries = summarizeDefensiveCasts([CLOAK], windows, [], 0, FIGHT_DUR_S);
     expect(summaries).toHaveLength(1);
@@ -90,9 +78,13 @@ describe('summarizeDefensiveCasts', () => {
 
 describe('findParseDefensiveWindows', () => {
   it('slices damage taken by the buff span and picks the dominant enemy', () => {
-    const windows = buildBuffWindows([applybuff(CLOAK_OF_SHADOWS, 10), removebuff(CLOAK_OF_SHADOWS, 15)], 0);
+    const windows = buildBuffWindows([applyBuff(CLOAK_OF_SHADOWS, 10), removeBuff(CLOAK_OF_SHADOWS, 15)], 0);
     const result = findParseDefensiveWindows(
-      [dtaken(BOSS_HIT, 12, 500, BOSS_ACTOR), dtaken(ADD_HIT, 13, 200, ADD_ACTOR), dtaken(BOSS_HIT, 100, 999, BOSS_ACTOR)],
+      [
+        damageTaken(BOSS_HIT, 12, 500, { source: BOSS_ACTOR }),
+        damageTaken(ADD_HIT, 13, 200, { source: ADD_ACTOR }),
+        damageTaken(BOSS_HIT, 100, 999, { source: BOSS_ACTOR }),
+      ],
       0, 300, windows, [CLOAK], new Map([[BOSS_ACTOR, BOSS_GAME_ID], [ADD_ACTOR, ADD_GAME_ID]]),
     );
     expect(result).toHaveLength(1);
@@ -101,9 +93,9 @@ describe('findParseDefensiveWindows', () => {
   });
 
   it('runs an open buff to fight end (no rulebook duration)', () => {
-    const windows = buildBuffWindows([applybuff(CLOAK_OF_SHADOWS, 10)], 0); // no remove
+    const windows = buildBuffWindows([applyBuff(CLOAK_OF_SHADOWS, 10)], 0); // no remove
     const result = findParseDefensiveWindows(
-      [dtaken(BOSS_HIT, 50, 400, BOSS_ACTOR)], 0, 300, windows, [CLOAK], new Map([[BOSS_ACTOR, BOSS_GAME_ID]]),
+      [damageTaken(BOSS_HIT, 50, 400, { source: BOSS_ACTOR })], 0, 300, windows, [CLOAK], new Map([[BOSS_ACTOR, BOSS_GAME_ID]]),
     );
     expect(result[0].window_length_s).toBe(290); // 10 -> 300 (fight end), not 10 + duration
     expect(result[0].window_damage).toBe(400);
@@ -281,16 +273,16 @@ const wclFake = {
   }),
   getReport: async (code: string) => (code === 'r1' ? reportFor(10, 'P1', 1) : reportFor(20, 'P2', 2)),
   getAllEvents: async (_code: string, _fightId: number, dataType: string) => {
-    if (dataType === 'Buffs') return [applybuff(CLOAK_OF_SHADOWS, 30), removebuff(CLOAK_OF_SHADOWS, 35)];
+    if (dataType === 'Buffs') return [applyBuff(CLOAK_OF_SHADOWS, 30), removeBuff(CLOAK_OF_SHADOWS, 35)];
     if (dataType === 'Casts') return [cast(CLOAK_OF_SHADOWS, 30)];
-    return [dtaken(700, 32, 1000, 9)]; // DamageTaken
+    return [damageTaken(700, 32, 1000, { source: 9 })]; // DamageTaken
   },
   // Raw gameData.ability map (id-keyed { id, icon, name }); the transform projects it.
   getAbilities: async (ids: number[]) =>
     Object.fromEntries(ids.map(id => [id, id === 700 ? { id, icon: 'hit', name: 'Boss Hit' } : { id, icon: 'cloak', name: 'Cloak of Shadows' }])),
 };
 const filesFake = {
-  getRulebook: async () => ({ spec: 'SubtletyRogue', major_cooldowns: [], defensives: [CLOAK] }),
+  getRulebook: async () => rulebook({ defensives: [CLOAK] }),
 };
 
 describe('DefensiveTransformService (live, in-browser)', () => {

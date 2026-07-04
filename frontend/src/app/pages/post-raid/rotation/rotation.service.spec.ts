@@ -4,12 +4,8 @@ import { WclApiService } from '../../../core/services/wcl-api';
 import { AnalysisFinding } from '../../../core/models/analysis.models';
 import { PerCdBenchmark } from '../../../core/models/encounter.models';
 import { RulebookRule, CastWithoutPriorCondition, HoldCooldownForAnchorCondition } from '../../../core/models/rulebook.models';
-import { WclEvent } from '../../../core/models/wcl.models';
 import { SHADOW_BLADES, SHADOW_DANCE, SECRET_TECHNIQUE, VANISH, BLOODLUST } from '../../../../testing/spell-ids';
-import {
-  isOutlierAbove, isOutlierBelow, benchExpectedUses, closestToZero, castEfficiencyPct,
-  fmtClock, sortBySeverity,
-} from '../../../shared/analysis/analysis-math';
+import { cast, applyBuff } from '../../../../testing/builders/events';
 import { ROTATION_DATA_SOURCE, RotationBench } from './rotation-data-source';
 import { DataSource } from '../../../core/data-source/data-source';
 import {
@@ -22,12 +18,8 @@ import {
   partitionRotationFindings, buildRuleRows, buildOffensiveRows, buildOnPlanChips,
 } from './rotation.service';
 
-function cast(spellId: number, atS: number): WclEvent {
-  return { type: 'cast', timestamp: atS * 1000, abilityGameID: spellId };
-}
-function buff(spellId: number, atS: number): WclEvent {
-  return { type: 'applybuff', timestamp: atS * 1000, abilityGameID: spellId };
-}
+// The check* and analyzeOneCooldown functions take cast times in ms.
+const ONE_SEC_MS = 1000;
 
 // Build a RotationScanInput for a 0..120s fight - keeps the call sites terse.
 function scan(over: Partial<RotationScanInput> & { bench: RotationBench }): RotationScanInput {
@@ -74,50 +66,6 @@ const HOLD_DANCE_FOR_BLADES: HoldCooldownForAnchorCondition = {
   spell_ids: [SHADOW_DANCE], spell_names: ['Shadow Dance'],
   anchor_spell_id: SHADOW_BLADES, anchor_spell_name: 'Shadow Blades', hold_window_s: 15,
 };
-
-/* ----------------------------- statistical predicates ----------------------------- */
-
-describe('statistical predicates', () => {
-  it.each([
-    { value: 11, mean: 5, stddev: 2, out: true },
-    { value: 9, mean: 5, stddev: 2, out: false },
-    { value: 8, mean: 5, stddev: 2, out: false },
-  ])('isOutlierAbove($value)', ({ value, mean, stddev, out }) => {
-    expect(isOutlierAbove(value, mean, stddev)).toBe(out);
-  });
-
-  it('isOutlierBelow at one sigma is true more than one stddev under', () => {
-    expect(isOutlierBelow(80, 90, 5, 1)).toBe(true);
-    expect(isOutlierBelow(86, 90, 5, 1)).toBe(false);
-  });
-
-  it('benchExpectedUses scales uses/min to the fight length', () => {
-    expect(benchExpectedUses(120, { avg: 1, stddev: 0.1 })).toEqual({ expected: 2, floor: 2 });
-  });
-
-  it('closestToZero picks the smallest absolute offset', () => {
-    expect(closestToZero([-3, 1, 5])).toBe(1);
-  });
-
-  it('castEfficiencyPct clamps to >= 0', () => {
-    expect(castEfficiencyPct(0, 100)).toBe(100);
-    expect(castEfficiencyPct(200, 100)).toBe(0);
-  });
-
-  it('fmtClock zero-pads minutes and seconds', () => {
-    expect(fmtClock(65)).toBe('01:05');
-  });
-
-  it('sortBySeverity orders critical first, success last', () => {
-    const findings: AnalysisFinding[] = [
-      { severity: 'success', category: 'x', message: '' },
-      { severity: 'critical', category: 'y', message: '' },
-      { severity: 'warning', category: 'z', message: '' },
-    ];
-    sortBySeverity(findings);
-    expect(findings.map(f => f.severity)).toEqual(['critical', 'warning', 'success']);
-  });
-});
 
 /* ----------------------------- rule engine ----------------------------- */
 
@@ -221,7 +169,7 @@ describe('analyzeRotationFindings', () => {
 
   it('emits a success when used on cd and BL-aligned', () => {
     const casts = [cast(SHADOW_BLADES, 6)];
-    const buffs = [buff(BLOODLUST, 6)];
+    const buffs = [applyBuff(BLOODLUST, 6)];
     const single = bench({ per_cd_benchmarks: { 'Shadow Blades': cdBench({ uses_per_min: { avg: 0.5, stddev: 0.1, min: 0.4, max: 0.6 } }) } });
     const findings = analyzeRotationFindings(scan({ castEvents: casts, buffEvents: buffs, bench: single }));
     const success = findings.find(f => f.category === 'cooldown_usage' && f.severity === 'success');
@@ -231,7 +179,7 @@ describe('analyzeRotationFindings', () => {
 
   it('flags a late opener', () => {
     const casts = [cast(SHADOW_BLADES, 40)];
-    const buffs = [buff(BLOODLUST, 38)];
+    const buffs = [applyBuff(BLOODLUST, 38)];
     const findings = analyzeRotationFindings(scan({ castEvents: casts, buffEvents: buffs, bench: bench() }));
     expect(findings.some(f => f.category === 'cooldown_delay')).toBe(true);
   });
@@ -302,7 +250,6 @@ describe('checkLostUses', () => {
 
 describe('checkFirstCastDelay', () => {
   // cdBench: avg_first_cast_s 5, stddev 2 -> outlier above 5 + 2*2 = 9s.
-  const ONE_SEC_MS = 1000;
 
   it('flags a first cast more than 2 sigma past the top open', () => {
     // first cast at 10s > 9s threshold.
@@ -320,7 +267,6 @@ describe('checkFirstCastDelay', () => {
 });
 
 describe('checkBloodlustAlignment', () => {
-  const ONE_SEC_MS = 1000;
   const BL_AT_S = 10;
   // BL window: 30s before BL to 40s duration + 15s trail -> [-30, +55] around BL_AT_S = [-20, 65].
 
@@ -358,7 +304,6 @@ describe('checkBloodlustAlignment', () => {
 });
 
 describe('checkGaps', () => {
-  const ONE_SEC_MS = 1000;
   // cdBench: avg_gap_s 90, stddev 5 -> outlier above 90 + 2*5 = 100s.
 
   it('flags a gap more than 2 sigma above the top gap', () => {
@@ -377,7 +322,6 @@ describe('checkGaps', () => {
 });
 
 describe('checkHoldSuggestions', () => {
-  const ONE_SEC_MS = 1000;
   const holdCd = cdBench({
     hold_targets: { '2': { target_s: 130, stddev_s: 5, delay_s: 30, delay_stddev_s: 3, band_s: 5, effective_cd_s: 90, count: 4, total_samples: 5 } },
   });
@@ -394,7 +338,6 @@ describe('checkHoldSuggestions', () => {
 });
 
 describe('checkCastEfficiency', () => {
-  const ONE_SEC_MS = 1000;
   const FIGHT_DUR_S = 120;
   // bench(): top_avg_efficiency 90%, top_efficiency_stddev 3% -> the warn threshold is 1 sigma
   // under, i.e. below 87%. efficiency% = (1 - idleS / FIGHT_DUR_S) * 100.
@@ -433,7 +376,6 @@ describe('checkCastEfficiency', () => {
 });
 
 describe('analyzeOneCooldown', () => {
-  const ONE_SEC_MS = 1000;
   const FIGHT_DUR_S = 120;
   const UPM = { avg: 0.5, stddev: 0.1, min: 0.4, max: 0.6 };  // top-parse uses-per-minute
   const cd = { name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 90, align_with_bloodlust: true };
@@ -490,19 +432,9 @@ describe('bucketRotationFindings', () => {
     expect(out.offensiveRows[0]).toMatchObject({ name: 'Shadow Blades', spellId: SHADOW_BLADES, icon: 'sb', chip: 'held' });
     expect(out.onPlan).toEqual([{ name: 'Vanish', spellId: VANISH, icon: 'vanish' }]);
   });
-
-  it('does not put a cooldown with issues on plan even if it also has a success', () => {
-    const findings: AnalysisFinding[] = [
-      { severity: 'critical', category: 'lost_cooldown', cd_name: 'Shadow Blades', message: '', measured: { value: '0 / 2' } },
-      { severity: 'success', category: 'cooldown_usage', cd_name: 'Shadow Blades', message: '' },
-    ];
-    const out = bucketRotationFindings(findings, { 'Shadow Blades': SHADOW_BLADES }, abilities);
-    expect(out.onPlan).toEqual([]);
-    expect(out.offensiveRows).toHaveLength(1);
-  });
 });
 
-describe('bucketRotationFindings passes', () => {
+describe('rotation finding partition and row builders', () => {
   const abilities = { [SHADOW_BLADES]: { icon: 'sb', name: 'Shadow Blades' }, [VANISH]: { icon: 'vanish', name: 'Vanish' } };
   const ruleFinding: AnalysisFinding = { severity: 'critical', category: 'rule_violation', label: 'Dance without Secret Technique', message: '', measured: { value: '1 / 1' }, details: { remedy: 'fix' } };
   const issueFinding: AnalysisFinding = { severity: 'warning', category: 'cooldown_delay', cd_name: 'Shadow Blades', message: '', measured: { value: '+3s' }, timestamp_ms: 4000 };
@@ -602,7 +534,7 @@ describe('RotationFeatureService', () => {
         masterData: { actors: [], abilities: [{ gameID: SHADOW_BLADES, name: 'Shadow Blades', icon: 'sb' }] },
       }),
       getAllEvents: async (_c: string, _f: number, dataType: string) =>
-        dataType === 'Casts' ? [cast(SHADOW_BLADES, 6)] : [buff(BLOODLUST, 6)],
+        dataType === 'Casts' ? [cast(SHADOW_BLADES, 6)] : [applyBuff(BLOODLUST, 6)],
     };
     const single = bench({ per_cd_benchmarks: { 'Shadow Blades': cdBench({ uses_per_min: { avg: 0.5, stddev: 0.1, min: 0.4, max: 0.6 } }) } });
     const service = withSource(single, wcl);

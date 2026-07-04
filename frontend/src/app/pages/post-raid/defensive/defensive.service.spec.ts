@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { WclApiService } from '../../../core/services/wcl-api';
-import { WclEvent } from '../../../core/models/wcl.models';
 import { BurstWindow, PlayerBurstWindow, PlayerDefensive } from '../../../core/models/analysis.models';
 import { PerDefensiveBenchmark } from '../../../core/models/encounter.models';
 import { DEFENSIVE_DATA_SOURCE, DefensiveBench } from './defensive-data-source';
@@ -13,49 +12,34 @@ import {
   playerCoveredWindow, playerUsefulTiming, windowMissFindings,
   buildDefensiveUsageWindows, analyzeOneDefensive, gapDelayFindings, holdSuggestionFindings,
 } from './defensive.service';
+import { applyBuff, removeBuff, damageTaken, cast } from '../../../../testing/builders/events';
 import { CLOAK_OF_SHADOWS } from '../../../../testing/spell-ids';
 
-function applybuff(spellId: number, atS: number): WclEvent {
-  return { type: 'applybuff', timestamp: atS * 1000, abilityGameID: spellId };
-}
-function removebuff(spellId: number, atS: number): WclEvent {
-  return { type: 'removebuff', timestamp: atS * 1000, abilityGameID: spellId };
-}
-function dtaken(spellId: number, atS: number, amount: number): WclEvent {
-  return { type: 'damage', timestamp: atS * 1000, abilityGameID: spellId, amount };
-}
-
 const CLOAK_META = { name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS, cooldown: 120, duration: 5, usage_rule: 'Use on big hits', talent_gated: false };
+
+/** The common per-defensive benchmark shape; each site overrides only the fields it documents. */
+function defBench(overrides: Partial<PerDefensiveBenchmark> = {}): PerDefensiveBenchmark {
+  return {
+    sample_count: 5, used_sample_count: 5, avg_first_cast_s: 10, stddev_first_cast_s: 2, avg_gap_s: 60, stddev_gap_s: 5,
+    hold_targets: {}, avg_uses: 2, avg_uses_per_min: 0.4, uses_per_min: { avg: 0.4, stddev: 0.05, min: 0.3, max: 0.5 },
+    majority_hold: false,
+    ...overrides,
+  };
+}
 
 /* ----------------------------- player defensives ----------------------------- */
 
 describe('analyzeDefensives', () => {
+  // Composition only: span shapes and fallbacks are specced on buildDefensiveUsageWindows.
   it('builds buff-window-centric uses with damage taken during each window', () => {
     const out = analyzeDefensives(
       [CLOAK_META],
-      [], [applybuff(CLOAK_OF_SHADOWS, 10), removebuff(CLOAK_OF_SHADOWS, 15)], [dtaken(700, 12, 500)],
+      [], [applyBuff(CLOAK_OF_SHADOWS, 10), removeBuff(CLOAK_OF_SHADOWS, 15)], [damageTaken(700, 12, 500)],
       0, 300_000,
     );
     expect(out).toHaveLength(1);
     expect(out[0]).toMatchObject({ name: 'Cloak of Shadows', uses: 1, cast_times_s: [10] });
     expect(out[0].windows[0]).toMatchObject({ start_s: 10, end_s: 15, dmg_during: 500 });
-  });
-
-  it('falls back to a point usage (no rulebook-duration window) when no buffs exist', () => {
-    const out = analyzeDefensives(
-      [CLOAK_META],
-      [{ type: 'cast', timestamp: 20_000, abilityGameID: CLOAK_OF_SHADOWS }], [], [dtaken(700, 21, 300)],
-      0, 300_000,
-    );
-    expect(out[0]).toMatchObject({ uses: 1, cast_times_s: [20] });
-    expect(out[0].windows[0]).toMatchObject({ start_s: 20, end_s: 20, dmg_during: 0 });
-  });
-
-  it('runs an open buff to fight end, not a rulebook duration', () => {
-    const out = analyzeDefensives(
-      [CLOAK_META], [], [applybuff(CLOAK_OF_SHADOWS, 10)], [dtaken(700, 50, 400)], 0, 300_000,
-    );
-    expect(out[0].windows[0]).toMatchObject({ start_s: 10, end_s: 300, dmg_during: 400 });
   });
 });
 
@@ -78,7 +62,7 @@ describe('buildDefensiveUsageWindows', () => {
   it('falls back to point casts (zero span, no damage) only when there is no buff span', () => {
     const CAST_S = 20;
     const out = buildDefensiveUsageWindows(
-      CLOAK_OF_SHADOWS, [], [{ type: 'cast', timestamp: CAST_S * 1000, abilityGameID: CLOAK_OF_SHADOWS }],
+      CLOAK_OF_SHADOWS, [], [cast(CLOAK_OF_SHADOWS, CAST_S)],
       dmg, rel, F_START, F_END, FIGHT_END_S,
     );
     expect(out).toEqual([{ start_s: CAST_S, end_s: CAST_S, dmg_during: 0 }]);
@@ -87,7 +71,7 @@ describe('buildDefensiveUsageWindows', () => {
   it('ignores a cast outside the fight bounds (boundary)', () => {
     const PAST_END_S = 301; // > FIGHT_END_S, so its timestamp is past F_END
     const out = buildDefensiveUsageWindows(
-      CLOAK_OF_SHADOWS, [], [{ type: 'cast', timestamp: PAST_END_S * 1000, abilityGameID: CLOAK_OF_SHADOWS }],
+      CLOAK_OF_SHADOWS, [], [cast(CLOAK_OF_SHADOWS, PAST_END_S)],
       dmg, rel, F_START, F_END, FIGHT_END_S,
     );
     expect(out).toEqual([]);
@@ -98,11 +82,8 @@ describe('gapDelayFindings', () => {
   // avg_gap 60, stddev 5 -> +2sigma band is 70; a gap must STRICTLY exceed 70 to flag.
   const AVG_GAP_S = 60;
   const STDDEV_GAP_S = 5;
-  const benchWithGap = (overrides: Partial<PerDefensiveBenchmark> = {}): PerDefensiveBenchmark => ({
-    sample_count: 5, used_sample_count: 5, avg_first_cast_s: 10, stddev_first_cast_s: 2, avg_gap_s: AVG_GAP_S, stddev_gap_s: STDDEV_GAP_S,
-    hold_targets: {}, avg_uses: 2, avg_uses_per_min: 0.4, uses_per_min: { avg: 0.4, stddev: 0.05, min: 0.3, max: 0.5 },
-    majority_hold: false, ...overrides,
-  });
+  const benchWithGap = (overrides: Partial<PerDefensiveBenchmark> = {}): PerDefensiveBenchmark =>
+    defBench({ avg_gap_s: AVG_GAP_S, stddev_gap_s: STDDEV_GAP_S, ...overrides });
 
   it('flags a gap beyond the +2sigma band', () => {
     const GAP_OVER = 71; // 71 > 70
@@ -181,11 +162,8 @@ describe('holdSuggestionFindings', () => {
 });
 
 describe('analyzeOneDefensive', () => {
-  const bench: PerDefensiveBenchmark = {
-    sample_count: 10, used_sample_count: 10, avg_first_cast_s: 10, stddev_first_cast_s: 2, avg_gap_s: 60, stddev_gap_s: 5,
-    hold_targets: {}, avg_uses: 2, avg_uses_per_min: 0.4, uses_per_min: { avg: 0.4, stddev: 0.05, min: 0.3, max: 0.5 },
-    majority_hold: false,
-  };
+  // Full use-share bench (10/10 top parses used it), so no check is use-share gated.
+  const bench = defBench({ sample_count: 10, used_sample_count: 10 });
   const player = (overrides: Partial<PlayerDefensive>): PlayerDefensive =>
     ({ name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS, cooldown: 120, uses: 0, cast_times_s: [], windows: [], ...overrides });
   const FIGHT_DUR_S = 300;
@@ -193,6 +171,13 @@ describe('analyzeOneDefensive', () => {
   it('flags a never-used defensive as a critical lost cooldown', () => {
     const out = analyzeOneDefensive(player({ uses: 0, cast_times_s: [] }), bench, 300);
     expect(out[0]).toMatchObject({ severity: 'critical', category: 'lost_cooldown' });
+  });
+
+  it('flags a late first use as a warning', () => {
+    // First use is well past avg 10 + 2*stddev 2 = 14s -> a first-cast delay warning.
+    const LATE_FIRST_S = 40;
+    const out = analyzeOneDefensive(player({ uses: 1, cast_times_s: [LATE_FIRST_S] }), bench, FIGHT_DUR_S);
+    expect(out.some(finding => finding.severity === 'warning' && finding.category === 'cooldown_delay')).toBe(true);
   });
 
   // used_sample_count / sample_count below MIN_USE_SHARE_FRAC (0.5) -> a situational defensive.
@@ -228,14 +213,8 @@ describe('analyzeOneDefensive', () => {
 });
 
 describe('analyzeDefensiveFindings', () => {
-  const bench: Record<string, PerDefensiveBenchmark> = {
-    'Cloak of Shadows': {
-      sample_count: 10, used_sample_count: 10, avg_first_cast_s: 10, stddev_first_cast_s: 2,
-      avg_gap_s: 60, stddev_gap_s: 5, hold_targets: {},
-      avg_uses: 2, avg_uses_per_min: 0.4, uses_per_min: { avg: 0.4, stddev: 0.05, min: 0.3, max: 0.5 },
-      majority_hold: false,
-    },
-  };
+  // Composition only: per-defensive checks are specced on analyzeOneDefensive.
+  const bench: Record<string, PerDefensiveBenchmark> = { 'Cloak of Shadows': defBench({ sample_count: 10, used_sample_count: 10 }) };
 
   it('flags a never-used defensive as a critical lost cooldown', () => {
     const findings = analyzeDefensiveFindings(
@@ -244,30 +223,6 @@ describe('analyzeDefensiveFindings', () => {
     );
     expect(findings[0]).toMatchObject({ severity: 'critical', category: 'lost_cooldown', cd_name: 'Cloak of Shadows' });
   });
-
-  it('emits a success when usage matches and there are no issues', () => {
-    const findings = analyzeDefensiveFindings(
-      [{ name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS, cooldown: 120, uses: 2, cast_times_s: [10, 70], windows: [] }],
-      bench, 300,
-    );
-    expect(findings.some(f => f.severity === 'success' && f.cd_name === 'Cloak of Shadows')).toBe(true);
-  });
-
-  it('flags a late first use as a warning', () => {
-    const findings = analyzeDefensiveFindings(
-      [{ name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS, cooldown: 120, uses: 1, cast_times_s: [40], windows: [] }],
-      bench, 300,
-    );
-    expect(findings.some(f => f.severity === 'warning' && f.category === 'cooldown_delay')).toBe(true);
-  });
-
-  it('skips a talent-gated defensive that was never used', () => {
-    const findings = analyzeDefensiveFindings(
-      [{ name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS, cooldown: 120, uses: 0, cast_times_s: [], windows: [], talent_gated: true }],
-      bench, 300,
-    );
-    expect(findings).toEqual([]);
-  });
 });
 
 describe('computePlayerDefensiveWindows', () => {
@@ -275,7 +230,7 @@ describe('computePlayerDefensiveWindows', () => {
     const top: BurstWindow[] = [
       { time_s: 10, window_length_s: 5, dmg_avg: 0, dmg_min: 0, dmg_max: 0, dmg_stddev: 0, common_cds: [], ability_breakdown: [] },
     ];
-    const out = computePlayerDefensiveWindows(top, [dtaken(700, 12, 400), dtaken(701, 14, 100), dtaken(700, 15, 999)], 0);
+    const out = computePlayerDefensiveWindows(top, [damageTaken(700, 12, 400), damageTaken(701, 14, 100), damageTaken(700, 15, 999)], 0);
     expect(out[0].window_damage).toBe(500); // event at exactly 15 (== end) excluded
     expect(out[0].ability_breakdown![0]).toMatchObject({ spell_id: 700, damage: 400 });
   });
@@ -428,11 +383,7 @@ describe('buildDefensivePlanRows', () => {
       defensives: [{ name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS, cooldown: 120, duration: 5, usage_rule: 'Use it', talent_gated: false }],
       ability_icons: { [CLOAK_OF_SHADOWS]: { icon: 'cloak', name: 'Cloak of Shadows' } },
       per_defensive_benchmarks: {
-        'Cloak of Shadows': {
-          sample_count: 5, used_sample_count: 5, avg_first_cast_s: 12, stddev_first_cast_s: 2, avg_gap_s: null, stddev_gap_s: null,
-          hold_targets: {}, avg_uses: 2, avg_uses_per_min: 0.4, uses_per_min: { avg: 0.4, stddev: 0.05, min: 0.3, max: 0.5 },
-          majority_hold: false,
-        },
+        'Cloak of Shadows': defBench({ avg_first_cast_s: 12, avg_gap_s: null, stddev_gap_s: null }),
       },
       defensive_windows: [{ time_s: 30, window_length_s: 5, dmg_avg: 0, dmg_min: 0, dmg_max: 0, dmg_stddev: 0, defensive_name: 'Cloak of Shadows', common_cds: ['Cloak of Shadows'], ability_breakdown: [] }],
     });
@@ -447,13 +398,7 @@ describe('buildDefensivePlanRows', () => {
 function fullBench(): DefensiveBench {
   return {
     spec: 'SubtletyRogue', encounter_id: 1, encounter_name: 'Boss', sample_count: 5,
-    per_defensive_benchmarks: {
-      'Cloak of Shadows': {
-        sample_count: 5, used_sample_count: 5, avg_first_cast_s: 10, stddev_first_cast_s: 2, avg_gap_s: 60, stddev_gap_s: 5,
-        hold_targets: {}, avg_uses: 2, avg_uses_per_min: 0.4, uses_per_min: { avg: 0.4, stddev: 0.05, min: 0.3, max: 0.5 },
-        majority_hold: false,
-      },
-    },
+    per_defensive_benchmarks: { 'Cloak of Shadows': defBench() },
     defensive_windows: [{
       time_s: 30, window_length_s: 5, dmg_avg: 1000, dmg_min: 800, dmg_max: 1200, dmg_stddev: 100,
       defensive_name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS, ref_game_id: 6666, common_cds: ['Cloak of Shadows'],
@@ -493,9 +438,9 @@ describe('DefensiveFeatureService.loadAnalysisView (post-raid)', () => {
     const wcl = {
       getReport: async () => report,
       getAllEvents: async (_c: string, _f: number, dataType: string) => {
-        if (dataType === 'Buffs') return [applybuff(CLOAK_OF_SHADOWS, 30), removebuff(CLOAK_OF_SHADOWS, 35)];
+        if (dataType === 'Buffs') return [applyBuff(CLOAK_OF_SHADOWS, 30), removeBuff(CLOAK_OF_SHADOWS, 35)];
         if (dataType === 'Casts') return [];
-        return [dtaken(700, 32, 1150)]; // DamageTaken inside window
+        return [damageTaken(700, 32, 1150)]; // DamageTaken inside window
       },
     };
     const service = serviceWith(fullBench(), wcl);

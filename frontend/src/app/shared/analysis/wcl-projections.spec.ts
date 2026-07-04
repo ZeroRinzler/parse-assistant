@@ -27,6 +27,25 @@ describe('unwrapRankings', () => {
   });
 });
 
+describe('toParseRankings', () => {
+  it('maps raw rankings to fetchable parses and caps at count', () => {
+    const raw = [rankingRow('P1', 'r1', 1), rankingRow('P2', 'r2', 2), rankingRow('P3', 'r3', 3)];
+    expect(toParseRankings(raw, 2)).toEqual([
+      { player: 'P1', report_code: 'r1', fight_id: 1 },
+      { player: 'P2', report_code: 'r2', fight_id: 2 },
+    ]);
+  });
+
+  it('drops anonymized "Character <id>-<id>" names and rows without a report code', () => {
+    const raw = [
+      rankingRow('Character 123-456', 'r1', 1), // privacy-anonymized parse
+      { name: 'NoReport', report: { fightID: 2 } }, // report code missing -> unfetchable
+      rankingRow('Keep', 'r3', 3),
+    ];
+    expect(toParseRankings(raw, 10)).toEqual([{ player: 'Keep', report_code: 'r3', fight_id: 3 }]);
+  });
+});
+
 describe('abilityIcons', () => {
   const SHADOW_BLADES = 121471;
   const CLOAK = 31224;

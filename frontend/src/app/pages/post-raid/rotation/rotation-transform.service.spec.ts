@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
-import { WclEvent } from '../../../core/models/wcl.models';
 import {
   RotationTransformService,
   detectBloodlust, summarizeCooldownCasts, detectHoldWindows, castGapListMs,
@@ -10,13 +9,8 @@ import {
   CdSummary,
 } from './rotation-transform.service';
 import { SHADOW_BLADES, BLOODLUST, CLOAK_OF_SHADOWS } from '../../../../testing/spell-ids';
-
-function cast(spellId: number, atS: number): WclEvent {
-  return { type: 'cast', timestamp: atS * 1000, abilityGameID: spellId };
-}
-function buff(spellId: number, atS: number): WclEvent {
-  return { type: 'applybuff', timestamp: atS * 1000, abilityGameID: spellId };
-}
+import { cast, applyBuff } from '../../../../testing/builders/events';
+import { rulebook } from '../../../../testing/builders/rulebook';
 
 /* ----------------------------- pure functions ----------------------------- */
 
@@ -31,10 +25,10 @@ describe('rotationCdSpellIds', () => {
 
 describe('detectBloodlust', () => {
   it('returns the first BL apply time in seconds', () => {
-    expect(detectBloodlust([buff(999, 5), buff(BLOODLUST, 30)], 0)).toBe(30);
+    expect(detectBloodlust([applyBuff(999, 5), applyBuff(BLOODLUST, 30)], 0)).toBe(30);
   });
   it('returns null when no BL buff present', () => {
-    expect(detectBloodlust([buff(999, 5)], 0)).toBeNull();
+    expect(detectBloodlust([applyBuff(999, 5)], 0)).toBeNull();
   });
 });
 
@@ -219,6 +213,9 @@ function reportFor(playerId: number, playerName: string, fightId: number) {
   };
 }
 
+// An id outside the rulebook cooldowns; exercises the cooldown-cast filter.
+const UNTRACKED_SPELL_ID = 99;
+
 const wclFake = {
   // getRankings returns the raw WCL envelope ({ rankings }); the transform unwraps it.
   getRankings: async () => ({
@@ -229,17 +226,14 @@ const wclFake = {
   }),
   getReport: async (code: string) => (code === 'r1' ? reportFor(10, 'P1', 1) : reportFor(20, 'P2', 2)),
   getAllEvents: async (_code: string, _fightId: number, dataType: string) =>
-    dataType === 'Casts' ? [cast(SHADOW_BLADES, 5), cast(99, 8)] : [buff(BLOODLUST, 6)],
+    dataType === 'Casts' ? [cast(SHADOW_BLADES, 5), cast(UNTRACKED_SPELL_ID, 8)] : [applyBuff(BLOODLUST, 6)],
   // Raw gameData.ability map (id-keyed { id, icon, name }); the transform projects it.
   getAbilities: async (ids: number[]) =>
     Object.fromEntries(ids.map(id => [id, { id, icon: 'sb', name: 'Shadow Blades' }])),
 };
 const filesFake = {
-  getRulebook: async () => ({
-    spec: 'SubtletyRogue',
-    major_cooldowns: [{ name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 90, align_with_bloodlust: true }],
-    defensives: [],
-    rules: [],
+  getRulebook: async () => rulebook({
+    cooldowns: [{ name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 90, align_with_bloodlust: true }],
   }),
 };
 

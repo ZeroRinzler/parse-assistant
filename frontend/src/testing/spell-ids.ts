@@ -3,8 +3,8 @@
  *
  * The production code never hardcodes spec spell IDs (they come from the
  * rulebook), but tests need *some* stable IDs to wire events to rules. Naming
- * them here keeps specs readable - `Events.cast(SHADOW_BLADES, "0:01")` reads
- * as documentation - and the exact numeric values are irrelevant to the tests
+ * them here keeps specs readable - `cast(SHADOW_BLADES, 1)` reads as
+ * documentation - and the exact numeric values are irrelevant to the tests
  * as long as builders and rulebook fixtures agree.
  *
  * The Bloodlust family IDs are the real ones the engine recognizes

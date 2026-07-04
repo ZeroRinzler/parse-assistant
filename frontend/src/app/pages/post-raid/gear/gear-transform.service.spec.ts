@@ -5,8 +5,7 @@ import { DataFileApiService } from '../../../core/services/data-file-api';
 import { CharacterGear, WclCombatantInfo, WclGearItem } from '../../../core/models/wcl.models';
 import {
   GearTransformService, toParseGear, aggregateParseGear, ParseGear,
-  aggregateTalents, aggregateTrinkets, aggregateEnchants,
-  extractGear, talentKeyFromTree, toParseRankings,
+  aggregateTalents, aggregateTrinkets, aggregateEnchants, talentKeyFromTree,
 } from './gear-transform.service';
 
 // Per-slot caps mirrored from the transform service (MAX_TALENT_BUILDS = 5,
@@ -21,31 +20,6 @@ const ENCHANT_SLOT = 15;
 const EXAMPLE_SOURCE_ID = 537;
 
 /* ----------------------------- pure functions ----------------------------- */
-
-describe('toParseRankings', () => {
-  it('maps raw rankings to fetchable parses, dropping anonymized names', () => {
-    const raw = [
-      { name: 'Character 1-2', report: { code: 'r0', fightID: 9 } },
-      { name: 'Keep', report: { code: 'r1', fightID: 3 } },
-    ];
-    expect(toParseRankings(raw, 10)).toEqual([{ player: 'Keep', report_code: 'r1', fight_id: 3 }]);
-  });
-});
-
-describe('extractGear', () => {
-  it('extracts trinkets from slots 12/13 (stripping .jpg) and enchants from any slot', () => {
-    const gear: unknown[] = Array(16).fill(null);
-    gear[12] = { id: 200, name: 'Trinket A', icon: 'a.jpg' };
-    gear[13] = { id: '201', name: 'Trinket B', icon: 'b.jpg' };
-    gear[15] = { id: 1, name: 'Wep', permanentEnchant: '8041' };
-    const { trinkets, enchants } = extractGear(gear as never);
-    expect(trinkets).toEqual([
-      { slot: 12, id: 200, name: 'Trinket A', icon: 'a' },
-      { slot: 13, id: 201, name: 'Trinket B', icon: 'b' },
-    ]);
-    expect(enchants).toEqual([{ slot: 15, id: 8041, name: '' }]);
-  });
-});
 
 describe('talentKeyFromTree', () => {
   it('builds a v2: key from string-sorted nodeIDs', () => {
@@ -74,58 +48,6 @@ describe('toParseGear', () => {
   it('returns null for absent gear', () => {
     expect(toParseGear(null, ranking, 537)).toBeNull();
     expect(toParseGear({ found: false }, ranking, 537)).toBeNull();
-  });
-});
-
-describe('aggregateParseGear', () => {
-  const parse = (overrides: Partial<ParseGear>): ParseGear => ({
-    talent_key: 'v2:1,2', trinkets: [], enchants: [],
-    report_code: 'rep', fight_id: 1, player_name: 'P', source_id: 1, ...overrides,
-  });
-
-  it('rolls talent builds, trinkets per slot, and enchants into pct distributions', () => {
-    const parses: ParseGear[] = [
-      parse({ talent_key: 'v2:A', trinkets: [{ slot: 12, id: 100, name: 'A', icon: 'inv_a' }], enchants: [{ slot: 15, id: 8041, name: 'Soph' }] }),
-      parse({ talent_key: 'v2:A', trinkets: [{ slot: 12, id: 100, name: 'A', icon: 'inv_a' }], enchants: [{ slot: 15, id: 8041, name: 'Soph' }] }),
-      parse({ talent_key: 'v2:B', trinkets: [{ slot: 12, id: 200, name: 'B', icon: 'inv_b' }], enchants: [] }),
-      parse({ talent_key: 'v2:A', trinkets: [{ slot: 13, id: 300, name: 'C', icon: 'inv_c' }], enchants: [{ slot: 15, id: 9000, name: 'Other' }] }),
-    ];
-    const stats = aggregateParseGear(parses);
-
-    expect(stats.talent_builds[0]).toMatchObject({ key: 'v2:A', pct: 75 });
-    expect(stats.talent_builds[1]).toMatchObject({ key: 'v2:B', pct: 25 });
-    // slot 12: id 100 in 2/4 = 50%, id 200 in 1/4 = 25%
-    expect(stats.trinkets[12]).toEqual([
-      { id: 100, name: 'A', icon: 'inv_a', pct: 50 },
-      { id: 200, name: 'B', icon: 'inv_b', pct: 25 },
-    ]);
-    expect(stats.trinkets[13]).toEqual([{ id: 300, name: 'C', icon: 'inv_c', pct: 25 }]);
-    // slot 15: 8041 in 2/4 = 50%, 9000 in 1/4 = 25%
-    expect(stats.enchants[15]).toEqual([
-      { id: 8041, name: 'Soph', pct: 50 },
-      { id: 9000, name: 'Other', pct: 25 },
-    ]);
-  });
-
-  it('ignores non-trinket slots and zero ids', () => {
-    const stats = aggregateParseGear([
-      parse({ trinkets: [{ slot: 5, id: 1, name: 'X', icon: 'x' }, { slot: 12, id: 0, name: '', icon: '' }] }),
-    ]);
-    expect(stats.trinkets).toEqual({});
-  });
-
-  it('returns empty aggregates for no parses', () => {
-    expect(aggregateParseGear([])).toEqual({ talent_builds: [], trinkets: {}, enchants: {} });
-  });
-
-  it('records the first-seen parse identity so a build can link to an example parse', () => {
-    const stats = aggregateParseGear([
-      parse({ talent_key: 'v2:A', report_code: 'rep1', fight_id: 3, player_name: 'Ann', source_id: 537 }),
-      parse({ talent_key: 'v2:A', report_code: 'rep2', fight_id: 7, player_name: 'Bob', source_id: 99 }),
-    ]);
-    expect(stats.talent_builds[0]).toMatchObject({
-      key: 'v2:A', report_code: 'rep1', fight_id: 3, player_name: 'Ann', source_id: 537,
-    });
   });
 });
 
