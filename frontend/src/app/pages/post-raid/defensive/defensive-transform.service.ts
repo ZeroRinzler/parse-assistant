@@ -21,7 +21,7 @@ import { PerDefensiveBenchmark, CdHoldTargets } from '../../../core/models/encou
 import { logWarn } from '../../../core/log';
 import { mean, median, deviation } from 'd3-array';
 import { round, groupByTime, getOrInsert } from '../../../shared/analysis/analysis-math';
-import { abilityIcons, toParseRankings, unwrapRankings } from '../../../shared/analysis/wcl-projections';
+import { abilityIcons, normalizeAbilityId, toParseRankings, unwrapRankings } from '../../../shared/analysis/wcl-projections';
 import { DataSource } from '../../../core/data-source/data-source';
 import { DefensiveBench, DefensivePlanMeta } from './defensive-data-source';
 
@@ -181,7 +181,8 @@ export function windowDamageBreakdown(windowHits: WindowHit[]): { spell_id: numb
   }
   return [...abilityDmg.entries()]
     .sort((a, b) => b[1] - a[1]).slice(0, ABILITY_BREAKDOWN_TOP_N)
-    .map(([spell_id, damage]) => ({ spell_id, damage }));
+    // The melee auto-attack event id resolves to the real Auto Attack spell (name/icon/Wowhead).
+    .map(([abilityId, damage]) => ({ spell_id: normalizeAbilityId(abilityId), damage }));
 }
 
 /**

@@ -19,7 +19,7 @@ export { rowsFromEntries, onPlanFromEntries, bucketFindings, CAT_LABEL } from '.
   templateUrl: './finding-table.html',
 })
 export class FindingTableComponent {
-  readonly title = input.required<string>();
+  readonly heading = input.required<string>();
   readonly subtitle = input<string>('');
   readonly rows = input.required<FindingRow[]>();
   readonly onPlan = input<OnPlanChip[]>([]);

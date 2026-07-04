@@ -22,7 +22,7 @@ import { BurstWindow } from '../../../core/models/analysis.models';
 import { logWarn } from '../../../core/log';
 import { mean, median, deviation, quantile } from 'd3-array';
 import { round, groupByTime, getOrInsert } from '../../../shared/analysis/analysis-math';
-import { abilityIcons, toParseRankings, unwrapRankings } from '../../../shared/analysis/wcl-projections';
+import { abilityIcons, normalizeAbilityId, toParseRankings, unwrapRankings } from '../../../shared/analysis/wcl-projections';
 import { DataSource } from '../../../core/data-source/data-source';
 import { BurstBench } from './burst-data-source';
 
@@ -195,11 +195,12 @@ export function windowAbilityBreakdown(
 
   return [...byAbility.entries()]
     .sort((a, b) => b[1] - a[1]).slice(0, 6)
-    .map(([spell_id, dmg]) => ({
-      spell_id,
+    .map(([abilityId, dmg]) => ({
+      // The melee auto-attack event id resolves to the real Auto Attack spell (name/icon/Wowhead).
+      spell_id: normalizeAbilityId(abilityId),
       damage: dmg,
-      casts: castsByName.get(nameOf(spell_id)) ?? 0,
-      is_passive: !castNamesInParse.has(nameOf(spell_id)),
+      casts: castsByName.get(nameOf(abilityId)) ?? 0,
+      is_passive: !castNamesInParse.has(nameOf(abilityId)),
     }));
 }
 

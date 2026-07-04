@@ -1,7 +1,7 @@
 <!-- Per-defensive findings -->
 @if (findingRows().length || onPlan().length) {
   <wl-finding-table
-    title="Defensives"
+    heading="Defensives"
     subtitle="Defensive cooldowns vs top parses."
     [rows]="findingRows()"
     [onPlan]="onPlan()"
@@ -19,7 +19,7 @@
     [fightDuration]="fightDuration()"
     [showCasts]="false"
     [showMap]="showMap()"
-    title="Defensive Windows"
+    heading="Defensive Windows"
     subtitle="Damage taken in top-parse defensive windows vs top parses."
     (openMap)="onOpenMap($event)">
   </wl-window-comparison>

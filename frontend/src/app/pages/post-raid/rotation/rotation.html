@@ -2,7 +2,7 @@
   <!-- Rotation rules: rendered only when there is something to say. -->
   @if (ruleRows().length || ruleOnPlanChips().length) {
     <wl-finding-table
-      title="Rotation Rules"
+      heading="Rotation Rules"
       subtitle="Rotation rules vs top parses."
       [rows]="ruleRows()"
       [onPlan]="ruleOnPlanChips()">
@@ -11,7 +11,7 @@
 
   <!-- Offensive cooldowns: always rendered (the table owns the empty state). -->
   <wl-finding-table
-    title="Offensives"
+    heading="Offensives"
     subtitle="Offensive cooldowns vs top parses."
     [rows]="offensiveRows()"
     [onPlan]="onPlan()">
