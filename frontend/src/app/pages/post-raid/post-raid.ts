@@ -422,7 +422,6 @@ export class PostRaidComponent {
   }
 
   protected async onPlayerChange(): Promise<void> {
-    if (this.liveSyncEnabled()) return;
     this._persistPlayerName();
     await this.resolveSelection();
   }
