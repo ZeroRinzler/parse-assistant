@@ -3,8 +3,7 @@
   <!-- Header: section title + column labels. Mobile drops the grid so the title sits flush-left and the
        column labels hide; the 4-col grid + labels restore at md. -->
   <div class="px-4 pt-3 pb-2 md:grid md:grid-cols-[20px_minmax(0,1fr)_96px_200px] md:gap-[14px] md:items-baseline">
-    <div class="hidden md:block"></div>
-    <div>
+    <div class="md:col-span-2">
       <div class="text-[17px] font-semibold text-[var(--text)]">{{ heading() }}</div>
       @if (subtitle()) {
         <div class="text-xs text-[var(--muted)] mt-0.5">{{ subtitle() }}</div>
@@ -39,7 +38,7 @@
               <span class="text-sm text-[var(--text)]">{{ name }}</span>
             }
             @if (row.timestampMs != null) {
-              <span class="text-[11px] text-[var(--accent)] tabular-nums">{{ row.timestampMs / 1000 | formatDuration }}</span>
+              <span class="text-[13px] text-[var(--accent)] tabular-nums">{{ row.timestampMs / 1000 | formatDuration }}</span>
               @if (showMap()) {
                 <button mat-icon-button class="icon-button-compact" aria-label="Open positioning map" (click)="onOpenMap(row)">
                   <mat-icon class="icon-16">my_location</mat-icon>

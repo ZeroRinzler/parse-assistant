@@ -35,7 +35,7 @@
           <div class="flex flex-wrap items-baseline gap-x-4 gap-y-1 md:flex-col md:items-end md:gap-1.5">
             <span class="flex items-baseline gap-1.5">
               <span class="font-mono text-[10px] uppercase tracking-[0.5px] text-[var(--muted)]">First use</span>
-              <span class="font-mono text-[12.5px] text-[var(--text)] tabular-nums">{{ cd.firstCastS | formatDuration }}</span>
+              <span class="font-mono text-[13px] text-[var(--accent)] tabular-nums">{{ cd.firstCastS | formatDuration }}</span>
             </span>
             <span class="flex items-baseline gap-1.5">
               <span class="font-mono text-[10px] uppercase tracking-[0.5px] text-[var(--muted)]">Avg uses</span>
@@ -46,7 +46,7 @@
             <span class="font-mono text-[10px] uppercase tracking-[0.5px] text-[var(--muted)]">Holds</span>
             @if (cd.holds.length) {
               @for (hold of cd.holds; track hold.castIndex) {
-                <span class="font-mono text-[11.5px] text-[var(--text)] bg-[var(--surface-alt)] border border-[var(--border)] rounded-[4px] px-1.5 py-px whitespace-nowrap tabular-nums">{{ hold.targetS | formatDuration }}</span>
+                <span class="font-mono text-[13px] text-[var(--accent)] bg-[var(--surface-alt)] border border-[var(--border)] rounded-[4px] px-1.5 py-px whitespace-nowrap tabular-nums">{{ hold.targetS | formatDuration }}</span>
               }
             } @else {
               <span class="font-mono text-[12.5px] text-[var(--muted)]">None</span>
