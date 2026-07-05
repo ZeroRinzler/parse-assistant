@@ -79,7 +79,7 @@ jobs:
             if git fetch --no-tags --quiet origin "pull/$n/head" \
               && git checkout --quiet --detach FETCH_HEAD \
               && npm --prefix frontend ci \
-              && npm --prefix frontend run build -- --base-href "/${GITHUB_REPOSITORY#*/}/pr-$n/"; then
+              && npm --prefix frontend run build -- --base-href "/pr-$n/"; then
               rm -rf "preview-out/pr-$n"
               mkdir -p "preview-out/pr-$n"
               cp -a static/angular/browser/. "preview-out/pr-$n/"

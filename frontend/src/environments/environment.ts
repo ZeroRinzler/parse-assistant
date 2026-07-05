@@ -7,13 +7,12 @@
  * build configuration's `fileReplacements` (see angular.json).
  *
  * `dataBaseHref` is the absolute base every deployed build fetches `data/specs/` from. On
- * gh-pages the data is a single shared copy at the site root
- * (`/warcraft-learner/data/specs/`), a sibling of every environment folder (`main/`,
- * `pr-N/`). Because each environment lives at a different depth, an absolute base keeps the
- * fetch identical for all of them - `main` and every PR preview read the one canonical
- * copy, and no preview ships its own duplicate. The `development` build overrides this with
- * an empty string so `npm start` resolves `data/specs/` relative to `document.baseURI` (it
- * runs live-transform anyway).
+ * gh-pages the data is a single shared copy at the site root (`/data/specs/`), a sibling of
+ * every environment folder (`main/`, `pr-N/`). Because each environment lives at a different
+ * depth, an absolute base keeps the fetch identical for all of them - `main` and every PR
+ * preview read the one canonical copy, and no preview ships its own duplicate. The
+ * `development` build overrides this with an empty string so `npm start` resolves
+ * `data/specs/` relative to `document.baseURI` (it runs live-transform anyway).
  */
 import { Provider } from '@angular/core';
 import { provideFileDataSource } from '../app/core/data-source/provide-data-source';
@@ -31,13 +30,13 @@ export const environment = {
    * Absolute base for the static data files. Empty (development) resolves
    * `data/specs/` relative to `document.baseURI`.
    *
-   * The `/<repo>/` segment here is the single source of truth for the repo name on
-   * the frontend side. It MUST match the base-href repo segment the workflows derive
-   * from the `GITHUB_REPOSITORY` runner env in `.github/workflows/deploy-pages.yml` and
-   * `pr-preview.yml`, because every deployed shell fetches this one shared data copy at
-   * the gh-pages site root. On a rename or fork, update this one string to match.
+   * The site is served from the custom domain root (see the gh-pages `CNAME` file), so
+   * this is just the site-root path to the shared data folder - no repo-name segment.
+   * It must stay a sibling of every environment folder (`main/`, `pr-N/`), which the
+   * workflows derive their `--base-href` from in `.github/workflows/deploy-pages.yml`
+   * and `pr-preview.yml`.
    */
-  dataBaseHref: '/warcraft-learner/data/specs/',
+  dataBaseHref: '/data/specs/',
 };
 
 /**

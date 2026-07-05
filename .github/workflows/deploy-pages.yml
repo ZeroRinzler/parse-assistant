@@ -46,17 +46,16 @@ jobs:
       # shell (no data overlay). The ~100 MB minified data lives once at the gh-pages root under
       # data/specs/ (maintained solely by ingest-parses) and every environment fetches that one
       # shared copy via the absolute dataBaseHref, so `main` never re-pushes the dataset.
-      # The repo-name segment of the base-href is derived from the always-present
-      # GITHUB_REPOSITORY runner env (owner/repo); `${GITHUB_REPOSITORY#*/}` strips the
-      # owner so a rename or fork stays correct with no edit. For gpolcode/warcraft-learner
-      # this yields `/warcraft-learner/main/`, matching the frontend `dataBaseHref` root.
+      # The site is served from the custom domain root (see the gh-pages `CNAME` file), so the
+      # base-href carries no repo-name segment - just the environment folder, matching the
+      # frontend `dataBaseHref` root.
       - name: Build
-        run: npm run build -- --base-href "/${GITHUB_REPOSITORY#*/}/main/"
+        run: npm run build -- --base-href "/main/"
         working-directory: frontend
 
-      # Root of the site: a 3-line index.html that redirects `/warcraft-learner/` to the `main`
-      # environment, plus a 404.html copy of the built shell so GitHub Pages' site-wide 404
-      # boots the SPA for deep links under /main/ (client-side routes survive a hard refresh).
+      # Root of the site: a 3-line index.html that redirects to the `main` environment, plus a
+      # 404.html copy of the built shell so GitHub Pages' site-wide 404 boots the SPA for deep
+      # links under /main/ (client-side routes survive a hard refresh).
       - name: Assemble root overlay
         run: |
           set -euo pipefail
