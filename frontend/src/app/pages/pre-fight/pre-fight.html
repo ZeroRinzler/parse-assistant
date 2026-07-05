@@ -88,17 +88,21 @@
   </mat-card>
 
   @if (selectedEncId()) {
+    @if (!benchAvailable()) {
+      <wl-bench-empty-banner variant="pre" [encounter]="selectedEncounter()?.name ?? ''"></wl-bench-empty-banner>
+    }
+
     <!-- Gear consensus (bench-only mode: no player selection) -->
-    <wl-gear [spec]="selectedSpec()" [encounterId]="selectedEncId()"></wl-gear>
+    <wl-gear [spec]="selectedSpec()" [encounterId]="selectedEncId()" (availableChange)="gearAvailable.set($event)"></wl-gear>
 
     <!-- Cooldown plan -->
-    <wl-rotation-cd-plan [spec]="selectedSpec()" [encounterId]="selectedEncId()"></wl-rotation-cd-plan>
+    <wl-rotation-cd-plan [spec]="selectedSpec()" [encounterId]="selectedEncId()" (availableChange)="cdPlanAvailable.set($event)"></wl-rotation-cd-plan>
 
     <!-- Defensive plan -->
-    <wl-defensive-plan [spec]="selectedSpec()" [encounterId]="selectedEncId()"></wl-defensive-plan>
+    <wl-defensive-plan [spec]="selectedSpec()" [encounterId]="selectedEncId()" (availableChange)="defensivePlanAvailable.set($event)"></wl-defensive-plan>
 
     <!-- Burst windows (bench-only) -->
-    <wl-burst-windows [spec]="selectedSpec()" [encounterId]="selectedEncId()" [showMap]="mapReady()" (openMap)="onOpenMap($event)"></wl-burst-windows>
+    <wl-burst-windows [spec]="selectedSpec()" [encounterId]="selectedEncId()" [showMap]="mapReady()" (openMap)="onOpenMap($event)" (availableChange)="burstAvailable.set($event)"></wl-burst-windows>
   }
 
   <wl-map-panel></wl-map-panel>

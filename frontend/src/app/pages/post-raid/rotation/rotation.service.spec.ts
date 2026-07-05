@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { WclApiService } from '../../../core/services/wcl-api';
+import { DataFileApiService } from '../../../core/services/data-file-api';
 import { AnalysisFinding } from '../../../core/models/analysis.models';
 import { PerCdBenchmark } from '../../../core/models/encounter.models';
 import { RulebookRule, CastWithoutPriorCondition, HoldCooldownForAnchorCondition } from '../../../core/models/rulebook.models';
@@ -509,22 +510,44 @@ describe('buildCdPlan', () => {
 
 /* ----------------------------- feature service ----------------------------- */
 
-function withSource(value: RotationBench | null, wcl?: unknown): RotationFeatureService {
+function withSource(value: RotationBench | null, wcl?: unknown, rules: RulebookRule[] = []): RotationFeatureService {
   const source: DataSource<RotationBench> = { getBench: () => Promise.resolve(value) };
+  // The rotation rules are read from the authored rulebook (present regardless of ingest),
+  // so the feature service also injects the pass-through DataFileApiService.
+  const dataFiles: Pick<DataFileApiService, 'getRulebook'> = {
+    getRulebook: () => Promise.resolve({ spec: 'SubtletyRogue', spec_icon: 'x', rules }),
+  };
   TestBed.configureTestingModule({
     providers: [
       { provide: ROTATION_DATA_SOURCE, useValue: source },
       { provide: WclApiService, useValue: (wcl ?? {}) as WclApiService },
+      { provide: DataFileApiService, useValue: dataFiles },
     ],
   });
   return TestBed.inject(RotationFeatureService);
 }
 
 describe('RotationFeatureService', () => {
-  it('returns an empty player view when bench is absent', async () => {
+  it('marks offensives unavailable and empty when the top-parse bench is absent', async () => {
     const service = withSource(null);
     const view = await service.loadPlayerView('SubtletyRogue', 1, 'rX', 1, 10);
-    expect(view).toEqual({ ruleRows: [], ruleOnPlan: [], offensiveRows: [], onPlan: [] });
+    expect(view).toEqual({ available: false, ruleRows: [], ruleOnPlan: [], offensiveRows: [], onPlan: [] });
+  });
+
+  it('evaluates the rulebook rules even with no bench (offensives unavailable)', async () => {
+    // A fresh tier: no top-parse bench, but the rulebook rules still grade the player's casts.
+    const wcl = {
+      getReport: async () => ({ title: 't', fights: [{ id: 1, name: 'Boss', startTime: 0, endTime: 120_000 }], masterData: { actors: [], abilities: [] } }),
+      getAllEvents: async (_c: string, _f: number, dataType: string) =>
+        dataType === 'Casts' ? [cast(SHADOW_DANCE, 10), cast(SECRET_TECHNIQUE, 30)] : [],
+    };
+    const rule: RulebookRule = { priority: 'critical', condition: DANCE_NEEDS_SECRET_TECH };
+    const service = withSource(null, wcl, [rule]);
+    const view = await service.loadPlayerView('SubtletyRogue', 1, 'rX', 1, 10);
+    expect(view.available).toBe(false);
+    expect(view.offensiveRows).toEqual([]);
+    expect(view.ruleRows).toHaveLength(1);
+    expect(view.ruleRows[0].what).toBe('Shadow Dance without Secret Technique');
   });
 
   it('computes player findings from the player log', async () => {
@@ -539,6 +562,7 @@ describe('RotationFeatureService', () => {
     const single = bench({ per_cd_benchmarks: { 'Shadow Blades': cdBench({ uses_per_min: { avg: 0.5, stddev: 0.1, min: 0.4, max: 0.6 } }) } });
     const service = withSource(single, wcl);
     const view = await service.loadPlayerView('SubtletyRogue', 1, 'rX', 1, 10);
+    expect(view.available).toBe(true);
     expect(view.onPlan).toEqual([{ name: 'Shadow Blades', spellId: SHADOW_BLADES, icon: 'sb' }]);
   });
 
@@ -546,9 +570,16 @@ describe('RotationFeatureService', () => {
     const service = withSource(bench({
       per_cd_benchmarks: { 'Shadow Blades': cdBench() },
     }));
-    const rows = await service.loadPlanView('SubtletyRogue', 1);
-    expect(rows).toHaveLength(1);
-    expect(rows[0].name).toBe('Shadow Blades');
-    expect(rows[0].icon).toBe('sb');
+    const view = await service.loadPlanView('SubtletyRogue', 1);
+    expect(view.available).toBe(true);
+    expect(view.rows).toHaveLength(1);
+    expect(view.rows[0].name).toBe('Shadow Blades');
+    expect(view.rows[0].icon).toBe('sb');
+  });
+
+  it('marks the pre-fight plan unavailable when the bench is absent', async () => {
+    const service = withSource(null);
+    const view = await service.loadPlanView('SubtletyRogue', 1);
+    expect(view).toEqual({ available: false, rows: [] });
   });
 });

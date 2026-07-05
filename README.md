@@ -23,6 +23,7 @@ cd frontend
 npm install
 npm run data:pull   # fetch the generated bench data from the `gh-pages` branch (see below)
 npm start           # Angular dev server on http://localhost:4200
+npm run start:empty # same, but with every encounter's bench emptied (fresh-tier empty states)
 ```
 
 The ~100 MB of generated bench data (minified JSON) under `frontend/public/data/specs/**` is not tracked on `main`; it lives once on the `gh-pages` branch at the site root under `data/specs/`, the single shared copy the deployed site serves. `npm run data:pull` fetches `origin/gh-pages` and extracts those files into your working tree, where they remain gitignored. Re-run it whenever you want the latest parse data.

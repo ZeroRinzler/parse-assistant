@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, effect, inject, input, output, signal } from '@angular/core';
 import { WindowComparisonComponent } from '../../../shared/components/window-comparison/window-comparison';
+import { WaitingPlaceholderComponent } from '../../../shared/components/waiting-placeholder/waiting-placeholder';
 import { ComparisonWindow } from '../../../core/models/window-comparison.models';
 import { ClipAnchor } from '../../../core/models/capture.models';
 import { LatestLoad } from '../../../shared/latest-load';
@@ -18,7 +19,7 @@ import { BurstFeatureService, BurstMapAnchor } from './burst.service';
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-burst-windows',
-  imports: [WindowComparisonComponent],
+  imports: [WindowComparisonComponent, WaitingPlaceholderComponent],
   templateUrl: './burst-windows.html',
 })
 export class BurstWindowsComponent {
@@ -39,7 +40,10 @@ export class BurstWindowsComponent {
   readonly openClip = output<ClipAnchor>();
   /** Emits false when the card has finished loading; the page gates its spinner on it. */
   readonly busyChange = output<boolean>();
+  /** Whether the top-parse bench exists. The page aggregates it for the banner. */
+  readonly availableChange = output<boolean>();
 
+  protected readonly available = signal(true);
   private readonly _windows = signal<ComparisonWindow[]>([]);
   private readonly _anchors = signal<BurstMapAnchor[]>([]);
   private readonly _clipAnchors = signal<ClipAnchor[]>([]);
@@ -60,6 +64,8 @@ export class BurstWindowsComponent {
       this.loader.run(load, {
         context: 'burst.loadPlayerView',
         apply: view => {
+          this.available.set(view.available);
+          this.availableChange.emit(view.available);
           this._windows.set(view.windows);
           this._anchors.set(view.anchors);
           this._clipAnchors.set(view.clipAnchors);

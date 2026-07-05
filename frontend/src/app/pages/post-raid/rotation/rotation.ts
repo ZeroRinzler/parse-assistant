@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal } from '@angular/core';
 import { FindingTableComponent, OnPlanChip } from '../../../shared/components/finding-table/finding-table';
+import { WaitingPlaceholderComponent } from '../../../shared/components/waiting-placeholder/waiting-placeholder';
 import { LatestLoad } from '../../../shared/latest-load';
 import {
   RotationFeatureService, RotationFindingRow, RotationOnPlanChip,
@@ -17,7 +18,7 @@ import {
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-rotation',
-  imports: [FindingTableComponent],
+  imports: [FindingTableComponent, WaitingPlaceholderComponent],
   templateUrl: './rotation.html',
 })
 export class RotationComponent {
@@ -31,7 +32,10 @@ export class RotationComponent {
 
   /** Emits false when the card has finished loading; the page gates its spinner on it. */
   readonly busyChange = output<boolean>();
+  /** Whether the top-parse bench exists (Offensives). The page aggregates it for the banner. */
+  readonly availableChange = output<boolean>();
 
+  protected readonly available = signal(true);
   protected readonly ruleRows = signal<RotationFindingRow[]>([]);
   protected readonly ruleOnPlan = signal<string[]>([]);
   protected readonly offensiveRows = signal<RotationFindingRow[]>([]);
@@ -53,6 +57,8 @@ export class RotationComponent {
       this.loader.run(this.rotation.loadPlayerView(spec, encounterId, reportCode, fightId, playerId), {
         context: 'rotation.loadPlayerView',
         apply: view => {
+          this.available.set(view.available);
+          this.availableChange.emit(view.available);
           this.ruleRows.set(view.ruleRows);
           this.ruleOnPlan.set(view.ruleOnPlan);
           this.offensiveRows.set(view.offensiveRows);

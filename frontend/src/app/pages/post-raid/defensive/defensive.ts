@@ -6,6 +6,7 @@ import {
   bucketFindings, CAT_LABEL, FindingRow, FindingTableComponent, onPlanFromEntries, rowsFromEntries,
 } from '../../../shared/components/finding-table/finding-table';
 import { WindowComparisonComponent } from '../../../shared/components/window-comparison/window-comparison';
+import { WaitingPlaceholderComponent } from '../../../shared/components/waiting-placeholder/waiting-placeholder';
 import { LatestLoad } from '../../../shared/latest-load';
 import { DefensiveFeatureService, DefensiveMapAnchor, defensiveFindingClipAnchor } from './defensive.service';
 
@@ -21,7 +22,7 @@ import { DefensiveFeatureService, DefensiveMapAnchor, defensiveFindingClipAnchor
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-defensive',
-  imports: [FindingTableComponent, WindowComparisonComponent],
+  imports: [FindingTableComponent, WindowComparisonComponent, WaitingPlaceholderComponent],
   templateUrl: './defensive.html',
 })
 export class DefensiveComponent {
@@ -42,7 +43,10 @@ export class DefensiveComponent {
   readonly openClip = output<ClipAnchor>();
   /** Emits false when the card has finished loading; the page gates its spinner on it. */
   readonly busyChange = output<boolean>();
+  /** Whether the top-parse bench exists. The page aggregates it for the banner. */
+  readonly availableChange = output<boolean>();
 
+  protected readonly available = signal(true);
   private readonly _findings = signal<AnalysisFinding[]>([]);
   private readonly _spellIdsByName = signal<Record<string, number>>({});
   private readonly _iconByName = signal<Record<string, string>>({});
@@ -63,6 +67,8 @@ export class DefensiveComponent {
       this.loader.run(this.defensive.loadAnalysisView(spec, encounterId, report, fight, player), {
         context: 'defensive.loadAnalysisView',
         apply: view => {
+          this.available.set(view.available);
+          this.availableChange.emit(view.available);
           this._findings.set(view.findings);
           this._spellIdsByName.set(view.spellIdsByName);
           this._iconByName.set(view.iconByName);

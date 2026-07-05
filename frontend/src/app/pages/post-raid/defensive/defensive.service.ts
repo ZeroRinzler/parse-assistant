@@ -45,6 +45,8 @@ export interface DefensiveMapAnchor {
 
 /** The defensive card view-model: findings + per-window comparison + map/clip anchors. */
 export interface DefensiveView {
+  /** Whether the top-parse bench exists for this encounter (false shows the waiting state). */
+  available: boolean;
   findings: AnalysisFinding[];
   /** Defensive name -> spell id, so the findings table links to the right spell. */
   spellIdsByName: Record<string, number>;
@@ -518,12 +520,12 @@ export class DefensiveFeatureService {
     playerId: number,
   ): Promise<DefensiveView> {
     const bench = await this.source.getBench(spec, encounterId);
-    if (!bench) return { findings: [], spellIdsByName: {}, iconByName: {}, windows: [], anchors: [], clipAnchors: [] };
+    if (!bench) return { available: false, findings: [], spellIdsByName: {}, iconByName: {}, windows: [], anchors: [], clipAnchors: [] };
 
     try {
       const report: WclReport = await this.wclApi.getReport(reportCode);
       const fight = report.fights.find(entry => entry.id === fightId);
-      if (!fight) return { findings: [], spellIdsByName: bench.cd_spell_ids, iconByName: {}, windows: [], anchors: [], clipAnchors: [] };
+      if (!fight) return { available: true, findings: [], spellIdsByName: bench.cd_spell_ids, iconByName: {}, windows: [], anchors: [], clipAnchors: [] };
       const fStart = fight.startTime;
       const fEnd = fight.endTime;
       const fightDurationS = (fEnd - fStart) / 1000;
@@ -550,16 +552,16 @@ export class DefensiveFeatureService {
       const { windows, anchors, clipAnchors } = buildDefensiveWindows({
         topWindows: bench.defensive_windows, playerWindows, playerDefensives, fightDurationS, abilities: bench.ability_icons,
       });
-      return { findings, spellIdsByName: bench.cd_spell_ids, iconByName, windows, anchors, clipAnchors };
+      return { available: true, findings, spellIdsByName: bench.cd_spell_ids, iconByName, windows, anchors, clipAnchors };
     } catch (err) {
       logWarn(`DefensiveFeatureService.loadAnalysisView ${reportCode}:${fightId}`, err);
-      return { findings: [], spellIdsByName: bench.cd_spell_ids, iconByName: {}, windows: [], anchors: [], clipAnchors: [] };
+      return { available: true, findings: [], spellIdsByName: bench.cd_spell_ids, iconByName: {}, windows: [], anchors: [], clipAnchors: [] };
     }
   }
 
   /** Pre-fight entry: the bench-only defensive-plan rows for a spec + encounter. */
-  async loadPlan(spec: string, encounterId: number): Promise<DefensivePlanRow[]> {
+  async loadPlan(spec: string, encounterId: number): Promise<{ available: boolean; rows: DefensivePlanRow[] }> {
     const bench = await this.source.getBench(spec, encounterId);
-    return buildDefensivePlanRows(bench);
+    return { available: bench !== null, rows: buildDefensivePlanRows(bench) };
   }
 }

@@ -1,5 +1,10 @@
+<!-- No top-parse bench yet: the whole card has nothing to grade against. -->
+@if (!available()) {
+  <wl-waiting-placeholder heading="Defensives" subtitle="Defensive cooldowns vs top parses."></wl-waiting-placeholder>
+}
+
 <!-- Per-defensive findings -->
-@if (findingRows().length || onPlan().length) {
+@if (available() && (findingRows().length || onPlan().length)) {
   <wl-finding-table
     heading="Defensives"
     subtitle="Defensive cooldowns vs top parses."

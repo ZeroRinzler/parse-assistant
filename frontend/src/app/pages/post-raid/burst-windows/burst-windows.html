@@ -1,10 +1,14 @@
-<wl-window-comparison
-  [windows]="windows()"
-  [higherIsBetter]="true"
-  [showMap]="showMap()"
-  [showClip]="showClip()"
-  heading="Burst Windows"
-  subtitle="Damage in each burst window vs top parses."
-  (openMap)="onOpenMap($event)"
-  (openClip)="onOpenClip($event)">
-</wl-window-comparison>
+@if (available()) {
+  <wl-window-comparison
+    [windows]="windows()"
+    [higherIsBetter]="true"
+    [showMap]="showMap()"
+    [showClip]="showClip()"
+    heading="Burst Windows"
+    subtitle="Damage in each burst window vs top parses."
+    (openMap)="onOpenMap($event)"
+    (openClip)="onOpenClip($event)">
+  </wl-window-comparison>
+} @else {
+  <wl-waiting-placeholder heading="Burst Windows" subtitle="Damage in each burst window vs top parses."></wl-waiting-placeholder>
+}

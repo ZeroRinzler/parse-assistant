@@ -1,7 +1,8 @@
-import { ChangeDetectionStrategy, Component, effect, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, effect, inject, input, output, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { GameIconComponent } from '../../../shared/components/game-icon/game-icon';
 import { CollapsibleTextComponent } from '../../../shared/components/collapsible-text/collapsible-text';
+import { WaitingPlaceholderComponent } from '../../../shared/components/waiting-placeholder/waiting-placeholder';
 import { FormatDurationPipe } from '../../../shared/pipes/format-duration-pipe';
 import { LatestLoad } from '../../../shared/latest-load';
 import { DefensiveFeatureService, DefensivePlanRow } from './defensive.service';
@@ -16,7 +17,7 @@ import { DefensiveFeatureService, DefensivePlanRow } from './defensive.service';
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-defensive-plan',
-  imports: [DecimalPipe, GameIconComponent, CollapsibleTextComponent, FormatDurationPipe],
+  imports: [DecimalPipe, GameIconComponent, CollapsibleTextComponent, WaitingPlaceholderComponent, FormatDurationPipe],
   templateUrl: './defensive-plan.html',
 })
 export class DefensivePlanComponent {
@@ -27,6 +28,10 @@ export class DefensivePlanComponent {
   readonly title = input('Defensive plan');
   readonly subtitle = input('Defensive usage across top parses.');
 
+  /** Whether the top-parse bench exists. The page aggregates it for the banner. */
+  readonly availableChange = output<boolean>();
+
+  protected readonly available = signal(true);
   private readonly _items = signal<DefensivePlanRow[]>([]);
   protected readonly items = this._items.asReadonly();
 
@@ -38,7 +43,11 @@ export class DefensivePlanComponent {
       const encounterId = this.encounterId();
       this.loader.run(this.defensive.loadPlan(spec, encounterId), {
         context: 'defensive.loadPlan',
-        apply: rows => this._items.set(rows),
+        apply: view => {
+          this.available.set(view.available);
+          this.availableChange.emit(view.available);
+          this._items.set(view.rows);
+        },
       });
     });
   }

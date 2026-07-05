@@ -88,6 +88,17 @@
                   "with": "src/environments/environment.development.ts"
                 }
               ]
+            },
+            "empty": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true,
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.empty.ts"
+                }
+              ]
             }
           },
           "defaultConfiguration": "production"
@@ -100,6 +111,9 @@
             },
             "development": {
               "buildTarget": "frontend:build:development"
+            },
+            "empty": {
+              "buildTarget": "frontend:build:empty"
             }
           },
           "defaultConfiguration": "development"

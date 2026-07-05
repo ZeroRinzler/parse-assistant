@@ -16,6 +16,7 @@ import { LiveReportSyncService, POLL_INTERVAL_MS } from '../../core/services/liv
 import { WclFight, WclPlayer, WclReport, PlayerDetailGroups } from '../../core/models/wcl.models';
 import { ClipAnchor } from '../../core/models/capture.models';
 import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner/loading-spinner';
+import { BenchEmptyBannerComponent } from '../../shared/components/bench-empty-banner/bench-empty-banner';
 import { RotationComponent } from './rotation/rotation';
 import { BurstWindowsComponent } from './burst-windows/burst-windows';
 import { DefensiveComponent } from './defensive/defensive';
@@ -169,7 +170,7 @@ export function specOf(groups: PlayerDetailGroups, playerId: number): string {
   imports: [
     ReactiveFormsModule, MatFormFieldModule, MatInputModule, MatSelectModule,
     MatButtonModule, MatCardModule,
-    LoadingSpinnerComponent, ArtIconComponent, RotationComponent, BurstWindowsComponent,
+    LoadingSpinnerComponent, BenchEmptyBannerComponent, ArtIconComponent, RotationComponent, BurstWindowsComponent,
     DefensiveComponent, GearComponent, MapPanelComponent, LiveControlsComponent, ClipPanelComponent,
     FormatDurationPipe, FormatSpecPipe, SpecIconPipe, ClassIconPipe, BossIconPipe,
   ],
@@ -215,6 +216,15 @@ export class PostRaidComponent {
   protected readonly gearBusy = signal(true);
   protected readonly cardsBusy = computed(() =>
     this.rotationBusy() || this.burstBusy() || this.defensiveBusy() || this.gearBusy());
+
+  // Per-card bench availability (from each card's `availableChange`); the banner shows when
+  // none have a bench. Rotation counts via its offensives; its rulebook rules render regardless.
+  protected readonly rotationAvailable = signal(false);
+  protected readonly burstAvailable = signal(false);
+  protected readonly defensiveAvailable = signal(false);
+  protected readonly gearAvailable = signal(false);
+  protected readonly benchAvailable = computed(() =>
+    this.rotationAvailable() || this.burstAvailable() || this.defensiveAvailable() || this.gearAvailable());
   protected readonly error = signal('');
 
   protected readonly fights = signal<WclFight[]>([]);

@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject, input, ou
 import { MatIconModule } from '@angular/material/icon';
 import { GameIconComponent } from '../../../shared/components/game-icon/game-icon';
 import { CollapsibleTextComponent } from '../../../shared/components/collapsible-text/collapsible-text';
+import { WaitingPlaceholderComponent } from '../../../shared/components/waiting-placeholder/waiting-placeholder';
 import { slotName, statusIcon } from '../../../shared/gear/gear-comparison';
 import { LatestLoad } from '../../../shared/latest-load';
 import { GearFeatureService, GearComparisonView, emptyGearView } from './gear.service';
@@ -18,7 +19,7 @@ import { GearFeatureService, GearComparisonView, emptyGearView } from './gear.se
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-gear',
-  imports: [MatIconModule, GameIconComponent, CollapsibleTextComponent],
+  imports: [MatIconModule, GameIconComponent, CollapsibleTextComponent, WaitingPlaceholderComponent],
   templateUrl: './gear.html',
 })
 export class GearComponent {
@@ -33,9 +34,12 @@ export class GearComponent {
 
   /** Emits false when the card has finished loading; the page gates its spinner on it. */
   readonly busyChange = output<boolean>();
+  /** Whether the top-parse gear bench exists. The page aggregates it for the banner. */
+  readonly availableChange = output<boolean>();
 
   private readonly _view = signal<GearComparisonView>(emptyGearView());
   protected readonly view = this._view.asReadonly();
+  protected readonly available = computed(() => this.view().available);
 
   // Enchant rows partitioned for the comparison view (semantic data only, no styling).
   protected readonly enchantIssues = computed(() => this.view().enchantRows.filter(row => row.status !== 'ok'));
@@ -58,7 +62,10 @@ export class GearComponent {
         : this.gear.loadBenchView(spec, encounterId);
       this.loader.run(load, {
         context: 'gear.loadComparisonView',
-        apply: view => this._view.set(view),
+        apply: view => {
+          this._view.set(view);
+          this.availableChange.emit(view.available);
+        },
         settled: () => this.busyChange.emit(false),
       });
     });

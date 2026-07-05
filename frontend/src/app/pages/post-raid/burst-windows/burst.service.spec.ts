@@ -165,9 +165,14 @@ const benchFixture: BurstBench = {
 };
 
 describe('BurstFeatureService', () => {
-  it('returns an empty view when the bench file is absent', async () => {
+  it('returns an unavailable, empty view when the bench file is absent', async () => {
     const view = await withBench(null).loadBenchView('SubtletyRogue', 1);
-    expect(view).toEqual({ windows: [], anchors: [], clipAnchors: [] });
+    expect(view).toEqual({ available: false, windows: [], anchors: [], clipAnchors: [] });
+  });
+
+  it('marks the view available when the bench file exists', async () => {
+    const view = await withBench(benchFixture).loadBenchView('SubtletyRogue', 1);
+    expect(view.available).toBe(true);
   });
 
   it('bench-only: shows the top windows with no player overlay (neutral info status)', async () => {

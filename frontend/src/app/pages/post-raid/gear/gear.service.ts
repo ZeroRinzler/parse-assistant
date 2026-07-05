@@ -29,6 +29,8 @@ import { GEAR_DATA_SOURCE, GearBench } from './gear-data-source';
 
 /** Where the gear card seeks its data: a chosen player log, or bench-only consensus. */
 export interface GearComparisonView {
+  /** Whether the top-parse gear bench exists (false shows the "waiting" state). */
+  available: boolean;
   /** True when the player's own gear is shown alongside the bench (post-raid). */
   comparison: boolean;
 
@@ -50,6 +52,7 @@ export interface GearComparisonView {
 /** Empty bench-only view used when no bench data is available at all. */
 export function emptyGearView(): GearComparisonView {
   return {
+    available: false,
     comparison: false,
     talentBuilds: [], talentStatus: { status: 'unknown', note: 'No talent data.' },
     trinketRows: [], trinketStatus: 'ok', benchTrinketRows: [],
@@ -111,6 +114,7 @@ export function buildGearView(
   const trinketRows = buildTrinketRows(playerGear, stats);
 
   return {
+    available: stats !== null,
     comparison,
     talentBuilds: buildTalentBuilds(stats, playerKey),
     talentStatus: talentStatusOf(stats, playerKey),

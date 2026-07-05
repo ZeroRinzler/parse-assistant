@@ -27,6 +27,8 @@ export interface BurstMapAnchor {
 
 /** The burst card view-model: one ComparisonWindow + one map/clip anchor per top window. */
 export interface BurstView {
+  /** Whether the top-parse bench exists for this encounter (false shows the waiting state). */
+  available: boolean;
   windows: ComparisonWindow[];
   anchors: BurstMapAnchor[];
   clipAnchors: ClipAnchor[];
@@ -138,7 +140,7 @@ export function buildBurstView(
     anchors.push(burstMapAnchor(window));
     clipAnchors.push(burstClipAnchor(window, index));
   });
-  return { windows, anchors, clipAnchors };
+  return { available: true, windows, anchors, clipAnchors };
 }
 
 /** Total damage on a WCL event (raw amount + absorbed). */
@@ -224,7 +226,7 @@ export class BurstFeatureService {
     spec: string, encounterId: number, reportCode: string, fightId: number, playerId: number,
   ): Promise<BurstView> {
     const bench = await this.source.getBench(spec, encounterId);
-    if (!bench) return { windows: [], anchors: [], clipAnchors: [] };
+    if (!bench) return { available: false, windows: [], anchors: [], clipAnchors: [] };
 
     try {
       const report = await this.wclApi.getReport(reportCode);
@@ -251,7 +253,7 @@ export class BurstFeatureService {
   /** Pre-fight: the top-parse burst windows with no player overlay (informational). */
   async loadBenchView(spec: string, encounterId: number): Promise<BurstView> {
     const bench = await this.source.getBench(spec, encounterId);
-    if (!bench) return { windows: [], anchors: [], clipAnchors: [] };
+    if (!bench) return { available: false, windows: [], anchors: [], clipAnchors: [] };
     return buildBurstView(bench.windows, [], Number.POSITIVE_INFINITY, bench.cd_spell_ids, bench.ability_icons, true);
   }
 }

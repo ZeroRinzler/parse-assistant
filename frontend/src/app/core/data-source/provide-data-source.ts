@@ -2,6 +2,7 @@ import { InjectionToken, Provider, Type, inject } from '@angular/core';
 import { DataFileApiService } from '../services/data-file-api';
 import { DataSource } from './data-source';
 import { FileDataSource } from './file-data-source';
+import { EmptyDataSource } from './empty-data-source';
 
 /**
  * The on-disk data directory a slice reads under `data/specs/{spec}/`. Naming one of
@@ -30,4 +31,12 @@ export function provideFileDataSource<T>(token: InjectionToken<DataSource<T>>, s
  */
 export function provideLiveDataSource<T>(token: InjectionToken<DataSource<T>>, liveImpl: Type<DataSource<T>>): Provider {
   return { provide: token, useExisting: liveImpl };
+}
+
+/**
+ * Empty-data binding for a `*_DATA_SOURCE` token: an `EmptyDataSource<T>` (`getBench`
+ * always `null`). Used from `environment.empty.ts` only; references no `*TransformService`.
+ */
+export function provideEmptyDataSource<T>(token: InjectionToken<DataSource<T>>): Provider {
+  return { provide: token, useFactory: () => new EmptyDataSource<T>() };
 }

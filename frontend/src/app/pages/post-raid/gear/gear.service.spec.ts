@@ -73,6 +73,7 @@ describe('buildGearView', () => {
 describe('emptyGearView', () => {
   it('is a bench-off view with no rows', () => {
     expect(emptyGearView()).toEqual({
+      available: false,
       comparison: false,
       talentBuilds: [], talentStatus: { status: 'unknown', note: 'No talent data.' },
       trinketRows: [], trinketStatus: 'ok', benchTrinketRows: [],
@@ -116,6 +117,7 @@ function configure(bench: GearBench | null, gear: CharacterGear | null): GearFea
 describe('GearFeatureService', () => {
   it('loadBenchView builds the bench-only view', async () => {
     const view = await configure(benchWith(), null).loadBenchView('SubtletyRogue', 1);
+    expect(view.available).toBe(true);
     expect(view.comparison).toBe(false);
     expect(view.benchTrinketRows).toHaveLength(1);
   });

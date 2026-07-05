@@ -1,7 +1,8 @@
-import { ChangeDetectionStrategy, Component, effect, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, effect, inject, input, output, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { GameIconComponent } from '../../../shared/components/game-icon/game-icon';
 import { CollapsibleTextComponent } from '../../../shared/components/collapsible-text/collapsible-text';
+import { WaitingPlaceholderComponent } from '../../../shared/components/waiting-placeholder/waiting-placeholder';
 import { FormatDurationPipe } from '../../../shared/pipes/format-duration-pipe';
 import { LatestLoad } from '../../../shared/latest-load';
 import { RotationFeatureService, CdPlanRow } from './rotation.service';
@@ -15,7 +16,7 @@ import { RotationFeatureService, CdPlanRow } from './rotation.service';
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-rotation-cd-plan',
-  imports: [DecimalPipe, GameIconComponent, CollapsibleTextComponent, FormatDurationPipe],
+  imports: [DecimalPipe, GameIconComponent, CollapsibleTextComponent, WaitingPlaceholderComponent, FormatDurationPipe],
   templateUrl: './rotation-cd-plan.html',
 })
 export class RotationCdPlanComponent {
@@ -26,6 +27,10 @@ export class RotationCdPlanComponent {
   readonly title = input('Cooldown plan');
   readonly subtitle = input('Offensive cooldown usage across top parses.');
 
+  /** Whether the top-parse bench exists. The page aggregates it for the banner. */
+  readonly availableChange = output<boolean>();
+
+  protected readonly available = signal(true);
   protected readonly items = signal<CdPlanRow[]>([]);
 
   private readonly loader = new LatestLoad();
@@ -36,7 +41,11 @@ export class RotationCdPlanComponent {
       const encounterId = this.encounterId();
       this.loader.run(this.rotation.loadPlanView(spec, encounterId), {
         context: 'rotation.loadPlanView',
-        apply: rows => this.items.set(rows),
+        apply: view => {
+          this.available.set(view.available);
+          this.availableChange.emit(view.available);
+          this.items.set(view.rows);
+        },
       });
     });
   }

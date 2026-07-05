@@ -438,10 +438,10 @@ function serviceWith(bench: DefensiveBench | null, wcl: Record<string, unknown> 
 }
 
 describe('DefensiveFeatureService.loadAnalysisView (post-raid)', () => {
-  it('returns an empty view when the bench file is absent', async () => {
+  it('returns an unavailable, empty view when the bench file is absent', async () => {
     const service = serviceWith(null);
     expect(await service.loadAnalysisView('SubtletyRogue', 1, 'r1', 1, 10))
-      .toEqual({ findings: [], spellIdsByName: {}, iconByName: {}, windows: [], anchors: [], clipAnchors: [] });
+      .toEqual({ available: false, findings: [], spellIdsByName: {}, iconByName: {}, windows: [], anchors: [], clipAnchors: [] });
   });
 
   it('computes player findings + windows from the player log', async () => {
@@ -472,13 +472,14 @@ describe('DefensiveFeatureService.loadAnalysisView (post-raid)', () => {
 describe('DefensiveFeatureService.loadPlan (pre-fight)', () => {
   it('returns the bench-only plan rows', async () => {
     const service = serviceWith(fullBench());
-    const rows = await service.loadPlan('SubtletyRogue', 1);
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ name: 'Cloak of Shadows', spellId: CLOAK_OF_SHADOWS, uses: 2, firstCastS: 10, windowsS: [30] });
+    const view = await service.loadPlan('SubtletyRogue', 1);
+    expect(view.available).toBe(true);
+    expect(view.rows).toHaveLength(1);
+    expect(view.rows[0]).toMatchObject({ name: 'Cloak of Shadows', spellId: CLOAK_OF_SHADOWS, uses: 2, firstCastS: 10, windowsS: [30] });
   });
 
-  it('returns [] when the bench file is absent', async () => {
+  it('is unavailable with empty rows when the bench file is absent', async () => {
     const service = serviceWith(null);
-    expect(await service.loadPlan('SubtletyRogue', 1)).toEqual([]);
+    expect(await service.loadPlan('SubtletyRogue', 1)).toEqual({ available: false, rows: [] });
   });
 });

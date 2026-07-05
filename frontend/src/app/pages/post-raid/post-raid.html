@@ -87,13 +87,18 @@
            card finishes loading, then the whole block reveals at once. Not @if-gated on
            cardsBusy() - that would unmount the cards and never start their loads. -->
       <div class="flex flex-col gap-6" [class.hidden]="cardsBusy()">
+        @if (!benchAvailable()) {
+          <wl-bench-empty-banner variant="post" [encounter]="selectedFight()?.name ?? ''"></wl-bench-empty-banner>
+        }
+
         <wl-rotation
           [spec]="spec()"
           [encounterId]="selectedEncounterId()"
           [reportCode]="reportCode()"
           [fightId]="selectedFightId()!"
           [playerId]="selectedPlayerId()!"
-          (busyChange)="rotationBusy.set($event)">
+          (busyChange)="rotationBusy.set($event)"
+          (availableChange)="rotationAvailable.set($event)">
         </wl-rotation>
 
         <wl-burst-windows
@@ -106,7 +111,8 @@
           [showClip]="clipReady()"
           (openMap)="onOpenMap($event)"
           (openClip)="onOpenClip($event)"
-          (busyChange)="burstBusy.set($event)">
+          (busyChange)="burstBusy.set($event)"
+          (availableChange)="burstAvailable.set($event)">
         </wl-burst-windows>
 
         <wl-defensive
@@ -120,7 +126,8 @@
           [showClip]="clipReady()"
           (openMap)="onDefensiveOpenMap($event)"
           (openClip)="onOpenClip($event)"
-          (busyChange)="defensiveBusy.set($event)">
+          (busyChange)="defensiveBusy.set($event)"
+          (availableChange)="defensiveAvailable.set($event)">
         </wl-defensive>
 
         <wl-gear
@@ -129,7 +136,8 @@
           [report]="reportCode()"
           [fight]="selectedFightId()!"
           [player]="selectedPlayerId()!"
-          (busyChange)="gearBusy.set($event)">
+          (busyChange)="gearBusy.set($event)"
+          (availableChange)="gearAvailable.set($event)">
         </wl-gear>
       </div>
     }
