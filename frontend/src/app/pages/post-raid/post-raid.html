@@ -91,6 +91,17 @@
           <wl-bench-empty-banner variant="post" [encounter]="selectedFight()?.name ?? ''"></wl-bench-empty-banner>
         }
 
+        <wl-pull-overview
+          [report]="reportCode()"
+          [fight]="selectedFight()!"
+          [player]="selectedPlayerId()!"
+          [showMap]="mapReady()"
+          [showClip]="clipReady()"
+          (openMap)="onOpenMap($event)"
+          (openClip)="onOpenClip($event)"
+          (busyChange)="pullOverviewBusy.set($event)">
+        </wl-pull-overview>
+
         <wl-rotation
           [spec]="spec()"
           [encounterId]="selectedEncounterId()"

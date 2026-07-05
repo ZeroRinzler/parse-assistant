@@ -24,6 +24,8 @@ export interface EventsQueryVars {
 }
 export interface CombatantInfoQueryVars { code: string; fightIDs: number[]; sourceID: number }
 export interface RankingsQueryVars { encounterID: number; className: string; specName: string }
+export interface TableQueryVars { code: string; fightIDs: number[]; dataType: string }
+export interface ResurrectsQueryVars { code: string; fightIDs: number[]; filter: string; startTime: number; endTime: number }
 
 // ---------------------------------------------------------------------------
 // Query strings
@@ -33,7 +35,7 @@ export const REPORT_Q = `
 query($code:String!){reportData{report(code:$code){
   title
   startTime
-  fights(killType:All){id name startTime endTime kill encounterID difficulty friendlyPlayers}
+  fights(killType:All){id name startTime endTime kill encounterID difficulty friendlyPlayers fightPercentage}
   masterData{
     actors(type:"Player"){id name subType server}
     enemies:actors(type:"NPC"){id name gameID}
@@ -51,6 +53,29 @@ query($code:String!,$fightIDs:[Int]!,$dataType:EventDataType,$sourceID:Int,$star
   reportData{report(code:$code){
     events(fightIDs:$fightIDs,dataType:$dataType,sourceID:$sourceID,
            startTime:$startTime,endTime:$endTime,includeResources:$includeResources,hostilityType:$hostilityType,limit:10000){data nextPageTimestamp}
+  }}
+}`;
+
+/**
+ * Damage-done summary table for a fight. Returns a JSON blob whose `data.entries` holds
+ * one row per source actor (`id`, `total`); the caller picks its player and derives DPS
+ * from `total` over the fight duration. This is the whole pull's table (no source filter),
+ * because filtering by `sourceID` regroups the rows by ability rather than by player.
+ */
+export const TABLE_Q = `
+query($code:String!,$fightIDs:[Int]!,$dataType:TableDataType){
+  reportData{report(code:$code){table(fightIDs:$fightIDs,dataType:$dataType)}}
+}`;
+
+/**
+ * Resurrect events for a fight. WCL has no `Resurrects` data type, so this scans `All`
+ * with a server-side `filterExpression` (only the matching events come back), so the wipe
+ * analysis can tell when a dead player is brought back. Paginated like the events reader.
+ */
+export const RESURRECTS_Q = `
+query($code:String!,$fightIDs:[Int]!,$filter:String,$startTime:Float,$endTime:Float){
+  reportData{report(code:$code){
+    events(fightIDs:$fightIDs,dataType:All,filterExpression:$filter,startTime:$startTime,endTime:$endTime,limit:10000){data nextPageTimestamp}
   }}
 }`;
 

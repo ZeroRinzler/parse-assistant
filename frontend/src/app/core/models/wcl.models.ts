@@ -8,6 +8,8 @@ export interface WclFight {
   attempt: number;
   duration_s: number;
   friendlyPlayers: number[];
+  /** Boss health % remaining when the pull ended (WCL `fightPercentage`); ~0 on a kill. */
+  fightPercentage: number;
 }
 
 export interface WclPlayer {
@@ -32,6 +34,11 @@ export interface WclEvent {
   absorbed?: number;
   sourceID?: number;
   targetID?: number;
+  // Present on `death` events: the ability that dealt the killing blow (its `amount` is
+  // absent, so the lethal hit's magnitude is read from the matching DamageTaken event).
+  killingAbilityGameID?: number;
+  // Present on DamageTaken events: the full incoming hit before the player's mitigation.
+  unmitigatedAmount?: number;
   // Position is present only when the events query is made with
   // `includeResources: true`. WCL flattens one actor's resource snapshot onto
   // the event; `resourceActor` says whose it is (1 = source, 2 = target).
@@ -107,6 +114,13 @@ export interface WclRawRanking {
  * forms (see `unwrapRankings`).
  */
 export type WclRankingsBlob = string | { rankings?: WclRawRanking[] };
+
+/**
+ * Raw `report.table(dataType:DamageDone)` envelope as WCL returns it: either a JSON
+ * blob (string) or an already-parsed object. `data.entries` carries one row per source
+ * actor (`id` = actor id, `total` = summed damage). Consumers unwrap both forms.
+ */
+export type WclTableBlob = string | { data?: { entries?: { id: number; total: number }[] } };
 
 /**
  * One raw `gameData.ability` entry. The `icon` carries the trailing `.jpg` zamimg

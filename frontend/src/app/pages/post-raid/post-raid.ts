@@ -17,6 +17,7 @@ import { WclFight, WclPlayer, WclReport, PlayerDetailGroups } from '../../core/m
 import { ClipAnchor } from '../../core/models/capture.models';
 import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner/loading-spinner';
 import { BenchEmptyBannerComponent } from '../../shared/components/bench-empty-banner/bench-empty-banner';
+import { PullOverviewComponent } from './pull-overview/pull-overview';
 import { RotationComponent } from './rotation/rotation';
 import { BurstWindowsComponent } from './burst-windows/burst-windows';
 import { DefensiveComponent } from './defensive/defensive';
@@ -170,7 +171,7 @@ export function specOf(groups: PlayerDetailGroups, playerId: number): string {
   imports: [
     ReactiveFormsModule, MatFormFieldModule, MatInputModule, MatSelectModule,
     MatButtonModule, MatCardModule,
-    LoadingSpinnerComponent, BenchEmptyBannerComponent, ArtIconComponent, RotationComponent, BurstWindowsComponent,
+    LoadingSpinnerComponent, BenchEmptyBannerComponent, ArtIconComponent, PullOverviewComponent, RotationComponent, BurstWindowsComponent,
     DefensiveComponent, GearComponent, MapPanelComponent, LiveControlsComponent, ClipPanelComponent,
     FormatDurationPipe, FormatSpecPipe, SpecIconPipe, ClassIconPipe, BossIconPipe,
   ],
@@ -210,12 +211,13 @@ export class PostRaidComponent {
   // spinner stays up - and the cards stay hidden - until every card has finished loading,
   // so the cards never flash empty content between mount and first data. Init true: cards
   // are never shown before the first load completes.
+  protected readonly pullOverviewBusy = signal(true);
   protected readonly rotationBusy = signal(true);
   protected readonly burstBusy = signal(true);
   protected readonly defensiveBusy = signal(true);
   protected readonly gearBusy = signal(true);
   protected readonly cardsBusy = computed(() =>
-    this.rotationBusy() || this.burstBusy() || this.defensiveBusy() || this.gearBusy());
+    this.pullOverviewBusy() || this.rotationBusy() || this.burstBusy() || this.defensiveBusy() || this.gearBusy());
 
   // Per-card bench availability (from each card's `availableChange`); the banner shows when
   // none have a bench. Rotation counts via its offensives; its rulebook rules render regardless.
@@ -450,6 +452,7 @@ export class PostRaidComponent {
 
       // Mark every card busy before they mount/reload, so the spinner stays up continuously
       // until each card emits busyChange(false) - no gap where the cards render empty.
+      this.pullOverviewBusy.set(true);
       this.rotationBusy.set(true);
       this.burstBusy.set(true);
       this.defensiveBusy.set(true);

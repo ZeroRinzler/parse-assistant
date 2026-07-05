@@ -4,13 +4,13 @@ import { LiveModeState } from './live-mode-state';
 import { WCL_TRANSPORT, WCL_INGEST_MODE, WclTransportError } from './wcl-transport';
 import {
   WclReport, WclEvent,
-  PlayerDetailGroups, WclRankingsBlob, WclRawAbility, WclCombatantInfo,
+  PlayerDetailGroups, WclRankingsBlob, WclRawAbility, WclCombatantInfo, WclTableBlob,
 } from '../models/wcl.models';
 import {
   REPORT_Q, PLAYER_DETAILS_Q, EVENTS_Q,
-  COMBATANT_INFO_Q, RANKINGS_Q, buildGearNamesQuery, buildAbilityIconsQuery,
+  COMBATANT_INFO_Q, RANKINGS_Q, TABLE_Q, RESURRECTS_Q, buildGearNamesQuery, buildAbilityIconsQuery,
   ReportQueryVars, PlayerDetailsQueryVars,
-  EventsQueryVars, CombatantInfoQueryVars, RankingsQueryVars,
+  EventsQueryVars, CombatantInfoQueryVars, RankingsQueryVars, TableQueryVars, ResurrectsQueryVars,
 } from './wcl-queries';
 import { specMetaOf } from '../spec-meta';
 
@@ -112,6 +112,40 @@ export class WclApiService {
       COMBATANT_INFO_Q, vars,
     );
     return result?.reportData?.report?.events?.data ?? [];
+  }
+
+  /**
+   * Raw damage-done summary table for a fight (JSON blob, string or object). Consumers
+   * pick their player's `data.entries` row by actor id and derive DPS from `total` over
+   * the fight duration. Cache-first per `livePolicy` (a saved report's table is immutable).
+   */
+  async getDamageDoneTable(code: string, fightId: number): Promise<WclTableBlob | null> {
+    const vars: TableQueryVars = { code, fightIDs: [fightId], dataType: 'DamageDone' };
+    const result = await this.query<{ reportData: { report: { table: WclTableBlob } } }>(
+      TABLE_Q, vars, this.livePolicy(),
+    );
+    return result?.reportData?.report?.table ?? null;
+  }
+
+  /**
+   * Resurrect events (type `resurrect`) for a fight - who was brought back and when - so the
+   * wipe analysis can tell when a dead player is alive again. WCL has no `Resurrects` data
+   * type, so this scans `All` with a server-side `type` filter (only matches come back).
+   */
+  async getResurrects(code: string, fightId: number, startTime: number, endTime: number): Promise<WclEvent[]> {
+    const events: WclEvent[] = [];
+    let currentStart = startTime;
+    for (;;) {
+      const vars: ResurrectsQueryVars = { code, fightIDs: [fightId], filter: 'type = "resurrect"', startTime: currentStart, endTime };
+      const result = await this.query<{ reportData: { report: { events: { data: WclEvent[]; nextPageTimestamp?: number } } } }>(
+        RESURRECTS_Q, vars, this.livePolicy(),
+      );
+      const page = result.reportData.report.events;
+      events.push(...(page.data ?? []));
+      if (!page.nextPageTimestamp) break;
+      currentStart = page.nextPageTimestamp;
+    }
+    return events;
   }
 
   /**
