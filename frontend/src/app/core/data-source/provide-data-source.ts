@@ -8,7 +8,8 @@ import { EmptyDataSource } from './empty-data-source';
  * The on-disk data directory a slice reads under `data/specs/{spec}/`. Naming one of
  * these literals is the only thing that varies across slices at the binding call site, so
  * the union keeps a typo from silently binding a token to a directory that does not exist
- * (which would read `null` and render an empty card with no error).
+ * (which would 404 to a `missing` result and render the waiting state, masking the
+ * misconfiguration as un-ingested data).
  */
 export type SliceDir = 'burst' | 'rotation' | 'defensive' | 'gear' | 'positions';
 
@@ -35,7 +36,8 @@ export function provideLiveDataSource<T>(token: InjectionToken<DataSource<T>>, l
 
 /**
  * Empty-data binding for a `*_DATA_SOURCE` token: an `EmptyDataSource<T>` (`getBench`
- * always `null`). Used from `environment.empty.ts` only; references no `*TransformService`.
+ * always resolves to a `missing` result). Used from `environment.empty.ts` only; references
+ * no `*TransformService`.
  */
 export function provideEmptyDataSource<T>(token: InjectionToken<DataSource<T>>): Provider {
   return { provide: token, useFactory: () => new EmptyDataSource<T>() };

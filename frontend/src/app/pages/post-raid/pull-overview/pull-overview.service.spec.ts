@@ -82,6 +82,14 @@ describe('dpsFromTable', () => {
     expect(dpsFromTable(null, PLAYER_ID, FIGHT_DURATION_S)).toEqual(MISSING_TABLE_ERROR);
   });
 
+  it('reports an unparseable string blob as a failed load, not a measured 0', () => {
+    expect(dpsFromTable('{ not json', PLAYER_ID, FIGHT_DURATION_S)).toEqual(MISSING_TABLE_ERROR);
+  });
+
+  it('reports a valid-JSON blob without a data.entries array as a failed load, not a measured 0', () => {
+    expect(dpsFromTable({ data: {} }, PLAYER_ID, FIGHT_DURATION_S)).toEqual(MISSING_TABLE_ERROR);
+  });
+
   it('reports a real 0 for a player absent from a valid table (a healer with no damage entry)', () => {
     expect(dpsFromTable(blob, ABSENT_PLAYER_ID, FIGHT_DURATION_S)).toEqual(ok(0));
   });

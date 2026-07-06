@@ -62,7 +62,8 @@ export class PullOverviewComponent {
             this._view.set(result.value);
           } else {
             if (result.error.kind === 'permanent') logWarn(result.error.id, result.error.context);
-            // A missing report renders nothing; transient/permanent render the load-error leaf.
+            // transient/permanent render the load-error leaf; a `missing` clears the error so the
+            // template's waiting placeholder shows, never a blank card.
             this._error.set(result.error.kind === 'missing' ? null : result.error);
             this._view.set(null);
           }

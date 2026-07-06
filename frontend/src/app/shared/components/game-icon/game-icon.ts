@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input, signal } from '@angular/core';
 import { NgOptimizedImage } from '@angular/common';
 
 export type GameIconKind = 'spell' | 'item';
@@ -8,9 +8,10 @@ export type GameIconKind = 'spell' | 'item';
  *
  * Inputs-only leaf with three required inputs: callers pass `id`, `icon`, and
  * `name` explicitly on every use - feature services resolve icon + name from the
- * ingest-baked `ability_icons` map (or the report's `masterData.abilities`). There
- * is no fallback here: an empty `icon` legitimately renders name-only (no art),
- * and `name` is always supplied by the caller.
+ * ingest-baked `ability_icons` map (or the report's `masterData.abilities`). An
+ * empty `icon` legitimately renders name-only (no art), and a resolved icon whose
+ * image fails to load falls back to the same name-only rendering (no broken-image
+ * glyph); `name` is always supplied by the caller.
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -24,7 +25,9 @@ export type GameIconKind = 'spell' | 'item';
       rel="noopener"
       class="inline-flex items-center gap-1.5 no-underline hover:brightness-125">
       @if (iconUrl(); as src) {
-        <img [ngSrc]="src" [width]="18" [height]="18" alt="" class="rounded-sm" />
+        @if (failedSrc() !== src) {
+          <img [ngSrc]="src" [width]="18" [height]="18" alt="" class="rounded-sm" (error)="failedSrc.set(src)" />
+        }
       }
       <!-- text-sm keeps names the same size as the no-icon fallback names next to
            this component (finding-table, compact-ability-row, the plan cards). -->
@@ -39,6 +42,11 @@ export class GameIconComponent {
   readonly name = input.required<string>();
   /** Explicit icon filename; an empty string renders name-only (no art). */
   readonly icon = input.required<string>();
+
+  // The URL whose image last failed to load; the template hides that img so a
+  // broken art request degrades to name-only. A changed `icon` yields a new URL
+  // that no longer matches, so the image is retried.
+  protected readonly failedSrc = signal<string | null>(null);
 
   // The icon may arrive with or without a trailing image extension (WCL's
   // master-data icons carry `.jpg`); normalize before appending the zamimg suffix

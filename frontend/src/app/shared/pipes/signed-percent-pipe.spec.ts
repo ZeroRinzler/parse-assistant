@@ -13,6 +13,8 @@ describe('SignedPercentPipe', () => {
     { input: 12.4,      expected: '+12%',  why: 'fractional delta rounds to whole percent' },
     { input: -4.6,      expected: '-5%',   why: 'negative fractional delta rounds to nearest whole' },
     { input: -0.4,      expected: '0%',    why: 'a small negative that rounds to zero drops the sign (no "-0%")' },
+    { input: NaN,       expected: '',      why: 'NaN returns blank, never the literal "NaN%"' },
+    { input: Infinity,  expected: '',      why: 'a non-finite delta returns blank' },
   ] as { input: number | null | undefined; expected: string; why: string }[])(
     'transform($input) === "$expected" ($why)',
     ({ input, expected }) => {

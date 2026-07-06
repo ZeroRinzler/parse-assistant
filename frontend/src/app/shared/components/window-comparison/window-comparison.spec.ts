@@ -38,6 +38,23 @@ describe('WindowComparisonComponent overviewMax', () => {
   it('floors at 0.01 so an all-null/empty set never yields a zero scale', () => {
     expect(overviewMaxOf([win({})])).toBe(0.01);
   });
+
+  it('ignores a NaN value so one bad datum never blanks the whole bar', () => {
+    expect(overviewMaxOf([win({ topAvg: 100, playerPct: NaN }), win({ topMax: 250 })])).toBe(250);
+  });
+});
+
+describe('WindowComparisonComponent overviewDelta', () => {
+  it('computes the signed percent gap for finite values', () => {
+    const { vm } = mountVm(WindowComparisonComponent, { windows: [win({ playerPct: 90, topAvg: 100 })] });
+    expect((vm['overviewDelta'] as () => number | null)()).toBeCloseTo(-10, 9);
+  });
+
+  it('is null (muted) when the player value is NaN, never a NaN badge', () => {
+    const { vm } = mountVm(WindowComparisonComponent, { windows: [win({ playerPct: NaN, topAvg: 100 })] });
+    expect((vm['overviewDelta'] as () => number | null)()).toBeNull();
+    expect((vm['overviewDeltaStatus'] as () => string)()).toBe('muted');
+  });
 });
 
 describe('WindowComparisonComponent selectedIndex', () => {

@@ -8,7 +8,7 @@ import { WclApiService } from '../../../core/services/wcl-api';
 import { WclEvent, WclFight } from '../../../core/models/wcl.models';
 import { EncounterPositions, ReferenceSelector } from '../../../core/models/positioning.models';
 import { logWarn } from '../../../core/log';
-import { Result, LoadError } from '../../../core/result';
+import { Result, LoadError, permanent } from '../../../core/result';
 import { toLoadError } from '../../../core/http-load-error';
 import { posActorId } from './map-positions';
 import { MAP_DATA_SOURCE, MapData } from './map-data-source';
@@ -55,6 +55,8 @@ interface PendingOverlay {
   playerId: number;
   positions: EncounterPositions;
   enemies: MapEnemyActor[];
+  /** The `prepare` sequence that captured this; a deferred overlay from a superseded pull is dropped. */
+  seq: number;
 }
 
 /** The anchor a feature card emits (and the page forwards) to open the map. */
@@ -159,6 +161,8 @@ export class MapFeatureService {
   private pendingOverlay: PendingOverlay | null = null;
   /** True once built for the current pull, so a re-open never refetches. */
   private overlayLoaded = false;
+  /** Bumped on every `prepare`; a slow bench/overlay load checks it so a stale selection never wins. */
+  private prepareSeq = 0;
 
   readonly open = signal(false);
   readonly anchorTime = signal(0);
@@ -172,6 +176,12 @@ export class MapFeatureService {
   /** Load the top-parse bench (the /pre and initial post-raid path). Clears any stale live overlay. */
   async loadBench(spec: string, encounterId: number): Promise<Result<MapData, LoadError>> {
     const result = await this.source.getBench(spec, encounterId);
+    this._applyBench(result);
+    return result;
+  }
+
+  /** Push a bench result to the `positions`/`error` signals and clear any stale live overlay. */
+  private _applyBench(result: Result<MapData, LoadError>): void {
     this.live.set(null);
     if (result.ok) {
       this.positions.set(result.value);
@@ -181,23 +191,26 @@ export class MapFeatureService {
       this.positions.set(null);
       this.error.set(result.error.kind === 'missing' ? null : result.error);
     }
-    return result;
   }
 
   /**
    * Prepare the post-raid context: load the bench now, but DEFER the live-overlay fetch (two full
    * position-event streams) until the map first opens, since most analyses never open it. Refreshes
-   * immediately if the panel is already open (a live-sync pull mid-watch).
+   * immediately if the panel is already open (a live-sync pull mid-watch). A rapid fight/player
+   * switch supersedes an in-flight bench load: the stale result is dropped so it never wins the state.
    */
   async prepare(
     reportCode: string, fight: WclFight, playerId: number, spec: string, enemies: MapEnemyActor[],
   ): Promise<void> {
+    const seq = ++this.prepareSeq;
     this.live.set(null);
     this._resetOverlay();
     if (!fight?.encounterID) { this.positions.set(null); this.error.set(null); return; }
-    const result = await this.loadBench(spec, fight.encounterID);
+    const result = await this.source.getBench(spec, fight.encounterID);
+    if (seq !== this.prepareSeq) return; // a newer prepare superseded this selection
+    this._applyBench(result);
     if (!result.ok) return;
-    this.pendingOverlay = { reportCode, fight, playerId, positions: result.value, enemies };
+    this.pendingOverlay = { reportCode, fight, playerId, positions: result.value, enemies, seq };
     if (this.open()) await this.ensureLiveOverlay();
   }
 
@@ -237,8 +250,20 @@ export class MapFeatureService {
     try {
       const { reportCode, fight, playerId, positions, enemies } = pending;
       const events = await this.fetchLiveEvents(reportCode, fight, playerId);
-      this.live.set(buildLiveOverlay({ positions, events, fightStartMs: fight.startTime, playerId, enemies }));
-      this.error.set(null);
+      if (pending.seq !== this.prepareSeq) return; // a newer prepare superseded this deferred overlay
+      const overlay = buildLiveOverlay({ positions, events, fightStartMs: fight.startTime, playerId, enemies });
+      this.live.set(overlay);
+      if (overlay) {
+        this.error.set(null);
+      } else {
+        // The overlay loaded, but the player produced no position samples: an unusable analysis, not
+        // a still-loading map. Surface it as permanent so the map does not sit silently on bench trails.
+        const failure = permanent('No position data for you in this pull.', 'map.no-player-positions');
+        if (!failure.ok && failure.error.kind === 'permanent') {
+          logWarn(failure.error.id, failure.error.context);
+          this.error.set(failure.error);
+        }
+      }
       this.overlayLoaded = true;
     } catch (cause) {
       // Surface a failed overlay read instead of a silently empty map.

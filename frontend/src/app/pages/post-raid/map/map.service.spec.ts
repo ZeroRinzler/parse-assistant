@@ -310,6 +310,47 @@ describe('MapFeatureService deferred overlay', () => {
     expect(api.calls.some(call => call.dataType === 'DamageDone')).toBe(false);
   });
 
+  it('surfaces a permanent error when the loaded overlay has no player position samples', async () => {
+    const NO_POSITIONS_ID = 'map.no-player-positions'; // repro id the no-samples permanent carries
+    const { service } = setup(); // RecordingWclApi returns [] events, so the player has no samples
+    await service.prepare('code', sampleFight, PLAYER_ACTOR_ID, 'SubtletyRogue', []);
+    service.openAt({ timeS: 1 });
+    await settle();
+
+    // The overlay loaded but yielded no "you" trail: surfaced as a failure, not a silent bench-only map.
+    expect(service.live()).toBeNull();
+    expect(service.overlayLoading()).toBe(false);
+    const error = service.error();
+    expect(error?.kind).toBe('permanent');
+    if (error?.kind === 'permanent') expect(error.id).toBe(NO_POSITIONS_ID);
+  });
+
+  it('drops a stale bench load so a rapid selection switch keeps the latest positions', async () => {
+    const STALE_ENCOUNTER = 111;
+    const LATEST_ENCOUNTER = 222;
+    const staleData: EncounterPositions = { ...sampleData, encounter_id: STALE_ENCOUNTER };
+    const latestData: EncounterPositions = { ...sampleData, encounter_id: LATEST_ENCOUNTER };
+    let resolveStale: (() => void) | null = null;
+    const source: DataSource<MapData> = {
+      getBench: (_spec, enc) => enc === STALE_ENCOUNTER
+        ? new Promise<Result<MapData, LoadError>>(res => { resolveStale = () => res(ok(staleData)); })
+        : Promise.resolve(ok(latestData)),
+    };
+    TestBed.configureTestingModule({ providers: [{ provide: MAP_DATA_SOURCE, useValue: source }] });
+    const service = TestBed.inject(MapFeatureService);
+    const staleFight = { ...sampleFight, encounterID: STALE_ENCOUNTER } as WclFight;
+    const latestFight = { ...sampleFight, encounterID: LATEST_ENCOUNTER } as WclFight;
+
+    const stalePrepare = service.prepare('code', staleFight, 5, 'SubtletyRogue', []); // bench never resolves yet
+    await service.prepare('code', latestFight, 5, 'SubtletyRogue', []); // supersedes, resolves now
+    expect(service.positions()).toBe(latestData);
+
+    resolveStale!(); // the earlier selection finally resolves, out of order
+    await stalePrepare;
+    // The stale bench does not overwrite the current selection.
+    expect(service.positions()).toBe(latestData);
+  });
+
   it('surfaces a failed overlay fetch as an error rather than a silent empty map', async () => {
     const OVERLAY_ERROR_ID = 'map.overlay'; // repro id a permanent overlay failure carries
     const throwingApi = {

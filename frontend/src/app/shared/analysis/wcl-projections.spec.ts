@@ -24,6 +24,14 @@ describe('unwrapRankings', () => {
     expect(unwrapRankings({})).toEqual([]);
   });
 
+  it('returns [] without throwing for an unparseable string blob, warning for repro', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    expect(() => unwrapRankings('{ not json')).not.toThrow();
+    expect(unwrapRankings('{ not json')).toEqual([]);
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
   it('composes with toParseRankings to yield fetchable parses', () => {
     const blob = JSON.stringify({ rankings: [rankingRow('Keep', 'r1', 3)] });
     expect(toParseRankings(unwrapRankings(blob), 10)).toEqual([{ player: 'Keep', report_code: 'r1', fight_id: 3 }]);

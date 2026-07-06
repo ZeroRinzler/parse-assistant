@@ -1,5 +1,9 @@
 @if (error(); as e) {
   <wl-load-state [error]="e" />
+} @else if (!view()) {
+  <!-- No error and no view: the pull's own log was not found (a `missing` result). Show the
+       waiting placeholder rather than a blank card. -->
+  <wl-load-state caption="" />
 } @else if (view(); as v) {
   <div class="bg-[var(--surface)] border border-[var(--border)] rounded-[10px] overflow-hidden">
 

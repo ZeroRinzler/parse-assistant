@@ -25,12 +25,23 @@ export function normalizeAbilityId(id: number): number {
 /**
  * Unwrap WCL's `characterRankings` envelope into its ranking rows. WCL returns it
  * either as a JSON blob (string) or an already-parsed object; both forms (and an
- * absent blob) are handled, so the result is always an array.
+ * absent or unparseable blob) are handled, so the result is always an array and the
+ * function never throws.
  */
 export function unwrapRankings(blob: WclRankingsBlob | null | undefined): WclRawRanking[] {
   if (!blob) return [];
-  const parsed = typeof blob === 'string' ? JSON.parse(blob) as { rankings?: WclRawRanking[] } : blob;
-  return parsed.rankings ?? [];
+  const parsed = typeof blob === 'string' ? safeParseRankings(blob) : blob;
+  return parsed?.rankings ?? [];
+}
+
+/** Parse a rankings envelope string, warning and returning null on a malformed blob. */
+function safeParseRankings(raw: string): { rankings?: WclRawRanking[] } | null {
+  try {
+    return JSON.parse(raw) as { rankings?: WclRawRanking[] };
+  } catch (err) {
+    logWarn('unwrapRankings: malformed rankings blob', err);
+    return null;
+  }
 }
 
 /**

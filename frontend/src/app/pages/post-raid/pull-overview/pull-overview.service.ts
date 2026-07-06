@@ -68,11 +68,16 @@ export function wipeTimeS(
   return fightDurationS;
 }
 
-/** Parse WCL's `table` blob (string or object) into its source-actor entries. */
-function tableEntries(blob: WclTableBlob | null): { id: number; total: number }[] {
-  if (!blob) return [];
+/**
+ * Parse WCL's `table` blob (string or object) into its source-actor entries. Returns null when
+ * the blob is absent, unparseable, or missing its `data.entries` array - an unusable table, as
+ * opposed to a valid table with an empty entry list (a real, played-but-no-damage pull).
+ */
+function tableEntries(blob: WclTableBlob | null): { id: number; total: number }[] | null {
+  if (!blob) return null;
   const parsed = typeof blob === 'string' ? safeJson(blob) : blob;
-  return parsed?.data?.entries ?? [];
+  const entries = parsed?.data?.entries;
+  return Array.isArray(entries) ? entries : null;
 }
 
 function safeJson(raw: string): { data?: { entries?: { id: number; total: number }[] } } | null {
@@ -85,16 +90,18 @@ function safeJson(raw: string): { data?: { entries?: { id: number; total: number
 }
 
 /**
- * The player's DPS from the damage-done table. A null/failed blob is a load failure (the whole
- * table is unusable, so a played pull would show a bogus 0), returned as a `permanent` error. A
- * player legitimately absent from a valid table (a healer) is a real 0, as is a zero-length pull.
+ * The player's DPS from the damage-done table. An unusable table - absent, unparseable, or missing
+ * its entries - is a load failure (a played pull would show a bogus 0), returned as a `permanent`
+ * error. A player legitimately absent from a valid table (a healer) is a real 0, as is a
+ * zero-length pull.
  */
 export function dpsFromTable(
   blob: WclTableBlob | null, playerId: number, durationS: number,
 ): Result<number, LoadError> {
   if (durationS <= 0) return ok(0);
-  if (!blob) return permanent('Damage table missing for this pull.', 'pull-overview.damage-table');
-  const entry = tableEntries(blob).find(row => row.id === playerId);
+  const entries = tableEntries(blob);
+  if (!entries) return permanent('Damage table missing for this pull.', 'pull-overview.damage-table');
+  const entry = entries.find(row => row.id === playerId);
   return ok(entry ? entry.total / durationS : 0);
 }
 

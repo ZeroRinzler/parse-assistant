@@ -154,14 +154,16 @@ export class WindowComparisonComponent {
   });
 
   protected readonly overviewMax = computed(() => {
+    // Filter NaN as well as null: a single NaN would make Math.max return NaN and blank the bar.
     const vals = this.windows().flatMap(w =>
       [w.overview.topAvg, w.overview.topMax, w.overview.playerPct]
-        .filter((v): v is number => v != null));
+        .filter((v): v is number => v != null && Number.isFinite(v)));
     return Math.max(...vals, 0.01);
   });
 
   private barPct(value: number, max: number): number {
-    return Math.min(100, Math.max(0, (value / max) * 100));
+    const pct = (value / max) * 100;
+    return Number.isFinite(pct) ? Math.min(100, Math.max(0, pct)) : 0;
   }
 
   protected readonly overviewDelta = computed<number | null>(() => {
@@ -169,7 +171,9 @@ export class WindowComparisonComponent {
     if (!w) return null;
     const { playerPct, topAvg } = w.overview;
     if (playerPct == null || topAvg == null || topAvg === 0) return null;
-    return ((playerPct - topAvg) / topAvg) * 100;
+    const delta = ((playerPct - topAvg) / topAvg) * 100;
+    // A NaN player/top value would otherwise render a "NaN%" badge; drop it to the muted state.
+    return Number.isFinite(delta) ? delta : null;
   });
 
   // Semantic delta state only - the template maps it to a badge-* class.
