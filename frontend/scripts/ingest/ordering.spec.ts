@@ -1,94 +1,68 @@
 import { describe, it, expect } from 'vitest';
 import {
-  orderSpecsByVersionThenTime, orderEncountersByMissingFirst, PRIORITY_SPEC, type SpecOrderEntry,
+  orderSpecsByVersion, orderEncountersByMissingFirst, PRIORITY_SPEC, type SpecOrderEntry,
 } from './ordering.ts';
 
 const entry = (over: Partial<SpecOrderEntry> & { spec: string }): SpecOrderEntry => ({
   dataCount: 5,
   onCurrentVersion: true,
-  lastChange: 1000,
   ...over,
 });
 
-describe('orderSpecsByVersionThenTime', () => {
+describe('orderSpecsByVersion', () => {
   it('puts empty specs first, then old-version, then current-version', () => {
-    const order = orderSpecsByVersionThenTime([
+    const order = orderSpecsByVersion([
       entry({ spec: 'Current', onCurrentVersion: true }),
-      entry({ spec: 'Empty', dataCount: 0, onCurrentVersion: false, lastChange: null }),
+      entry({ spec: 'Empty', dataCount: 0, onCurrentVersion: false }),
       entry({ spec: 'Old', onCurrentVersion: false }),
     ]);
     expect(order).toEqual(['Empty', 'Old', 'Current']);
   });
 
-  it('keeps every old-version spec ahead of every current-version spec regardless of time', () => {
-    // The current-version spec is much older by git time, but the version group dominates.
-    const order = orderSpecsByVersionThenTime([
-      entry({ spec: 'CurrentButAncient', onCurrentVersion: true, lastChange: 1 }),
-      entry({ spec: 'OldButRecent', onCurrentVersion: false, lastChange: 9999 }),
+  it('keeps every old-version spec ahead of every current-version spec', () => {
+    const order = orderSpecsByVersion([
+      entry({ spec: 'CurrentZebra', onCurrentVersion: true }),
+      entry({ spec: 'OldApple', onCurrentVersion: false }),
     ]);
-    expect(order).toEqual(['OldButRecent', 'CurrentButAncient']);
+    expect(order).toEqual(['OldApple', 'CurrentZebra']);
   });
 
-  it('sorts oldest git time first within a group', () => {
-    const order = orderSpecsByVersionThenTime([
-      entry({ spec: 'Newer', onCurrentVersion: true, lastChange: 500 }),
-      entry({ spec: 'Older', onCurrentVersion: true, lastChange: 100 }),
-    ]);
-    expect(order).toEqual(['Older', 'Newer']);
-  });
-
-  it('treats a null git time as oldest within its group', () => {
-    const order = orderSpecsByVersionThenTime([
-      entry({ spec: 'Timed', onCurrentVersion: false, lastChange: 100 }),
-      entry({ spec: 'NoHistory', onCurrentVersion: false, lastChange: null }),
-    ]);
-    expect(order).toEqual(['NoHistory', 'Timed']);
-  });
-
-  it('breaks equal-time ties alphabetically (stable, deterministic order)', () => {
-    const order = orderSpecsByVersionThenTime([
-      entry({ spec: 'Charlie', lastChange: 200 }),
-      entry({ spec: 'Alpha', lastChange: 200 }),
-      entry({ spec: 'Bravo', lastChange: 200 }),
+  it('sorts alphabetically within a group (stable, deterministic order)', () => {
+    const order = orderSpecsByVersion([
+      entry({ spec: 'Charlie' }),
+      entry({ spec: 'Alpha' }),
+      entry({ spec: 'Bravo' }),
     ]);
     expect(order).toEqual(['Alpha', 'Bravo', 'Charlie']);
   });
 
   it('pins the priority spec first within its bracket, then alphabetical for the rest', () => {
-    const order = orderSpecsByVersionThenTime([
-      entry({ spec: 'OutlawRogue', lastChange: 200 }),
-      entry({ spec: PRIORITY_SPEC, lastChange: 200 }),
-      entry({ spec: 'AssassinationRogue', lastChange: 200 }),
+    const order = orderSpecsByVersion([
+      entry({ spec: 'OutlawRogue' }),
+      entry({ spec: PRIORITY_SPEC }),
+      entry({ spec: 'AssassinationRogue' }),
     ]);
     expect(order).toEqual([PRIORITY_SPEC, 'AssassinationRogue', 'OutlawRogue']);
   });
 
-  it('pins the priority spec ahead of an older spec within the same bracket (priority beats time)', () => {
-    const order = orderSpecsByVersionThenTime([
-      entry({ spec: 'AssassinationRogue', lastChange: 100 }),
-      entry({ spec: PRIORITY_SPEC, lastChange: 900 }),
-    ]);
-    expect(order).toEqual([PRIORITY_SPEC, 'AssassinationRogue']);
-  });
-
   it('does not pull the priority spec ahead of an earlier (emptier/older-version) bracket', () => {
-    const order = orderSpecsByVersionThenTime([
+    const order = orderSpecsByVersion([
       entry({ spec: PRIORITY_SPEC, onCurrentVersion: true }),
-      entry({ spec: 'EmptySpec', dataCount: 0, onCurrentVersion: false, lastChange: null }),
+      entry({ spec: 'EmptySpec', dataCount: 0, onCurrentVersion: false }),
       entry({ spec: 'OldSpec', onCurrentVersion: false }),
     ]);
     expect(order).toEqual(['EmptySpec', 'OldSpec', PRIORITY_SPEC]);
   });
 
   it('does not mutate the input', () => {
-    const entries = [entry({ spec: 'B', lastChange: 2 }), entry({ spec: 'A', lastChange: 1 })];
+    const entries = [entry({ spec: 'B' }), entry({ spec: 'A' })];
     const snapshot = entries.map(item => item.spec);
-    orderSpecsByVersionThenTime(entries);
+    orderSpecsByVersion(entries);
     expect(entries.map(item => item.spec)).toEqual(snapshot);
   });
 
   it('returns an empty list for no specs', () => {
-    expect(orderSpecsByVersionThenTime([])).toEqual([]);
+    expect(orderSpecsByVersion([])).toEqual([]);
   });
 });
 

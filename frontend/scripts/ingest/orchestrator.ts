@@ -30,9 +30,8 @@ import {
 } from './wcl-client.ts';
 import { RATE_LIMIT_QUERY, CLASSES_QUERY } from './wcl-queries.ts';
 import { INGEST_VERSION } from './ingest-version.ts';
-import { specDataMtime } from './git-mtime.ts';
 import {
-  orderSpecsByVersionThenTime, orderEncountersByMissingFirst, type SpecOrderEntry,
+  orderSpecsByVersion, orderEncountersByMissingFirst, type SpecOrderEntry,
 } from './ordering.ts';
 import {
   encounterSkipKey, signatureAfterFetch, readStoredSignature, readStoredVersion, signatureMatches,
@@ -293,18 +292,6 @@ async function ingestSpec(
   return false;
 }
 
-/**
- * Compact relative age of a unix-seconds timestamp ("9m" / "3h" / "3d"), for the work-order
- * log. Null (no git history / never ingested) reads as "never". Sub-minute rounds to "0m".
- */
-function formatRelativeAge(unixSeconds: number | null): string {
-  if (unixSeconds == null) return 'never';
-  const deltaSeconds = Math.max(0, Math.floor(Date.now() / 1000) - unixSeconds);
-  if (deltaSeconds < 3600) return `${Math.floor(deltaSeconds / 60)}m`;
-  if (deltaSeconds < 86400) return `${Math.floor(deltaSeconds / 3600)}h`;
-  return `${Math.floor(deltaSeconds / 86400)}d`;
-}
-
 async function main(): Promise<void> {
   const program = new Command()
     .name('ingest')
@@ -370,8 +357,8 @@ async function main(): Promise<void> {
       return;
     }
     // Order specs so a budget-bounded run fixes the most out-of-date data first: empty ->
-    // old-version -> current, oldest git-commit time within each group. All cheap disk + git
-    // reads, zero WCL budget.
+    // old-version -> current, alphabetical within each group. All cheap disk reads, zero
+    // WCL budget.
     const orderInputs = await Promise.all(withRulebook.map(async spec => {
       const burstFiles = (await runtime.dataFile.listSliceFiles(spec, 'burst'))
         .filter(file => file.endsWith('.json'));
@@ -380,25 +367,23 @@ async function main(): Promise<void> {
         return slice ? readStoredVersion(slice) : null;
       }));
       const storedVersions = versions.filter((stored): stored is number => stored !== null);
-      const lastChange = specDataMtime(spec);
       const entry: SpecOrderEntry = {
         spec,
         dataCount: burstFiles.length,
         onCurrentVersion: burstFiles.length > 0 && versions.every(stored => stored === INGEST_VERSION),
-        lastChange,
       };
       // Show the lowest on-disk version - the one that decides the spec's old/current group.
       const displayVersion = storedVersions.length ? Math.min(...storedVersions) : null;
-      return { spec, entry, displayVersion, lastChange };
+      return { spec, entry, displayVersion };
     }));
-    specs = orderSpecsByVersionThenTime(orderInputs.map(input => input.entry));
+    specs = orderSpecsByVersion(orderInputs.map(input => input.entry));
     const displayBySpec = new Map(orderInputs.map(input => [input.spec, input] as const));
     const versionLines = specs.map(spec => {
       const info = displayBySpec.get(spec);
       const versionLabel = info && info.displayVersion != null ? `v${info.displayVersion}` : 'v?';
-      return `${spec} ${versionLabel} ${formatRelativeAge(info ? info.lastChange : null)}`;
+      return `${spec} ${versionLabel}`;
     });
-    console.log(`Specs (old version + oldest-updated first):\n${versionLines.join('\n')}`);
+    console.log(`Specs (old version first):\n${versionLines.join('\n')}`);
   }
 
   for (const spec of specs) {
