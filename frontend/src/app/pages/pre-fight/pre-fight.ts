@@ -95,7 +95,14 @@ export class PreFightComponent implements OnInit {
       const specs = await this.encounterSelection.getSpecs();
       if (specs.ok) {
         this.specs.set(specs.value);
-        if (this.classes().length) this.classControl.enable({ emitEvent: false });
+        if (this.classes().length) {
+          this.classControl.enable({ emitEvent: false });
+        } else {
+          // The data index (index.json) loaded but the spec-meta universe did not: the class
+          // dropdown options derive from spec-meta.json while the empty-state gate keys off
+          // index.json, so surface the failure instead of a dead-looking empty dropdown.
+          this.surfaceLoadError({ kind: 'transient', message: 'Spec data is unavailable right now.' });
+        }
       } else {
         this.surfaceLoadError(specs.error);
       }

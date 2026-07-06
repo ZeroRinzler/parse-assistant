@@ -382,6 +382,17 @@ describe('buildDefensivePlanRows', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ name: 'Cloak of Shadows', spellId: CLOAK_OF_SHADOWS, icon: 'cloak', uses: 2, firstCastS: 12, windowsS: [30], rule: 'Use it' });
   });
+
+  it('falls back to an empty icon for a defensive whose spell id is not in the ability map', () => {
+    // CLOAK_OF_SHADOWS is intentionally absent from ability_icons, so the guarded lookup must not throw.
+    const bench = benchWith({
+      defensives: [{ name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS, cooldown: 120, duration: 5, usage_rule: 'Use it', talent_gated: false }],
+      ability_icons: {},
+    });
+    const rows = buildDefensivePlanRows(bench);
+    expect(rows[0].spellId).toBe(CLOAK_OF_SHADOWS);
+    expect(rows[0].icon).toBe('');
+  });
 });
 
 function fullBench(): DefensiveBench {
@@ -464,14 +475,21 @@ describe('DefensiveFeatureService.loadAnalysisView (post-raid)', () => {
 describe('DefensiveFeatureService.loadPlan (pre-fight)', () => {
   it('returns the bench-only plan rows', async () => {
     const service = serviceWith(ok(fullBench()));
-    const view = await service.loadPlan('SubtletyRogue', 1);
-    expect(view.available).toBe(true);
-    expect(view.rows).toHaveLength(1);
-    expect(view.rows[0]).toMatchObject({ name: 'Cloak of Shadows', spellId: CLOAK_OF_SHADOWS, uses: 2, firstCastS: 10, windowsS: [30] });
+    const result = await service.loadPlan('SubtletyRogue', 1);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.rows).toHaveLength(1);
+      expect(result.value.rows[0]).toMatchObject({ name: 'Cloak of Shadows', spellId: CLOAK_OF_SHADOWS, uses: 2, firstCastS: 10, windowsS: [30] });
+    }
   });
 
-  it('is unavailable with empty rows when the bench is not ok', async () => {
+  it('propagates a transient bench outage so the pre-fight plan surfaces a retry error', async () => {
     const service = serviceWith(transient('WCL is unreachable right now.'));
-    expect(await service.loadPlan('SubtletyRogue', 1)).toEqual({ available: false, rows: [] });
+    expect(await service.loadPlan('SubtletyRogue', 1)).toEqual(transient('WCL is unreachable right now.'));
+  });
+
+  it('propagates a missing bench so the pre-fight plan waiting state shows', async () => {
+    const service = serviceWith(missing('Not yet ingested.'));
+    expect(await service.loadPlan('SubtletyRogue', 1)).toEqual(missing('Not yet ingested.'));
   });
 });

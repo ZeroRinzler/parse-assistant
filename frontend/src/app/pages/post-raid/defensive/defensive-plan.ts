@@ -2,9 +2,10 @@ import { ChangeDetectionStrategy, Component, effect, inject, input, output, sign
 import { DecimalPipe } from '@angular/common';
 import { GameIconComponent } from '../../../shared/components/game-icon/game-icon';
 import { CollapsibleTextComponent } from '../../../shared/components/collapsible-text/collapsible-text';
-import { LoadStateComponent } from '../../../shared/components/load-state/load-state';
+import { LoadStateComponent, RenderableLoadError } from '../../../shared/components/load-state/load-state';
 import { FormatDurationPipe } from '../../../shared/pipes/format-duration-pipe';
 import { LatestLoad } from '../../../shared/latest-load';
+import { logWarn } from '../../../core/log';
 import { DefensiveFeatureService, DefensivePlanRow } from './defensive.service';
 
 /**
@@ -32,6 +33,7 @@ export class DefensivePlanComponent {
   readonly availableChange = output<boolean>();
 
   protected readonly available = signal(true);
+  protected readonly error = signal<RenderableLoadError | null>(null);
   private readonly _items = signal<DefensivePlanRow[]>([]);
   protected readonly items = this._items.asReadonly();
 
@@ -43,10 +45,19 @@ export class DefensivePlanComponent {
       const encounterId = this.encounterId();
       this.loader.run(this.defensive.loadPlan(spec, encounterId), {
         context: 'defensive.loadPlan',
-        apply: view => {
-          this.available.set(view.available);
-          this.availableChange.emit(view.available);
-          this._items.set(view.rows);
+        apply: result => {
+          if (result.ok) {
+            this.error.set(null);
+            this.available.set(true);
+            this.availableChange.emit(true);
+            this._items.set(result.value.rows);
+          } else {
+            if (result.error.kind === 'permanent') logWarn(result.error.id, result.error.context);
+            this.error.set(result.error.kind === 'missing' ? null : result.error);
+            this.available.set(false);
+            this.availableChange.emit(false);
+            this._items.set([]);
+          }
         },
       });
     });

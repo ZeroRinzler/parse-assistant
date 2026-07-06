@@ -1,5 +1,5 @@
-@if (!available()) {
-  <wl-load-state [heading]="title()" [subtitle]="subtitle()"></wl-load-state>
+@if (error() || !available()) {
+  <wl-load-state [heading]="title()" [subtitle]="subtitle()" [error]="error()"></wl-load-state>
 } @else if (items().length) {
   <div class="bg-[var(--surface)] border border-[var(--border)] rounded-[10px] overflow-hidden">
     <!-- Header -->

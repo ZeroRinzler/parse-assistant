@@ -499,6 +499,14 @@ describe('buildCdPlan', () => {
     expect(unaligned.bloodlust).toBe(false);
     expect(unaligned.bloodlustPct).toBeNull();
   });
+
+  it('falls back to an empty icon for a cooldown whose spell id is not in the ability map', () => {
+    // SECRET_TECHNIQUE is deliberately absent from `abilities`, so the guarded lookup must not throw.
+    const UNMAPPED_SPELL_ID = SECRET_TECHNIQUE;
+    const plan = buildCdPlan([{ name: 'Unmapped', spell_id: UNMAPPED_SPELL_ID, cooldown: 60 }], {}, abilities);
+    expect(plan[0].spellId).toBe(UNMAPPED_SPELL_ID);
+    expect(plan[0].icon).toBe('');
+  });
 });
 
 // A WCL fake that resolves a valid (empty) player log, so a test's outcome is driven by the
@@ -578,16 +586,22 @@ describe('RotationFeatureService', () => {
     const service = withSource(ok(bench({
       per_cd_benchmarks: { 'Shadow Blades': cdBench() },
     })));
-    const view = await service.loadPlanView('SubtletyRogue', 1);
-    expect(view.available).toBe(true);
-    expect(view.rows).toHaveLength(1);
-    expect(view.rows[0].name).toBe('Shadow Blades');
-    expect(view.rows[0].icon).toBe('sb');
+    const result = await service.loadPlanView('SubtletyRogue', 1);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.rows).toHaveLength(1);
+      expect(result.value.rows[0].name).toBe('Shadow Blades');
+      expect(result.value.rows[0].icon).toBe('sb');
+    }
   });
 
-  it('marks the pre-fight plan unavailable when the bench is absent', async () => {
+  it('propagates a missing bench so the pre-fight plan waiting state shows', async () => {
     const service = withSource(missing('Not yet ingested.'));
-    const view = await service.loadPlanView('SubtletyRogue', 1);
-    expect(view).toEqual({ available: false, rows: [] });
+    expect(await service.loadPlanView('SubtletyRogue', 1)).toEqual(missing('Not yet ingested.'));
+  });
+
+  it('propagates a transient bench outage so the pre-fight plan surfaces a retry error', async () => {
+    const service = withSource(transient('WCL is unreachable right now.'));
+    expect(await service.loadPlanView('SubtletyRogue', 1)).toEqual(transient('WCL is unreachable right now.'));
   });
 });

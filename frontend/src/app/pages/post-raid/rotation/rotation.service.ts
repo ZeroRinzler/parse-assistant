@@ -60,6 +60,11 @@ export interface RotationPlayerView {
   onPlan: RotationOnPlanChip[];
 }
 
+/** Bench-only cooldown plan; an `ok` result implies the top-parse bench exists. */
+export interface RotationPlanView {
+  rows: CdPlanRow[];
+}
+
 const BLOODLUST_IDS = new Set([2825, 32182, 80353, 90355, 264667, 390386]);
 const BLOODLUST_DURATION_S = 40;
 // A cast from BL_WINDOW_LEAD_S before BL through BL_WINDOW_TRAIL_S after it expires counts as aligned.
@@ -517,10 +522,13 @@ export function buildCdPlan(
           .sort((a, b) => Number(a[0]) - Number(b[0]))
           .map(([idx, target]) => ({ castIndex: Number(idx), targetS: target.target_s }))
       : [];
+    const spellId = cd.spell_id ?? null;
+    const ability = spellId != null ? abilities[spellId] : undefined;
+    if (spellId != null && !ability) logWarn('buildCdPlan: ability id missing from ability map', spellId);
     return {
       name: cd.name,
-      spellId: cd.spell_id ?? null,
-      icon: abilities[cd.spell_id].icon,
+      spellId,
+      icon: ability?.icon ?? '',
       firstCastS: cdBench?.avg_first_cast_s ?? null,
       uses: cdBench?.avg_uses ?? null,
       usesPerMin: cdBench?.uses_per_min.avg ?? null,
@@ -571,9 +579,9 @@ export class RotationFeatureService {
     }
   }
 
-  async loadPlanView(spec: string, encounterId: number): Promise<{ available: boolean; rows: CdPlanRow[] }> {
+  async loadPlanView(spec: string, encounterId: number): Promise<Result<RotationPlanView, LoadError>> {
     const bench = await this.source.getBench(spec, encounterId);
-    if (!bench.ok) return { available: false, rows: [] };
-    return { available: true, rows: buildCdPlan(bench.value.major_cooldowns, bench.value.per_cd_benchmarks, bench.value.ability_icons) };
+    if (!bench.ok) return bench;
+    return ok({ rows: buildCdPlan(bench.value.major_cooldowns, bench.value.per_cd_benchmarks, bench.value.ability_icons) });
   }
 }

@@ -8,7 +8,7 @@ import { BURST_DATA_SOURCE, BurstBench } from './burst-data-source';
 import { DataSource } from '../../../core/data-source/data-source';
 import {
   BurstFeatureService,
-  burstWindowStatus, splitCommonCds, burstMapAnchor, burstClipAnchor, buildBurstView, findPlayerBurstWindows,
+  burstWindowStatus, splitCommonCds, burstMapAnchor, burstClipAnchor, buildBurstView, burstDetailRows, findPlayerBurstWindows,
 } from './burst.service';
 import { SHADOW_BLADES, SHADOW_BLADES_DAMAGE } from '../../../../testing/spell-ids';
 import { cast, damage } from '../../../../testing/builders/events';
@@ -54,6 +54,17 @@ describe('burstClipAnchor', () => {
   it('carries the window span and a stable indexed key', () => {
     const window = { time_s: 12, window_length_s: 18 } as BurstWindow;
     expect(burstClipAnchor(window, 2)).toEqual({ timeS: 12, windowLengthS: 18, key: 'burst-2' });
+  });
+});
+
+describe('burstDetailRows', () => {
+  it('labels an ability whose spell id is missing from the ability map with a placeholder and empty icon', () => {
+    // SHADOW_BLADES_DAMAGE is intentionally left out of the ability map, so the guarded lookup must
+    // not throw; it renders a labelled placeholder instead of a blank card.
+    const breakdown = [{ spell_id: SHADOW_BLADES_DAMAGE, avg_damage: 600, min_damage: 400, max_damage: 800, count: 5, avg_casts: 2 }];
+    const rows = burstDetailRows(breakdown, null, {});
+    expect(rows[0].label).toBe(`Ability #${SHADOW_BLADES_DAMAGE}`);
+    expect(rows[0].icon).toBe('');
   });
 });
 

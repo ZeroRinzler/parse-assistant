@@ -62,18 +62,22 @@ export function burstDetailRows(
 ): RangeRow[] {
   const playerByAbility: Record<number, { damage: number; casts?: number }> = {};
   for (const ability of playerWindow?.ability_breakdown ?? []) playerByAbility[ability.spell_id] = ability;
-  return abilityBreakdown.map(ability => ({
-    spellId: ability.spell_id,
-    label: abilities[ability.spell_id].name,
-    icon: abilities[ability.spell_id].icon,
-    playerPct: playerByAbility[ability.spell_id]?.damage ?? null,
-    topAvg: ability.avg_damage,
-    topMin: ability.min_damage,
-    topMax: ability.max_damage,
-    playerCasts: playerByAbility[ability.spell_id]?.casts ?? null,
-    topCasts: ability.avg_casts ?? null,
-    passive: ability.is_passive ?? false,
-  }));
+  return abilityBreakdown.map(ability => {
+    const baked = abilities[ability.spell_id];
+    if (!baked) logWarn('burstDetailRows: ability id missing from ability map', ability.spell_id);
+    return {
+      spellId: ability.spell_id,
+      label: baked?.name ?? `Ability #${ability.spell_id}`,
+      icon: baked?.icon ?? '',
+      playerPct: playerByAbility[ability.spell_id]?.damage ?? null,
+      topAvg: ability.avg_damage,
+      topMin: ability.min_damage,
+      topMax: ability.max_damage,
+      playerCasts: playerByAbility[ability.spell_id]?.casts ?? null,
+      topCasts: ability.avg_casts ?? null,
+      passive: ability.is_passive ?? false,
+    };
+  });
 }
 
 export function burstMapAnchor(window: BurstWindow): BurstMapAnchor {

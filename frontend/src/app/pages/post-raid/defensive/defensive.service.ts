@@ -48,6 +48,11 @@ export interface DefensivePlanRow {
   rule: string | null;
 }
 
+/** Bench-only defensive plan; an `ok` result implies the top-parse bench exists. */
+export interface DefensivePlanView {
+  rows: DefensivePlanRow[];
+}
+
 const dmgOf = (event: WclEvent): number => (event.amount || 0) + (event.absorbed || 0);
 
 /** Lost/unused + first-cast checks run only when at least this share of top parses used the defensive. */
@@ -401,10 +406,13 @@ export function buildDefensivePlanRows(bench: DefensiveBench | null): DefensiveP
           .sort((a, b) => Number(a[0]) - Number(b[0]))
           .map(([idx, hold]) => ({ castIndex: Number(idx), targetS: hold.target_s }))
       : [];
+    const spellId = defensive.spell_id ?? null;
+    const ability = spellId != null ? bench.ability_icons[spellId] : undefined;
+    if (spellId != null && !ability) logWarn('buildDefensivePlanRows: ability id missing from ability map', spellId);
     return {
       name: defensive.name,
-      spellId: defensive.spell_id ?? null,
-      icon: bench.ability_icons[defensive.spell_id].icon,
+      spellId,
+      icon: ability?.icon ?? '',
       uses: benchmark?.avg_uses ?? null,
       firstCastS: benchmark?.avg_first_cast_s ?? null,
       windowsS,
@@ -469,8 +477,9 @@ export class DefensiveFeatureService {
   }
 
   /** Pre-fight entry: the bench-only defensive-plan rows for a spec + encounter. */
-  async loadPlan(spec: string, encounterId: number): Promise<{ available: boolean; rows: DefensivePlanRow[] }> {
+  async loadPlan(spec: string, encounterId: number): Promise<Result<DefensivePlanView, LoadError>> {
     const bench = await this.source.getBench(spec, encounterId);
-    return { available: bench.ok, rows: buildDefensivePlanRows(bench.ok ? bench.value : null) };
+    if (!bench.ok) return bench;
+    return ok({ rows: buildDefensivePlanRows(bench.value) });
   }
 }
