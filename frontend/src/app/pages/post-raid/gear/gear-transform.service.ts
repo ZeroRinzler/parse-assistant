@@ -1,27 +1,23 @@
 /**
- * Live `DataSource<GearBench>`: computes the gear bench live in the browser (no
- * ingestion). Self-contained per the slice rule - it imports ONLY the two API
- * services + models + `logWarn`, and reimplements its own aggregation math below
- * (it does NOT reference the ingest analysis). Bound by `environment.useLiveTransform`.
- *
- * It fetches the encounter's top parses and, for each, refetches the player's
- * combatant-info gear (trinkets, enchants, talent fingerprint) from that parse's
- * log, then rolls the per-parse gear up into talent / trinket / enchant
- * distributions - the same shape the ingest bench writes.
+ * Live `DataSource<GearBench>`: computes the gear bench in the browser with its own
+ * aggregation math (it does NOT reference the ingest analysis), mirroring the ingest bench
+ * shape. Fetches each top parse's combatant-info gear and rolls it up into talent / trinket /
+ * enchant distributions.
  */
 import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { CharacterGear, ParseRanking } from '../../../core/models/wcl.models';
 import { EncounterGearStats } from '../../../core/models/encounter.models';
 import { logWarn } from '../../../core/log';
+import { Result, LoadError, ok, missing } from '../../../core/result';
+import { toLoadError } from '../../../core/http-load-error';
 import { TRINKET_SLOTS, decodeHtmlEntities, extractGear, selectCombatantInfo, talentKeyFromTree } from './gear-extract';
 import { toParseRankings, unwrapRankings } from '../../../shared/analysis/wcl-projections';
 import { getOrInsert } from '../../../shared/analysis/analysis-math';
 import { DataSource } from '../../../core/data-source/data-source';
 import { GearBench } from './gear-data-source';
 
-// Re-exported from the slice-local projection module + the shared blessed module so
-// existing call sites / specs that import these from the transform service keep working.
+// Re-exported so call sites / specs importing these from the transform service keep working.
 export { iconFile, decodeHtmlEntities, extractGear, talentKeyFromTree } from './gear-extract';
 export { toParseRankings } from '../../../shared/analysis/wcl-projections';
 
@@ -35,15 +31,12 @@ const MAX_TALENT_BUILDS = 5;
 const MAX_TRINKETS_PER_SLOT = 5;
 const MAX_ENCHANTS_PER_SLOT = 3;
 
-/* ----------------------------- pure helpers (own math) ----------------------------- */
-
 function pct(count: number, total: number): number {
   return total ? Math.round((count / total) * 100) : 0;
 }
 
 /**
- * One top parse reduced to just its gear fingerprint (or null when unavailable).
- * The parse identity (`report_code`/`fight_id`/`player_name`) rides along so each
+ * One top parse reduced to its gear fingerprint. The parse identity rides along so each
  * bench talent build can link back to an example parse running it.
  */
 export interface ParseGear {
@@ -57,11 +50,7 @@ export interface ParseGear {
   source_id: number;
 }
 
-/**
- * Reduce a fetched `CharacterGear` to the fields the gear aggregation needs, tagged
- * with the parse identity from its `ranking` (so a build can link to an example parse).
- * `sourceId` is the player's actor id within that report (the WCL `source` deep-link).
- */
+/** Reduce a fetched `CharacterGear` to the aggregation fields, tagged with the parse identity. */
 export function toParseGear(gear: CharacterGear | null, ranking: ParseRanking, sourceId: number): ParseGear | null {
   if (!gear?.found) return null;
   return {
@@ -81,8 +70,7 @@ export function toParseGear(gear: CharacterGear | null, ranking: ParseRanking, s
  */
 export function aggregateTalents(parses: ParseGear[]): EncounterGearStats['talent_builds'] {
   const total = parses.length;
-  // Count and first-seen example are aggregated together, so the example is carried
-  // alongside the count rather than re-looked-up under a non-null assertion later.
+  // Carry the first-seen example alongside the count, avoiding a later non-null re-lookup.
   interface TalentAgg { count: number; report_code: string; fight_id: number; player_name: string; source_id: number }
   const talentBuilds = new Map<string, TalentAgg>();
 
@@ -174,11 +162,7 @@ export function aggregateEnchants(parses: ParseGear[]): EncounterGearStats['ench
   return enchants;
 }
 
-/**
- * Roll per-parse gear up into bench talent builds, per-slot trinkets (12/13), and
- * per-slot enchants - the `EncounterGearStats` block. Composes the three per-facet
- * aggregators.
- */
+/** Composes the three per-facet aggregators into the `EncounterGearStats` block. */
 export function aggregateParseGear(parses: ParseGear[]): EncounterGearStats {
   return {
     talent_builds: aggregateTalents(parses),
@@ -187,37 +171,40 @@ export function aggregateParseGear(parses: ParseGear[]): EncounterGearStats {
   };
 }
 
-/* ----------------------------- service shell ----------------------------- */
-
 @Injectable({ providedIn: 'root' })
 export class GearTransformService implements DataSource<GearBench> {
   private readonly wclApi = inject(WclApiService);
 
-  async getBench(spec: string, encounterId: number): Promise<GearBench | null> {
-    const rankings = toParseRankings(unwrapRankings(await this.wclApi.getRankings(spec, encounterId)), CANDIDATE_POOL_COUNT);
-    if (!rankings.length) return null;
+  async getBench(spec: string, encounterId: number): Promise<Result<GearBench, LoadError>> {
+    try {
+      const rankings = toParseRankings(unwrapRankings(await this.wclApi.getRankings(spec, encounterId)), CANDIDATE_POOL_COUNT);
+      if (!rankings.length) return missing('Not yet ingested.');
 
-    const parses: ParseGear[] = [];
-    let encounterName = '';
-    for (const ranking of rankings) {
-      const fetched = await this.fetchParseGear(ranking, spec);
-      if (!fetched) continue;
-      parses.push(fetched.gear);
-      encounterName ||= fetched.encounterName;
-      if (parses.length >= TOP_PARSE_COUNT) break;
+      const parses: ParseGear[] = [];
+      let encounterName = '';
+      for (const ranking of rankings) {
+        const fetched = await this.fetchParseGear(ranking, spec);
+        if (!fetched) continue;
+        parses.push(fetched.gear);
+        encounterName ||= fetched.encounterName;
+        if (parses.length >= TOP_PARSE_COUNT) break;
+      }
+      if (!parses.length) return missing('Not yet ingested.');
+
+      const stats = aggregateParseGear(parses);
+      return ok({
+        spec,
+        encounter_id: encounterId,
+        encounter_name: encounterName,
+        sample_count: parses.length,
+        talent_builds: stats.talent_builds,
+        trinkets: stats.trinkets,
+        enchants: stats.enchants,
+      });
+    } catch (cause) {
+      logWarn(`GearTransformService bench ${spec}:${encounterId}`, cause);
+      return toLoadError(cause, 'gear.bench');
     }
-    if (!parses.length) return null;
-
-    const stats = aggregateParseGear(parses);
-    return {
-      spec,
-      encounter_id: encounterId,
-      encounter_name: encounterName,
-      sample_count: parses.length,
-      talent_builds: stats.talent_builds,
-      trinkets: stats.trinkets,
-      enchants: stats.enchants,
-    };
   }
 
   /** One parse's gear fingerprint via raw combatant info; null if it can't be fetched. */

@@ -3,6 +3,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { FsDataFileTransport } from './node-data-file-transport.ts';
+import { ok, missing } from '../../src/app/core/result.ts';
 
 // A relative path that climbs out of the data root: the exact shape the containment check must reject.
 const TRAVERSAL_PATH = '../escapes.json';
@@ -26,25 +27,32 @@ describe('FsDataFileTransport', () => {
     await fs.promises.rm(root, { recursive: true, force: true });
   });
 
-  it('round-trips JSON written inside the root', async () => {
+  it('round-trips JSON written inside the root, resolving ok(body)', async () => {
     await transport.writeJson(SAFE_REL_PATH, PAYLOAD);
-    expect(await transport.readJson(SAFE_REL_PATH)).toEqual(PAYLOAD);
+    expect(await transport.readJson(SAFE_REL_PATH)).toEqual(ok(PAYLOAD));
   });
 
-  it('returns null for a missing file (ENOENT-tolerant read)', async () => {
-    expect(await transport.readJson(MISSING_REL_PATH)).toBeNull();
+  it('resolves missing for a missing file (ENOENT-tolerant read)', async () => {
+    expect(await transport.readJson(MISSING_REL_PATH)).toEqual(missing('Not yet ingested.'));
   });
 
   it('returns an empty list for a missing directory (ENOENT-tolerant list)', async () => {
     expect(await transport.list(MISSING_DIR)).toEqual([]);
   });
 
-  it('rejects a read that escapes the data root with `..`', async () => {
-    await expect(transport.readJson(TRAVERSAL_PATH)).rejects.toThrow(ESCAPE_ERROR);
+  it('contains a read that escapes the data root with `..`, resolving permanent', async () => {
+    const result = await transport.readJson(TRAVERSAL_PATH);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.kind).toBe('permanent');
+      if (result.error.kind === 'permanent') expect((result.error.context as Error).message).toMatch(ESCAPE_ERROR);
+    }
   });
 
-  it('rejects a nested `..` sequence that resolves outside the root', async () => {
-    await expect(transport.readJson(NESTED_TRAVERSAL_PATH)).rejects.toThrow(ESCAPE_ERROR);
+  it('contains a nested `..` read sequence that resolves outside the root, resolving permanent', async () => {
+    const result = await transport.readJson(NESTED_TRAVERSAL_PATH);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.kind).toBe('permanent');
   });
 
   it('rejects a write that escapes the data root', async () => {
@@ -60,7 +68,6 @@ describe('FsDataFileTransport', () => {
   });
 
   it('allows the root itself (relPath resolving exactly to root)', async () => {
-    // `list('')` targets the root directory, which is inside the root and must not be rejected.
     expect(await transport.list('')).toEqual([]);
   });
 });

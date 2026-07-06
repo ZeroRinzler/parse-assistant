@@ -1,15 +1,8 @@
 /**
- * Live `DataSource<DefensiveBench>`: computes the defensive bench live in the browser
- * (no ingestion). Self-contained per the slice rule - it imports the two API
- * services + models + `logWarn` (plus generic `d3-array` stats and the blessed
- * `shared/analysis/analysis-math` primitives such as `round`/`groupByTime`), and
- * reimplements its own defensive DOMAIN math below (it does NOT reference the ingest
- * analysis). Bound by `environment.useLiveTransform`.
- *
- * It fetches the encounter's top parses, refetches each parse's Buffs + DamageTaken
- * (and Casts as the no-self-buff fallback), builds per-parse buff-window-centric
- * defensive windows + usage summaries, then clusters them across parses and derives
- * the per-defensive benchmarks. Bench shape mirrors the ingest `DefensiveSliceFile`.
+ * Live `DataSource<DefensiveBench>`: computes the defensive bench in the browser with its
+ * own domain math (it does NOT reference the ingest analysis), mirroring the ingest bench
+ * shape. Fetches the top parses, builds per-parse defensive windows + usage summaries,
+ * clusters them across parses, and derives the per-defensive benchmarks.
  */
 import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
@@ -19,14 +12,15 @@ import { RulebookDefensive } from '../../../core/models/rulebook.models';
 import { BurstWindow, TopDefensiveSummary } from '../../../core/models/analysis.models';
 import { PerDefensiveBenchmark, CdHoldTargets } from '../../../core/models/encounter.models';
 import { logWarn } from '../../../core/log';
+import { Result, LoadError, ok, missing } from '../../../core/result';
+import { toLoadError } from '../../../core/http-load-error';
 import { mean, median, deviation } from 'd3-array';
 import { round, groupByTime, getOrInsert } from '../../../shared/analysis/analysis-math';
 import { abilityIcons, normalizeAbilityId, toParseRankings, unwrapRankings } from '../../../shared/analysis/wcl-projections';
 import { DataSource } from '../../../core/data-source/data-source';
 import { DefensiveBench, DefensivePlanMeta } from './defensive-data-source';
 
-// Re-exported from the shared blessed module so call sites / specs that import it
-// from the transform service keep working.
+// Re-exported so call sites / specs importing it from the transform service keep working.
 export { toParseRankings } from '../../../shared/analysis/wcl-projections';
 
 /** How many top parses to sample (matches the ingest bench). */
@@ -48,8 +42,8 @@ const HOLD_THRESHOLD_S = 8;
 const HOLD_BAND_MIN_S = 5.0;
 /** Keep only the top-N damage sources in a window's ability breakdown (UI row cap). */
 const ABILITY_BREAKDOWN_TOP_N = 6;
-
-/* ----------------------------- pure helpers (own math) ----------------------------- */
+/** No ingestable bench (empty rulebook, no top parses, or no fetchable sample); reported as `missing`. */
+const NO_DEFENSIVE_BENCH_MESSAGE = 'Not yet ingested.';
 
 /** Defensive name -> spell id, for the defensive window header icons. */
 export function defensiveSpellIds(defensives: RulebookDefensive[]): Record<string, number> {
@@ -116,9 +110,8 @@ export interface ParseDefWindow {
 }
 
 /**
- * Per-defensive usage summary for one parse: each apply->remove buff span (or
- * explicit cast for self-buff-less defensives) is one use; hold windows mark casts
- * delayed > 8s past on-cooldown.
+ * Per-defensive usage summary for one parse: each buff span (or explicit cast for
+ * self-buff-less defensives) is one use; hold windows mark casts delayed > 8s past reset.
  */
 export function summarizeDefensiveCasts(
   defensives: RulebookDefensive[],
@@ -144,9 +137,8 @@ export function summarizeDefensiveCasts(
     }
 
     castTimes.sort((a, b) => a - b);
-    // cast_index is 1-based (the ordinal of the held cast), matching the rotation slice and the
-    // runtime's `parseInt(idx) - 1` decode. delay_s is the prior-relative hold past the natural
-    // reset, so the runtime compares the player's own gap (cascade-free).
+    // cast_index is 1-based, matching the runtime's `parseInt(idx) - 1` decode. delay_s is the
+    // prior-relative hold past the natural reset, so the runtime compares the player's own gap.
     const holdWindows: { cast_index: number; actual_s: number; delay_s: number }[] = [];
     for (let castIndex = 1; castIndex < castTimes.length; castIndex++) {
       const expectedS = castTimes[castIndex - 1] + cooldownS;
@@ -186,9 +178,8 @@ export function windowDamageBreakdown(windowHits: WindowHit[]): { spell_id: numb
 }
 
 /**
- * Per-defensive windows for one parse: the MEASURED buff span (apply -> remove, or to
- * fight end for an open buff - never a rulebook duration) with the damage taken during
- * it, its share of the parse's total damage taken, and the dominant enemy.
+ * Per-defensive windows for one parse: the measured buff span (open buffs run to fight end,
+ * never a rulebook duration), its damage taken, its share of parse total, and dominant enemy.
  */
 export function findParseDefensiveWindows(
   damageTaken: WclEvent[], fightStartMs: number, fightDurationS: number,
@@ -250,10 +241,7 @@ export function clusterDamageStats(damages: number[]): { dmg_avg: number; dmg_st
   };
 }
 
-/**
- * Cross-parse top-N ability breakdown for a cluster: each ability present in at least
- * a majority of member parses, with its avg/min/max damage, highest avg first.
- */
+/** Cross-parse top-N ability breakdown: abilities in a majority of members, avg/min/max, highest avg first. */
 export function clusterAbilityBreakdown(cluster: ParseDefWindow[]): BurstWindow['ability_breakdown'] {
   const abilityDamage = new Map<number, number[]>();
   for (const member of cluster) {
@@ -274,11 +262,7 @@ export function clusterAbilityBreakdown(cluster: ParseDefWindow[]): BurstWindow[
     .slice(0, ABILITY_BREAKDOWN_TOP_N);
 }
 
-/**
- * Cluster per-parse defensive windows across parses into the bench `BurstWindow[]`.
- * Surfaces a window wherever a MAJORITY of distinct parses defended (consensus);
- * incoming damage taken is reported for context but no longer gates the window.
- */
+/** Clusters per-parse windows into the bench `BurstWindow[]`, one per consensus of distinct parses. */
 export function clusterDefensiveWindows(windows: ParseDefWindow[], sampleCount: number, mergeS = CLUSTER_MERGE_S): BurstWindow[] {
   if (!windows.length) return [];
   const byDefensive = new Map<string, ParseDefWindow[]>();
@@ -290,7 +274,7 @@ export function clusterDefensiveWindows(windows: ParseDefWindow[], sampleCount: 
   const result: BurstWindow[] = [];
   for (const [defensiveName, group] of byDefensive.entries()) {
     for (const cluster of groupByTime(group, mergeS)) {
-      // Consensus: a majority of DISTINCT parses must defend here.
+      // A majority of DISTINCT parses must defend here.
       const distinctParses = new Set(cluster.map(member => member.parse_index)).size;
       if (distinctParses < minParses) continue;
       // Damage-taken share is reported for context (dmg_pct_avg) but does not gate the window.
@@ -321,11 +305,9 @@ export function clusterDefensiveWindows(windows: ParseDefWindow[], sampleCount: 
 }
 
 /**
- * Cast indices where a majority of parses deliberately held past the natural reset, with the
- * prior-relative band the runtime compares the player's own gap against (mirrors the rotation
- * slice, cascade-free). `effectiveCd` is the defensive's cooldown (the cadence zero-point);
- * `totalParses` is every sampled parse (not users-only), so the consensus denominator and the
- * "X/Y hold" copy match rotation.
+ * Cast indices a majority of parses held past reset, with the prior-relative band the runtime
+ * compares the player's own gap against. `effectiveCd` is the cooldown (cadence zero-point);
+ * `totalParses` is every sampled parse (not users-only), so the consensus denominator matches.
  */
 export function buildHoldTargets(
   summaries: ParseDefensiveSummary[], effectiveCd: number, totalParses: number,
@@ -358,10 +340,8 @@ export function buildHoldTargets(
 }
 
 /**
- * Per-defensive benchmark from a defensive's per-parse summaries. `summaries` is users-only
- * (parses that pressed it at least once); `totalParses` is every sampled parse, so
- * `sample_count` (total) and `used_sample_count` (users) drive the runtime use-share gate.
- * `effectiveCd` is the defensive's cooldown (the hold-band cadence zero-point).
+ * Per-defensive benchmark. `summaries` is users-only; `totalParses` is every sampled parse,
+ * so `sample_count` (total) and `used_sample_count` (users) drive the runtime use-share gate.
  */
 export function buildDefensiveBenchmark(
   summaries: ParseDefensiveSummary[], effectiveCd: number, totalParses: number,
@@ -413,8 +393,7 @@ export function aggregateDefensiveBenchmarks(
     }
   }
 
-  // Every sampled parse contributes one array (possibly empty for a defensive it never used),
-  // so the array count is the total parse count - the use-share denominator for each defensive.
+  // Every sampled parse contributes one array, so the count is the total-parse use-share denominator.
   const totalParses = perParseSummaries.length;
   const perDefensiveBenchmarks: Record<string, PerDefensiveBenchmark> = {};
   const topDefensivesSummary: TopDefensiveSummary[] = [];
@@ -434,58 +413,62 @@ export function aggregateDefensiveBenchmarks(
   return { perDefensiveBenchmarks, topDefensivesSummary };
 }
 
-/* ----------------------------- service shell ----------------------------- */
-
 @Injectable({ providedIn: 'root' })
 export class DefensiveTransformService implements DataSource<DefensiveBench> {
   private readonly wclApi = inject(WclApiService);
   private readonly dataFiles = inject(DataFileApiService);
 
-  async getBench(spec: string, encounterId: number): Promise<DefensiveBench | null> {
-    const rulebook = await this.dataFiles.getRulebook(spec);
-    const defensives = rulebook?.defensives ?? [];
-    if (!defensives.length) return null;
+  async getBench(spec: string, encounterId: number): Promise<Result<DefensiveBench, LoadError>> {
+    const rulebookResult = await this.dataFiles.getRulebook(spec);
+    if (!rulebookResult.ok) return rulebookResult;
+    const defensives = rulebookResult.value.defensives ?? [];
+    if (!defensives.length) return missing(NO_DEFENSIVE_BENCH_MESSAGE);
 
-    const rankings = toParseRankings(unwrapRankings(await this.wclApi.getRankings(spec, encounterId)), CANDIDATE_POOL_COUNT);
-    if (!rankings.length) return null;
+    try {
+      const rankings = toParseRankings(unwrapRankings(await this.wclApi.getRankings(spec, encounterId)), CANDIDATE_POOL_COUNT);
+      if (!rankings.length) return missing(NO_DEFENSIVE_BENCH_MESSAGE);
 
-    const allWindows: ParseDefWindow[] = [];
-    const perParseSummaries: ParseDefensiveSummary[][] = [];
-    let sampleCount = 0;
-    let encounterName = '';
-    for (const ranking of rankings) {
-      const parse = await this.computeParse(ranking, defensives);
-      if (!parse) continue;
-      for (const window of parse.windows) window.parse_index = sampleCount;
-      allWindows.push(...parse.windows);
-      perParseSummaries.push(parse.summaries);
-      encounterName ||= parse.encounterName;
-      sampleCount += 1;
-      if (sampleCount >= TOP_PARSE_COUNT) break;
+      const allWindows: ParseDefWindow[] = [];
+      const perParseSummaries: ParseDefensiveSummary[][] = [];
+      let sampleCount = 0;
+      let encounterName = '';
+      for (const ranking of rankings) {
+        const parse = await this.computeParse(ranking, defensives);
+        if (!parse) continue;
+        for (const window of parse.windows) window.parse_index = sampleCount;
+        allWindows.push(...parse.windows);
+        perParseSummaries.push(parse.summaries);
+        encounterName ||= parse.encounterName;
+        sampleCount += 1;
+        if (sampleCount >= TOP_PARSE_COUNT) break;
+      }
+      if (!sampleCount) return missing(NO_DEFENSIVE_BENCH_MESSAGE);
+
+      const defensiveWindows = clusterDefensiveWindows(allWindows, sampleCount);
+      const { perDefensiveBenchmarks, topDefensivesSummary } = aggregateDefensiveBenchmarks(perParseSummaries, defensives);
+      const cd_spell_ids = defensiveSpellIds(defensives);
+      // A real icon for every defensive + window ability by id (complete, no fallback).
+      const referencedIds = [
+        ...Object.values(cd_spell_ids),
+        ...defensiveWindows.flatMap(window => window.ability_breakdown.map(ability => ability.spell_id)),
+      ];
+
+      return ok({
+        spec,
+        encounter_id: encounterId,
+        encounter_name: encounterName,
+        sample_count: sampleCount,
+        per_defensive_benchmarks: perDefensiveBenchmarks,
+        defensive_windows: defensiveWindows,
+        top_defensives_summary: topDefensivesSummary,
+        defensives: defensivePlanMeta(defensives),
+        cd_spell_ids,
+        ability_icons: abilityIcons(await this.wclApi.getAbilities(referencedIds)),
+      });
+    } catch (cause) {
+      logWarn('DefensiveTransformService.getBench', cause);
+      return toLoadError(cause, 'defensive.bench');
     }
-    if (!sampleCount) return null;
-
-    const defensiveWindows = clusterDefensiveWindows(allWindows, sampleCount);
-    const { perDefensiveBenchmarks, topDefensivesSummary } = aggregateDefensiveBenchmarks(perParseSummaries, defensives);
-    const cd_spell_ids = defensiveSpellIds(defensives);
-    // Resolve a real icon for every defensive + window ability by id (complete, no fallback).
-    const referencedIds = [
-      ...Object.values(cd_spell_ids),
-      ...defensiveWindows.flatMap(window => window.ability_breakdown.map(ability => ability.spell_id)),
-    ];
-
-    return {
-      spec,
-      encounter_id: encounterId,
-      encounter_name: encounterName,
-      sample_count: sampleCount,
-      per_defensive_benchmarks: perDefensiveBenchmarks,
-      defensive_windows: defensiveWindows,
-      top_defensives_summary: topDefensivesSummary,
-      defensives: defensivePlanMeta(defensives),
-      cd_spell_ids,
-      ability_icons: abilityIcons(await this.wclApi.getAbilities(referencedIds)),
-    };
   }
 
   /** One parse's defensive windows + usage summaries via the colocated pure fns; null on fetch failure. */

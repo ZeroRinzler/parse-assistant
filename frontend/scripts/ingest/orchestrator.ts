@@ -1,24 +1,10 @@
 #!/usr/bin/env node
 /**
- * warcraft-learner - ingestion orchestrator (npm run ingest).
- *
- * The single ingestion path. Instead of a duplicated Node ETL, it boots the headless
- * Angular runtime (bootstrapIngestRuntime) and drives the very `*TransformService`s
- * the browser uses to compute each slice's tailored data, then persists it through the
- * same DataFileApiService. So local dev (the `useLiveTransform` flag computes the same
- * benches live in the browser) and the hourly GHA run share one transform implementation.
- *
- * Orchestration only (no transformation lives here):
- *   - discover specs that have a rulebook,
- *   - discover current-expansion live encounters (reuses getEncounters via a thin
- *     WclQueryClient adapter over the runtime WclApiService),
- *   - per encounter: assert WCL budget, fetch rankings (cheap, cached), compute the
- *     encounter signature, SKIP when it matches the stored source_signature,
- *   - otherwise run the 5 transforms (bounded concurrency), stamp + write each file,
- *   - rebuild encounters.json + index.json, prune stale encounters.
- *
- * Requires WCL_CLIENT_ID / WCL_CLIENT_SECRET (already wired into WclAuthService via the
- * node WCL transport). WCL is the only network dependency.
+ * Ingestion orchestrator (npm run ingest). Boots the headless Angular runtime and drives
+ * the same `*TransformService`s the browser uses, persisting through the same
+ * DataFileApiService, so ingestion and the live browser transform share one implementation.
+ * Orchestration only; no transformation lives here. Requires WCL_CLIENT_ID /
+ * WCL_CLIENT_SECRET; WCL is the only network dependency.
  */
 import { Command } from 'commander';
 import pLimit from 'p-limit';
@@ -30,6 +16,7 @@ import {
 } from './wcl-client.ts';
 import { RATE_LIMIT_QUERY, CLASSES_QUERY } from './wcl-queries.ts';
 import { INGEST_VERSION } from './ingest-version.ts';
+import { type LoadError } from '../../src/app/core/result.ts';
 import {
   orderSpecsByVersion, orderEncountersByMissingFirst, type SpecOrderEntry,
 } from './ordering.ts';
@@ -44,22 +31,19 @@ import type { WclRateLimitData, WclResourceEvent, IngestEncounter, WclGameClass 
 import type { EncounterEntry, SpecEntry } from '../../src/app/core/models/encounter.models.ts';
 
 const TOP_N = 10;
-// The signature draws its candidate pool from the same depth the transforms over-fetch to
-// (their CANDIDATE_POOL_COUNT = TOP_PARSE_COUNT * 2), so a parse that backfills a private
-// top parse is part of the skip key.
+// Matches the depth the transforms over-fetch to (CANDIDATE_POOL_COUNT = TOP_PARSE_COUNT * 2),
+// so a parse that backfills a private top parse is part of the skip key.
 const SIGNATURE_POOL_COUNT = TOP_N * 2;
 const POINTS_MARGIN = 500;     // stop cleanly when fewer than this many WCL points remain in the hour
-const SLICE_CONCURRENCY = 3;   // max transforms run concurrently per encounter
+const SLICE_CONCURRENCY = 3;
 
-// The tailored slice files the transforms write (directory name under {spec}/).
-// `burst` is the canonical carrier of the encounter's source_signature for the skip
-// check (every slice for an encounter shares the same parse set, so any one would do).
+// `burst` carries the encounter's source_signature for the skip check (every slice shares the
+// same parse set, so any one would do).
 const SLICES = ['burst', 'rotation', 'defensive', 'gear'] as const;
 
 /**
- * A `WclQueryClient` adapter over the runtime `WclApiService`, so the pure
- * orchestration helper `getEncounters` (worldData discovery + liveness probe) can be
- * reused unchanged. The adapter owns budget tracking via the rateLimitData query.
+ * `WclQueryClient` adapter over the runtime `WclApiService`, so `getEncounters` can be reused
+ * unchanged. Owns budget tracking via the rateLimitData query.
  */
 class RuntimeWclClient implements WclQueryClient {
   private _limitPerHour: number | null = null;
@@ -83,8 +67,8 @@ class RuntimeWclClient implements WclQueryClient {
     ) as Promise<WclResourceEvent[]>;
   }
 
-  // Discovery never resolves server slugs (that is per-parse gear enrichment, which the
-  // transforms own internally), so a no-op satisfies the interface.
+  // Discovery never resolves server slugs (that is per-parse gear enrichment the transforms
+  // own internally), so a no-op satisfies the interface.
   async resolveServerSlug(): Promise<[string, string]> {
     return ['', ''];
   }
@@ -102,18 +86,15 @@ class RuntimeWclClient implements WclQueryClient {
   }
 }
 
-/** The candidate parse pool the signature draws from (anonymized-filtered, top SIGNATURE_POOL_COUNT). */
 async function rankingPool(runtime: IngestRuntime, spec: string, encounterId: number): Promise<SignatureRanking[]> {
   const raw = await runtime.wclApi.getRankings(spec, encounterId);
   return selectSignatureRankings(unwrapRankings(raw), SIGNATURE_POOL_COUNT);
 }
 
 /**
- * Compute every slice for one encounter and write the tailored files, stamped. Computes all
- * five slices first (concurrently, sharing fetches), THEN stamps + writes: the final
- * signature and the inaccessible-parse set are known only after every transform has fetched,
- * so any private top parse a transform backfilled past is excluded from the skip key and
- * persisted on the canonical burst file for the next run's cheap check.
+ * Compute all five slices first (concurrently, sharing fetches), THEN stamp + write: the final
+ * signature and inaccessible-parse set are known only after every transform has fetched, so a
+ * private top parse a transform backfilled past is excluded from the skip key.
  */
 async function ingestEncounter(
   runtime: IngestRuntime, spec: string, encounter: IngestEncounter, version: string, poolRows: SignatureRanking[],
@@ -130,44 +111,46 @@ async function ingestEncounter(
     limit(() => transforms.map.getBench(spec, encId)),
   ]);
 
-  // Parses a transform found inaccessible (permission-denied) this run. signatureAfterFetch
-  // keys the stamp on the top-N ACCESSIBLE parses and returns the inaccessible keys to persist,
-  // so the next cheap hash check can exclude them without re-fetching.
+  // signatureAfterFetch keys the stamp on the top-N accessible parses and returns the
+  // inaccessible keys to persist, so the next cheap hash check can exclude them without re-fetching.
   const inaccessibleCodes = new Set(runtime.takeInaccessibleReportCodes());
   const { signature, inaccessibleParses } = signatureAfterFetch(poolRows, inaccessibleCodes, version, TOP_N);
 
+  // Skip on any failure so a slice is never overwritten with partial data.
+  const skipNote = (slice: string, error: LoadError): string =>
+    error.kind === 'missing'
+      ? `    [${encounter.name}] ${slice}: no data, skipped`
+      : `    [${encounter.name}] ${slice}: ${error.kind} (${error.message}), skipped`;
+
   let wroteAny = false;
   const writes: Promise<unknown>[] = [];
-  if (burst) {
-    // Canonical carrier: also persists the inaccessible set the skip check reads.
-    const stamped = { ...stampSignature(burst, signature, INGEST_VERSION), inaccessible_parses: inaccessibleParses };
+  if (burst.ok) {
+    // burst also persists the inaccessible set the skip check reads.
+    const stamped = { ...stampSignature(burst.value, signature, INGEST_VERSION), inaccessible_parses: inaccessibleParses };
     writes.push(dataFile.writeSlice(spec, encId, 'burst', stamped));
     wroteAny = true;
-  } else { console.log(`    [${encounter.name}] burst: no data, skipped`); }
-  if (rotation) {
-    writes.push(dataFile.writeSlice(spec, encId, 'rotation', stampSignature(rotation, signature, INGEST_VERSION)));
+  } else { console.log(skipNote('burst', burst.error)); }
+  if (rotation.ok) {
+    writes.push(dataFile.writeSlice(spec, encId, 'rotation', stampSignature(rotation.value, signature, INGEST_VERSION)));
     wroteAny = true;
-  } else { console.log(`    [${encounter.name}] rotation: no data, skipped`); }
-  if (defensive) {
-    writes.push(dataFile.writeSlice(spec, encId, 'defensive', stampSignature(defensive, signature, INGEST_VERSION)));
+  } else { console.log(skipNote('rotation', rotation.error)); }
+  if (defensive.ok) {
+    writes.push(dataFile.writeSlice(spec, encId, 'defensive', stampSignature(defensive.value, signature, INGEST_VERSION)));
     wroteAny = true;
-  } else { console.log(`    [${encounter.name}] defensive: no data, skipped`); }
-  if (gear) {
-    writes.push(dataFile.writeSlice(spec, encId, 'gear', stampSignature(gear, signature, INGEST_VERSION)));
+  } else { console.log(skipNote('defensive', defensive.error)); }
+  if (gear.ok) {
+    writes.push(dataFile.writeSlice(spec, encId, 'gear', stampSignature(gear.value, signature, INGEST_VERSION)));
     wroteAny = true;
-  } else { console.log(`    [${encounter.name}] gear: no data, skipped`); }
-  if (map) {
-    writes.push(dataFile.writePositions(spec, encId, stampSignature(map, signature, INGEST_VERSION)));
-  } else { console.log(`    [${encounter.name}] positions: no data, skipped`); }
+  } else { console.log(skipNote('gear', gear.error)); }
+  if (map.ok) {
+    writes.push(dataFile.writePositions(spec, encId, stampSignature(map.value, signature, INGEST_VERSION)));
+  } else { console.log(skipNote('positions', map.error)); }
 
   await Promise.all(writes);
   return wroteAny;
 }
 
-/**
- * Rebuild a spec's encounters.json from the tailored burst files actually present on
- * disk (the canonical per-encounter carrier). sample_count comes from the burst bench.
- */
+/** Rebuild a spec's encounters.json from the burst files present on disk. */
 async function rebuildEncountersIndex(runtime: IngestRuntime, spec: string): Promise<EncounterEntry[]> {
   const { dataFile } = runtime;
   const files = await dataFile.listSliceFiles(spec, 'burst');
@@ -177,34 +160,32 @@ async function rebuildEncountersIndex(runtime: IngestRuntime, spec: string): Pro
     const encId = parseInt(file);
     if (!Number.isFinite(encId)) continue;
     const bench = await dataFile.getSlice<{ encounter_id?: number; encounter_name?: string; sample_count?: number }>(spec, encId, 'burst');
-    if (!bench) continue;
+    if (!bench.ok) continue;
     entries.push({
-      id: bench.encounter_id ?? encId,
-      name: bench.encounter_name ?? file,
-      sample_count: bench.sample_count ?? 0,
+      id: bench.value.encounter_id ?? encId,
+      name: bench.value.encounter_name ?? file,
+      sample_count: bench.value.sample_count ?? 0,
     });
   }
   await dataFile.writeEncounters(spec, entries);
   return entries;
 }
 
-/** Rebuild the top-level index.json by scanning every spec's encounters.json. */
 async function rebuildSpecIndex(runtime: IngestRuntime): Promise<void> {
   const { dataFile } = runtime;
   const specs = await dataFile.listSpecs();
   const entries: SpecEntry[] = [];
   for (const spec of specs.sort()) {
     const encounters = await dataFile.getEncounters(spec);
-    const count = encounters.filter(entry => entry.sample_count > 0).length;
+    const count = encounters.ok ? encounters.value.filter(entry => entry.sample_count > 0).length : 0;
     if (count > 0) entries.push({ spec, encounter_count: count });
   }
   await dataFile.writeSpecs(entries);
 }
 
 /**
- * Prune on-disk data for a spec's encounters whose ids are no longer in the protected
- * set. Mirrors the legacy pruneStaleEncounters safety: an empty protected set (a
- * transient worldData failure) never deletes anything.
+ * Prune on-disk data for a spec's encounters whose ids are no longer in the protected set.
+ * An empty protected set (a transient worldData failure) never deletes anything.
  */
 async function pruneStaleEncounters(runtime: IngestRuntime, spec: string, protectedIds: Set<number>): Promise<number[]> {
   if (protectedIds.size === 0) {
@@ -255,9 +236,10 @@ async function ingestSpec(
         continue;
       }
 
-      // Skip check: key on the top-N ACCESSIBLE parses - exclude the ones a prior run found
-      // inaccessible (persisted on the burst file) - and compare against its stamped signature.
-      const existing = await runtime.dataFile.getSlice<SignedFile>(spec, encounter.id, 'burst');
+      // Key on the top-N accessible parses, excluding ones a prior run found inaccessible
+      // (persisted on the burst file), and compare against the stamped signature.
+      const existingResult = await runtime.dataFile.getSlice<SignedFile>(spec, encounter.id, 'burst');
+      const existing = existingResult.ok ? existingResult.value : null;
       const skipKey = encounterSkipKey(poolRows, readInaccessibleParses(existing), version, TOP_N);
       if (signatureMatches(readStoredSignature(existing), skipKey)) {
         console.log(`  [${encounter.name}] unchanged (signature ${skipKey}), skipped`);
@@ -269,8 +251,7 @@ async function ingestSpec(
         const wrote = await ingestEncounter(runtime, spec, encounter, version, poolRows);
         console.log(`  [${encounter.name}] ${wrote ? 'done' : 'no slice data produced'}`);
       } finally {
-        // Drop this encounter's cached reports/events before the next one (bound memory;
-        // the 5 transforms have already shared their fetches within this encounter).
+        // Drop this encounter's cached reports/events before the next one to bound memory.
         runtime.clearWclCache();
       }
     }
@@ -312,14 +293,13 @@ async function main(): Promise<void> {
   const version = String(INGEST_VERSION);
   console.log(`Ingest version: ${version}`);
 
-  // Resolve the spec universe (class/spec names + slugs) from WCL gameData.classes. The spec
-  // icon is not on WCL, so enrich each meta from that spec's rulebook (its spec_icon stem).
-  // Then hydrate the runtime spec-meta cache (so getRankings can resolve a spec) and bake
-  // spec-meta.json for the browser.
+  // The spec icon is not on WCL, so enrich each meta from that spec's rulebook (its spec_icon
+  // stem). Hydrating the cache lets getRankings resolve a spec.
   const classesData = await client.query<{ gameData?: { classes?: WclGameClass[] } }>(CLASSES_QUERY);
   const metas = mapClassesToSpecMeta(classesData.gameData?.classes ?? []);
   for (const meta of metas) {
-    meta.specIcon = (await runtime.dataFile.getRulebook(meta.spec))?.spec_icon ?? '';
+    const rulebook = await runtime.dataFile.getRulebook(meta.spec);
+    meta.specIcon = rulebook.ok ? rulebook.value.spec_icon : '';
   }
   const specWcl: SpecWclMap = specWclFromMetas(metas);
   runtime.hydrateSpecMeta(metas);
@@ -337,7 +317,6 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  // Specs to process: the --spec arg, or every spec that has a rulebook on disk.
   let specs: string[];
   if (opts.spec) {
     if (!specWcl[opts.spec]) {
@@ -350,21 +329,20 @@ async function main(): Promise<void> {
     const onDisk = await runtime.dataFile.listSpecs();
     const withRulebook: string[] = [];
     for (const spec of onDisk) {
-      if (await runtime.dataFile.getRulebook(spec)) withRulebook.push(spec);
+      if ((await runtime.dataFile.getRulebook(spec)).ok) withRulebook.push(spec);
     }
     if (!withRulebook.length) {
       console.log('No known specs (no rulebook.json found). Nothing to do.');
       return;
     }
     // Order specs so a budget-bounded run fixes the most out-of-date data first: empty ->
-    // old-version -> current, alphabetical within each group. All cheap disk reads, zero
-    // WCL budget.
+    // old-version -> current, alphabetical within each group. Cheap disk reads, zero WCL budget.
     const orderInputs = await Promise.all(withRulebook.map(async spec => {
       const burstFiles = (await runtime.dataFile.listSliceFiles(spec, 'burst'))
         .filter(file => file.endsWith('.json'));
       const versions = await Promise.all(burstFiles.map(async file => {
         const slice = await runtime.dataFile.getSlice<SignedFile>(spec, parseInt(file), 'burst');
-        return slice ? readStoredVersion(slice) : null;
+        return slice.ok ? readStoredVersion(slice.value) : null;
       }));
       const storedVersions = versions.filter((stored): stored is number => stored !== null);
       const entry: SpecOrderEntry = {
@@ -372,7 +350,7 @@ async function main(): Promise<void> {
         dataCount: burstFiles.length,
         onCurrentVersion: burstFiles.length > 0 && versions.every(stored => stored === INGEST_VERSION),
       };
-      // Show the lowest on-disk version - the one that decides the spec's old/current group.
+      // The lowest on-disk version decides the spec's old/current group.
       const displayVersion = storedVersions.length ? Math.min(...storedVersions) : null;
       return { spec, entry, displayVersion };
     }));

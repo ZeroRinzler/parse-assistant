@@ -1,4 +1,6 @@
-@if (!positions()) {
+@if (loadError(); as e) {
+  <wl-load-state [error]="e" />
+} @else if (!positions()) {
   <p class="text-[13px] text-[var(--muted)]">
     No position data for this encounter.
   </p>

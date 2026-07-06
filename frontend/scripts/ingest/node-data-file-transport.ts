@@ -1,20 +1,18 @@
 /**
- * Node data-file transport: a filesystem implementation of the same
- * `DataFileTransport` the browser fills with HTTP reads. Reads + writes + lists
- * `frontend/public/data/specs/**`, so the ingestion persists the transforms' output
- * through the same `DataFileApiService` the runtime reads from.
+ * Filesystem `DataFileTransport` over `frontend/public/data/specs/**`, so ingestion persists
+ * through the same `DataFileApiService` the browser fills with HTTP reads.
  */
 import fs from 'fs';
 import path from 'path';
 import type { DataFileTransport } from '../../src/app/core/services/data-file-transport.ts';
+import { Result, LoadError, ok, missing, permanent } from '../../src/app/core/result.ts';
 
 export class FsDataFileTransport implements DataFileTransport {
   constructor(private readonly root: string) {}
 
   private resolve(relPath: string): string {
-    // Contain every access to the data root: a crafted relPath with `..` segments would
-    // otherwise let a read/write/list escape `frontend/public/data/specs/**`. Normalize the
-    // join and reject anything that resolves outside the root.
+    // Reject a crafted relPath whose `..` segments resolve outside the data root, so no
+    // read/write/list can escape it.
     const root = path.resolve(this.root);
     const full = path.resolve(root, relPath);
     if (full !== root && !full.startsWith(root + path.sep)) {
@@ -23,22 +21,21 @@ export class FsDataFileTransport implements DataFileTransport {
     return full;
   }
 
-  async readJson<T>(relPath: string): Promise<T | null> {
+  async readJson<T>(relPath: string): Promise<Result<T, LoadError>> {
     try {
-      return JSON.parse(await fs.promises.readFile(this.resolve(relPath), 'utf8')) as T;
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null;
-      throw err;
+      return ok(JSON.parse(await fs.promises.readFile(this.resolve(relPath), 'utf8')) as T);
+    } catch (cause) {
+      // An absent file is the un-ingested `missing` case, mirroring the browser 404.
+      if ((cause as NodeJS.ErrnoException).code === 'ENOENT') return missing('Not yet ingested.');
+      return permanent('Data file could not be read.', `data-file.${relPath}`, cause);
     }
   }
 
   async writeJson(relPath: string, data: unknown): Promise<void> {
     const full = this.resolve(relPath);
     await fs.promises.mkdir(path.dirname(full), { recursive: true });
-    // Minified: the tailored bench data is machine-read (fetched + JSON.parsed), never
-    // hand-edited, and there are thousands of files, so dropping the pretty-print
-    // indentation cuts the on-disk / deployed footprint by roughly 70%. Still valid JSON
-    // an IDE opens and can format on demand. The trailing newline keeps the file POSIX-tidy.
+    // Minified: the bench data is machine-read across thousands of files, so dropping
+    // pretty-print indentation cuts the deployed footprint by roughly 70%.
     await fs.promises.writeFile(full, JSON.stringify(data) + '\n');
   }
 

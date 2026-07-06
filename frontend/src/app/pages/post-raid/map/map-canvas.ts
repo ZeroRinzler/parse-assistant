@@ -8,6 +8,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
 import { ReferenceSelector } from '../../../core/models/positioning.models';
 import { FormatDurationPipe } from '../../../shared/pipes/format-duration-pipe';
+import { LoadStateComponent, RenderableLoadError } from '../../../shared/components/load-state/load-state';
 import { MapFeatureService } from './map.service';
 import {
   RelPos, ParseTimelines, buildParseTimelines, buildTrail, positionAt, toReferenceLocal,
@@ -20,17 +21,15 @@ const STEP_S = 0.5;
 const MAX_FRAME_DT_S = 0.1;
 
 /**
- * The positioning map canvas: the top-parse benchmark (where the best players of
- * this spec stood relative to a reference) plus the analysed player's own trail.
- * A feature component - it injects exactly one service (`MapFeatureService`) and
- * reads its bench/live/anchor/reference signals. Reference is switchable; a
- * scrubber steps through the window around the anchor time. The canvas resolves
- * design tokens at draw time (no hardcoded colors).
+ * The positioning map canvas: the top-parse benchmark plus the analysed player's own trail.
+ * Injects one service (`MapFeatureService`) and reads its bench/live/anchor/reference signals.
+ * Reference is switchable; a scrubber steps through the window around the anchor. Design tokens
+ * are resolved at draw time (no hardcoded colors).
  */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-map-canvas',
-  imports: [MatButtonModule, MatIconModule, MatFormFieldModule, MatSelectModule, FormatDurationPipe],
+  imports: [MatButtonModule, MatIconModule, MatFormFieldModule, MatSelectModule, FormatDurationPipe, LoadStateComponent],
   templateUrl: './map-canvas.html',
 })
 export class MapCanvasComponent {
@@ -39,6 +38,11 @@ export class MapCanvasComponent {
   protected readonly positions = this.map.positions;
   protected readonly live = this.map.live;
   protected readonly anchorTime = this.map.anchorTime;
+  /** Renderable bench/overlay failure; a `missing` bench is excluded (it shows the empty placeholder). */
+  protected readonly loadError = computed<RenderableLoadError | null>(() => {
+    const error = this.map.error();
+    return error && error.kind !== 'missing' ? error : null;
+  });
 
   protected readonly selector = signal<ReferenceSelector>({ kind: 'boss' });
   protected readonly scrubT = signal(0);
@@ -73,10 +77,9 @@ export class MapCanvasComponent {
   protected readonly windowEnd = computed(() => this.anchorTime() + this.postS());
 
   /**
-   * Player + reference timelines per parse, rebuilt only when the bench or the reference
-   * changes - never per scrubbed frame. Scaling every stored row into a sample object is the
-   * expensive step, so caching it here (rather than inside the old topParse* helpers) is what
-   * keeps playback cheap: each frame just interpolates the cached timelines.
+   * Player + reference timelines per parse, rebuilt only when the bench or reference changes, never
+   * per scrubbed frame. Scaling every stored row into a sample is the expensive step, so caching it
+   * here keeps playback cheap: each frame just interpolates the cached timelines.
    */
   private readonly parseTimelines = computed<ParseTimelines[]>(() => {
     const positions = this.positions();
@@ -148,9 +151,9 @@ export class MapCanvasComponent {
     this.playing.set(true);
     this.stopTimer();
     this.lastFrameMs = 0;
-    // Drive playback off requestAnimationFrame (vs a 60ms setInterval): it aligns redraws to
-    // the display refresh and pauses automatically when the tab is hidden. The scrubber
-    // advances by real elapsed wall-time, so speed stays ~1x independent of the frame rate.
+    // Drive playback off requestAnimationFrame: it aligns redraws to the display refresh and pauses
+    // when the tab is hidden. The scrubber advances by real elapsed wall-time, so speed stays ~1x
+    // independent of frame rate.
     const step = (nowMs: number): void => {
       const dt = this.lastFrameMs ? Math.min((nowMs - this.lastFrameMs) / 1000, MAX_FRAME_DT_S) : 0;
       this.lastFrameMs = nowMs;
@@ -181,17 +184,14 @@ export class MapCanvasComponent {
     return toReferenceLocal(player, ref, t);
   }
 
-  // --- Canvas ---------------------------------------------------------------
-
   private draw(canvas: HTMLCanvasElement): void {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     const dpr = globalThis.devicePixelRatio || 1;
     const cssW = canvas.clientWidth || 600;
     const cssH = canvas.clientHeight || 420;
-    // Only resize the backing buffer when it actually changed: assigning width/height
-    // reallocates + clears the buffer, so doing it every frame (playback redraws ~60x/s)
-    // is wasted work. setTransform + clearRect below still run each frame.
+    // Only resize the backing buffer when it changed: assigning width/height reallocates + clears it,
+    // wasted work every frame during playback. setTransform + clearRect below still run each frame.
     const bufW = Math.round(cssW * dpr);
     const bufH = Math.round(cssH * dpr);
     if (canvas.width !== bufW || canvas.height !== bufH) {
@@ -215,9 +215,8 @@ export class MapCanvasComponent {
     const scale = radiusPx / maxYd;
     const toScreen = (point: { fwd: number; right: number }): [number, number] => [cx + point.right * scale, cy - point.fwd * scale];
 
-    // The canvas draws imperatively and cannot consume `var(--token)`, so the
-    // design tokens (the single source of color truth) are resolved to concrete
-    // values here. No hardcoded fallbacks - a missing token is a styles.scss bug.
+    // The canvas draws imperatively and cannot consume `var(--token)`, so design tokens are resolved
+    // to concrete values here. No hardcoded fallbacks - a missing token is a styles.scss bug.
     const css = getComputedStyle(canvas);
     const token = (name: string): string => css.getPropertyValue(name).trim();
     const gold = token('--gold');
@@ -227,7 +226,6 @@ export class MapCanvasComponent {
     const rankedColor = token('--accent');
     const outline = token('--map-dot-outline');
 
-    // Range rings.
     ctx.strokeStyle = border; ctx.fillStyle = muted; ctx.font = '11px system-ui, sans-serif'; ctx.lineWidth = 1;
     for (let yd = 5; yd <= maxYd; yd += 5) {
       ctx.beginPath(); ctx.arc(cx, cy, yd * scale, 0, 2 * Math.PI); ctx.stroke();

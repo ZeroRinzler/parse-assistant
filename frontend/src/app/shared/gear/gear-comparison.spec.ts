@@ -235,26 +235,38 @@ describe('buildTrinketRows', () => {
     });
   });
 
-  it('returns an empty array when there is neither player gear nor bench data', () => {
-    expect(buildTrinketRows(null, null)).toEqual([]);
+  it('returns an empty array when the player wears no trinket and there is no bench data', () => {
+    // The comparison builders take real player gear; a player with no trinkets and
+    // no bench data yields no rows (the bench-only plan uses buildBenchTrinketRows).
+    expect(buildTrinketRows(gear({ trinkets: [] }), null)).toEqual([]);
     expect(buildTrinketRows(gear({ trinkets: [] }), stats({ trinkets: {} }))).toEqual([]);
   });
 });
 
-describe('buildEnchantRows with null playerGear', () => {
-  it('shows Not enchanted for every bench slot when playerGear is null', () => {
-    // This is the race-condition state: topGear loaded but playerGear not yet
-    // fetched. The gear-section component uses benchEnchantRows instead of
-    // enchantRows when playerGear is null to avoid this misleading display.
-    const rows = buildEnchantRows(null, stats({
-      enchants: { 15: [{ id: 8041, name: 'Sophic Devotion', pct: 90 }] },
-    }));
+describe('buildEnchantRows (comparison, real player gear)', () => {
+  // The comparison builder is only ever called with a real player's gear. The
+  // bench-only /pre plan has no player and uses buildBenchEnchantRows instead, so a
+  // "Not enchanted for every slot" render for a not-yet-loaded player never happens.
+
+  it('flags a high-consensus slot the real player left un-enchanted', () => {
+    const rows = buildEnchantRows(
+      gear({ enchants: [] }),
+      stats({ enchants: { 15: [{ id: 8041, name: 'Sophic Devotion', pct: 90 }] } }),
+    );
     expect(rows).toHaveLength(1);
-    expect(rows[0].name).toBe('Not enchanted');
+    expect(rows[0]).toMatchObject({ status: 'warn', name: 'Not enchanted' });
   });
 
-  it('returns an empty array when both gear and stats are null', () => {
-    expect(buildEnchantRows(null, null)).toEqual([]);
+  it('marks a slot on-plan when the player runs the consensus enchant', () => {
+    const rows = buildEnchantRows(
+      gear({ enchants: [{ slot: 15, id: 8041, name: 'Sophic Devotion' }] }),
+      stats({ enchants: { 15: [{ id: 8041, name: 'Sophic Devotion', pct: 90 }] } }),
+    );
+    expect(rows[0]).toMatchObject({ status: 'ok', name: 'Sophic Devotion' });
+  });
+
+  it('returns an empty array when the player has no enchants and there is no bench data', () => {
+    expect(buildEnchantRows(gear({ enchants: [] }), stats({ enchants: {} }))).toEqual([]);
   });
 
   it('returns a row for a player enchant on a slot with no bench data', () => {

@@ -1,7 +1,6 @@
 <div class="bg-[var(--surface)] border border-[var(--border)] rounded-[10px] overflow-hidden">
 
-  <!-- Header: section title + column labels. Mobile drops the grid so the title sits flush-left and the
-       column labels hide; the 4-col grid + labels restore at md. -->
+  <!-- Mobile drops the grid so the title sits flush-left and the column labels hide; the 4-col grid + labels restore at md. -->
   <div class="px-4 pt-3 pb-2 md:grid md:grid-cols-[20px_minmax(0,1fr)_96px_200px] md:gap-[14px] md:items-baseline">
     <div class="md:col-span-2">
       <div class="text-[17px] font-semibold text-[var(--text)]">{{ heading() }}</div>
@@ -17,16 +16,15 @@
     <div class="grid grid-cols-[20px_minmax(0,1fr)] md:grid-cols-[20px_minmax(0,1fr)_96px_200px] gap-x-[14px] gap-y-2 md:gap-y-0 px-4 py-[10px] items-start md:items-center border-t border-[var(--border)]"
          [class.row-critical]="row.severity === 'critical'">
 
-      <!-- Severity icon -->
       <div class="flex items-center justify-center self-start md:self-center">
         <mat-icon class="icon-18"
           [class.badge-critical]="row.severity === 'critical'"
-          [class.badge-warning]="row.severity === 'warning'">
-          {{ row.severity === 'critical' ? 'error' : 'warning_amber' }}
+          [class.badge-warning]="row.severity === 'warning'"
+          [class.badge-info]="row.severity === 'info'">
+          {{ row.severity === 'critical' ? 'error' : row.severity === 'info' ? 'info' : 'warning_amber' }}
         </mat-icon>
       </div>
 
-      <!-- What cell -->
       <div class="min-w-0">
         @if (row.name; as name) {
           <div class="flex items-center gap-[7px] flex-wrap">
@@ -51,10 +49,16 @@
               }
             }
             @if (row.chip) {
-              @if (row.severity === 'critical') {
-                <span class="text-[10px] rounded-sm px-[5px] tabular-nums text-[var(--critical)] bg-[var(--critical)]/10 border border-[var(--critical)]/25">{{ row.chip }}</span>
-              } @else {
-                <span class="text-[10px] rounded-sm px-[5px] tabular-nums text-[var(--warning)] bg-[var(--warning)]/10 border border-[var(--warning)]/25">{{ row.chip }}</span>
+              @switch (row.severity) {
+                @case ('critical') {
+                  <span class="text-[10px] rounded-sm px-[5px] tabular-nums text-[var(--critical)] bg-[var(--critical)]/10 border border-[var(--critical)]/25">{{ row.chip }}</span>
+                }
+                @case ('info') {
+                  <span class="text-[10px] rounded-sm px-[5px] tabular-nums text-[var(--info)] bg-[var(--info)]/10 border border-[var(--info)]/25">{{ row.chip }}</span>
+                }
+                @default {
+                  <span class="text-[10px] rounded-sm px-[5px] tabular-nums text-[var(--warning)] bg-[var(--warning)]/10 border border-[var(--warning)]/25">{{ row.chip }}</span>
+                }
               }
             }
           </div>
@@ -63,10 +67,10 @@
         }
       </div>
 
-      <!-- Measured cell: mobile = labelled inline value under the name; desktop = stacked, right-aligned. -->
       <div class="col-start-2 md:col-auto flex items-baseline gap-2 md:block text-left md:text-right leading-[1.1]"
         [class.badge-critical]="row.severity === 'critical'"
-        [class.badge-warning]="row.severity === 'warning'">
+        [class.badge-warning]="row.severity === 'warning'"
+        [class.badge-info]="row.severity === 'info'">
         <span class="md:hidden font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">Measured</span>
         <div class="text-[15px] font-bold tabular-nums">{{ row.measured.value }}</div>
         @if (row.measured.unit) {
@@ -74,7 +78,6 @@
         }
       </div>
 
-      <!-- Fix cell: mobile = divider + label above clamped text; desktop = left divider, full text. -->
       <div class="col-start-2 md:col-auto text-[13px] text-[var(--muted)] leading-[1.45] border-t md:border-t-0 md:border-l border-[var(--border)] pt-2 md:pt-0 pl-0 md:pl-[14px]">
         <span class="md:hidden block font-mono text-[10px] uppercase tracking-wider text-[var(--muted)] mb-1">Fix</span>
         <wl-collapsible-text>{{ row.fix }}</wl-collapsible-text>

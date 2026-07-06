@@ -12,6 +12,7 @@ describe('SignedPercentPipe', () => {
     { input: -4,        expected: '-4%',   why: 'negative delta keeps its natural minus sign' },
     { input: 12.4,      expected: '+12%',  why: 'fractional delta rounds to whole percent' },
     { input: -4.6,      expected: '-5%',   why: 'negative fractional delta rounds to nearest whole' },
+    { input: -0.4,      expected: '0%',    why: 'a small negative that rounds to zero drops the sign (no "-0%")' },
   ] as { input: number | null | undefined; expected: string; why: string }[])(
     'transform($input) === "$expected" ($why)',
     ({ input, expected }) => {

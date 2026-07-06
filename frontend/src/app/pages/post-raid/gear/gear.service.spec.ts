@@ -4,8 +4,10 @@ import { CharacterGear, WclCombatantInfo, WclGearItem } from '../../../core/mode
 import { WclApiService } from '../../../core/services/wcl-api';
 import { GEAR_DATA_SOURCE, GearBench } from './gear-data-source';
 import { DataSource } from '../../../core/data-source/data-source';
+import { Result, LoadError, ok, permanent, missing } from '../../../core/result';
 import {
-  GearFeatureService, benchToStats, buildGearView, emptyGearView,
+  GearFeatureService, benchToStats, buildGearView, buildBenchGearView,
+  buildCharacterGear, emptyGearView,
 } from './gear.service';
 
 function benchWith(overrides: Partial<GearBench> = {}): GearBench {
@@ -18,7 +20,20 @@ function benchWith(overrides: Partial<GearBench> = {}): GearBench {
   };
 }
 
-/* ----------------------------- pure functions ----------------------------- */
+// Reconstruct a raw CombatantInfo event from a desired CharacterGear so the feature
+// service (which reads raw combatant info + extracts gear itself) reproduces it.
+// Names are baked onto the gear items, so getGameNames is not consulted. Talent key
+// parts ride as nodeID strings (the v2:<parts> form round-trips through extraction).
+function toRawEvent(gear: CharacterGear): WclCombatantInfo {
+  const items: WclGearItem[] = [];
+  for (const trinket of gear.trinkets ?? []) items[trinket.slot] = { id: trinket.id, name: trinket.name };
+  for (const enchant of gear.enchants ?? []) {
+    items[enchant.slot] = { ...(items[enchant.slot] ?? { id: 1, name: 'x' }), permanentEnchant: enchant.id, permanentEnchantName: enchant.name };
+  }
+  const parts = (gear.talent_key ?? '').replace(/^v2:/, '');
+  const talentTree = parts ? parts.split(',').map(node => ({ nodeID: node as unknown as number })) : [];
+  return { sourceID: 10, gear: items, talentTree };
+}
 
 describe('benchToStats', () => {
   it('extracts the gear stats block from a bench', () => {
@@ -28,22 +43,44 @@ describe('benchToStats', () => {
       enchants: { 15: [{ id: 8041, name: 'Sophic', pct: 90 }] },
     });
   });
+});
 
-  it('is null for a null bench', () => {
-    expect(benchToStats(null)).toBeNull();
+describe('buildCharacterGear', () => {
+  it('is a permanent error when the log has no combatant info', () => {
+    expect(buildCharacterGear(null, {}, 'r1', 'SubtletyRogue'))
+      .toEqual(permanent('No combatant info in this log.', 'gear.combatant-info'));
+  });
+
+  it('builds the gear fingerprint when the event carries gear', () => {
+    const event = toRawEvent({
+      found: true, talent_key: 'v2:A',
+      trinkets: [{ slot: 12, id: 100, name: 'A' }],
+      enchants: [{ slot: 15, id: 8041, name: 'Sophic' }],
+    });
+    const result = buildCharacterGear(event, {}, 'r1', 'SubtletyRogue');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value).toMatchObject({ found: true, source_report: 'r1', talent_key: 'v2:A' });
+  });
+});
+
+describe('buildBenchGearView', () => {
+  const stats = benchToStats(benchWith());
+
+  it('comparison off, bench rows populated from the dedicated bench builders', () => {
+    const view = buildBenchGearView(stats);
+    expect(view.comparison).toBe(false);
+    expect(view.benchTrinketRows).toEqual([{ slotLabel: 'Trinket 1', id: 100, name: 'A', icon: 'inv_a', pct: 70 }]);
+    expect(view.benchEnchantRows).toEqual([{ slotName: 'Main Hand', name: 'Sophic', pct: 90 }]);
+    expect(view.talentBuilds[0]).toMatchObject({ pct: 80, label: 'Most common build' });
+    // The comparison rows stay empty in bench-only mode (no player to compare).
+    expect(view.enchantRows).toEqual([]);
+    expect(view.trinketRows).toEqual([]);
   });
 });
 
 describe('buildGearView', () => {
   const stats = benchToStats(benchWith());
-
-  it('bench-only mode: comparison off, bench rows populated', () => {
-    const view = buildGearView(null, stats);
-    expect(view.comparison).toBe(false);
-    expect(view.benchTrinketRows).toEqual([{ slotLabel: 'Trinket 1', id: 100, name: 'A', icon: 'inv_a', pct: 70 }]);
-    expect(view.benchEnchantRows).toEqual([{ slotName: 'Main Hand', name: 'Sophic', pct: 90 }]);
-    expect(view.talentBuilds[0]).toMatchObject({ pct: 80, label: 'Most common build' });
-  });
 
   it('comparison mode: player matching bench is on-plan (ok)', () => {
     const player: CharacterGear = {
@@ -71,9 +108,8 @@ describe('buildGearView', () => {
 });
 
 describe('emptyGearView', () => {
-  it('is a bench-off view with no rows', () => {
+  it('is a bench-off placeholder with no rows', () => {
     expect(emptyGearView()).toEqual({
-      available: false,
       comparison: false,
       talentBuilds: [], talentStatus: { status: 'unknown', note: 'No talent data.' },
       trinketRows: [], trinketStatus: 'ok', benchTrinketRows: [],
@@ -82,24 +118,7 @@ describe('emptyGearView', () => {
   });
 });
 
-/* ----------------------------- feature service ---------------------------- */
-
-// Reconstruct a raw CombatantInfo event from a desired CharacterGear so the feature
-// service (which now reads raw combatant info + extracts gear itself) reproduces it.
-// Names are baked onto the gear items, so getGameNames is not consulted. Talent key
-// parts ride as nodeID strings (the v2:<parts> form round-trips through extraction).
-function toRawEvent(gear: CharacterGear): WclCombatantInfo {
-  const items: WclGearItem[] = [];
-  for (const trinket of gear.trinkets ?? []) items[trinket.slot] = { id: trinket.id, name: trinket.name };
-  for (const enchant of gear.enchants ?? []) {
-    items[enchant.slot] = { ...(items[enchant.slot] ?? { id: 1, name: 'x' }), permanentEnchant: enchant.id, permanentEnchantName: enchant.name };
-  }
-  const parts = (gear.talent_key ?? '').replace(/^v2:/, '');
-  const talentTree = parts ? parts.split(',').map(node => ({ nodeID: node as unknown as number })) : [];
-  return { sourceID: 10, gear: items, talentTree };
-}
-
-function configure(bench: GearBench | null, gear: CharacterGear | null): GearFeatureService {
+function configure(bench: Result<GearBench, LoadError>, gear: CharacterGear | null): GearFeatureService {
   const source: DataSource<GearBench> = { getBench: () => Promise.resolve(bench) };
   const wclFake = {
     getCombatantInfo: async (): Promise<WclCombatantInfo[]> => (gear?.found ? [toRawEvent(gear)] : []),
@@ -116,15 +135,16 @@ function configure(bench: GearBench | null, gear: CharacterGear | null): GearFea
 
 describe('GearFeatureService', () => {
   it('loadBenchView builds the bench-only view', async () => {
-    const view = await configure(benchWith(), null).loadBenchView('SubtletyRogue', 1);
-    expect(view.available).toBe(true);
-    expect(view.comparison).toBe(false);
-    expect(view.benchTrinketRows).toHaveLength(1);
+    const result = await configure(ok(benchWith()), null).loadBenchView('SubtletyRogue', 1);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.comparison).toBe(false);
+    expect(result.value.benchTrinketRows).toHaveLength(1);
   });
 
-  it('loadBenchView returns the empty view when no bench exists', async () => {
-    const view = await configure(null, null).loadBenchView('SubtletyRogue', 1);
-    expect(view).toEqual(emptyGearView());
+  it('loadBenchView propagates a missing bench unchanged', async () => {
+    const result = await configure(missing('Not yet ingested.'), null).loadBenchView('SubtletyRogue', 1);
+    expect(result).toEqual(missing('Not yet ingested.'));
   });
 
   it('loadComparisonView merges fetched player gear with the bench', async () => {
@@ -133,19 +153,20 @@ describe('GearFeatureService', () => {
       trinkets: [{ slot: 12, id: 100, name: 'A' }],
       enchants: [{ slot: 15, id: 8041, name: 'Sophic' }],
     };
-    const view = await configure(benchWith(), player).loadComparisonView('SubtletyRogue', 1, 'r1', 3, 10);
-    expect(view.comparison).toBe(true);
-    expect(view.talentStatus.status).toBe('ok');
+    const result = await configure(ok(benchWith()), player).loadComparisonView('SubtletyRogue', 1, 'r1', 3, 10);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.comparison).toBe(true);
+    expect(result.value.talentStatus.status).toBe('ok');
   });
 
-  it('loadComparisonView falls back to bench-only when the player has no combatant info', async () => {
-    const view = await configure(benchWith(), null).loadComparisonView('SubtletyRogue', 1, 'r1', 3, 10);
-    expect(view.comparison).toBe(false);
-    expect(view.benchTrinketRows).toHaveLength(1);
+  it('loadComparisonView surfaces a permanent error when the player has no combatant info', async () => {
+    const result = await configure(ok(benchWith()), null).loadComparisonView('SubtletyRogue', 1, 'r1', 3, 10);
+    expect(result).toEqual(permanent('No combatant info in this log.', 'gear.combatant-info'));
   });
 
-  it('loadComparisonView returns the empty view when neither bench nor player gear exist', async () => {
-    const view = await configure(null, null).loadComparisonView('SubtletyRogue', 1, 'r1', 3, 10);
-    expect(view).toEqual(emptyGearView());
+  it('loadComparisonView propagates a missing bench before fetching player gear', async () => {
+    const result = await configure(missing('Not yet ingested.'), null).loadComparisonView('SubtletyRogue', 1, 'r1', 3, 10);
+    expect(result).toEqual(missing('Not yet ingested.'));
   });
 });

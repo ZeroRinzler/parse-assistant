@@ -1,44 +1,34 @@
 /**
- * Map slice runtime shell + its pure positioning functions, colocated.
- *
- * `MapFeatureService` is the imperative shell (the components inject only it). It
- * owns the positioning-panel state (open / anchorTime / reference
- * plus the loaded bench and the optional live overlay), reads the prepared bench via the
- * swappable `MAP_DATA_SOURCE`, and builds the live overlay from `WclApiService`
- * position events. Every calculated field is its own small, exported,
- * individually-tested pure function below - no separate vm file.
- *
- * Per the slice self-containment rule it imports ONLY the two API services (here
- * via `MAP_DATA_SOURCE` + `WclApiService`), models, `logWarn`, and the slice-local
- * `map-positions` projection - never `positioning-core`, `map-context`, or any other
- * domain service. The positioning math (`buildActorTimelines`, `listReferenceEnemies`,
- * the facing offset) is PORTED here as pure fns rather than imported.
+ * Map slice: the imperative shell `MapFeatureService` (the only service the components inject)
+ * plus the pure positioning functions it uses. The positioning math is owned here as pure fns
+ * rather than shared, so the slice stays self-contained.
  */
 import { Injectable, Injector, inject, signal } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { WclEvent, WclFight } from '../../../core/models/wcl.models';
 import { EncounterPositions, ReferenceSelector } from '../../../core/models/positioning.models';
 import { logWarn } from '../../../core/log';
+import { Result, LoadError } from '../../../core/result';
+import { toLoadError } from '../../../core/http-load-error';
 import { posActorId } from './map-positions';
 import { MAP_DATA_SOURCE, MapData } from './map-data-source';
 
 /**
  * WoW's `facing` zero-point does not align with our forward axis; empirically a
- * -90 degree offset puts "behind the boss" below the reference. Ported verbatim
- * from `positioning-core` so the slice owns its own copy.
+ * -90 degree offset puts "behind the boss" below the reference.
  */
 export const FACING_OFFSET_RAD = -Math.PI / 2;
 
 const RAW_TO_YARDS = 1 / 100;
 const FACING_TO_RAD = 1 / 1000;
 
-/** One position sample for an actor, fight-relative time in seconds, coords in yards. */
+/** One actor position sample: time fight-relative (s), x/y in yards. */
 export interface PosSample {
   t: number;
   x: number;
   y: number;
   facing?: number;
-  /** Map/phase the actor was on; positions are only comparable within one mapID. */
+  /** Positions are only comparable within one mapID (map/phase). */
   mapID?: number;
 }
 
@@ -47,27 +37,18 @@ export interface ActorTimeline {
   samples: PosSample[];
 }
 
-/**
- * Live player overlay: live-pull timelines plus how to resolve the reference actor
- * per selector. Same shape the legacy `PositioningMapComponent` consumed.
- */
+/** Live player overlay: live-pull timelines plus how to resolve the reference actor per selector. */
 export interface MapLiveOverlay {
   timelines: Map<number, ActorTimeline>;
   playerId: number;
-  /** Live boss actor id (matched to the ingested boss). */
   bossActorId: number | null;
   /** gameID -> live actor id, so a chosen enemy reference maps to this pull's actor. */
   refActorByGameId: Map<number, number>;
 }
 
-/** A friendly/enemy actor id + gameID, supplied by the page from the report master data. */
 export interface MapEnemyActor { id: number; name: string; gameID: number; }
 
-/**
- * Everything the deferred live-overlay fetch needs, captured by `prepare` and consumed the
- * first time the map panel opens. Holding these lets the expensive position-event fetch wait
- * until the user actually opens the map (most analyses never do).
- */
+/** Captured by `prepare`; the expensive position-event fetch waits until the map first opens. */
 interface PendingOverlay {
   reportCode: string;
   fight: WclFight;
@@ -80,9 +61,8 @@ interface PendingOverlay {
 export interface MapAnchor {
   timeS: number;
   /**
-   * Length of the bench window this anchor represents, in seconds. A burst/defensive window
-   * plays its exact span (`timeS` to `timeS + windowLengthS`); a point-in-time cast omits it
-   * (0/undefined) and gets pre/post padding instead.
+   * A window plays its exact span (`timeS` to `timeS + windowLengthS`); a point-in-time cast
+   * omits it (0/undefined) and gets pre/post padding instead.
    */
   windowLengthS?: number;
   /** Optional reference override; defaults to the boss. */
@@ -92,13 +72,9 @@ export interface MapAnchor {
 /** Seconds of padding on each side of a point-in-time map anchor (a single cast). */
 export const MAP_POINT_PAD_S = 5;
 
-/* ----------------------------- pure functions ----------------------------- */
-
 /**
- * Build per-actor position timelines from events fetched with
- * `includeResources: true`. WCL flattens one actor's position onto each event
- * (the actor named by `resourceActor`), so each event yields one sample. Ported
- * from `positioning-core.buildActorTimelines`.
+ * Build per-actor position timelines. With `includeResources: true` WCL flattens one
+ * actor's position onto each event, so each event yields one sample.
  */
 export function buildActorTimelines(events: WclEvent[], fightStartMs: number): Map<number, ActorTimeline> {
   const byActor = new Map<number, PosSample[]>();
@@ -123,10 +99,7 @@ export function buildActorTimelines(events: WclEvent[], fightStartMs: number): M
   return out;
 }
 
-/**
- * Distinct reference enemies across all parses, for the map's reference picker.
- * Ported from `positioning-core.listReferenceEnemies`.
- */
+/** Distinct reference enemies across all parses, for the reference picker. */
 export function listReferenceEnemies(positions: EncounterPositions): { gameId: number; name: string; isBoss: boolean }[] {
   const map = new Map<number, { gameId: number; name: string; isBoss: boolean }>();
   for (const parse of positions.parses) {
@@ -140,18 +113,12 @@ export function listReferenceEnemies(positions: EncounterPositions): { gameId: n
   return [...map.values()].sort((a, b) => (b.isBoss ? 1 : 0) - (a.isBoss ? 1 : 0));
 }
 
-/** The live actor that stands in for the ingested boss, plus the gameID -> live-actor-id map. */
 export interface LiveReference {
   bossActorId: number | null;
   refActorByGameId: Map<number, number>;
 }
 
-/**
- * Resolve the live pull's reference actors from the ingested bench: map each
- * enemy's gameID to its live actor id, then look up the ingested boss's gameID to
- * find this pull's boss actor. Shared by the overlay builder and the event fetch so
- * the derivation lives in one place. Pure.
- */
+/** Map each enemy gameID to its live actor id, then resolve the ingested boss's gameID to this pull's boss actor. */
 export function resolveLiveReference(positions: EncounterPositions, enemies: MapEnemyActor[]): LiveReference {
   const refActorByGameId = new Map<number, number>();
   for (const enemy of enemies) if (enemy.gameID != null) refActorByGameId.set(enemy.gameID, enemy.id);
@@ -160,7 +127,6 @@ export function resolveLiveReference(positions: EncounterPositions, enemies: Map
   return { bossActorId, refActorByGameId };
 }
 
-/** Inputs for assembling the live player overlay from already-fetched position events. */
 export interface LiveOverlayInput {
   positions: EncounterPositions;
   events: WclEvent[];
@@ -169,13 +135,7 @@ export interface LiveOverlayInput {
   enemies: MapEnemyActor[];
 }
 
-/**
- * Assemble the live overlay from already-fetched, position-bearing live events:
- * per-actor timelines plus the live actor id for the ingested boss and a gameID
- * -> live-actor-id map for enemy references. Null when the player has no samples.
- * Reproduces the core of the legacy `MapContextService._buildLiveOverlay` minus
- * the fetching, so it stays pure and testable.
- */
+/** Assemble the live overlay from position-bearing events; null when the player has no samples. */
 export function buildLiveOverlay(input: LiveOverlayInput): MapLiveOverlay | null {
   const { positions, events, fightStartMs, playerId, enemies } = input;
   const { bossActorId, refActorByGameId } = resolveLiveReference(positions, enemies);
@@ -184,28 +144,22 @@ export function buildLiveOverlay(input: LiveOverlayInput): MapLiveOverlay | null
   return { timelines, playerId, bossActorId, refActorByGameId };
 }
 
-/* ----------------------------- feature service ---------------------------- */
-
 @Injectable({ providedIn: 'root' })
 export class MapFeatureService {
   private readonly source = inject(MAP_DATA_SOURCE);
-  // Resolved lazily: only `prepare` (the post-raid live overlay) needs WCL, so the
-  // bench-only paths (/pre, tests) never pull in the WCL transport / Apollo.
+  // Resolved lazily: only `prepare` needs WCL, so bench-only paths (/pre, tests) never pull in the WCL transport.
   private readonly injector = inject(Injector);
 
-  /** Loaded top-parse bench for the current encounter (null until loaded / on /pre with no file). */
   readonly positions = signal<EncounterPositions | null>(null);
-  /** Live player overlay; null on pages with no pull (e.g. /pre) or before a pull loads. */
   readonly live = signal<MapLiveOverlay | null>(null);
-  /** True while the deferred live-overlay event fetch is in flight (drives the panel spinner). */
+  /** Transient/permanent bench or overlay failure; a `missing` bench is kept null (it feeds the empty placeholder). */
+  readonly error = signal<LoadError | null>(null);
   readonly overlayLoading = signal(false);
 
-  /** Params for the deferred overlay fetch (set by `prepare`, consumed on first open). */
   private pendingOverlay: PendingOverlay | null = null;
-  /** True once the overlay has been built for the current pull, so a re-open never refetches. */
+  /** True once built for the current pull, so a re-open never refetches. */
   private overlayLoaded = false;
 
-  /** Panel state - ported from the global `PositioningPanelService`. */
   readonly open = signal(false);
   readonly anchorTime = signal(0);
   readonly reference = signal<ReferenceSelector>({ kind: 'boss' });
@@ -213,82 +167,69 @@ export class MapFeatureService {
   readonly preS = signal(MAP_POINT_PAD_S);
   readonly postS = signal(MAP_POINT_PAD_S);
 
-  /** True once top-parse positions are available, so the page can show map buttons. */
   ready(): boolean { return !!this.positions(); }
 
-  /**
-   * Load the top-parse bench for an encounter (bench-only path - /pre and the
-   * initial post-raid load). Clears any stale live overlay.
-   */
-  async loadBench(spec: string, encounterId: number): Promise<MapData | null> {
-    const data = await this.source.getBench(spec, encounterId);
-    this.positions.set(data);
+  /** Load the top-parse bench (the /pre and initial post-raid path). Clears any stale live overlay. */
+  async loadBench(spec: string, encounterId: number): Promise<Result<MapData, LoadError>> {
+    const result = await this.source.getBench(spec, encounterId);
     this.live.set(null);
-    return data;
+    if (result.ok) {
+      this.positions.set(result.value);
+      this.error.set(null);
+    } else {
+      if (result.error.kind === 'permanent') logWarn(result.error.id, result.error.context);
+      this.positions.set(null);
+      this.error.set(result.error.kind === 'missing' ? null : result.error);
+    }
+    return result;
   }
 
   /**
-   * Prepare the post-raid context: load the top-parse bench (so the map buttons can light
-   * up) but DEFER the live-overlay fetch. Building the overlay costs two full position-
-   * event streams (player casts, every enemy cast), and most analyses never
-   * open the map - so the params are captured and the fetch waits until the panel first
-   * opens (see `ensureLiveOverlay`). If the panel is already open (a live-sync pull while
-   * the user is watching the map), the overlay refreshes immediately.
+   * Prepare the post-raid context: load the bench now, but DEFER the live-overlay fetch (two full
+   * position-event streams) until the map first opens, since most analyses never open it. Refreshes
+   * immediately if the panel is already open (a live-sync pull mid-watch).
    */
   async prepare(
     reportCode: string, fight: WclFight, playerId: number, spec: string, enemies: MapEnemyActor[],
   ): Promise<void> {
     this.live.set(null);
     this._resetOverlay();
-    if (!fight?.encounterID) { this.positions.set(null); return; }
-    try {
-      const positions = await this.loadBench(spec, fight.encounterID);
-      if (!positions) return;
-      this.pendingOverlay = { reportCode, fight, playerId, positions, enemies };
-      if (this.open()) await this.ensureLiveOverlay();
-    } catch (err) {
-      logWarn(`MapFeatureService.prepare ${reportCode}:${fight?.id}`, err);
-      this.live.set(null);
-    }
+    if (!fight?.encounterID) { this.positions.set(null); this.error.set(null); return; }
+    const result = await this.loadBench(spec, fight.encounterID);
+    if (!result.ok) return;
+    this.pendingOverlay = { reportCode, fight, playerId, positions: result.value, enemies };
+    if (this.open()) await this.ensureLiveOverlay();
   }
 
-  /** Open the map at an anchor emitted by another feature card. */
   openAt(anchor: MapAnchor): void {
     this.anchorTime.set(anchor.timeS);
     this.reference.set(anchor.reference ?? { kind: 'boss' });
-    // A bench window scrubs its exact span (0 before, its length after); a point-in-time
-    // cast gets symmetric padding on each side.
+    // A window scrubs its exact span (0 before, its length after); a point-in-time cast gets symmetric padding.
     const isWindow = (anchor.windowLengthS ?? 0) > 0;
     this.preS.set(isWindow ? 0 : MAP_POINT_PAD_S);
     this.postS.set(isWindow ? anchor.windowLengthS! : MAP_POINT_PAD_S);
     this.open.set(true);
-    // First open triggers the deferred overlay fetch; a no-op once loaded, or when there is
-    // no pending pull (bench-only /pre).
+    // First open triggers the deferred fetch; a no-op once loaded or with no pending pull.
     void this.ensureLiveOverlay();
   }
 
   close(): void { this.open.set(false); }
 
-  /** Drop all context (e.g. when starting a new analysis). */
   clear(): void {
     this.open.set(false);
     this.positions.set(null);
     this.live.set(null);
+    this.error.set(null);
     this._resetOverlay();
   }
 
-  /** Forget any deferred overlay so a new pull (or a cleared map) starts cold. */
   private _resetOverlay(): void {
     this.pendingOverlay = null;
     this.overlayLoaded = false;
     this.overlayLoading.set(false);
   }
 
-  /**
-   * Build the live overlay from the deferred `prepare` params, on demand. Idempotent and
-   * guarded: it fetches at most once per pull (a re-open is free) and no-ops when there is
-   * nothing pending (bench-only pages) or a fetch is already in flight.
-   */
+  /** Build the live overlay from the deferred `prepare` params, at most once per pull; no-ops when nothing is pending or a fetch is in flight. */
   private async ensureLiveOverlay(): Promise<void> {
     const pending = this.pendingOverlay;
     if (!pending || this.overlayLoaded || this.overlayLoading()) return;
@@ -297,21 +238,22 @@ export class MapFeatureService {
       const { reportCode, fight, playerId, positions, enemies } = pending;
       const events = await this.fetchLiveEvents(reportCode, fight, playerId);
       this.live.set(buildLiveOverlay({ positions, events, fightStartMs: fight.startTime, playerId, enemies }));
+      this.error.set(null);
       this.overlayLoaded = true;
-    } catch (err) {
-      logWarn(`MapFeatureService.ensureLiveOverlay ${pending.reportCode}:${pending.fight.id}`, err);
+    } catch (cause) {
+      // Surface a failed overlay read instead of a silently empty map.
+      const result = toLoadError(cause, 'map.overlay');
+      logWarn(`MapFeatureService.ensureLiveOverlay ${pending.reportCode}:${pending.fight.id}`, cause);
       this.live.set(null);
+      this.error.set(!result.ok && result.error.kind !== 'missing' ? result.error : null);
     } finally {
       this.overlayLoading.set(false);
     }
   }
 
   /**
-   * Fetch the position-bearing live events the overlay needs: friendly player casts + enemy
-   * casts, both with `includeResources`. The enemy fetch passes `hostilityType: 'Enemies'`
-   * (the events query defaults to Friendlies, so an enemy-side fetch without it returns
-   * nothing). The boss and add trails come from the enemy casts, as in
-   * `MapTransformService.fetchPositionEvents`.
+   * Fetch position-bearing live events: player casts + enemy casts, both with `includeResources`.
+   * The enemy fetch needs `hostilityType: 'Enemies'` because the events query defaults to Friendlies.
    */
   private async fetchLiveEvents(
     reportCode: string, fight: WclFight, playerId: number,

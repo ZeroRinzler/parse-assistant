@@ -1,11 +1,3 @@
-/**
- * Burst slice runtime shell + its pure transform functions, colocated.
- *
- * `BurstFeatureService` is the imperative shell (the component injects only it): it
- * reads the prepared bench via the swappable `BURST_DATA_SOURCE`, then calls the
- * pure functions below to assemble the view-model. Every calculated field is its
- * own small, exported, individually-tested pure function - no separate vm file.
- */
 import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { BurstWindow, PlayerBurstWindow } from '../../../core/models/analysis.models';
@@ -13,33 +5,25 @@ import { WclEvent } from '../../../core/models/wcl.models';
 import { ComparisonWindow, WindowStatus, RangeRow } from '../../../core/models/window-comparison.models';
 import { ClipAnchor } from '../../../core/models/capture.models';
 import { logWarn } from '../../../core/log';
+import { Result, LoadError, ok } from '../../../core/result';
+import { toLoadError } from '../../../core/http-load-error';
 import { windowSpells } from '../../../shared/analysis/wcl-projections';
 import { BURST_DATA_SOURCE } from './burst-data-source';
 
-/** Spell id -> baked icon + name, complete over every spell the card renders. */
 export type AbilityIcons = Record<number, { icon: string; name: string }>;
 
-/** Anchor for opening the positioning map on a burst window (emitted as an output). */
 export interface BurstMapAnchor {
   timeS: number;
   windowLengthS: number;
 }
 
-/** The burst card view-model: one ComparisonWindow + one map/clip anchor per top window. */
 export interface BurstView {
-  /** Whether the top-parse bench exists for this encounter (false shows the waiting state). */
-  available: boolean;
   windows: ComparisonWindow[];
   anchors: BurstMapAnchor[];
   clipAnchors: ClipAnchor[];
 }
 
-/* ----------------------------- pure functions ----------------------------- */
-
-/**
- * Status glyph for one burst window. Higher player damage is better, so falling
- * short of the top-parse range is the problem.
- */
+/** Higher player damage is better, so falling short of the top-parse range is the problem. */
 export function burstWindowStatus(
   playerDamage: number | null,
   topAvg: number,
@@ -48,8 +32,7 @@ export function burstWindowStatus(
   notReached: boolean,
   benchOnly = false,
 ): { status: WindowStatus; icon: string } {
-  // Bench-only (pre-fight): no player log to compare, so the window is purely
-  // informational - a neutral chart glyph, never a red "missing data" state.
+  // Pre-fight has no player log to compare, so the window is purely informational.
   if (benchOnly) return { status: 'info', icon: 'insights' };
   if (notReached) return { status: 'muted', icon: 'schedule' };
   if (playerDamage === null) return { status: 'muted', icon: 'help_outline' };
@@ -58,7 +41,6 @@ export function burstWindowStatus(
   return { status: 'good', icon: 'check_circle' };
 }
 
-/** Split a window's cooldown names into icon spell-ids (known) and plain labels (unknown). */
 export function splitCommonCds(
   commonCds: string[],
   cdSpellIds: Record<string, number>,
@@ -73,7 +55,6 @@ export function splitCommonCds(
   return { spellIds, labels };
 }
 
-/** Per-ability comparison rows: player damage / casts vs the top-parse range. */
 export function burstDetailRows(
   abilityBreakdown: BurstWindow['ability_breakdown'],
   playerWindow: PlayerBurstWindow | null,
@@ -95,21 +76,16 @@ export function burstDetailRows(
   }));
 }
 
-/** Map anchor for a window: when to seek. */
 export function burstMapAnchor(window: BurstWindow): BurstMapAnchor {
   return { timeS: window.time_s, windowLengthS: window.window_length_s };
 }
 
-/** Clip anchor for a window: its exact span plus the stable key clips are memoized under. */
+/** The `key` is the stable id clips are memoized under. */
 export function burstClipAnchor(window: BurstWindow, index: number): ClipAnchor {
   return { timeS: window.time_s, windowLengthS: window.window_length_s, key: `burst-${index}` };
 }
 
-/**
- * Build the burst card view-model: each top-parse burst window paired with the
- * player's damage inside it (by index), plus a map anchor. A window whose start is
- * past the player's fight length is "not reached" and shown muted.
- */
+/** A window whose start is past the player's fight length is "not reached" and shown muted. */
 export function buildBurstView(
   topWindows: BurstWindow[],
   playerWindows: PlayerBurstWindow[],
@@ -140,20 +116,15 @@ export function buildBurstView(
     anchors.push(burstMapAnchor(window));
     clipAnchors.push(burstClipAnchor(window, index));
   });
-  return { available: true, windows, anchors, clipAnchors };
+  return { windows, anchors, clipAnchors };
 }
 
-/** Total damage on a WCL event (raw amount + absorbed). */
 function eventDamage(event: WclEvent): number {
   return (event.amount || 0) + (event.absorbed || 0);
 }
 
-/**
- * Aggregate the player's damage + casts inside one top-parse burst window (top 10
- * abilities). The window boundary is half-open: an event at exactly `time_s +
- * window_length_s` falls OUTSIDE. Cast counts are attributed by ability NAME, not
- * spell id, because a damage event's `abilityGameID` often differs from the cast id.
- */
+// Half-open window boundary: an event at exactly `time_s + window_length_s` falls OUTSIDE. Casts are
+// attributed by ability NAME, not spell id, because a damage event's `abilityGameID` often differs.
 function playerWindowAggregate(
   window: BurstWindow,
   sortedDmg: WclEvent[],
@@ -185,11 +156,6 @@ function playerWindowAggregate(
   return { time_s: window.time_s, window_damage: Math.round(winTotal), ability_breakdown };
 }
 
-/**
- * Player damage dealt inside each top-parse burst window (top 10 abilities, with
- * cast counts). Ported self-contained from the legacy `findPlayerBurstWindows` so
- * the feature service owns the player-side math and never imports `core/analysis`.
- */
 export function findPlayerBurstWindows(
   topWindows: BurstWindow[],
   dmgEvents: WclEvent[],
@@ -205,18 +171,6 @@ export function findPlayerBurstWindows(
   return topWindows.map(window => playerWindowAggregate(window, sortedDmg, casts, fightStartMs, nameOf));
 }
 
-/* ----------------------------- feature service ---------------------------- */
-
-/**
- * Runtime shell for the burst card. Dual-mode and self-contained: it injects only
- * its data source (file / live by the dev flag) plus the cached `WclApiService`
- * for the player's own log.
- *
- * - Post-raid (`loadPlayerView`): fetches the player's report (master abilities for
- *   icon/name) + Casts/DamageDone, computes the player's window damage with the
- *   colocated `findPlayerBurstWindows`, then compares against the bench windows.
- * - Pre-fight (`loadBenchView`): bench-only, the top windows with no player overlay.
- */
 @Injectable({ providedIn: 'root' })
 export class BurstFeatureService {
   private readonly source = inject(BURST_DATA_SOURCE);
@@ -224,14 +178,16 @@ export class BurstFeatureService {
 
   async loadPlayerView(
     spec: string, encounterId: number, reportCode: string, fightId: number, playerId: number,
-  ): Promise<BurstView> {
+  ): Promise<Result<BurstView, LoadError>> {
     const bench = await this.source.getBench(spec, encounterId);
-    if (!bench) return { available: false, windows: [], anchors: [], clipAnchors: [] };
+    if (!bench.ok) return bench;
 
     try {
       const report = await this.wclApi.getReport(reportCode);
       const fight = report.fights.find(entry => entry.id === fightId);
-      if (!fight) return buildBurstView(bench.windows, [], Number.POSITIVE_INFINITY, bench.cd_spell_ids, bench.ability_icons, true);
+      // A selected fight may legitimately not be in the report yet during a live sync:
+      // an informational bench-only view, not a failure.
+      if (!fight) return ok(buildBurstView(bench.value.windows, [], Number.POSITIVE_INFINITY, bench.value.cd_spell_ids, bench.value.ability_icons, true));
 
       // Names only, to attribute the player's casts by ability name in each window.
       const abilityNames = new Map<number, string>();
@@ -241,19 +197,18 @@ export class BurstFeatureService {
         this.wclApi.getAllEvents(reportCode, fightId, 'Casts', fight.startTime, fight.endTime, playerId),
         this.wclApi.getAllEvents(reportCode, fightId, 'DamageDone', fight.startTime, fight.endTime, playerId),
       ]);
-      const playerWindows = findPlayerBurstWindows(bench.windows, damage, casts, fight.startTime, abilityNames);
+      const playerWindows = findPlayerBurstWindows(bench.value.windows, damage, casts, fight.startTime, abilityNames);
       const fightDurationS = (fight.endTime - fight.startTime) / 1000;
-      return buildBurstView(bench.windows, playerWindows, fightDurationS, bench.cd_spell_ids, bench.ability_icons);
-    } catch (err) {
-      logWarn(`BurstFeatureService.loadPlayerView ${reportCode}:${fightId}`, err);
-      return buildBurstView(bench.windows, [], Number.POSITIVE_INFINITY, bench.cd_spell_ids, bench.ability_icons, true);
+      return ok(buildBurstView(bench.value.windows, playerWindows, fightDurationS, bench.value.cd_spell_ids, bench.value.ability_icons));
+    } catch (cause) {
+      logWarn(`BurstFeatureService.loadPlayerView ${reportCode}:${fightId}`, cause);
+      return toLoadError(cause, 'burst.player-view');
     }
   }
 
-  /** Pre-fight: the top-parse burst windows with no player overlay (informational). */
-  async loadBenchView(spec: string, encounterId: number): Promise<BurstView> {
+  async loadBenchView(spec: string, encounterId: number): Promise<Result<BurstView, LoadError>> {
     const bench = await this.source.getBench(spec, encounterId);
-    if (!bench) return { available: false, windows: [], anchors: [], clipAnchors: [] };
-    return buildBurstView(bench.windows, [], Number.POSITIVE_INFINITY, bench.cd_spell_ids, bench.ability_icons, true);
+    if (!bench.ok) return bench;
+    return ok(buildBurstView(bench.value.windows, [], Number.POSITIVE_INFINITY, bench.value.cd_spell_ids, bench.value.ability_icons, true));
   }
 }

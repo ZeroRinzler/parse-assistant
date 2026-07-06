@@ -2,20 +2,19 @@ import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { WclEvent, WclFight, WclReport, WclTableBlob } from '../../../core/models/wcl.models';
 import { logWarn } from '../../../core/log';
+import { Result, LoadError, ok, permanent } from '../../../core/result';
+import { toLoadError } from '../../../core/http-load-error';
 
 /**
- * Pull overview - the first, always-on card on the post-raid page. It summarizes a single
- * pull from the player's OWN log alone (WCL, no bench): the player's DPS, the pull time and
- * boss % reached, and each of the player's deaths plus the kill/wipe outcome. It injects
- * only `WclApiService`; there is no bench, no `*_DATA_SOURCE`, and no transform.
+ * Pull overview - the first, always-on card on the post-raid page. Summarizes one pull from the
+ * player's OWN log (WCL, no bench): DPS, pull time, boss % reached, the player's deaths, and the
+ * kill/wipe outcome. Injects only `WclApiService`; no bench, no `*_DATA_SOURCE`, no transform.
  */
 
 const MS_PER_S = 1000;
 
-/** Whether the pull ended in a kill or a wipe. */
 export type PullResult = 'kill' | 'wipe';
 
-/** One of the player's deaths in the pull. */
 export interface PullDeathRow {
   /** 1-based ordinal ("Death 1", "Death 2"). */
   index: number;
@@ -27,7 +26,6 @@ export interface PullDeathRow {
   amount: number;
 }
 
-/** The card's view-model: a single pull, entirely derived from the player's own log. */
 export interface PullOverviewView {
   /** Attempt number of this boss within the report ("Pull N of this session"). */
   attempt: number;
@@ -86,11 +84,18 @@ function safeJson(raw: string): { data?: { entries?: { id: number; total: number
   }
 }
 
-/** The player's DPS from the damage-done table: their entry's total over the pull length. */
-export function dpsFromTable(blob: WclTableBlob | null, playerId: number, durationS: number): number {
-  if (durationS <= 0) return 0;
+/**
+ * The player's DPS from the damage-done table. A null/failed blob is a load failure (the whole
+ * table is unusable, so a played pull would show a bogus 0), returned as a `permanent` error. A
+ * player legitimately absent from a valid table (a healer) is a real 0, as is a zero-length pull.
+ */
+export function dpsFromTable(
+  blob: WclTableBlob | null, playerId: number, durationS: number,
+): Result<number, LoadError> {
+  if (durationS <= 0) return ok(0);
+  if (!blob) return permanent('Damage table missing for this pull.', 'pull-overview.damage-table');
   const entry = tableEntries(blob).find(row => row.id === playerId);
-  return entry ? entry.total / durationS : 0;
+  return ok(entry ? entry.total / durationS : 0);
 }
 
 /** Report abilities keyed by game id -> name, for resolving a killing blow. */
@@ -148,37 +153,46 @@ export class PullOverviewFeatureService {
    * killing-blow names), the damage-done table (for DPS) and the pull's deaths; the
    * player's DamageTaken (for lethal-hit magnitudes) is fetched only when they died.
    */
-  async loadView(reportCode: string, playerId: number, fight: WclFight): Promise<PullOverviewView> {
+  async loadView(
+    reportCode: string, playerId: number, fight: WclFight,
+  ): Promise<Result<PullOverviewView, LoadError>> {
     const result: PullResult = fight.kill ? 'kill' : 'wipe';
 
-    const report = await this.wclApi.getReport(reportCode);
-    const names = abilityNameMap(report);
+    try {
+      const report = await this.wclApi.getReport(reportCode);
+      const names = abilityNameMap(report);
 
-    const [table, deathEvents] = await Promise.all([
-      this.wclApi.getDamageDoneTable(reportCode, fight.id),
-      this.wclApi.getAllEvents(reportCode, fight.id, 'Deaths', fight.startTime, fight.endTime),
-    ]);
+      const [table, deathEvents] = await Promise.all([
+        this.wclApi.getDamageDoneTable(reportCode, fight.id),
+        this.wclApi.getAllEvents(reportCode, fight.id, 'Deaths', fight.startTime, fight.endTime),
+      ]);
 
-    const dps = dpsFromTable(table, playerId, fight.duration_s);
-    const myDeaths = deathEvents.filter(event => event.targetID === playerId);
-    const damageTaken = myDeaths.length
-      ? await this.wclApi.getAllEvents(reportCode, fight.id, 'DamageTaken', fight.startTime, fight.endTime, playerId)
-      : [];
-    const deaths = buildDeathRows(myDeaths, damageTaken, playerId, fight.startTime, names);
-    let outcomeTimeS = fight.duration_s;
-    if (result === 'wipe') {
-      const resurrects = await this.wclApi.getResurrects(reportCode, fight.id, fight.startTime, fight.endTime);
-      outcomeTimeS = wipeTimeS(deathEvents, resurrects, fight.startTime, fight.duration_s);
+      const dps = dpsFromTable(table, playerId, fight.duration_s);
+      if (!dps.ok) return dps;
+
+      const myDeaths = deathEvents.filter(event => event.targetID === playerId);
+      const damageTaken = myDeaths.length
+        ? await this.wclApi.getAllEvents(reportCode, fight.id, 'DamageTaken', fight.startTime, fight.endTime, playerId)
+        : [];
+      const deaths = buildDeathRows(myDeaths, damageTaken, playerId, fight.startTime, names);
+      let outcomeTimeS = fight.duration_s;
+      if (result === 'wipe') {
+        const resurrects = await this.wclApi.getResurrects(reportCode, fight.id, fight.startTime, fight.endTime);
+        outcomeTimeS = wipeTimeS(deathEvents, resurrects, fight.startTime, fight.duration_s);
+      }
+
+      return ok({
+        attempt: fight.attempt,
+        result,
+        durationS: fight.duration_s,
+        bossPercentage: fight.fightPercentage,
+        dps: dps.value,
+        deaths,
+        outcomeTimeS,
+      });
+    } catch (cause) {
+      logWarn('PullOverviewFeatureService.loadView', cause);
+      return toLoadError(cause, 'pull-overview.view');
     }
-
-    return {
-      attempt: fight.attempt,
-      result,
-      durationS: fight.duration_s,
-      bossPercentage: fight.fightPercentage,
-      dps,
-      deaths,
-      outcomeTimeS,
-    };
   }
 }

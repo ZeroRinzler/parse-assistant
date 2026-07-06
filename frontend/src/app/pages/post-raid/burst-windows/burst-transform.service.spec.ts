@@ -3,6 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
 import { WclEvent } from '../../../core/models/wcl.models';
+import { ok, missing } from '../../../core/result';
 import {
   BurstTransformService, cdTimings, findParseWindows, clusterParseWindows, cdSpellIds, ParseWindow,
   bucketDamagePerBin, forwardRollingDamage, detectDenseRuns, trimRunToDamage,
@@ -42,8 +43,6 @@ const DENSITY_THRESHOLD = 48;
 function burstAt(startS: number): WclEvent[] {
   return [0, 1, 2, 3].map(offset => damage(SHADOW_BLADES_DAMAGE, startS + offset, BIN_DAMAGE));
 }
-
-/* ----------------------------- pure functions ----------------------------- */
 
 describe('cdSpellIds', () => {
   it('maps cooldown + defensive names to spell ids, skipping missing ids', () => {
@@ -358,8 +357,6 @@ describe('clusterParseWindows', () => {
   });
 });
 
-/* ----------------------------- service (end to end, fake client) ----------------------------- */
-
 function reportFor(playerId: number, playerName: string, fightId: number) {
   return {
     title: 't',
@@ -390,10 +387,10 @@ const wclFake = {
     Object.fromEntries(ids.map(id => [id, { id, icon: `icon_${id}`, name: `name_${id}` }])),
 };
 const filesFake = {
-  getRulebook: async () => rulebook({
+  getRulebook: async () => ok(rulebook({
     spec: 'SubtletyRogue',
     cooldowns: [{ name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 90, duration: 20 }],
-  }),
+  })),
 };
 
 describe('BurstTransformService (live, in-browser)', () => {
@@ -405,15 +402,16 @@ describe('BurstTransformService (live, in-browser)', () => {
       ],
     });
     const bench = await TestBed.inject(BurstTransformService).getBench('SubtletyRogue', 1);
-    expect(bench).not.toBeNull();
-    expect(bench!.sample_count).toBe(2);
-    expect(bench!.encounter_name).toBe('Boss');
-    expect(bench!.cd_spell_ids).toEqual({ 'Shadow Blades': SHADOW_BLADES });
-    expect(bench!.windows).toHaveLength(1);
-    expect(bench!.windows[0].common_cds).toContain('Shadow Blades');
+    expect(bench.ok).toBe(true);
+    if (!bench.ok) return;
+    expect(bench.value.sample_count).toBe(2);
+    expect(bench.value.encounter_name).toBe('Boss');
+    expect(bench.value.cd_spell_ids).toEqual({ 'Shadow Blades': SHADOW_BLADES });
+    expect(bench.value.windows).toHaveLength(1);
+    expect(bench.value.windows[0].common_cds).toContain('Shadow Blades');
     // ability_icons is complete: header cooldown AND every window ability resolved by id.
-    expect(bench!.ability_icons[SHADOW_BLADES]).toEqual({ icon: `icon_${SHADOW_BLADES}`, name: `name_${SHADOW_BLADES}` });
-    expect(bench!.ability_icons[SHADOW_BLADES_DAMAGE]).toEqual({ icon: `icon_${SHADOW_BLADES_DAMAGE}`, name: `name_${SHADOW_BLADES_DAMAGE}` });
+    expect(bench.value.ability_icons[SHADOW_BLADES]).toEqual({ icon: `icon_${SHADOW_BLADES}`, name: `name_${SHADOW_BLADES}` });
+    expect(bench.value.ability_icons[SHADOW_BLADES_DAMAGE]).toEqual({ icon: `icon_${SHADOW_BLADES_DAMAGE}`, name: `name_${SHADOW_BLADES_DAMAGE}` });
   });
 
   it('backfills past a private (unfetchable) top parse to keep the sample count full', async () => {
@@ -434,17 +432,36 @@ describe('BurstTransformService (live, in-browser)', () => {
       ],
     });
     const bench = await TestBed.inject(BurstTransformService).getBench('SubtletyRogue', 1);
+    expect(bench.ok).toBe(true);
     // 11 candidates, one private: the 11th backfills the skipped parse to a full 10.
-    expect(bench!.sample_count).toBe(10);
+    if (bench.ok) expect(bench.value.sample_count).toBe(10);
   });
 
-  it('returns null when the spec has no rulebook cooldowns', async () => {
+  it('returns missing when the spec rulebook has no cooldowns', async () => {
     TestBed.configureTestingModule({
       providers: [
         { provide: WclApiService, useValue: wclFake as unknown as WclApiService },
-        { provide: DataFileApiService, useValue: { getRulebook: async () => null } as unknown as DataFileApiService },
+        {
+          provide: DataFileApiService,
+          useValue: { getRulebook: async () => ok(rulebook({ spec: 'SubtletyRogue', cooldowns: [] })) } as unknown as DataFileApiService,
+        },
       ],
     });
-    expect(await TestBed.inject(BurstTransformService).getBench('SubtletyRogue', 1)).toBeNull();
+    expect(await TestBed.inject(BurstTransformService).getBench('SubtletyRogue', 1))
+      .toEqual(missing('Not yet ingested.'));
+  });
+
+  it('propagates a missing rulebook read as missing', async () => {
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: WclApiService, useValue: wclFake as unknown as WclApiService },
+        {
+          provide: DataFileApiService,
+          useValue: { getRulebook: async () => missing('Not yet ingested.') } as unknown as DataFileApiService,
+        },
+      ],
+    });
+    expect(await TestBed.inject(BurstTransformService).getBench('SubtletyRogue', 1))
+      .toEqual(missing('Not yet ingested.'));
   });
 });

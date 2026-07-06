@@ -12,6 +12,10 @@ describe('FormatDurationPipe', () => {
     { input: 300,       expected: '5:00',   why: 'exact five minutes' },
     { input: 3661,      expected: '61:01',  why: 'minutes can exceed 59 (no capping)' },
     { input: 9.9,       expected: '0:09',   why: 'fractional seconds are floored' },
+    { input: -1,        expected: '-0:01',  why: 'a negative time keeps its sign (e.g. pre-pull)' },
+    { input: -71,       expected: '-1:11',  why: 'a negative time formats mm:ss with a leading minus' },
+    { input: -3661,     expected: '-61:01', why: 'minutes can exceed 59 on a negative time too' },
+    { input: NaN,       expected: '0:00',   why: 'a non-finite duration falls back to the zero rendering' },
   ] as { input: number | null | undefined; expected: string; why: string }[])(
     'transform($input) === "$expected" ($why)',
     ({ input, expected }) => {

@@ -1,14 +1,9 @@
 /**
- * Generic, cross-slice WCL-response projections and window view-row builders.
- *
- * These are the small pure functions that several slices projected identically:
- * turning a raw WCL rankings array into the top fetchable parses, and turning a
- * list of spell ids + baked ability art into window header chips. They are not
- * domain analysis - just shape reprojections - so they live here under `shared/`
- * (a blessed cross-slice home, the same way `shared/analysis/analysis-math.ts` and
- * `shared/gear/gear-comparison.ts` do) and each slice imports one implementation
- * instead of re-declaring it. No Angular / `inject()` / IO; pure functions only.
+ * Generic, cross-slice WCL-response projections and window view-row builders: small pure functions
+ * several slices need (raw WCL rankings -> top fetchable parses; spell ids + baked art -> window
+ * header chips), kept here so each slice imports one implementation. No Angular / IO.
  */
+import { logWarn } from '../../core/log';
 import { ParseRanking, WclRankingsBlob, WclRawAbility, WclRawRanking } from '../../core/models/wcl.models';
 import { WindowSpell } from '../../core/models/window-comparison.models';
 
@@ -70,5 +65,15 @@ export function toParseRankings(raw: WclRawRanking[], count: number): ParseRanki
 export function windowSpells(
   spellIds: number[], abilities: Record<number, { icon: string; name: string }>,
 ): WindowSpell[] {
-  return spellIds.map(id => ({ id, icon: abilities[id].icon, name: abilities[id].name }));
+  return spellIds.map(id => {
+    const ability = abilities[id];
+    if (!ability) {
+      // A window can reference an id the ability map never resolved; emit a labelled
+      // placeholder with the empty-icon fallback so the card still renders, and warn
+      // with the missing id so a bug report can reproduce it.
+      logWarn('windowSpells: ability id missing from ability map', id);
+      return { id, icon: '', name: `Ability #${id}` };
+    }
+    return { id, icon: ability.icon, name: ability.name };
+  });
 }

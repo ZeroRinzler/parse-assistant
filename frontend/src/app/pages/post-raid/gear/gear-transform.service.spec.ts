@@ -3,6 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
 import { CharacterGear, WclCombatantInfo, WclGearItem } from '../../../core/models/wcl.models';
+import { missing } from '../../../core/result';
 import {
   GearTransformService, toParseGear, aggregateParseGear, ParseGear,
   aggregateTalents, aggregateTrinkets, aggregateEnchants, talentKeyFromTree,
@@ -18,8 +19,6 @@ const TRINKET_1_SLOT = 12;
 const TRINKET_2_SLOT = 13;
 const ENCHANT_SLOT = 15;
 const EXAMPLE_SOURCE_ID = 537;
-
-/* ----------------------------- pure functions ----------------------------- */
 
 describe('talentKeyFromTree', () => {
   it('builds a v2: key from string-sorted nodeIDs', () => {
@@ -50,8 +49,6 @@ describe('toParseGear', () => {
     expect(toParseGear({ found: false }, ranking, 537)).toBeNull();
   });
 });
-
-/* ----------------------------- per-facet aggregators ----------------------------- */
 
 function gearParse(overrides: Partial<ParseGear>): ParseGear {
   return {
@@ -151,8 +148,6 @@ describe('aggregateParseGear', () => {
   });
 });
 
-/* ----------------------------- service (end to end, fake client) ----------------------------- */
-
 function reportFor(playerId: number, playerName: string, fightId: number) {
   return {
     title: 't',
@@ -193,14 +188,15 @@ describe('GearTransformService (live, in-browser)', () => {
       ],
     });
     const bench = await TestBed.inject(GearTransformService).getBench('SubtletyRogue', 1);
-    expect(bench).not.toBeNull();
-    expect(bench!.sample_count).toBe(2);
-    expect(bench!.encounter_name).toBe('Boss');
-    expect(bench!.talent_builds[0]).toMatchObject({
+    expect(bench.ok).toBe(true);
+    if (!bench.ok) return;
+    expect(bench.value.sample_count).toBe(2);
+    expect(bench.value.encounter_name).toBe('Boss');
+    expect(bench.value.talent_builds[0]).toMatchObject({
       key: 'v2:65', pct: 100, report_code: 'r1', fight_id: 1, player_name: 'P1', source_id: 10,
     });
-    expect(bench!.trinkets[12]).toEqual([{ id: 100, name: 'A', icon: 't', pct: 100 }]);
-    expect(bench!.enchants[15]).toEqual([{ id: 8041, name: 'Soph', pct: 100 }]);
+    expect(bench.value.trinkets[12]).toEqual([{ id: 100, name: 'A', icon: 't', pct: 100 }]);
+    expect(bench.value.enchants[15]).toEqual([{ id: 8041, name: 'Soph', pct: 100 }]);
   });
 
   it('backfills past a private (unfetchable) top parse to keep the sample count full', async () => {
@@ -223,16 +219,18 @@ describe('GearTransformService (live, in-browser)', () => {
     });
     const bench = await TestBed.inject(GearTransformService).getBench('SubtletyRogue', 1);
     // 11 candidates, one private: the 11th backfills the skipped parse to a full 10.
-    expect(bench!.sample_count).toBe(10);
+    expect(bench.ok).toBe(true);
+    if (bench.ok) expect(bench.value.sample_count).toBe(10);
   });
 
-  it('returns null when there are no rankings', async () => {
+  it('is a missing error when there are no rankings', async () => {
     TestBed.configureTestingModule({
       providers: [
         { provide: WclApiService, useValue: { getRankings: async () => ({ rankings: [] }) } as unknown as WclApiService },
         { provide: DataFileApiService, useValue: {} as unknown as DataFileApiService },
       ],
     });
-    expect(await TestBed.inject(GearTransformService).getBench('SubtletyRogue', 1)).toBeNull();
+    expect(await TestBed.inject(GearTransformService).getBench('SubtletyRogue', 1))
+      .toEqual(missing('Not yet ingested.'));
   });
 });

@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, MockInstance } from 'vitest';
 import {
-  abilityIcons, normalizeAbilityId, toParseRankings, unwrapRankings,
+  abilityIcons, normalizeAbilityId, toParseRankings, unwrapRankings, windowSpells,
   WCL_MELEE_EVENT_ABILITY_ID, WOW_AUTO_ATTACK_SPELL_ID,
 } from './wcl-projections';
 
@@ -75,6 +75,37 @@ describe('abilityIcons', () => {
     expect(abilityIcons(raw)).toEqual({ [SHADOW_BLADES]: { icon: 'ability_sb', name: 'Shadow Blades' } });
   });
 
+});
+
+describe('windowSpells', () => {
+  const SHADOW_BLADES = 121471;
+  const UNKNOWN_SPELL_ID = 999999; // an id the ability map never resolved
+  const abilities = { [SHADOW_BLADES]: { icon: 'ability_sb', name: 'Shadow Blades' } };
+
+  // A missing id is reported via logWarn -> console.warn; the spy keeps the runner
+  // output clean and lets the missing-id test assert on the warning.
+  let warnSpy: MockInstance<typeof console.warn>;
+  beforeEach(() => { warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined); });
+  afterEach(() => { warnSpy.mockRestore(); });
+
+  it('resolves a known id to its baked icon and name', () => {
+    expect(windowSpells([SHADOW_BLADES], abilities)).toEqual([
+      { id: SHADOW_BLADES, icon: 'ability_sb', name: 'Shadow Blades' },
+    ]);
+  });
+
+  it('emits a labelled empty-icon placeholder for an unknown id without throwing', () => {
+    expect(() => windowSpells([UNKNOWN_SPELL_ID], abilities)).not.toThrow();
+    expect(windowSpells([UNKNOWN_SPELL_ID], abilities)).toEqual([
+      { id: UNKNOWN_SPELL_ID, icon: '', name: `Ability #${UNKNOWN_SPELL_ID}` },
+    ]);
+  });
+
+  it('warns with the missing id so a bug report can reproduce it', () => {
+    windowSpells([UNKNOWN_SPELL_ID], abilities);
+    // logWarn(context, id) lands as two console.warn args: '[warcraft-learner] <context>:', id.
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('windowSpells'), UNKNOWN_SPELL_ID);
+  });
 });
 
 describe('normalizeAbilityId', () => {

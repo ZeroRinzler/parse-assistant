@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { TestBed } from '@angular/core/testing';
+import { HttpErrorResponse } from '@angular/common/http';
 import { BurstWindow, PlayerBurstWindow } from '../../../core/models/analysis.models';
 import { WclApiService } from '../../../core/services/wcl-api';
+import { Result, LoadError, ok, missing, transient } from '../../../core/result';
 import { BURST_DATA_SOURCE, BurstBench } from './burst-data-source';
 import { DataSource } from '../../../core/data-source/data-source';
 import {
@@ -10,8 +12,6 @@ import {
 } from './burst.service';
 import { SHADOW_BLADES, SHADOW_BLADES_DAMAGE } from '../../../../testing/spell-ids';
 import { cast, damage } from '../../../../testing/builders/events';
-
-/* ----------------------------- pure functions ----------------------------- */
 
 describe('burstWindowStatus', () => {
   // topAvg 1000, topMin 800, stddev 100 -> bad below 700, warn below 900.
@@ -107,8 +107,6 @@ describe('buildBurstView', () => {
   });
 });
 
-/* ----------------------------- feature service ---------------------------- */
-
 describe('findPlayerBurstWindows', () => {
   const window: BurstWindow = {
     time_s: 10, window_length_s: 20, dmg_avg: 0, dmg_min: 0, dmg_max: 0, dmg_stddev: 0, common_cds: [], ability_breakdown: [],
@@ -142,12 +140,12 @@ const wclFake = {
     dataType === 'Casts' ? [cast(SHADOW_BLADES, 11)] : [damage(SHADOW_BLADES_DAMAGE, 12, 950)],
 };
 
-function withBench(bench: BurstBench | null): BurstFeatureService {
+function withBench(bench: Result<BurstBench, LoadError>, wcl: unknown = wclFake): BurstFeatureService {
   const source: DataSource<BurstBench> = { getBench: () => Promise.resolve(bench) };
   TestBed.configureTestingModule({
     providers: [
       { provide: BURST_DATA_SOURCE, useValue: source },
-      { provide: WclApiService, useValue: wclFake as unknown as WclApiService },
+      { provide: WclApiService, useValue: wcl as WclApiService },
     ],
   });
   return TestBed.inject(BurstFeatureService);
@@ -164,31 +162,55 @@ const benchFixture: BurstBench = {
   }],
 };
 
+// A 5xx status toLoadError maps to a transient error.
+const HTTP_SERVICE_UNAVAILABLE = 503;
+
 describe('BurstFeatureService', () => {
-  it('returns an unavailable, empty view when the bench file is absent', async () => {
-    const view = await withBench(null).loadBenchView('SubtletyRogue', 1);
-    expect(view).toEqual({ available: false, windows: [], anchors: [], clipAnchors: [] });
+  it('propagates the data-source error when the bench read fails', async () => {
+    const result = await withBench(missing('Not yet ingested.')).loadBenchView('SubtletyRogue', 1);
+    expect(result).toEqual(missing('Not yet ingested.'));
   });
 
-  it('marks the view available when the bench file exists', async () => {
-    const view = await withBench(benchFixture).loadBenchView('SubtletyRogue', 1);
-    expect(view.available).toBe(true);
+  it('returns an ok bench view when the bench file exists', async () => {
+    const result = await withBench(ok(benchFixture)).loadBenchView('SubtletyRogue', 1);
+    expect(result.ok).toBe(true);
   });
 
   it('bench-only: shows the top windows with no player overlay (neutral info status)', async () => {
-    const view = await withBench(benchFixture).loadBenchView('SubtletyRogue', 1);
-    expect(view.windows).toHaveLength(1);
-    expect(view.windows[0].overview.playerPct).toBeNull();
-    expect(view.windows[0].status).toBe('info');
-    expect(view.windows[0].statusIcon).toBe('insights');
-    expect(view.anchors[0]).toEqual({ timeS: 10, windowLengthS: 20 });
+    const result = await withBench(ok(benchFixture)).loadBenchView('SubtletyRogue', 1);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.windows).toHaveLength(1);
+    expect(result.value.windows[0].overview.playerPct).toBeNull();
+    expect(result.value.windows[0].status).toBe('info');
+    expect(result.value.windows[0].statusIcon).toBe('insights');
+    expect(result.value.anchors[0]).toEqual({ timeS: 10, windowLengthS: 20 });
   });
 
   it('player view: fetches the log and compares the player damage against the bench', async () => {
-    const view = await withBench(benchFixture).loadPlayerView('SubtletyRogue', 1, 'rep', 1, 10);
-    expect(view.windows).toHaveLength(1);
-    expect(view.windows[0].overview.playerPct).toBe(950);
-    expect(view.windows[0].detailRows[0].label).toBe('Eviscerate');
-    expect(view.anchors[0]).toEqual({ timeS: 10, windowLengthS: 20 });
+    const result = await withBench(ok(benchFixture)).loadPlayerView('SubtletyRogue', 1, 'rep', 1, 10);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.windows).toHaveLength(1);
+    expect(result.value.windows[0].overview.playerPct).toBe(950);
+    expect(result.value.windows[0].detailRows[0].label).toBe('Eviscerate');
+    expect(result.value.anchors[0]).toEqual({ timeS: 10, windowLengthS: 20 });
+  });
+
+  it('surfaces a WCL failure in the player view as a transient error (no silent bench-only fallback)', async () => {
+    const failingWcl = { getReport: async () => { throw new HttpErrorResponse({ status: HTTP_SERVICE_UNAVAILABLE }); } };
+    const result = await withBench(ok(benchFixture), failingWcl).loadPlayerView('SubtletyRogue', 1, 'rep', 1, 10);
+    expect(result).toEqual(transient('WCL is unreachable right now.'));
+  });
+
+  it('returns an ok informational view when the selected fight is not in the report (live sync)', async () => {
+    const MISSING_FIGHT_ID = 999;
+    const result = await withBench(ok(benchFixture)).loadPlayerView('SubtletyRogue', 1, 'rep', MISSING_FIGHT_ID, 10);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.windows).toHaveLength(1);
+    // No player overlay: the informational bench-only view (benchOnly=true) shows the neutral info glyph.
+    expect(result.value.windows[0].status).toBe('info');
+    expect(result.value.windows[0].overview.playerPct).toBeNull();
   });
 });

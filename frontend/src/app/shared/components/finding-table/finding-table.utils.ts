@@ -1,4 +1,11 @@
 import { AnalysisFinding } from '../../../core/models/analysis.models';
+import { logWarn } from '../../../core/log';
+
+/** Displayed "What" label for a finding whose cooldown could not be identified (no cd_name). */
+export const UNKNOWN_COOLDOWN_LABEL = 'Unknown cooldown';
+
+/** logWarn context for a surfaced finding that carries no identifiable cooldown. */
+const UNKNOWN_COOLDOWN_CONTEXT = 'finding-table.unknown-cooldown';
 
 /** Maps a finding category to the short label shown as a meta chip. */
 export const CAT_LABEL: Record<string, string> = {
@@ -20,7 +27,7 @@ export interface FindingMeasure {
  * Rule rows carry a plain `what` label; cooldown rows carry a spell identity.
  */
 export interface FindingRow {
-  severity: 'critical' | 'warning';
+  severity: 'critical' | 'warning' | 'info';
   name?: string;
   spellId?: number | null;
   /** Baked icon filename for `wl-game-icon` (empty string when there is no art). */
@@ -59,7 +66,7 @@ export function rowsFromEntries(entries: FindingEntry[], catLabel: Record<string
     if (!entry.hasIssue) continue;
     for (const f of entry.findings) {
       rows.push({
-        severity: f.severity === 'critical' ? 'critical' : 'warning',
+        severity: f.severity === 'critical' ? 'critical' : f.severity === 'info' ? 'info' : 'warning',
         name: entry.name,
         spellId: entry.spellId,
         icon: entry.icon,
@@ -111,10 +118,13 @@ export function bucketFindings(
       (byName[name] ??= { issues: [], holds: [] }).holds.push(finding);
     } else if (options.collectRules && (finding.category === 'rule_violation' || !finding.cd_name)) {
       ruleFindings.push(finding);
+    } else if (finding.cd_name) {
+      (byName[finding.cd_name] ??= { issues: [], holds: [] }).issues.push(finding);
     } else {
-      const name = finding.cd_name;
-      if (!name) continue;
-      (byName[name] ??= { issues: [], holds: [] }).issues.push(finding);
+      // No cd_name and not collected as a rule: surface it under an explicit label so the
+      // coaching feedback is never dropped, and log the finding so a report can reproduce it.
+      logWarn(UNKNOWN_COOLDOWN_CONTEXT, finding);
+      (byName[UNKNOWN_COOLDOWN_LABEL] ??= { issues: [], holds: [] }).issues.push(finding);
     }
   }
   for (const finding of findings) {

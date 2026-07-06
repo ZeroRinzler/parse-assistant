@@ -1,14 +1,9 @@
-<!-- Gear card: one top-level header (Gear title + subtitle + column labels, like wl-finding-table)
-     followed by three sections each with a small mono sub-heading (Talents / Trinkets / Enchants).
-     Column labels live in the card header and are NOT repeated per section.
-
-     Dual-mode off `view()`: comparison (player vs bench) when view().comparison, else bench-only.
-     The 4-col grid template literals are mirrored across header + every row; keep them in sync. -->
-
-@if (available()) {
+<!-- The 4-col grid template literals are mirrored across header + every row; keep them in sync. -->
+@if (error() || !available()) {
+  <wl-load-state heading="Gear" subtitle="Top-parse gear consensus." [error]="error()"></wl-load-state>
+} @else {
 <div class="bg-[var(--surface)] border border-[var(--border)] rounded-[10px] overflow-hidden">
 
-  <!-- Card header: same 4-col grid as wl-finding-table. Mobile drops the grid + column labels. -->
   <div class="px-4 pt-3 pb-2 md:grid md:grid-cols-[20px_minmax(0,1fr)_96px_200px] md:gap-[14px] md:items-baseline">
     <div class="md:col-span-2">
       <div class="text-[17px] font-semibold text-[var(--text)]">Gear</div>
@@ -22,9 +17,7 @@
     <div class="hidden md:block text-[10px] uppercase tracking-widest text-[var(--muted)] pl-[14px]">Fix</div>
   </div>
 
-  <!-- ── TALENTS ─────────────────────────────────────────────────────── -->
   <div class="border-t border-[var(--border)]">
-    <!-- Section sub-heading on the grid (same col alignment as rows) -->
     <div class="px-4 pt-3 pb-1 md:grid md:grid-cols-[20px_minmax(0,1fr)_96px_200px] md:gap-[14px] md:items-baseline">
       <div></div>
       <div class="text-[10px] uppercase tracking-widest text-[var(--muted)]">Talents</div>
@@ -34,7 +27,6 @@
 
     @if (view().comparison) {
       @if (view().talentStatus.status === 'warn') {
-        <!-- issue row: % in subline per design; top% col left empty -->
         <div class="grid grid-cols-[20px_minmax(0,1fr)] md:grid-cols-[20px_minmax(0,1fr)_96px_200px] gap-x-[14px] gap-y-2 md:gap-y-0 px-4 py-[10px] items-start md:items-center border-t border-[var(--border)]">
           <div class="flex items-center justify-center self-start md:self-center">
             <mat-icon class="icon-18 badge-warning">warning_amber</mat-icon>
@@ -58,7 +50,6 @@
           </div>
         </div>
       } @else if (view().talentStatus.status === 'ok') {
-        <!-- on-plan chip -->
         <div class="flex items-center gap-2 flex-wrap border-t border-[var(--border)] px-4 py-[10px]">
           <span class="text-[10px] uppercase tracking-widest text-[var(--muted)] mr-0.5">On plan</span>
           <span class="chip-onplan">
@@ -66,13 +57,11 @@
           </span>
         </div>
       } @else {
-        <!-- unknown: no bench talent data -->
         <div class="flex items-center gap-2 border-t border-[var(--border)] px-4 py-3 text-[13px] text-[var(--muted)]">
           No talent data.
         </div>
       }
     } @else {
-      <!-- bench-only: talent build rows -->
       @if (view().talentBuilds.length) {
         @for (build of view().talentBuilds; track build.label) {
           <div class="grid grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[20px_minmax(0,1fr)_96px_200px] gap-x-[14px] gap-y-1 md:gap-y-0 items-center px-4 py-[10px] border-t border-[var(--border)]">
@@ -96,9 +85,7 @@
     }
   </div>
 
-  <!-- ── TRINKETS ────────────────────────────────────────────────────── -->
   <div class="border-t border-[var(--border)]">
-    <!-- Section sub-heading -->
     <div class="px-4 pt-3 pb-1 md:grid md:grid-cols-[20px_minmax(0,1fr)_96px_200px] md:gap-[14px] md:items-baseline">
       <div></div>
       <div class="text-[10px] uppercase tracking-widest text-[var(--muted)]">Trinkets</div>
@@ -108,7 +95,6 @@
 
     @if (view().comparison) {
       @if (view().trinketStatus !== 'ok') {
-        <!-- any issue: all slots as rows (issue rows + compact-ok rows); no chips in this state -->
         @for (row of view().trinketRows; track row.slotLabel) {
           @if (row.status !== 'ok') {
             <div class="grid grid-cols-[20px_minmax(0,1fr)] md:grid-cols-[20px_minmax(0,1fr)_96px_200px] gap-x-[14px] gap-y-2 md:gap-y-0 px-4 py-[10px] items-start md:items-center border-t border-[var(--border)]">
@@ -138,7 +124,6 @@
               </div>
             </div>
           } @else {
-            <!-- compact ok trinket row alongside issues -->
             <div class="grid grid-cols-[20px_minmax(0,1fr)] md:grid-cols-[20px_minmax(0,1fr)_96px_200px] gap-x-[14px] gap-y-2 md:gap-y-0 px-4 py-[7px] items-start md:items-center border-t border-[var(--border)]/30 opacity-55">
               <div class="flex items-center justify-center self-start md:self-center">
                 <span class="block h-[7px] w-[7px] shrink-0 rounded-full bg-[var(--success)]/60"></span>
@@ -159,7 +144,6 @@
           }
         }
       } @else if (view().trinketRows.length) {
-        <!-- all ok: one named chip per trinket -->
         <div class="flex items-center gap-2 flex-wrap border-t border-[var(--border)] px-4 py-[10px]">
           <span class="text-[10px] uppercase tracking-widest text-[var(--muted)] mr-0.5">On plan</span>
           @for (row of view().trinketRows; track row.slotLabel) {
@@ -174,7 +158,6 @@
         </div>
       }
     } @else {
-      <!-- bench-only trinkets -->
       @if (view().benchTrinketRows.length) {
         @for (row of view().benchTrinketRows; track row.slotLabel) {
           <div class="grid grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[20px_minmax(0,1fr)_96px_200px] gap-x-[14px] gap-y-1 md:gap-y-0 items-center px-4 py-[10px] border-t border-[var(--border)]">
@@ -198,9 +181,7 @@
     }
   </div>
 
-  <!-- ── ENCHANTS ───────────────────────────────────────────────────── -->
   <div class="border-t border-[var(--border)]">
-    <!-- Section sub-heading -->
     <div class="px-4 pt-3 pb-1 md:grid md:grid-cols-[20px_minmax(0,1fr)_96px_200px] md:gap-[14px] md:items-baseline">
       <div></div>
       <div class="text-[10px] uppercase tracking-widest text-[var(--muted)]">Enchants</div>
@@ -210,7 +191,6 @@
 
     @if (view().comparison) {
       @if (enchantIssues().length) {
-        <!-- issue rows -->
         @for (row of enchantIssues(); track row.slotName) {
           <div class="grid grid-cols-[20px_minmax(0,1fr)] md:grid-cols-[20px_minmax(0,1fr)_96px_200px] gap-x-[14px] gap-y-2 md:gap-y-0 px-4 py-[10px] items-start md:items-center border-t border-[var(--border)]">
             <div class="flex items-center justify-center self-start md:self-center">
@@ -220,7 +200,6 @@
                 {{ row.status === 'info' ? 'info' : 'warning_amber' }}
               </mat-icon>
             </div>
-            <!-- slot label inline-left of enchant name, per design -->
             <div class="min-w-0 flex items-baseline gap-2">
               <span class="shrink-0 w-20 whitespace-nowrap text-[10px] uppercase tracking-widest text-[var(--muted)]">{{ row.slotName }}</span>
               <span class="text-sm text-[var(--text)] truncate">{{ row.name }}</span>
@@ -240,7 +219,6 @@
             </div>
           </div>
         }
-        <!-- passing enchants collapsed to one count chip; only rendered when any pass -->
         @if (enchantOnPlan().length) {
           <div class="flex items-center gap-2 flex-wrap border-t border-[var(--border)] px-4 py-[10px]">
             <span class="text-[10px] uppercase tracking-widest text-[var(--muted)] mr-0.5">On plan</span>
@@ -250,7 +228,6 @@
           </div>
         }
       } @else if (view().enchantRows.length) {
-        <!-- all clear: all enchants chip -->
         <div class="flex items-center gap-2 flex-wrap border-t border-[var(--border)] px-4 py-[10px]">
           <span class="text-[10px] uppercase tracking-widest text-[var(--muted)] mr-0.5">On plan</span>
           <span class="chip-onplan">
@@ -263,7 +240,6 @@
         </div>
       }
     } @else {
-      <!-- bench-only enchants -->
       @if (view().benchEnchantRows.length) {
         @for (row of view().benchEnchantRows; track row.slotName) {
           <div class="grid grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[20px_minmax(0,1fr)_96px_200px] gap-x-[14px] gap-y-1 md:gap-y-0 items-center px-4 py-[10px] border-t border-[var(--border)]">
@@ -288,7 +264,4 @@
   </div>
 
 </div>
-} @else {
-  <!-- No top-parse gear bench yet (fresh tier): show the waiting state. -->
-  <wl-waiting-placeholder heading="Gear" subtitle="Top-parse gear consensus."></wl-waiting-placeholder>
 }

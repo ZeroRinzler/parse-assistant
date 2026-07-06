@@ -7,7 +7,7 @@ import {
 } from '@angular/core';
 import { provideRouter, withComponentInputBinding } from '@angular/router';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
-import { provideHttpClient, withFetch } from '@angular/common/http';
+import { provideHttpClient, withFetch, withInterceptors } from '@angular/common/http';
 import { MatIconRegistry } from '@angular/material/icon';
 import { DomSanitizer } from '@angular/platform-browser';
 import { provideApollo } from 'apollo-angular';
@@ -18,6 +18,7 @@ import { WCL_TRANSPORT, WCL_API_URL } from './core/services/wcl-transport';
 import { ApolloWclTransport } from './core/services/apollo-wcl-transport';
 import { DATA_FILE_TRANSPORT, HttpDataFileTransport } from './core/services/data-file-transport';
 import { DataFileApiService } from './core/services/data-file-api';
+import { retryTransientInterceptor } from './core/interceptors/retry-transient.interceptor';
 import { hydrateSpecMeta } from './core/spec-meta';
 import { dataSourceProviders } from '../environments/environment';
 
@@ -37,13 +38,18 @@ export const appConfig: ApplicationConfig = {
     provideBrowserGlobalErrorListeners(),
     provideRouter(routes, withComponentInputBinding()),
     provideAnimationsAsync(),
-    provideHttpClient(withFetch()),
+    // Apollo's HttpLink rides on this HttpClient, so the retry-transient interceptor
+    // covers both the WCL GraphQL POSTs and the static data-file GETs from one place.
+    provideHttpClient(withFetch(), withInterceptors([retryTransientInterceptor])),
     provideAppInitializer(async () => {
       // Hydrate the spec-meta cache (folder -> class/spec names + icons) from the baked
       // spec-meta.json before anything renders, so the class/spec dropdowns, the icon pipes,
       // and getRankings resolve. One tiny (~40-entry) file fetch, blocking bootstrap.
       const dataFile = inject(DataFileApiService);
-      hydrateSpecMeta(await dataFile.getSpecMeta());
+      // Bootstrap has no card to surface an error on, so a failed read degrades to an empty
+      // universe (which then shows the empty dropdowns) rather than blocking the app.
+      const specMeta = await dataFile.getSpecMeta();
+      hydrateSpecMeta(specMeta.ok ? specMeta.value : []);
     }),
     provideApollo(() => {
       // HttpLink rides on Angular's HttpClient; the per-request bearer token is supplied
@@ -57,16 +63,13 @@ export const appConfig: ApplicationConfig = {
       iconRegistry.setDefaultFontSetClass('material-symbols-outlined');
       iconRegistry.addSvgIconLiteral('github', sanitizer.bypassSecurityTrustHtml(GITHUB_SVG));
     }),
-    // WCL GraphQL transport: apollo-angular in the browser (its InMemoryCache dedupes and
-    // memoises the cache-first reads, so the five feature cards share one report/event fetch).
-    // The Node ingestion binds a plain-fetch transport instead, since apollo-angular does not
-    // run headless.
+    // apollo-angular in the browser, whose InMemoryCache dedupes the cache-first reads so the
+    // five cards share one report/event fetch. Node ingestion binds plain fetch (no headless apollo).
     { provide: WCL_TRANSPORT, useExisting: ApolloWclTransport },
     // Data-file transport: HTTP read-only in the browser (Node ingestion binds a fs read+write one).
     { provide: DATA_FILE_TRANSPORT, useExisting: HttpDataFileTransport },
-    // Vertical-slice data sources: file-backed in production, live transforms under the dev
-    // flag. The list is defined per-environment so a production build never imports (and thus
-    // tree-shakes out) the five `*TransformService`s.
+    // File-backed in production, live transforms under the dev flag. The per-environment list
+    // keeps a production build from importing (so it tree-shakes out) the five *TransformServices.
     ...dataSourceProviders,
   ],
 };

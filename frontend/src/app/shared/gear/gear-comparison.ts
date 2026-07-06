@@ -1,8 +1,4 @@
-/**
- * Pure gear-comparison helpers shared between the pre-fight boss-study page and
- * the analyze page's gear section. All functions are framework-free and unit-testable
- * without Angular.
- */
+/** Pure gear-comparison helpers shared between the pre-fight boss-study page and the gear section. */
 import { CharacterGear } from '../../core/models/wcl.models';
 import { EncounterGearStats } from '../../core/models/encounter.models';
 
@@ -20,8 +16,6 @@ const STATUS_ICONS: Record<GearStatus, string> = {
 
 export function slotName(slot: number): string { return SLOT_NAMES[slot] || `Slot ${slot}`; }
 export function statusIcon(status: GearStatus): string { return STATUS_ICONS[status]; }
-
-// ── Shared types ─────────────────────────────────────────────────────────────
 
 export interface EnchantRow {
   slotName: string;
@@ -52,15 +46,17 @@ export interface TrinketRow {
   note: string | null;
 }
 
-// ── Player-vs-bench comparison (analyze page) ─────────────────────────────────
+// The comparison builders below take a real `CharacterGear` (never null): the card only
+// compares once the player's gear is in hand. The bench-only view uses the dedicated
+// `buildBench*` builders instead, so a not-yet-loaded player never renders "Not enchanted".
 
 /**
  * Enchants: flag slots the player left un-enchanted that top parsers consider
  * mandatory, and surface where the player differs from the consensus enchant.
  */
-export function buildEnchantRows(gear: CharacterGear | null, stats: EncounterGearStats | null): EnchantRow[] {
+export function buildEnchantRows(gear: CharacterGear, stats: EncounterGearStats | null): EnchantRow[] {
   const topEnch = stats?.enchants ?? {};
-  const playerEnch = gear?.enchants ?? [];
+  const playerEnch = gear.enchants ?? [];
   if (!Object.keys(topEnch).length && !playerEnch.length) return [];
   const slots = new Set<number>();
   for (const k of Object.keys(topEnch)) slots.add(Number(k));
@@ -132,11 +128,9 @@ export function talentStatusOf(topStats: EncounterGearStats | null, playerKey: s
 }
 
 /**
- * Trinket slot order is irrelevant in WoW: wearing the two correct top-pick
- * trinkets counts as optimal regardless of which slot (12 vs 13) each sits in.
- * Returns true when the player's worn trinket id set for slots {12, 13} equals
- * the bench's top-pick id set {benchTop12Id, benchTop13Id}, compared unordered.
- * Returns false when either side lacks two distinct ids.
+ * Trinket slot order is irrelevant in WoW: true when the player's worn trinket id set for
+ * slots {12, 13} equals the bench's top-pick set, compared unordered. False unless both sides
+ * have two distinct ids.
  */
 function trinketSetMatches(
   playerTrinkets: NonNullable<CharacterGear['trinkets']>,
@@ -174,22 +168,16 @@ function trinketUsagePct(stats: EncounterGearStats | null, id: number): number |
 }
 
 /**
- * Per-slot trinket comparison: player's item vs top-parse consensus.
- * Returns a row for each slot (12, 13) that has either a player item or bench data.
- *
- * Recommendations come from `topTrinketPair` (two distinct trinkets ranked by
- * overall usage), not per-slot top picks - a trinket cannot be equipped twice,
- * so each recommendation is consumed by at most one slot and the same item is
- * never suggested for both.
+ * Per-slot trinket comparison (slots 12, 13). Recommendations come from `topTrinketPair`
+ * (two distinct trinkets), each consumed by at most one slot, so the same item is never
+ * suggested for both.
  */
-export function buildTrinketRows(gear: CharacterGear | null, stats: EncounterGearStats | null): TrinketRow[] {
-  const playerTrinkets = gear?.trinkets ?? [];
+export function buildTrinketRows(gear: CharacterGear, stats: EncounterGearStats | null): TrinketRow[] {
+  const playerTrinkets = gear.trinkets ?? [];
   const pair = topTrinketPair(stats);
   const rows: TrinketRow[] = [];
 
-  // Trinket slot order does not matter: if the player wears both recommended
-  // trinkets (in either slot order), accept both rows as optimal instead of
-  // flagging each slot for a "Switch to" swap.
+  // If the player wears both recommended trinkets (either slot order), accept both as optimal.
   if (trinketSetMatches(playerTrinkets, pair[0]?.id, pair[1]?.id)) {
     for (const slot of [12, 13]) {
       const label = slotName(slot);
@@ -201,9 +189,8 @@ export function buildTrinketRows(gear: CharacterGear | null, stats: EncounterGea
     return rows;
   }
 
-  // Mark recommendations the player already wears as satisfied, then hand the
-  // remaining (distinct) recommendations to the slots that need one. Consuming
-  // each recommendation once guarantees the two suggestions never collide.
+  // Hand each remaining (distinct) recommendation to a slot that needs one, consuming it once,
+  // so the two suggestions never collide.
   const wornIds = new Set(playerTrinkets.map(trinket => trinket.id));
   const remainingRecs = pair.filter(rec => !wornIds.has(rec.id));
   let recIndex = 0;
@@ -250,8 +237,6 @@ export function trinketStatusOf(rows: TrinketRow[]): GearStatus {
   return 'ok';
 }
 
-// ── Bench-only display (/pre boss-study page) ─────────────────────────────────
-
 export interface BenchEnchantRow {
   slotName: string;
   name: string;
@@ -274,15 +259,9 @@ export interface RecommendedTrinket {
 }
 
 /**
- * The two distinct trinkets top parsers run, ranked by overall usage.
- *
- * Trinket slot order is irrelevant in WoW and a trinket cannot be equipped
- * twice, so the per-slot distributions (which can name the same item as the
- * top pick of both slot 12 and slot 13) are merged by id. Each item's slot-12
- * and slot-13 usage is summed - the two slot sets are disjoint because no parse
- * wears the same trinket in both slots, so the sum is the true "% of top parsers
- * running this trinket" (40% in slot 12 + 30% in slot 13 = 70% overall). The two
- * most-used distinct trinkets are returned, so the same item is never surfaced twice.
+ * The two distinct trinkets top parsers run, ranked by overall usage. The per-slot
+ * distributions are merged by id: no parse wears the same trinket in both slots, so slot-12 +
+ * slot-13 usage sums to the true "% of top parsers running it" (40% + 30% = 70%).
  */
 export function topTrinketPair(stats: EncounterGearStats | null): RecommendedTrinket[] {
   const topTrinkets = stats?.trinkets ?? {};
@@ -315,11 +294,7 @@ export function buildBenchEnchantRows(stats: EncounterGearStats | null): BenchEn
     }, []);
 }
 
-/**
- * Shows the two distinct most-used trinkets for the boss-study view, ranked by
- * overall usage. A trinket can only be equipped once, so the rows are the
- * `topTrinketPair` (merged across slots), never the same item twice.
- */
+/** The two distinct most-used trinkets for the boss-study view (`topTrinketPair`, never the same twice). */
 export function buildBenchTrinketRows(stats: EncounterGearStats | null): BenchTrinketRow[] {
   return topTrinketPair(stats).map((trinket, index) => ({
     slotLabel: index === 0 ? 'Trinket 1' : 'Trinket 2',

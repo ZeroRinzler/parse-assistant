@@ -1,9 +1,8 @@
 <div class="mx-auto flex max-w-[860px] flex-col gap-4 px-3 md:px-4 pt-6 pb-12">
-  @if (error()) {
-    <div class="rounded-lg border border-[var(--critical)]/30 bg-[var(--critical)]/10 px-4 py-3.5 text-[13px] text-[var(--critical)]">{{ error() }}</div>
+  @if (error(); as e) {
+    <wl-load-state [error]="e" />
   }
 
-  <!-- Spec + encounter selector -->
   <mat-card appearance="outlined" class="p-4">
     @if (loading()) {
       <wl-loading-spinner message="Loading specs…"></wl-loading-spinner>
@@ -92,16 +91,12 @@
       <wl-bench-empty-banner variant="pre" [encounter]="selectedEncounter()?.name ?? ''"></wl-bench-empty-banner>
     }
 
-    <!-- Gear consensus (bench-only mode: no player selection) -->
     <wl-gear [spec]="selectedSpec()" [encounterId]="selectedEncId()" (availableChange)="gearAvailable.set($event)"></wl-gear>
 
-    <!-- Cooldown plan -->
     <wl-rotation-cd-plan [spec]="selectedSpec()" [encounterId]="selectedEncId()" (availableChange)="cdPlanAvailable.set($event)"></wl-rotation-cd-plan>
 
-    <!-- Defensive plan -->
     <wl-defensive-plan [spec]="selectedSpec()" [encounterId]="selectedEncId()" (availableChange)="defensivePlanAvailable.set($event)"></wl-defensive-plan>
 
-    <!-- Burst windows (bench-only) -->
     <wl-burst-windows [spec]="selectedSpec()" [encounterId]="selectedEncId()" [showMap]="mapReady()" (openMap)="onOpenMap($event)" (availableChange)="burstAvailable.set($event)"></wl-burst-windows>
   }
 

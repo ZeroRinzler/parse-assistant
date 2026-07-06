@@ -13,6 +13,7 @@ import {
 import { applyBuff, removeBuff, damageTaken, cast } from '../../../../testing/builders/events';
 import { rulebook } from '../../../../testing/builders/rulebook';
 import { CLOAK_OF_SHADOWS, EVASION } from '../../../../testing/spell-ids';
+import { ok } from '../../../core/result';
 
 // Enemy-side identifiers for the damage-taken fixtures (not player abilities, so local).
 const BOSS_HIT = 700;       // an enemy ability id the player takes damage from
@@ -24,8 +25,6 @@ const ADD_GAME_ID = 5555;   // stable gameID the add actor maps to
 
 const CLOAK = { name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS, cooldown: 120, duration: 5 };
 const FIGHT_DUR_S = 300;  // standard fight length used across the per-parse summary fixtures
-
-/* ----------------------------- pure functions ----------------------------- */
 
 describe('defensiveSpellIds', () => {
   it('maps defensive names to spell ids, skipping missing ids', () => {
@@ -249,8 +248,6 @@ describe('aggregateDefensiveBenchmarks', () => {
   });
 });
 
-/* ----------------------------- service (end to end, fake client) ----------------------------- */
-
 function reportFor(playerId: number, playerName: string, fightId: number) {
   return {
     title: 't',
@@ -282,7 +279,7 @@ const wclFake = {
     Object.fromEntries(ids.map(id => [id, id === 700 ? { id, icon: 'hit', name: 'Boss Hit' } : { id, icon: 'cloak', name: 'Cloak of Shadows' }])),
 };
 const filesFake = {
-  getRulebook: async () => rulebook({ defensives: [CLOAK] }),
+  getRulebook: async () => ok(rulebook({ defensives: [CLOAK] })),
 };
 
 describe('DefensiveTransformService (live, in-browser)', () => {
@@ -294,15 +291,16 @@ describe('DefensiveTransformService (live, in-browser)', () => {
       ],
     });
     const bench = await TestBed.inject(DefensiveTransformService).getBench('SubtletyRogue', 1);
-    expect(bench).not.toBeNull();
-    expect(bench!.sample_count).toBe(2);
-    expect(bench!.encounter_name).toBe('Boss');
-    expect(bench!.cd_spell_ids).toEqual({ 'Cloak of Shadows': CLOAK_OF_SHADOWS });
-    expect(bench!.defensives[0]).toMatchObject({ name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS });
-    expect(bench!.defensive_windows).toHaveLength(1);
-    expect(bench!.defensive_windows[0]).toMatchObject({ defensive_name: 'Cloak of Shadows', dmg_avg: 1000, ref_game_id: 6666 });
-    expect(bench!.top_defensives_summary).toEqual([{ spell_id: CLOAK_OF_SHADOWS, avg_uses: 1, min_uses: 1, max_uses: 1 }]);
-    expect(bench!.ability_icons[700]).toEqual({ icon: 'hit', name: 'Boss Hit' });
+    expect(bench.ok).toBe(true);
+    if (!bench.ok) return;
+    expect(bench.value.sample_count).toBe(2);
+    expect(bench.value.encounter_name).toBe('Boss');
+    expect(bench.value.cd_spell_ids).toEqual({ 'Cloak of Shadows': CLOAK_OF_SHADOWS });
+    expect(bench.value.defensives[0]).toMatchObject({ name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS });
+    expect(bench.value.defensive_windows).toHaveLength(1);
+    expect(bench.value.defensive_windows[0]).toMatchObject({ defensive_name: 'Cloak of Shadows', dmg_avg: 1000, ref_game_id: 6666 });
+    expect(bench.value.top_defensives_summary).toEqual([{ spell_id: CLOAK_OF_SHADOWS, avg_uses: 1, min_uses: 1, max_uses: 1 }]);
+    expect(bench.value.ability_icons[700]).toEqual({ icon: 'hit', name: 'Boss Hit' });
   });
 
   it('backfills past a private (unfetchable) top parse to keep the sample count full', async () => {
@@ -324,16 +322,32 @@ describe('DefensiveTransformService (live, in-browser)', () => {
     });
     const bench = await TestBed.inject(DefensiveTransformService).getBench('SubtletyRogue', 1);
     // 11 candidates, one private: the 11th backfills the skipped parse to a full 10.
-    expect(bench!.sample_count).toBe(10);
+    expect(bench.ok).toBe(true);
+    if (bench.ok) expect(bench.value.sample_count).toBe(10);
   });
 
-  it('returns null when the spec has no rulebook defensives', async () => {
+  it('reports missing when the spec has no rulebook defensives', async () => {
     TestBed.configureTestingModule({
       providers: [
         { provide: WclApiService, useValue: wclFake as unknown as WclApiService },
-        { provide: DataFileApiService, useValue: { getRulebook: async () => ({ spec: 'X', defensives: [] }) } as unknown as DataFileApiService },
+        { provide: DataFileApiService, useValue: { getRulebook: async () => ok({ spec: 'X', defensives: [] }) } as unknown as DataFileApiService },
       ],
     });
-    expect(await TestBed.inject(DefensiveTransformService).getBench('SubtletyRogue', 1)).toBeNull();
+    const bench = await TestBed.inject(DefensiveTransformService).getBench('SubtletyRogue', 1);
+    expect(bench.ok).toBe(false);
+    if (!bench.ok) expect(bench.error.kind).toBe('missing');
+  });
+
+  it('surfaces a WCL failure as an error, not a silent null bench', async () => {
+    const failingWcl = { ...wclFake, getRankings: async () => { throw new Error('WCL exploded'); } };
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: WclApiService, useValue: failingWcl as unknown as WclApiService },
+        { provide: DataFileApiService, useValue: filesFake as unknown as DataFileApiService },
+      ],
+    });
+    const bench = await TestBed.inject(DefensiveTransformService).getBench('SubtletyRogue', 1);
+    expect(bench.ok).toBe(false);
+    if (!bench.ok) expect(bench.error).toMatchObject({ kind: 'permanent', id: 'defensive.bench' });
   });
 });

@@ -1,16 +1,20 @@
 import { describe, it, expect } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { WclApiService } from '../../../core/services/wcl-api';
-import { WclEvent, WclFight, WclReport } from '../../../core/models/wcl.models';
+import { WclEvent, WclFight, WclReport, WclTableBlob } from '../../../core/models/wcl.models';
+import { ok, permanent } from '../../../core/result';
 import {
   PullOverviewFeatureService,
   dpsFromTable, abilityNameMap, lethalHitAmount, buildDeathRows, wipeTimeS,
 } from './pull-overview.service';
 
-// --- readable fixture constants -------------------------------------------------
 const PLAYER_ID = 5;
 const OTHER_PLAYER = 9;
 const KILLER_ID = 88;
+const ABSENT_PLAYER_ID = 77; // a player with no row in the damage table (e.g. a healer)
+
+// A null/failed damage table blob is a permanent load failure, not a measured 0.
+const MISSING_TABLE_ERROR = permanent('Damage table missing for this pull.', 'pull-overview.damage-table');
 
 const OVERWHELMING_BLAST = 214001;
 const FROST_BOMB = 198002;
@@ -67,17 +71,23 @@ describe('dpsFromTable', () => {
   const blob = { data: { entries: [{ id: OTHER_PLAYER, total: 999 }, { id: PLAYER_ID, total: PLAYER_TOTAL }] } };
 
   it('divides the player entry total by the pull length', () => {
-    expect(dpsFromTable(blob, PLAYER_ID, FIGHT_DURATION_S)).toBe(EXPECTED_DPS);
+    expect(dpsFromTable(blob, PLAYER_ID, FIGHT_DURATION_S)).toEqual(ok(EXPECTED_DPS));
   });
 
   it('parses a JSON-string blob the same as an object blob', () => {
-    expect(dpsFromTable(JSON.stringify(blob), PLAYER_ID, FIGHT_DURATION_S)).toBe(EXPECTED_DPS);
+    expect(dpsFromTable(JSON.stringify(blob), PLAYER_ID, FIGHT_DURATION_S)).toEqual(ok(EXPECTED_DPS));
   });
 
-  it('returns 0 for a missing player, a null blob, or a zero-length pull', () => {
-    expect(dpsFromTable(blob, 404, FIGHT_DURATION_S)).toBe(0);
-    expect(dpsFromTable(null, PLAYER_ID, FIGHT_DURATION_S)).toBe(0);
-    expect(dpsFromTable(blob, PLAYER_ID, 0)).toBe(0);
+  it('reports a null blob as a failed load, so the player never shows a bogus measured 0', () => {
+    expect(dpsFromTable(null, PLAYER_ID, FIGHT_DURATION_S)).toEqual(MISSING_TABLE_ERROR);
+  });
+
+  it('reports a real 0 for a player absent from a valid table (a healer with no damage entry)', () => {
+    expect(dpsFromTable(blob, ABSENT_PLAYER_ID, FIGHT_DURATION_S)).toEqual(ok(0));
+  });
+
+  it('reports a real 0 for a zero-length pull - an empty pull measures no damage, not a failure', () => {
+    expect(dpsFromTable(blob, PLAYER_ID, 0)).toEqual(ok(0));
   });
 });
 
@@ -174,16 +184,19 @@ describe('wipeTimeS', () => {
   });
 });
 
-// --- end-to-end through the feature service (fake WclApiService) ----------------
 interface FakeCalls { dataTypes: string[] }
 
-function makeService(over: { fight?: Partial<WclFight>; deaths?: WclEvent[]; damageTaken?: WclEvent[]; resurrects?: WclEvent[] } = {}): {
+function makeService(over: {
+  fight?: Partial<WclFight>; deaths?: WclEvent[]; damageTaken?: WclEvent[]; resurrects?: WclEvent[];
+  table?: WclTableBlob | null;
+} = {}): {
   service: PullOverviewFeatureService; calls: FakeCalls;
 } {
   const calls: FakeCalls = { dataTypes: [] };
+  const defaultTable: WclTableBlob = { data: { entries: [{ id: PLAYER_ID, total: PLAYER_TOTAL }] } };
   const wcl = {
     getReport: async () => report(),
-    getDamageDoneTable: async () => ({ data: { entries: [{ id: PLAYER_ID, total: PLAYER_TOTAL }] } }),
+    getDamageDoneTable: async () => ('table' in over ? over.table : defaultTable),
     getAllEvents: async (_c: string, _f: number, dataType: string) => {
       calls.dataTypes.push(dataType);
       if (dataType === 'Deaths') return over.deaths ?? [];
@@ -208,8 +221,11 @@ describe('PullOverviewFeatureService.loadView', () => {
       ],
       damageTaken: [dtEvent(OVERWHELMING_BLAST, DEATH_1_AT_S, BLAST_AMOUNT, BLAST_UNMITIGATED)],
     });
-    const view = await service.loadView('r', PLAYER_ID, fight());
+    const result = await service.loadView('r', PLAYER_ID, fight());
 
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const view = result.value;
     expect(view.result).toBe('wipe');
     expect(view.bossPercentage).toBe(41);
     expect(view.durationS).toBe(FIGHT_DURATION_S);
@@ -221,11 +237,24 @@ describe('PullOverviewFeatureService.loadView', () => {
 
   it('marks a clean kill at the fight end and skips the DamageTaken fetch when the player did not die', async () => {
     const { service, calls } = makeService({ deaths: [deathEvent(OTHER_PLAYER, DEATH_1_AT_S, OVERWHELMING_BLAST)] });
-    const view = await service.loadView('r', PLAYER_ID, fight({ kill: true, fightPercentage: 0 }));
+    const result = await service.loadView('r', PLAYER_ID, fight({ kill: true, fightPercentage: 0 }));
 
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const view = result.value;
     expect(view.result).toBe('kill');
     expect(view.deaths).toEqual([]);
     expect(view.outcomeTimeS).toBe(FIGHT_DURATION_S);
     expect(calls.dataTypes).not.toContain('DamageTaken');
+  });
+
+  it('fails the load when the damage table is missing, so the pull is not scored a bogus 0 DPS', async () => {
+    const { service } = makeService({
+      table: null,
+      deaths: [deathEvent(OTHER_PLAYER, DEATH_1_AT_S, OVERWHELMING_BLAST)],
+    });
+    const result = await service.loadView('r', PLAYER_ID, fight({ kill: true, fightPercentage: 0 }));
+
+    expect(result).toEqual(MISSING_TABLE_ERROR);
   });
 });

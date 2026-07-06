@@ -98,6 +98,9 @@ describe('closestToZero', () => {
   it('returns the value with the smallest absolute magnitude', () => {
     expect(closestToZero([-3, 1, 4])).toBe(1);
   });
+  it('returns 0 for an empty array', () => {
+    expect(closestToZero([])).toBe(0);
+  });
 });
 
 describe('benchExpectedUses', () => {

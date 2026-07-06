@@ -1,23 +1,22 @@
 <div class="flex flex-col gap-6">
-  <!-- Rotation rules: rendered only when there is something to say. -->
-  @if (ruleRows().length || ruleOnPlanChips().length) {
-    <wl-finding-table
-      heading="Rotation Rules"
-      subtitle="Rotation rules vs top parses."
-      [rows]="ruleRows()"
-      [onPlan]="ruleOnPlanChips()">
-    </wl-finding-table>
-  }
+  @if (error() || !available()) {
+    <!-- Offensive cooldowns are bench-driven; the load-state stands in until a bench exists, or shows the error. -->
+    <wl-load-state heading="Offensives" subtitle="Offensive cooldowns vs top parses." [error]="error()"></wl-load-state>
+  } @else {
+    @if (ruleRows().length || ruleOnPlanChips().length) {
+      <wl-finding-table
+        heading="Rotation Rules"
+        subtitle="Rotation rules vs top parses."
+        [rows]="ruleRows()"
+        [onPlan]="ruleOnPlanChips()">
+      </wl-finding-table>
+    }
 
-  <!-- Offensive cooldowns: bench-driven, so the waiting state stands in until a bench exists. -->
-  @if (available()) {
     <wl-finding-table
       heading="Offensives"
       subtitle="Offensive cooldowns vs top parses."
       [rows]="offensiveRows()"
       [onPlan]="onPlan()">
     </wl-finding-table>
-  } @else {
-    <wl-waiting-placeholder heading="Offensives" subtitle="Offensive cooldowns vs top parses."></wl-waiting-placeholder>
   }
 </div>

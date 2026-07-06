@@ -1,18 +1,3 @@
-/**
- * Live `DataSource<BurstBench>`: computes the burst bench live in the browser (no
- * ingestion). Self-contained per the slice rule - it imports the two API
- * services + models + `logWarn` (plus generic `d3-array` stats and the blessed
- * `shared/analysis/analysis-math` primitives such as `round`/`groupByTime`), and
- * reimplements its own burst DOMAIN math below (it does NOT reference the ingest
- * analysis). Bound by `environment.useLiveTransform`.
- *
- * It fetches the encounter's top parses, refetches each parse's Casts + DamageDone,
- * finds each parse's measured damage-density bursts (the stretches where the player's
- * DamageDone rate runs well above its fight-average), and clusters them across parses.
- * Windows are derived from where the damage actually lands, not from cooldown-cast x
- * rulebook-`duration` spans; cooldowns are only attributed onto a window after the
- * fact. Bloodlust timing is irrelevant here, so Buffs are skipped.
- */
 import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
@@ -20,20 +5,20 @@ import { WclEvent, ParseRanking } from '../../../core/models/wcl.models';
 import { RulebookCooldown, RulebookDefensive } from '../../../core/models/rulebook.models';
 import { BurstWindow } from '../../../core/models/analysis.models';
 import { logWarn } from '../../../core/log';
+import { Result, LoadError, ok, missing } from '../../../core/result';
+import { toLoadError } from '../../../core/http-load-error';
 import { mean, median, deviation, quantile } from 'd3-array';
 import { round, groupByTime, getOrInsert } from '../../../shared/analysis/analysis-math';
 import { abilityIcons, normalizeAbilityId, toParseRankings, unwrapRankings } from '../../../shared/analysis/wcl-projections';
 import { DataSource } from '../../../core/data-source/data-source';
 import { BurstBench } from './burst-data-source';
 
-// Re-exported from the shared blessed module so call sites / specs that import it
-// from the transform service keep working.
+// Re-exported so call sites and specs can import it from this service.
 export { toParseRankings } from '../../../shared/analysis/wcl-projections';
 
-/** How many top parses to sample (matches the ingest bench). */
+/** How many top parses to sample. */
 const TOP_PARSE_COUNT = 10;
-// Over-fetch so a private/unfetchable top parse can be backfilled by the
-// next-best one; the break in the loop caps actual fetches at TOP_PARSE_COUNT.
+// Over-fetch so a private/unfetchable top parse can be backfilled by the next-best one.
 const CANDIDATE_POOL_COUNT = TOP_PARSE_COUNT * 2;
 /** A window must carry at least this share of fight damage to count. */
 const SIGNIFICANCE_PCT = 0.015;
@@ -44,7 +29,6 @@ const MEMBER_MAJORITY_FRAC = 0.5;
 /** Windows within this many seconds cluster together. */
 const CLUSTER_MERGE_S = 15;
 
-/* ---- damage-density window detection (per parse) ---- */
 /** Sub-window bin width: damage is bucketed into 1s bins. */
 const BIN_MS = 1000;
 const BIN_S = BIN_MS / 1000;
@@ -57,9 +41,6 @@ const RATE_QUANTILE = 0.66;
 /** Bridge two dense runs separated by at most this many sub-threshold bins. */
 const MERGE_GAP_BINS = 2;
 
-/* ----------------------------- pure helpers (own math) ----------------------------- */
-
-/** Cooldown name -> spell id, for the burst window header icons. */
 export function cdSpellIds(cooldowns: RulebookCooldown[], defensives: RulebookDefensive[]): Record<string, number> {
   const map: Record<string, number> = {};
   for (const cooldown of cooldowns) if (cooldown.spell_id) map[cooldown.name] = cooldown.spell_id;
@@ -69,7 +50,6 @@ export function cdSpellIds(cooldowns: RulebookCooldown[], defensives: RulebookDe
 
 interface CdTiming { name: string; castTimesS: number[]; }
 
-/** Per-cooldown cast times (fight-relative seconds), for post-hoc window attribution. */
 export function cdTimings(casts: WclEvent[], cooldowns: RulebookCooldown[], fightStartMs: number): CdTiming[] {
   return cooldowns.map(cooldown => ({
     name: cooldown.name,
@@ -80,7 +60,6 @@ export function cdTimings(casts: WclEvent[], cooldowns: RulebookCooldown[], figh
   }));
 }
 
-/** One parse's burst window before cross-parse clustering. */
 export interface ParseWindow {
   time_s: number;
   window_length_s: number;
@@ -91,19 +70,16 @@ export interface ParseWindow {
   parse_index: number;
 }
 
-/** A `[startBin, endBin]` bin-index span (inclusive on both ends). */
+/** Bin-index span, inclusive on both ends. */
 export interface BinRun {
   startBin: number;
   endBin: number;
 }
 
-/** One damage hit as `[timestamp, damage, abilityGameID]`, sorted by timestamp. */
+/** `[timestamp, damage, abilityGameID]`. */
 type DamageHit = [number, number, number];
 
-/**
- * Bucket damage hits into `binCount` fixed `BIN_MS` bins spanning the fight, indexed
- * from `fightStartMs`. A hit before/after the span clamps into the first/last bin.
- */
+/** A hit before/after the fight span clamps into the first/last bin. */
 export function bucketDamagePerBin(hits: DamageHit[], fightStartMs: number, binCount: number): number[] {
   const damagePerBin = new Array<number>(binCount).fill(0);
   for (const [timestamp, hitDamage] of hits) {
@@ -125,13 +101,8 @@ export function forwardRollingDamage(damagePerBin: number[], rollBins: number): 
   return rollingDamage;
 }
 
-/**
- * Contiguous runs of dense bins. A bin is dense when its rolling damage clears
- * `densityThreshold` (strict `>=`). A run opens at the first dense bin and extends
- * while bins stay dense or fall short by at most `mergeGapBins` sub-threshold bins
- * (which bridge two dense stretches); a longer gap finalizes the run at its last
- * dense bin.
- */
+// A bin is dense when its rolling damage clears `densityThreshold` (strict `>=`). A run extends
+// across up to `mergeGapBins` sub-threshold bins bridging two dense stretches; a longer gap ends it.
 export function detectDenseRuns(rollingDamage: number[], densityThreshold: number, mergeGapBins: number): BinRun[] {
   const denseRuns: BinRun[] = [];
   let runStartBin = -1;
@@ -154,11 +125,8 @@ export function detectDenseRuns(rollingDamage: number[], densityThreshold: numbe
   return denseRuns;
 }
 
-/**
- * Snap a dense run to the bins that actually carry damage: the forward rolling rate
- * can flag up to ROLL_BINS-1 damage-free bins before a burst, which would otherwise
- * start the window early. Returns null when the run carries no damage at all.
- */
+// Snap a dense run to the bins that actually carry damage: the forward rolling rate can flag up to
+// ROLL_BINS-1 damage-free bins before a burst, which would otherwise start the window early.
 export function trimRunToDamage(run: BinRun, damagePerBin: number[]): BinRun | null {
   let windowStartBin = run.startBin;
   let windowEndBin = run.endBin;
@@ -168,15 +136,11 @@ export function trimRunToDamage(run: BinRun, damagePerBin: number[]): BinRun | n
   return { startBin: windowStartBin, endBin: windowEndBin };
 }
 
-/** A `[timestamp, abilityGameID]` cast pair. */
+/** `[timestamp, abilityGameID]`. */
 type CastRow = [number, number];
 
-/**
- * Top-6 ability breakdown for one window: damage by ability id, the cast count for
- * each (attributed by ability NAME, since a damage event's id often differs from the
- * cast id), and whether the ability is passive (never cast anywhere in the parse).
- * The window span is the half-open `[startMs, endMs)`.
- */
+// Casts are attributed by ability NAME (a damage event's id often differs from the cast id); an
+// ability is passive when never cast anywhere in the parse. The window span is half-open `[startMs, endMs)`.
 export function windowAbilityBreakdown(
   windowHits: DamageHit[],
   castRows: CastRow[],
@@ -204,7 +168,6 @@ export function windowAbilityBreakdown(
     }));
 }
 
-/** The positional inputs to `findParseWindows`, as a named parameter object. */
 export interface ParseWindowScan {
   damage: WclEvent[];
   fightStartMs: number;
@@ -215,14 +178,8 @@ export interface ParseWindowScan {
   minPct?: number;
 }
 
-/**
- * One parse's burst windows, measured as damage-density bursts: bucket DamageDone
- * into 1s bins, take a 3s rolling rate, and mark the bins whose rate runs well above
- * the parse mean as "dense". Contiguous dense bins (bridging up to MERGE_GAP_BINS
- * sub-threshold bins) form a window. Keep windows above the significance threshold,
- * attribute the cooldowns cast inside each, and break damage + casts down by ability
- * (top 6). Windows come from where the damage lands, not from cooldown durations.
- */
+// Windows are the parse's damage-density bursts (where the damage lands), not cooldown-duration
+// spans: bucket DamageDone into 1s bins, take a rolling rate, and cluster the bins that run dense.
 export function findParseWindows(scan: ParseWindowScan): ParseWindow[] {
   const { damage, fightStartMs, fightEndMs, timings, casts, abilityNames } = scan;
   const minPct = scan.minPct ?? SIGNIFICANCE_PCT;
@@ -240,9 +197,8 @@ export function findParseWindows(scan: ParseWindowScan): ParseWindow[] {
   const damagePerBin = bucketDamagePerBin(hits, fightStartMs, binCount);
   const rollingDamage = forwardRollingDamage(damagePerBin, ROLL_BINS);
 
-  // A bin is dense when its rolling damage clears THRESHOLD_MULT x the mean rolling
-  // damage, floored at the RATE_QUANTILE of the rolling-damage distribution (so a spiky
-  // parse still has to beat its own typical bin, not just its mean).
+  // Threshold floored at the RATE_QUANTILE of the rolling-damage distribution, so a spiky parse
+  // still has to beat its own typical bin, not just its mean.
   const meanRollingDamage = (total / binCount) * ROLL_BINS;
   const densityThreshold = Math.max(THRESHOLD_MULT * meanRollingDamage, quantile(rollingDamage, RATE_QUANTILE) ?? 0);
 
@@ -253,9 +209,8 @@ export function findParseWindows(scan: ParseWindowScan): ParseWindow[] {
     .filter(event => event.type === 'cast' && event.abilityGameID)
     .map(event => [event.timestamp, event.abilityGameID] as CastRow);
   const nameOf = (spellId: number): string => abilityNames.get(spellId) ?? `Spell ${spellId}`;
-  // Parse-global set of every ability name that was ever cast. An ability whose
-  // name never appears here is passive (proc/auto/pet damage), as opposed to an
-  // active ability that merely had no cast inside a given window.
+  // Every ability name ever cast in the parse. A name absent here is passive (proc/auto/pet damage),
+  // as opposed to an active ability that merely had no cast inside a given window.
   const castNamesInParse = new Set(castRows.map(([, abilityId]) => nameOf(abilityId)));
 
   const windows: ParseWindow[] = [];
@@ -266,8 +221,8 @@ export function findParseWindows(scan: ParseWindowScan): ParseWindow[] {
     const windowEndS = (trimmed.endBin + 1) * BIN_S;
     const startMs = fightStartMs + windowStartS * 1000;
     const endMs = fightStartMs + windowEndS * 1000;
-    // Half-open window end (< endMs) to match findPlayerBurstWindows, so a hit/cast
-    // exactly on the boundary is attributed identically on the bench and player sides.
+    // Half-open window end (< endMs) to match findPlayerBurstWindows, so a boundary hit/cast is
+    // attributed identically on the bench and player sides.
     const windowHits = hits.filter(hit => hit[0] >= startMs && hit[0] < endMs);
     const windowDmg = windowHits.reduce((sum, hit) => sum + hit[1], 0);
     if (!windowDmg || windowDmg / total < minPct) continue;
@@ -285,13 +240,13 @@ export function findParseWindows(scan: ParseWindowScan): ParseWindow[] {
       window_damage: windowDmg,
       active_cds,
       ability_breakdown,
-      parse_index: 0, // stamped per-parse in getBench, like the defensive slice
+      parse_index: 0, // stamped per-parse in getBench
     });
   }
   return windows.sort((a, b) => a.time_s - b.time_s);
 }
 
-/** Keep one window per parse (the biggest by window_damage), so a cluster counts DISTINCT parses. */
+/** Keep each parse's biggest window (by window_damage), so a cluster counts DISTINCT parses. */
 export function dedupeByParse(cluster: ParseWindow[]): ParseWindow[] {
   const byParse = new Map<number, ParseWindow>();
   for (const window of cluster) {
@@ -301,17 +256,12 @@ export function dedupeByParse(cluster: ParseWindow[]): ParseWindow[] {
   return [...byParse.values()];
 }
 
-/**
- * Cluster per-parse damage-density windows across parses into the bench
- * `BurstWindow[]`: group windows whose start is within CLUSTER_MERGE_S, keep only a
- * burst a majority of parses share, and emit absolute-damage + mean-length stats.
- */
+// Groups windows whose start is within CLUSTER_MERGE_S and keeps only a burst a majority of parses share.
 export function clusterParseWindows(windows: ParseWindow[], sampleCount: number, mergeS = CLUSTER_MERGE_S): BurstWindow[] {
   const result: BurstWindow[] = [];
   for (const cluster of groupByTime(windows, mergeS)) {
-    // Reduce to one window per parse (its biggest) so the consensus gate and the damage stats
-    // count DISTINCT parses - a parse that lands two dense runs within CLUSTER_MERGE_S of the
-    // cluster counts once ("most parses share it"), like the defensive slice's parse_index dedupe.
+    // Reduce to one window per parse so the consensus gate and damage stats count DISTINCT parses:
+    // a parse landing two dense runs near the cluster counts once.
     const members = dedupeByParse(cluster);
     if (members.length < Math.max(2, sampleCount * CLUSTER_MIN_FRAC)) continue;
     const damages = members.map(member => member.window_damage);
@@ -335,7 +285,7 @@ export function clusterParseWindows(windows: ParseWindow[], sampleCount: number,
         max_damage: Math.round(Math.max(...list)),
         count: list.length,
         avg_casts: Math.round(mean(abilityCasts.get(spell_id) ?? []) ?? 0),
-        // Passive only when no member parse ever cast it (every observation passive).
+        // Passive only when no member parse ever cast it.
         is_passive: (abilityPassive.get(spell_id) ?? []).every(Boolean),
       }))
       .sort((a, b) => b.avg_damage - a.avg_damage)
@@ -362,57 +312,60 @@ export function clusterParseWindows(windows: ParseWindow[], sampleCount: number,
   return result.sort((a, b) => a.time_s - b.time_s);
 }
 
-/* ----------------------------- service shell ----------------------------- */
-
 @Injectable({ providedIn: 'root' })
 export class BurstTransformService implements DataSource<BurstBench> {
   private readonly wclApi = inject(WclApiService);
   private readonly dataFiles = inject(DataFileApiService);
 
-  async getBench(spec: string, encounterId: number): Promise<BurstBench | null> {
+  async getBench(spec: string, encounterId: number): Promise<Result<BurstBench, LoadError>> {
     const rulebook = await this.dataFiles.getRulebook(spec);
-    const cooldowns = rulebook?.major_cooldowns ?? [];
-    if (!cooldowns.length) return null;
-    const defensives = rulebook?.defensives ?? [];
+    if (!rulebook.ok) return rulebook;
+    const cooldowns = rulebook.value.major_cooldowns ?? [];
+    if (!cooldowns.length) return missing('Not yet ingested.');
+    const defensives = rulebook.value.defensives ?? [];
 
-    const rankings = toParseRankings(unwrapRankings(await this.wclApi.getRankings(spec, encounterId)), CANDIDATE_POOL_COUNT);
-    if (!rankings.length) return null;
+    try {
+      const rankings = toParseRankings(unwrapRankings(await this.wclApi.getRankings(spec, encounterId)), CANDIDATE_POOL_COUNT);
+      if (!rankings.length) return missing('Not yet ingested.');
 
-    const allWindows: ParseWindow[] = [];
-    let sampleCount = 0;
-    let encounterName = '';
-    for (const ranking of rankings) {
-      const parse = await this.computeParseWindows(ranking, cooldowns);
-      if (!parse) continue;
-      // Stamp the parse index so clustering counts distinct parses (mirrors the defensive slice).
-      for (const window of parse.windows) window.parse_index = sampleCount;
-      allWindows.push(...parse.windows);
-      encounterName ||= parse.encounterName;
-      sampleCount += 1;
-      if (sampleCount >= TOP_PARSE_COUNT) break;
+      const allWindows: ParseWindow[] = [];
+      let sampleCount = 0;
+      let encounterName = '';
+      for (const ranking of rankings) {
+        const parse = await this.computeParseWindows(ranking, cooldowns);
+        if (!parse) continue;
+        // Stamp the parse index so clustering counts distinct parses.
+        for (const window of parse.windows) window.parse_index = sampleCount;
+        allWindows.push(...parse.windows);
+        encounterName ||= parse.encounterName;
+        sampleCount += 1;
+        if (sampleCount >= TOP_PARSE_COUNT) break;
+      }
+      if (!sampleCount) return missing('Not yet ingested.');
+
+      const windows = clusterParseWindows(allWindows, sampleCount);
+      const cd_spell_ids = cdSpellIds(cooldowns, defensives);
+      // A real icon for every spell the card renders (header cooldowns and each window ability)
+      // by id, so the map is complete (no fallback).
+      const referencedIds = [
+        ...Object.values(cd_spell_ids),
+        ...windows.flatMap(window => window.ability_breakdown.map(ability => ability.spell_id)),
+      ];
+      return ok({
+        spec,
+        encounter_id: encounterId,
+        encounter_name: encounterName,
+        sample_count: sampleCount,
+        windows,
+        cd_spell_ids,
+        ability_icons: abilityIcons(await this.wclApi.getAbilities(referencedIds)),
+      });
+    } catch (cause) {
+      logWarn('BurstTransformService.getBench', cause);
+      return toLoadError(cause, 'burst.bench');
     }
-    if (!sampleCount) return null;
-
-    const windows = clusterParseWindows(allWindows, sampleCount);
-    const cd_spell_ids = cdSpellIds(cooldowns, defensives);
-    // Resolve a real icon for every spell the card renders - header cooldowns and
-    // each window ability - by id, so the map is complete (no fallback).
-    const referencedIds = [
-      ...Object.values(cd_spell_ids),
-      ...windows.flatMap(window => window.ability_breakdown.map(ability => ability.spell_id)),
-    ];
-    return {
-      spec,
-      encounter_id: encounterId,
-      encounter_name: encounterName,
-      sample_count: sampleCount,
-      windows,
-      cd_spell_ids,
-      ability_icons: abilityIcons(await this.wclApi.getAbilities(referencedIds)),
-    };
   }
 
-  /** One parse's burst windows via the colocated pure fns; null if it can't be fetched. */
   private async computeParseWindows(
     ranking: ParseRanking, cooldowns: RulebookCooldown[],
   ): Promise<{ windows: ParseWindow[]; encounterName: string } | null> {
@@ -422,7 +375,7 @@ export class BurstTransformService implements DataSource<BurstBench> {
       const player = report.masterData?.actors?.find(actor => actor.name === ranking.player);
       if (!fight || !player) return null;
 
-      // Names only - used to attribute casts by ability name inside a parse window.
+      // Names only, to attribute casts by ability name inside a parse window.
       const abilityNames = new Map<number, string>(
         (report.masterData?.abilities ?? []).map(ability => [ability.gameID, ability.name]),
       );
@@ -436,8 +389,8 @@ export class BurstTransformService implements DataSource<BurstBench> {
         damage, fightStartMs: fight.startTime, fightEndMs: fight.endTime, timings, casts, abilityNames,
       });
       return { windows, encounterName: fight.name ?? '' };
-    } catch (err) {
-      logWarn(`BurstTransformService parse ${ranking.report_code}:${ranking.fight_id}`, err);
+    } catch (cause) {
+      logWarn(`BurstTransformService parse ${ranking.report_code}:${ranking.fight_id}`, cause);
       return null;
     }
   }

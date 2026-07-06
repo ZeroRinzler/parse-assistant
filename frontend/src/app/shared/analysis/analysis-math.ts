@@ -1,15 +1,7 @@
 /**
- * Generic, cross-slice analysis math + formatting helpers.
- *
- * These are pure, non-domain primitives (rounding, time clustering, outlier
- * predicates, expected-use arithmetic, clock formatting, severity ordering) that
- * several slices computed identically. They live here under `shared/` the same way
- * `shared/gear/gear-comparison.ts` does - a blessed cross-slice presentational/stats
- * derivation - so each slice imports one implementation instead of re-declaring it.
- *
- * The generic cross-slice WCL-response projections (`toParseRankings`) and window
- * view-row builders (`windowSpells`) live in the sibling `wcl-projections.ts`; each
- * slice's own domain clustering/benchmark math stays self-contained per slice.
+ * Generic, cross-slice analysis math + formatting helpers: pure, non-domain primitives (rounding,
+ * time clustering, outlier predicates, expected-use arithmetic, clock formatting, severity
+ * ordering) that several slices need, so each imports one implementation instead of re-declaring it.
  */
 import { median } from 'd3-array';
 import { AnalysisFinding } from '../../core/models/analysis.models';
@@ -20,10 +12,8 @@ export function round(value: number, decimals = 1): number {
 }
 
 /**
- * Return `map`'s value for `key`, inserting `makeDefault()` first when absent.
- * A single lookup that always yields a present value - it never returns undefined
- * and never throws - so a caller can group-and-append with one call instead of a
- * `has`/`set` guard followed by a non-null `get(key)!`.
+ * Return `map`'s value for `key`, inserting `makeDefault()` first when absent - so a caller can
+ * group-and-append in one call instead of a `has`/`set` guard plus a non-null `get`.
  */
 export function getOrInsert<K, V>(map: Map<K, V>, key: K, makeDefault: () => V): V {
   let value = map.get(key);
@@ -73,6 +63,7 @@ export function castEfficiencyPct(totalDowntimeS: number, fightDurS: number): nu
 
 /** The value closest to zero (smallest absolute value) - the primary BL offset. */
 export function closestToZero(values: number[]): number {
+  if (values.length === 0) return 0;
   return values.reduce((best, value) => (Math.abs(value) < Math.abs(best) ? value : best));
 }
 

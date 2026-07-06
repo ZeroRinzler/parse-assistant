@@ -1,25 +1,16 @@
 import { ChangeDetectionStrategy, Component, effect, inject, input, output, signal } from '@angular/core';
 import { WindowComparisonComponent } from '../../../shared/components/window-comparison/window-comparison';
-import { WaitingPlaceholderComponent } from '../../../shared/components/waiting-placeholder/waiting-placeholder';
+import { LoadStateComponent, RenderableLoadError } from '../../../shared/components/load-state/load-state';
 import { ComparisonWindow } from '../../../core/models/window-comparison.models';
 import { ClipAnchor } from '../../../core/models/capture.models';
+import { logWarn } from '../../../core/log';
 import { LatestLoad } from '../../../shared/latest-load';
 import { BurstFeatureService, BurstMapAnchor } from './burst.service';
 
-/**
- * Burst card. A feature component: it injects exactly one service
- * (`BurstFeatureService`) and renders. Its bench windows come from the swappable
- * `BURST_DATA_SOURCE` (file in prod, live transform under the dev flag); the
- * player's window damage is computed by the service from the player's own log.
- *
- * Dual-mode: with a `report`/`fight`/`player` selection (post-raid) it compares the
- * player against the bench; with only `spec`/`encounterId` (pre-fight) it shows the
- * bench windows informationally. Opening the map is an output the page wires.
- */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-burst-windows',
-  imports: [WindowComparisonComponent, WaitingPlaceholderComponent],
+  imports: [WindowComparisonComponent, LoadStateComponent],
   templateUrl: './burst-windows.html',
 })
 export class BurstWindowsComponent {
@@ -44,6 +35,7 @@ export class BurstWindowsComponent {
   readonly availableChange = output<boolean>();
 
   protected readonly available = signal(true);
+  protected readonly error = signal<RenderableLoadError | null>(null);
   private readonly _windows = signal<ComparisonWindow[]>([]);
   private readonly _anchors = signal<BurstMapAnchor[]>([]);
   private readonly _clipAnchors = signal<ClipAnchor[]>([]);
@@ -63,12 +55,23 @@ export class BurstWindowsComponent {
         : this.burst.loadBenchView(spec, encounterId);
       this.loader.run(load, {
         context: 'burst.loadPlayerView',
-        apply: view => {
-          this.available.set(view.available);
-          this.availableChange.emit(view.available);
-          this._windows.set(view.windows);
-          this._anchors.set(view.anchors);
-          this._clipAnchors.set(view.clipAnchors);
+        apply: result => {
+          if (result.ok) {
+            this.error.set(null);
+            this.available.set(true);
+            this.availableChange.emit(true);
+            this._windows.set(result.value.windows);
+            this._anchors.set(result.value.anchors);
+            this._clipAnchors.set(result.value.clipAnchors);
+          } else {
+            if (result.error.kind === 'permanent') logWarn(result.error.id, result.error.context);
+            this.error.set(result.error.kind === 'missing' ? null : result.error);
+            this.available.set(false);
+            this.availableChange.emit(false);
+            this._windows.set([]);
+            this._anchors.set([]);
+            this._clipAnchors.set([]);
+          }
         },
         settled: () => this.busyChange.emit(false),
       });

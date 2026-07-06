@@ -1,21 +1,13 @@
 /**
- * Live `DataSource<MapData>`: computes the top-parse position bench live in the
- * browser (no ingestion). Self-contained per the slice rule - it imports ONLY the
- * two API services + models + `logWarn`, and reimplements its own position math
- * below (it does NOT reference the ingest analysis under `scripts/ingest`). Bound
- * by `environment.useLiveTransform`.
+ * Live `DataSource<MapData>`: computes the top-parse position bench in the browser (no ingestion).
+ * Fetches each top parse's position-bearing events (Casts with `includeResources` for friendlies +
+ * enemies), groups samples per actor, resamples to a fixed cadence, and emits `EncounterPositions`.
+ * The pure position math is owned here rather than shared with `scripts/ingest`. Bound by
+ * `environment.useLiveTransform`.
  *
- * It fetches the encounter's top parses, refetches each parse's position-bearing
- * events (Casts with `includeResources` for friendlies + enemies), groups raw
- * samples per actor, resamples to a fixed cadence, and emits the same
- * `EncounterPositions` shape the ingest position writer emits. The colocated pure
- * fns mirror the ingest position math but are owned here (duplication over sharing).
- *
- * KNOWN LIMITATION: the WCL report's master `enemies[]` carries gameID + name but
- * not HP. The boss is therefore picked by the highest observed `maxHitPoints`
- * (flattened onto each event when `includeResources` is on), falling back to the
- * most-sampled enemy. This matches ingest closely but is not guaranteed identical
- * for fights where an add briefly out-HPs the boss in a snapshot.
+ * Boss pick: the WCL master `enemies[]` carries gameID + name but no HP, so the boss is the actor
+ * with the highest observed `maxHitPoints` (flattened onto events by `includeResources`). This can
+ * differ from ingest when an add briefly out-HPs the boss in a snapshot.
  */
 import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
@@ -23,14 +15,14 @@ import { DataFileApiService } from '../../../core/services/data-file-api';
 import { WclEvent, WclFight, ParseRanking } from '../../../core/models/wcl.models';
 import { ParsePositions, PosRow } from '../../../core/models/positioning.models';
 import { logWarn } from '../../../core/log';
+import { Result, LoadError, ok, missing } from '../../../core/result';
+import { toLoadError } from '../../../core/http-load-error';
 import { toParseRankings, unwrapRankings } from '../../../shared/analysis/wcl-projections';
 import { posActorId } from './map-positions';
 import { DataSource } from '../../../core/data-source/data-source';
 import { MapData } from './map-data-source';
 
-// Re-exported so call sites / specs that import these from the transform service
-// keep working (`toParseRankings` from the shared blessed module, `posActorId` from
-// the slice-local projection module).
+// Re-exported so call sites / specs importing these from the transform service keep working.
 export { toParseRankings } from '../../../shared/analysis/wcl-projections';
 export { posActorId } from './map-positions';
 
@@ -47,8 +39,6 @@ const MAX_TRACKED_ENEMIES = 5;
 const MIN_ENEMY_SAMPLES = 4;
 // Times/durations are stored rounded to deciseconds (0.1s): multiply, round, divide.
 const DECISECONDS_PER_S = 10;
-
-/* ----------------------------- pure helpers (own math) ----------------------------- */
 
 /** One raw position sample before resampling (raw WCL units; HP for boss pick). */
 export interface RawPosSample {
@@ -112,10 +102,8 @@ export function resampleTimeline(samples: RawPosSample[], durationS: number, int
   return out;
 }
 
-/** gameID + name for a report's enemy actors, keyed by actor id. */
 export interface EnemyMeta { gameID: number | null; name: string; }
 
-/** A candidate enemy actor with its grouped samples and HP/count used for selection. */
 export interface EnemyCandidate {
   actorId: number;
   count: number;
@@ -124,17 +112,15 @@ export interface EnemyCandidate {
   meta: EnemyMeta;
 }
 
-/** The enemies to track for a parse: the boss (or null if none) plus the kept enemy set. */
 export interface SelectedEnemies {
   bossId: number | null;
   kept: EnemyCandidate[];
 }
 
 /**
- * Pick the tracked enemy set from grouped per-actor samples: the boss is the actor
- * with the highest observed maxHitPoints; the rest are ranked by sample count and
- * capped at MAX_TRACKED_ENEMIES (the boss is always retained even past the cap).
- * The MIN_ENEMY_SAMPLES floor is applied later on resampled rows, not here. Pure.
+ * Pick the tracked enemy set: the boss is the actor with the highest observed maxHitPoints; the
+ * rest rank by sample count, capped at MAX_TRACKED_ENEMIES (the boss is kept even past the cap).
+ * The MIN_ENEMY_SAMPLES floor is applied later on resampled rows, not here.
  */
 export function selectBossAndEnemies(
   byActor: Map<number, RawPosSample[]>, playerId: number, enemyMetaById: Map<number, EnemyMeta>,
@@ -159,7 +145,6 @@ export function selectBossAndEnemies(
   return { bossId, kept };
 }
 
-/** Inputs for building one parse's position payload from its resource-bearing events. */
 export interface ParsePositionInput {
   reportCode: string;
   fightId: number;
@@ -172,11 +157,9 @@ export interface ParsePositionInput {
 }
 
 /**
- * Build one parse's position payload from its resource-bearing events: the ranked
- * player's resampled timeline plus the notable enemy timelines (boss = highest
- * observed maxHitPoints, then the most-sampled enemies). Enemies are keyed by
- * gameID so the frontend matches "the same boss/add" across parses. Mirrors
- * ingest `buildParsePositions`.
+ * Build one parse's position payload: the player's resampled timeline plus notable enemy timelines
+ * (boss = highest observed maxHitPoints, then most-sampled). Enemies are keyed by gameID so the
+ * frontend matches "the same boss/add" across parses.
  */
 export function buildParsePositions(input: ParsePositionInput): ParsePositions {
   const { reportCode, fightId, playerName, playerId, enemyMetaById, posEvents, fightStartMs, durationS } = input;
@@ -200,36 +183,39 @@ export function buildParsePositions(input: ParsePositionInput): ParsePositions {
   };
 }
 
-/* ----------------------------- service shell ----------------------------- */
-
 @Injectable({ providedIn: 'root' })
 export class MapTransformService implements DataSource<MapData> {
   private readonly wclApi = inject(WclApiService);
   private readonly dataFiles = inject(DataFileApiService);
 
-  async getBench(spec: string, encounterId: number): Promise<MapData | null> {
-    const rankings = toParseRankings(unwrapRankings(await this.wclApi.getRankings(spec, encounterId)), CANDIDATE_POOL_COUNT);
-    if (!rankings.length) return null;
+  async getBench(spec: string, encounterId: number): Promise<Result<MapData, LoadError>> {
+    try {
+      const rankings = toParseRankings(unwrapRankings(await this.wclApi.getRankings(spec, encounterId)), CANDIDATE_POOL_COUNT);
+      if (!rankings.length) return missing('No top parses for this encounter.');
 
-    const parses: ParsePositions[] = [];
-    let encounterName = '';
-    for (const ranking of rankings) {
-      const parse = await this.computeParse(ranking);
-      if (!parse) continue;
-      parses.push(parse.positions);
-      encounterName ||= parse.encounterName;
-      if (parses.length >= TOP_PARSE_COUNT) break;
+      const parses: ParsePositions[] = [];
+      let encounterName = '';
+      for (const ranking of rankings) {
+        const parse = await this.computeParse(ranking);
+        if (!parse) continue;
+        parses.push(parse.positions);
+        encounterName ||= parse.encounterName;
+        if (parses.length >= TOP_PARSE_COUNT) break;
+      }
+      if (!parses.length) return missing('No fetchable top parses for this encounter.');
+
+      return ok({
+        spec,
+        encounter_id: encounterId,
+        encounter_name: encounterName,
+        interval_s: POSITIONS_INTERVAL_S,
+        sample_count: parses.length,
+        parses,
+      });
+    } catch (cause) {
+      logWarn('MapTransformService.getBench', cause);
+      return toLoadError(cause, 'map.bench');
     }
-    if (!parses.length) return null;
-
-    return {
-      spec,
-      encounter_id: encounterId,
-      encounter_name: encounterName,
-      interval_s: POSITIONS_INTERVAL_S,
-      sample_count: parses.length,
-      parses,
-    };
   }
 
   /** One parse's resampled positions via the colocated pure fns; null if it can't be fetched. */
@@ -258,17 +244,15 @@ export class MapTransformService implements DataSource<MapData> {
         durationS: (fight.endTime - fight.startTime) / 1000,
       });
       return { positions, encounterName: fight.name ?? '' };
-    } catch (err) {
-      logWarn(`MapTransformService parse ${ranking.report_code}:${ranking.fight_id}`, err);
+    } catch (cause) {
+      logWarn(`MapTransformService parse ${ranking.report_code}:${ranking.fight_id}`, cause);
       return null;
     }
   }
 
   /**
-   * Friendly player casts + enemy casts, both with positions (`includeResources`), so the
-   * player and every notable enemy get a trail. The enemy fetch passes `hostilityType:
-   * 'Enemies'` - the events query defaults to Friendlies, so an enemy-side fetch without it
-   * returns nothing. The boss and add trails come from these enemy casts; the boss is
+   * Player casts + enemy casts, both with positions (`includeResources`). The enemy fetch needs
+   * `hostilityType: 'Enemies'` because the events query defaults to Friendlies; the boss is
    * identified afterward by observed maxHitPoints in `selectBossAndEnemies`.
    */
   private async fetchPositionEvents(

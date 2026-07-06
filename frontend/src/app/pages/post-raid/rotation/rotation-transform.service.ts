@@ -1,15 +1,3 @@
-/**
- * Live `DataSource<RotationBench>`: computes the rotation bench live in the browser
- * (no ingestion). Self-contained per the slice rule - it imports the two API
- * services + models + `logWarn` (plus generic `d3-array` stats and the blessed
- * `shared/analysis/analysis-math` primitives such as `round`), and reimplements its
- * own per-cooldown DOMAIN statistics below (it does NOT reference the ingest
- * analysis). Bound by `environment.useLiveTransform`.
- *
- * It fetches the encounter's top parses, refetches each parse's Casts + Buffs (for
- * Bloodlust) + DamageDone, summarizes each cooldown's casts, and rolls the per-cd
- * benchmarks + efficiency thresholds across parses - mirroring the ingest bench.
- */
 import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
@@ -21,18 +9,18 @@ import { mean, median, deviation, quantile } from 'd3-array';
 import { round, getOrInsert } from '../../../shared/analysis/analysis-math';
 import { abilityIcons, toParseRankings, unwrapRankings } from '../../../shared/analysis/wcl-projections';
 import { DataSource } from '../../../core/data-source/data-source';
+import { Result, LoadError, ok, missing } from '../../../core/result';
+import { toLoadError } from '../../../core/http-load-error';
 import { RotationBench } from './rotation-data-source';
 
-// Re-exported from the shared blessed module so call sites / specs that import it
-// from the transform service keep working.
+// Re-exported so call sites and specs can import it from this service.
 export { toParseRankings } from '../../../shared/analysis/wcl-projections';
 
-/** How many top parses to sample (matches the ingest bench). */
+/** How many top parses to sample. */
 const TOP_PARSE_COUNT = 10;
-// Over-fetch so a private/unfetchable top parse can be backfilled by the
-// next-best one; the break in the loop caps actual fetches at TOP_PARSE_COUNT.
+// Over-fetch so a private/unfetchable top parse can be backfilled by the next-best one.
 const CANDIDATE_POOL_COUNT = TOP_PARSE_COUNT * 2;
-/** Bloodlust / Heroism / Time Warp / etc. - any of these starts a "BL window". */
+/** Bloodlust / Heroism / Time Warp and equivalents. */
 const BLOODLUST_IDS = new Set([2825, 32182, 80353, 90355, 264667, 390386]);
 /** BL window: a CD counts as aligned if cast 30s before to 55s after BL start. */
 const BL_WINDOW_BEFORE_S = 30;
@@ -47,9 +35,6 @@ const HOLD_CONSENSUS_FRAC = 0.5;
 /** Floor on the runtime tolerance band half-width, so a tight cluster still tolerates jitter. */
 const HOLD_BAND_MIN_S = 5.0;
 
-/* ----------------------------- pure stats helpers (own math) ----------------------------- */
-
-/** Cooldown name -> spell id, for the row / header icons. */
 export function rotationCdSpellIds(cooldowns: RulebookCooldown[], defensives: RulebookDefensive[]): Record<string, number> {
   const map: Record<string, number> = {};
   for (const cooldown of cooldowns) if (cooldown.spell_id) map[cooldown.name] = cooldown.spell_id;
@@ -57,7 +42,6 @@ export function rotationCdSpellIds(cooldowns: RulebookCooldown[], defensives: Ru
   return map;
 }
 
-/** Fight-relative seconds of the first Bloodlust/Heroism/etc., or null if none. */
 export function detectBloodlust(buffEvents: WclEvent[], fightStartMs: number): number | null {
   for (const event of buffEvents) {
     if (event.type === 'applybuff' && BLOODLUST_IDS.has(event.abilityGameID)) {
@@ -67,20 +51,14 @@ export function detectBloodlust(buffEvents: WclEvent[], fightStartMs: number): n
   return null;
 }
 
-/** One deliberate hold of a cooldown past its prior cast + cooldown. */
 export interface HoldWindow {
   cast_index: number;
   actual_s: number;
   delay_s: number;
 }
 
-/**
- * Detect deliberate holds in one cooldown's ascending cast times. Hold detection is
- * PRIOR-RELATIVE: each cast is measured against the prior ACTUAL cast + the cooldown,
- * not a cumulative ideal schedule, so a single hold does not cascade into every later
- * cast looking held. A cast counts as held only when it lands more than
- * `HOLD_THRESHOLD_S` past that prior-relative reset (strict).
- */
+// Prior-relative: each cast is measured against the prior ACTUAL cast + the cooldown, not a
+// cumulative ideal schedule, so a single hold does not cascade into every later cast looking held.
 export function detectHoldWindows(castTimesS: number[], effectiveCd: number): HoldWindow[] {
   const holdWindows: HoldWindow[] = [];
   for (let castIndex = 1; castIndex < castTimesS.length; castIndex++) {
@@ -94,7 +72,6 @@ export function detectHoldWindows(castTimesS: number[], effectiveCd: number): Ho
   return holdWindows;
 }
 
-/** Per-parse, per-cd cast summary: count, first cast, BL alignment, hold windows. */
 export interface CdSummary {
   name: string;
   total_uses: number;
@@ -107,7 +84,6 @@ export interface CdSummary {
   fight_duration_s: number;
 }
 
-/** Summarize one parse's cooldown casts (mirrors ingest summarizeCooldownCasts). */
 export function summarizeCooldownCasts(
   castEvents: WclEvent[], cooldowns: RulebookCooldown[],
   fightStartMs: number, fightDurS: number, blTimeS: number | null,
@@ -146,7 +122,6 @@ export function summarizeCooldownCasts(
   });
 }
 
-/** Inter-cast gaps (ms, ascending) of all casts in a parse - for the downtime floor. */
 export function castGapListMs(castEvents: WclEvent[]): number[] {
   const completed = castEvents.filter(event => event.type === 'cast').sort((a, b) => a.timestamp - b.timestamp);
   const gaps: number[] = [];
@@ -154,7 +129,6 @@ export function castGapListMs(castEvents: WclEvent[]): number[] {
   return gaps.sort((a, b) => a - b);
 }
 
-/** uses-per-minute distribution across parses for one cooldown. */
 function benchUsesPerMin(entries: CdSummary[]): UsesPerMin {
   const usesPerMin: number[] = [];
   for (const entry of entries) {
@@ -171,11 +145,8 @@ function benchUsesPerMin(entries: CdSummary[]): UsesPerMin {
   };
 }
 
-/**
- * Per-cast-index hold targets where a MAJORITY of parses delayed past the natural reset.
- * `target_s` is the absolute clock median (display); `delay_s`/`band_s`/`effective_cd_s`
- * are the prior-relative band the runtime compares the player's own gap against.
- */
+// `target_s` is the absolute clock median (display); `delay_s`/`band_s`/`effective_cd_s` are the
+// prior-relative band the runtime compares the player's own gap against.
 export function buildHoldTargets(entries: CdSummary[], effectiveCd: number): CdHoldTargets {
   const byIdx = new Map<number, { actuals: number[]; delays: number[] }>();
   for (const entry of entries) {
@@ -205,7 +176,6 @@ export function buildHoldTargets(entries: CdSummary[], effectiveCd: number): CdH
   return targets;
 }
 
-/** Roll one cooldown's per-parse summaries into a `PerCdBenchmark`. */
 export function buildCdBenchmark(entries: CdSummary[], effectiveCd: number): PerCdBenchmark {
   const firstCasts = entries.map(entry => entry.first_cast_s).filter((value): value is number => value != null);
   const gaps: number[] = [];
@@ -238,7 +208,6 @@ export function buildCdBenchmark(entries: CdSummary[], effectiveCd: number): Per
   };
 }
 
-/** Downtime floor (p90 of pooled gaps) + top-parse efficiency mean/stddev. */
 export function computeEfficiencyThresholds(
   gapLists: number[][], durations: number[],
 ): { downtimeThresholdMs: number; topAvgEfficiency: number; topEfficiencyStddev: number } {
@@ -263,7 +232,6 @@ export function computeEfficiencyThresholds(
   };
 }
 
-/** Roll per-parse cooldown summaries into the per-cd benchmark map. */
 export function aggregateCdBenchmarks(
   perParse: CdSummary[][], cooldowns: RulebookCooldown[],
 ): Record<string, PerCdBenchmark> {
@@ -281,8 +249,6 @@ export function aggregateCdBenchmarks(
   return result;
 }
 
-/* ----------------------------- service shell ----------------------------- */
-
 interface ParseRotation {
   summaries: CdSummary[];
   gapListMs: number[];
@@ -295,53 +261,59 @@ export class RotationTransformService implements DataSource<RotationBench> {
   private readonly wclApi = inject(WclApiService);
   private readonly dataFiles = inject(DataFileApiService);
 
-  async getBench(spec: string, encounterId: number): Promise<RotationBench | null> {
-    const rulebook = await this.dataFiles.getRulebook(spec);
-    const cooldowns = rulebook?.major_cooldowns ?? [];
-    if (!cooldowns.length) return null;
-    const defensives = rulebook?.defensives ?? [];
-    const rules = rulebook?.rules ?? [];
+  async getBench(spec: string, encounterId: number): Promise<Result<RotationBench, LoadError>> {
+    const rulebookResult = await this.dataFiles.getRulebook(spec);
+    if (!rulebookResult.ok) return rulebookResult;
+    const rulebook = rulebookResult.value;
+    const cooldowns = rulebook.major_cooldowns ?? [];
+    if (!cooldowns.length) return missing('No rulebook cooldowns for this spec.');
+    const defensives = rulebook.defensives ?? [];
+    const rules = rulebook.rules ?? [];
 
-    const rankings = toParseRankings(unwrapRankings(await this.wclApi.getRankings(spec, encounterId)), CANDIDATE_POOL_COUNT);
-    if (!rankings.length) return null;
+    try {
+      const rankings = toParseRankings(unwrapRankings(await this.wclApi.getRankings(spec, encounterId)), CANDIDATE_POOL_COUNT);
+      if (!rankings.length) return missing('No top parses for this encounter.');
 
-    const perParse: CdSummary[][] = [];
-    const gapLists: number[][] = [];
-    const durations: number[] = [];
-    let encounterName = '';
-    for (const ranking of rankings) {
-      const parse = await this.computeParse(ranking, cooldowns);
-      if (!parse) continue;
-      perParse.push(parse.summaries);
-      gapLists.push(parse.gapListMs);
-      durations.push(parse.durationS);
-      encounterName ||= parse.encounterName;
-      if (perParse.length >= TOP_PARSE_COUNT) break;
+      const perParse: CdSummary[][] = [];
+      const gapLists: number[][] = [];
+      const durations: number[] = [];
+      let encounterName = '';
+      for (const ranking of rankings) {
+        const parse = await this.computeParse(ranking, cooldowns);
+        if (!parse) continue;
+        perParse.push(parse.summaries);
+        gapLists.push(parse.gapListMs);
+        durations.push(parse.durationS);
+        encounterName ||= parse.encounterName;
+        if (perParse.length >= TOP_PARSE_COUNT) break;
+      }
+      if (!perParse.length) return missing('No usable top parses for this encounter.');
+
+      const { downtimeThresholdMs, topAvgEfficiency, topEfficiencyStddev } = computeEfficiencyThresholds(gapLists, durations);
+
+      const cd_spell_ids = rotationCdSpellIds(cooldowns, defensives);
+      return ok({
+        spec,
+        encounter_id: encounterId,
+        encounter_name: encounterName,
+        sample_count: perParse.length,
+        avg_duration_s: durations.length ? round((mean(durations) ?? 0)) : 0,
+        downtime_threshold_ms: downtimeThresholdMs,
+        top_avg_efficiency: topAvgEfficiency,
+        top_efficiency_stddev: topEfficiencyStddev,
+        per_cd_benchmarks: aggregateCdBenchmarks(perParse, cooldowns),
+        major_cooldowns: cooldowns,
+        rules,
+        cd_spell_ids,
+        // A real icon for every cooldown + defensive by id, so the map is complete (no fallback).
+        ability_icons: abilityIcons(await this.wclApi.getAbilities(Object.values(cd_spell_ids))),
+      });
+    } catch (cause) {
+      logWarn(`RotationTransformService.getBench ${spec}:${encounterId}`, cause);
+      return toLoadError(cause, 'rotation.bench');
     }
-    if (!perParse.length) return null;
-
-    const { downtimeThresholdMs, topAvgEfficiency, topEfficiencyStddev } = computeEfficiencyThresholds(gapLists, durations);
-
-    const cd_spell_ids = rotationCdSpellIds(cooldowns, defensives);
-    return {
-      spec,
-      encounter_id: encounterId,
-      encounter_name: encounterName,
-      sample_count: perParse.length,
-      avg_duration_s: durations.length ? round((mean(durations) ?? 0)) : 0,
-      downtime_threshold_ms: downtimeThresholdMs,
-      top_avg_efficiency: topAvgEfficiency,
-      top_efficiency_stddev: topEfficiencyStddev,
-      per_cd_benchmarks: aggregateCdBenchmarks(perParse, cooldowns),
-      major_cooldowns: cooldowns,
-      rules,
-      cd_spell_ids,
-      // Resolve a real icon for every cooldown + defensive by id (complete, no fallback).
-      ability_icons: abilityIcons(await this.wclApi.getAbilities(Object.values(cd_spell_ids))),
-    };
   }
 
-  /** One parse's rotation summary via the colocated pure fns; null if unfetchable. */
   private async computeParse(
     ranking: ParseRanking, cooldowns: RulebookCooldown[],
   ): Promise<ParseRotation | null> {

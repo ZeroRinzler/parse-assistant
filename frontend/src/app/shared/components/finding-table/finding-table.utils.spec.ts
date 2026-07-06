@@ -1,5 +1,7 @@
-import { describe, it, expect } from 'vitest';
-import { bucketFindings, rowsFromEntries, onPlanFromEntries, CAT_LABEL, FindingEntry } from './finding-table.utils';
+import { describe, it, expect, vi, beforeEach, afterEach, MockInstance } from 'vitest';
+import {
+  bucketFindings, rowsFromEntries, onPlanFromEntries, CAT_LABEL, FindingEntry, UNKNOWN_COOLDOWN_LABEL,
+} from './finding-table.utils';
 import { AnalysisFinding } from '../../../core/models/analysis.models';
 import { SHADOW_BLADES, VANISH } from '../../../../testing/spell-ids';
 
@@ -20,6 +22,12 @@ const f = (
 });
 
 describe('bucketFindings', () => {
+  // An unidentified-cooldown finding is surfaced and logged via logWarn -> console.warn;
+  // the spy keeps the runner output clean and lets those tests assert on the warning.
+  let warnSpy: MockInstance<typeof console.warn>;
+  beforeEach(() => { warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined); });
+  afterEach(() => { warnSpy.mockRestore(); });
+
   it('groups critical issue under its cooldown name', () => {
     const finding = f('critical', 'lost_cooldown', 'Shadow Blades');
     const { entries } = bucketFindings([finding], { spellId, icon });
@@ -108,11 +116,20 @@ describe('bucketFindings', () => {
     expect(ruleFindings).toHaveLength(0);
   });
 
-  it('silently skips a finding with no cd_name when collectRules is false (no ghost "undefined" entry)', () => {
+  it('surfaces a finding with no cd_name as an Unknown cooldown entry when collectRules is false', () => {
     const finding = f('warning', 'cast_efficiency'); // no cd_name
     const { entries, ruleFindings } = bucketFindings([finding], { spellId, icon, collectRules: false });
-    expect(entries).toHaveLength(0);
     expect(ruleFindings).toHaveLength(0);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].name).toBe(UNKNOWN_COOLDOWN_LABEL);
+    expect(entries[0].hasIssue).toBe(true);
+    expect(entries[0].findings).toContain(finding);
+  });
+
+  it('logs a warning carrying the finding so an unidentified cooldown can be reproduced', () => {
+    const finding = f('warning', 'cast_efficiency'); // no cd_name
+    bucketFindings([finding], { spellId, icon, collectRules: false });
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('unknown-cooldown'), finding);
   });
 });
 
@@ -160,17 +177,19 @@ describe('rowsFromEntries', () => {
     expect(rows[0].measured).toEqual({ value: '-' });
   });
 
-  it('maps critical severity to "critical", anything else to "warning"', () => {
+  it('maps critical to "critical", info to its own "info" state, everything else to "warning"', () => {
     const mixedEntry: FindingEntry = {
       ...issueEntry,
       findings: [
-        { severity: 'critical', category: 'lost_cooldown', message: '', measured: { value: '', unit: '' } },
-        { severity: 'info',     category: 'cast_efficiency', message: '', measured: { value: '', unit: '' } },
+        { severity: 'critical', category: 'lost_cooldown',   message: '', measured: { value: '', unit: '' } },
+        { severity: 'info',     category: 'cast_efficiency',  message: '', measured: { value: '', unit: '' } },
+        { severity: 'warning',  category: 'cooldown_delay',   message: '', measured: { value: '', unit: '' } },
       ],
     };
     const rows = rowsFromEntries([mixedEntry], CAT_LABEL);
     expect(rows[0].severity).toBe('critical');
-    expect(rows[1].severity).toBe('warning');
+    expect(rows[1].severity).toBe('info');
+    expect(rows[2].severity).toBe('warning');
   });
 });
 

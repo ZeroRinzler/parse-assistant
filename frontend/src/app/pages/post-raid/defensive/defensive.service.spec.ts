@@ -9,11 +9,12 @@ import {
   DefensiveFeatureService,
   analyzeDefensives, analyzeDefensiveFindings, computePlayerDefensiveWindows,
   defensiveWindowStatus, defensiveMapAnchor, defensiveClipAnchor, defensiveFindingClipAnchor, buildDefensiveWindows, buildDefensivePlanRows,
-  playerCoveredWindow, playerUsefulTiming, windowMissFindings,
+  playerCoveredWindow,
   buildDefensiveUsageWindows, analyzeOneDefensive, gapDelayFindings, holdSuggestionFindings,
 } from './defensive.service';
 import { applyBuff, removeBuff, damageTaken, cast } from '../../../../testing/builders/events';
 import { CLOAK_OF_SHADOWS } from '../../../../testing/spell-ids';
+import { Result, LoadError, ok, missing, transient } from '../../../core/result';
 
 const CLOAK_META = { name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS, cooldown: 120, duration: 5, usage_rule: 'Use on big hits', talent_gated: false };
 
@@ -26,8 +27,6 @@ function defBench(overrides: Partial<PerDefensiveBenchmark> = {}): PerDefensiveB
     ...overrides,
   };
 }
-
-/* ----------------------------- player defensives ----------------------------- */
 
 describe('analyzeDefensives', () => {
   // Composition only: span shapes and fallbacks are specced on buildDefensiveUsageWindows.
@@ -236,20 +235,28 @@ describe('computePlayerDefensiveWindows', () => {
   });
 });
 
-/* ----------------------------- defensive windows view ----------------------------- */
-
 describe('defensiveWindowStatus', () => {
-  // topAvg 1000, topMax 1200, stddev 100. Lower damage is better; covering the window is required.
+  // Status is driven by damage TAKEN vs the band, not by coverage. Band edge = topMax + stddev.
+  const TOP_MAX = 1200;
+  const STDDEV = 100;
+  const BAND_EDGE = TOP_MAX + STDDEV;        // 1300 - damage above this is bad
+  const WITHIN_BAND = TOP_MAX;               // 1200 - within/below the band
+  const ABOVE_BAND = BAND_EDGE + 1;          // 1301 - strictly above the band
+
   it.each([
-    { name: 'not reached -> muted', player: 950 as number | null, notReached: true, covered: true, useful: false, status: 'muted', icon: 'schedule' },
-    { name: 'missing -> muted', player: null, notReached: false, covered: true, useful: false, status: 'muted', icon: 'help_outline' },
-    { name: 'not covered -> bad', player: 900, notReached: false, covered: false, useful: false, status: 'bad', icon: 'error' },
-    { name: 'covered + useful timing -> good', player: 1400, notReached: false, covered: true, useful: true, status: 'good', icon: 'check_circle' },
-    { name: 'covered, far above max -> warn', player: 1400, notReached: false, covered: true, useful: false, status: 'warn', icon: 'warning_amber' },
-    { name: 'covered, above avg band -> warn', player: 1150, notReached: false, covered: true, useful: false, status: 'warn', icon: 'warning_amber' },
-    { name: 'covered, within range -> good', player: 1000, notReached: false, covered: true, useful: false, status: 'good', icon: 'check_circle' },
-  ])('$name', ({ player, notReached, covered, useful, status, icon }) => {
-    expect(defensiveWindowStatus(player, 1000, 1200, 100, notReached, covered, useful)).toEqual({ status, icon });
+    // Not reached / no player data -> muted, no annotation (coverage irrelevant).
+    { name: 'not reached -> muted', player: 950 as number | null, notReached: true, covered: true, status: 'muted', icon: 'schedule', note: '' },
+    { name: 'missing -> muted', player: null, notReached: false, covered: true, status: 'muted', icon: 'help_outline', note: '' },
+    // Within/below the band -> good, whether or not the defensive was pressed.
+    { name: 'within band, covered -> good (covered)', player: WITHIN_BAND, notReached: false, covered: true, status: 'good', icon: 'check_circle', note: 'covered' },
+    { name: 'within band, not covered -> good (no defensive used)', player: WITHIN_BAND, notReached: false, covered: false, status: 'good', icon: 'check_circle', note: 'no defensive used' },
+    // At exactly the band edge is still good (strict boundary - only STRICTLY above is bad).
+    { name: 'at band edge -> good', player: BAND_EDGE, notReached: false, covered: true, status: 'good', icon: 'check_circle', note: 'covered' },
+    // Above the band -> bad, whether or not the defensive was pressed.
+    { name: 'above band, covered -> bad (used wrongly)', player: ABOVE_BAND, notReached: false, covered: true, status: 'bad', icon: 'error', note: 'defensive used wrongly' },
+    { name: 'above band, not covered -> bad (needed, unused)', player: ABOVE_BAND, notReached: false, covered: false, status: 'bad', icon: 'error', note: 'defensive needed, unused' },
+  ])('$name', ({ player, notReached, covered, status, icon, note }) => {
+    expect(defensiveWindowStatus(player, TOP_MAX, STDDEV, notReached, covered)).toEqual({ status, icon, note });
   });
 });
 
@@ -270,24 +277,6 @@ describe('playerCoveredWindow', () => {
 
   it('is false with no player defensive', () => {
     expect(playerCoveredWindow(window, undefined)).toBe(false);
-  });
-});
-
-describe('playerUsefulTiming', () => {
-  const window = { time_s: 30, window_length_s: 5, dmg_min: 800 } as BurstWindow;
-  const withSpans = (spans: { start_s: number; end_s: number; dmg_during: number }[]): PlayerDefensive =>
-    ({ name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS, cooldown: 120, uses: spans.length, windows: spans });
-
-  it('is true when a covering span mitigated at least the window minimum', () => {
-    expect(playerUsefulTiming(window, withSpans([{ start_s: 31, end_s: 36, dmg_during: 800 }]))).toBe(true);
-  });
-
-  it('is false when the covering span mitigated just under the minimum (boundary)', () => {
-    expect(playerUsefulTiming(window, withSpans([{ start_s: 31, end_s: 36, dmg_during: 799 }]))).toBe(false);
-  });
-
-  it('is false when the big mitigation is not near the window', () => {
-    expect(playerUsefulTiming(window, withSpans([{ start_s: 100, end_s: 105, dmg_during: 5000 }]))).toBe(false);
   });
 });
 
@@ -330,21 +319,32 @@ describe('buildDefensiveWindows', () => {
 
   it('pairs each window with player damage taken at the same index', () => {
     const player: PlayerBurstWindow[] = [{ time_s: 30, window_damage: 1150, ability_breakdown: [{ spell_id: 700, damage: 700 }] }];
-    // Covered the window (span 30-35), mitigated under dmg_min, took above the avg band -> warn.
+    // Covered the window (span 30-35); 1150 is within the band (max 1200 + stddev 100 = 1300) -> good, annotated covered.
     const playerDef: PlayerDefensive[] = [{ name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS, cooldown: 120, uses: 1, windows: [{ start_s: 30, end_s: 35, dmg_during: 700 }] }];
     const { windows, anchors, clipAnchors } = buildDefensiveWindows({ topWindows: [window], playerWindows: player, playerDefensives: playerDef, fightDurationS: 300, abilities });
     expect(windows[0].overview.playerPct).toBe(1150);
-    expect(windows[0].status).toBe('warn');
+    expect(windows[0].status).toBe('good');
+    expect(windows[0].labels).toContain('covered');
     expect(windows[0].spells).toEqual([{ id: CLOAK_OF_SHADOWS, icon: 'cloak', name: 'Cloak of Shadows' }]);
     expect(windows[0].detailRows[0]).toMatchObject({ spellId: 700, label: 'Boss Hit', icon: 'hit', playerPct: 700, topAvg: 600 });
     expect(anchors[0]).toEqual({ timeS: 30, refGameId: 6666, windowLengthS: 5 });
     expect(clipAnchors[0]).toEqual({ timeS: 30, windowLengthS: 5, key: 'defensive-0' });
   });
 
-  it('marks an uncovered window bad', () => {
-    const player: PlayerBurstWindow[] = [{ time_s: 30, window_damage: 900, ability_breakdown: [] }];
+  it('marks an above-band window bad, annotated as needing an unused defensive', () => {
+    // 1500 > band edge (max 1200 + stddev 100 = 1300); no covering defensive -> bad.
+    const player: PlayerBurstWindow[] = [{ time_s: 30, window_damage: 1500, ability_breakdown: [] }];
     const { windows } = buildDefensiveWindows({ topWindows: [window], playerWindows: player, playerDefensives: [], fightDurationS: 300, abilities });
     expect(windows[0].status).toBe('bad');
+    expect(windows[0].labels).toContain('defensive needed, unused');
+  });
+
+  it('keeps an uncovered within-band window good, annotated no defensive used', () => {
+    // 900 is within the band; not pressing a defensive when damage stayed acceptable is not a miss.
+    const player: PlayerBurstWindow[] = [{ time_s: 30, window_damage: 900, ability_breakdown: [] }];
+    const { windows } = buildDefensiveWindows({ topWindows: [window], playerWindows: player, playerDefensives: [], fightDurationS: 300, abilities });
+    expect(windows[0].status).toBe('good');
+    expect(windows[0].labels).toContain('no defensive used');
   });
 
   it('mutes and drops player data for a window the fight never reached', () => {
@@ -353,30 +353,6 @@ describe('buildDefensiveWindows', () => {
     expect(windows[0].overview.playerPct).toBeNull();
   });
 });
-
-describe('windowMissFindings', () => {
-  const missWindow: BurstWindow = {
-    time_s: 30, window_length_s: 5, dmg_avg: 1000, dmg_min: 800, dmg_max: 1200, dmg_stddev: 100,
-    defensive_name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS, common_cds: ['Cloak of Shadows'], ability_breakdown: [],
-  };
-  const covering: PlayerDefensive[] = [{ name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS, cooldown: 120, uses: 1, windows: [{ start_s: 30, end_s: 35, dmg_during: 900 }] }];
-
-  it('warns for an uncovered consensus window', () => {
-    const out = windowMissFindings([missWindow], [], 300);
-    expect(out).toHaveLength(1);
-    expect(out[0]).toMatchObject({ severity: 'warning', category: 'defensive_window', cd_name: 'Cloak of Shadows' });
-  });
-
-  it('does not warn when the player covered the window', () => {
-    expect(windowMissFindings([missWindow], covering, 300)).toEqual([]);
-  });
-
-  it('does not warn for a window the fight never reached', () => {
-    expect(windowMissFindings([missWindow], [], 5)).toEqual([]);
-  });
-});
-
-/* ----------------------------- pre-fight plan ----------------------------- */
 
 describe('buildDefensivePlanRows', () => {
   function benchWith(overrides: Partial<DefensiveBench>): DefensiveBench {
@@ -408,8 +384,6 @@ describe('buildDefensivePlanRows', () => {
   });
 });
 
-/* ----------------------------- feature service (dual mode) ---------------------------- */
-
 function fullBench(): DefensiveBench {
   return {
     spec: 'SubtletyRogue', encounter_id: 1, encounter_name: 'Boss', sample_count: 5,
@@ -426,7 +400,7 @@ function fullBench(): DefensiveBench {
   };
 }
 
-function serviceWith(bench: DefensiveBench | null, wcl: Record<string, unknown> = {}): DefensiveFeatureService {
+function serviceWith(bench: Result<DefensiveBench, LoadError>, wcl: Record<string, unknown> = {}): DefensiveFeatureService {
   const source: DataSource<DefensiveBench> = { getBench: () => Promise.resolve(bench) };
   TestBed.configureTestingModule({
     providers: [
@@ -438,10 +412,10 @@ function serviceWith(bench: DefensiveBench | null, wcl: Record<string, unknown> 
 }
 
 describe('DefensiveFeatureService.loadAnalysisView (post-raid)', () => {
-  it('returns an unavailable, empty view when the bench file is absent', async () => {
-    const service = serviceWith(null);
-    expect(await service.loadAnalysisView('SubtletyRogue', 1, 'r1', 1, 10))
-      .toEqual({ available: false, findings: [], spellIdsByName: {}, iconByName: {}, windows: [], anchors: [], clipAnchors: [] });
+  it('propagates a non-ok bench unchanged (missing drives the waiting state)', async () => {
+    const service = serviceWith(missing('Not yet ingested.'));
+    const result = await service.loadAnalysisView('SubtletyRogue', 1, 'r1', 1, 10);
+    expect(result).toEqual(missing('Not yet ingested.'));
   });
 
   it('computes player findings + windows from the player log', async () => {
@@ -458,28 +432,46 @@ describe('DefensiveFeatureService.loadAnalysisView (post-raid)', () => {
         return [damageTaken(700, 32, 1150)]; // DamageTaken inside window
       },
     };
-    const service = serviceWith(fullBench(), wcl);
-    const view = await service.loadAnalysisView('SubtletyRogue', 1, 'r1', 1, 10);
-    expect(view.spellIdsByName).toEqual({ 'Cloak of Shadows': CLOAK_OF_SHADOWS });
-    expect(view.windows).toHaveLength(1);
-    expect(view.windows[0].overview.playerPct).toBe(1150);
-    expect(view.anchors[0]).toMatchObject({ refGameId: 6666 });
+    const service = serviceWith(ok(fullBench()), wcl);
+    const result = await service.loadAnalysisView('SubtletyRogue', 1, 'r1', 1, 10);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.spellIdsByName).toEqual({ 'Cloak of Shadows': CLOAK_OF_SHADOWS });
+    expect(result.value.windows).toHaveLength(1);
+    expect(result.value.windows[0].overview.playerPct).toBe(1150);
+    expect(result.value.anchors[0]).toMatchObject({ refGameId: 6666 });
     // 1 use vs avg ~2, but only one buff window -> first cast at 30 (late) gives a warning finding.
-    expect(view.findings.length).toBeGreaterThan(0);
+    expect(result.value.findings.length).toBeGreaterThan(0);
+  });
+
+  it('surfaces a WCL failure as an error instead of a silent bench-only view', async () => {
+    const wcl = { getReport: async () => { throw new Error('WCL down'); } };
+    const service = serviceWith(ok(fullBench()), wcl);
+    const result = await service.loadAnalysisView('SubtletyRogue', 1, 'r1', 1, 10);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatchObject({ kind: 'permanent', id: 'defensive.player-view' });
+  });
+
+  it('returns an informational ok view when the selected fight is absent (e.g. mid live-sync)', async () => {
+    const wcl = { getReport: async () => ({ title: 't', fights: [], masterData: { actors: [], abilities: [] } }) };
+    const service = serviceWith(ok(fullBench()), wcl);
+    const result = await service.loadAnalysisView('SubtletyRogue', 1, 'r1', 99, 10);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value).toMatchObject({ findings: [], windows: [], spellIdsByName: { 'Cloak of Shadows': CLOAK_OF_SHADOWS } });
   });
 });
 
 describe('DefensiveFeatureService.loadPlan (pre-fight)', () => {
   it('returns the bench-only plan rows', async () => {
-    const service = serviceWith(fullBench());
+    const service = serviceWith(ok(fullBench()));
     const view = await service.loadPlan('SubtletyRogue', 1);
     expect(view.available).toBe(true);
     expect(view.rows).toHaveLength(1);
     expect(view.rows[0]).toMatchObject({ name: 'Cloak of Shadows', spellId: CLOAK_OF_SHADOWS, uses: 2, firstCastS: 10, windowsS: [30] });
   });
 
-  it('is unavailable with empty rows when the bench file is absent', async () => {
-    const service = serviceWith(null);
+  it('is unavailable with empty rows when the bench is not ok', async () => {
+    const service = serviceWith(transient('WCL is unreachable right now.'));
     expect(await service.loadPlan('SubtletyRogue', 1)).toEqual({ available: false, rows: [] });
   });
 });

@@ -11,8 +11,7 @@ import {
 import { SHADOW_BLADES, BLOODLUST, CLOAK_OF_SHADOWS } from '../../../../testing/spell-ids';
 import { cast, applyBuff } from '../../../../testing/builders/events';
 import { rulebook } from '../../../../testing/builders/rulebook';
-
-/* ----------------------------- pure functions ----------------------------- */
+import { ok, missing } from '../../../core/result';
 
 describe('rotationCdSpellIds', () => {
   it('maps cooldown + defensive names to spell ids, skipping missing ids', () => {
@@ -200,8 +199,6 @@ describe('aggregateCdBenchmarks', () => {
   });
 });
 
-/* ----------------------------- service (end to end, fake client) ----------------------------- */
-
 function reportFor(playerId: number, playerName: string, fightId: number) {
   return {
     title: 't',
@@ -232,12 +229,18 @@ const wclFake = {
     Object.fromEntries(ids.map(id => [id, { id, icon: 'sb', name: 'Shadow Blades' }])),
 };
 const filesFake = {
-  getRulebook: async () => rulebook({
+  getRulebook: async () => ok(rulebook({
     cooldowns: [{ name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 90, align_with_bloodlust: true }],
-  }),
+  })),
 };
 
 describe('RotationTransformService (live, in-browser)', () => {
+  // Full sample size the transform caps at (TOP_PARSE_COUNT in the service).
+  const FULL_SAMPLE_COUNT = 10;
+  // One private candidate over-fetched past, plus the full sample: 11 candidates in.
+  const CANDIDATE_COUNT = FULL_SAMPLE_COUNT + 1;
+  const PRIVATE_CODE = 'r5';
+
   it('computes a rotation bench from the top parses', async () => {
     TestBed.configureTestingModule({
       providers: [
@@ -245,23 +248,26 @@ describe('RotationTransformService (live, in-browser)', () => {
         { provide: DataFileApiService, useValue: filesFake as unknown as DataFileApiService },
       ],
     });
-    const bench = await TestBed.inject(RotationTransformService).getBench('SubtletyRogue', 1);
-    expect(bench).not.toBeNull();
-    expect(bench!.sample_count).toBe(2);
-    expect(bench!.encounter_name).toBe('Boss');
-    expect(bench!.cd_spell_ids).toEqual({ 'Shadow Blades': SHADOW_BLADES });
-    expect(bench!.per_cd_benchmarks['Shadow Blades'].sample_count).toBe(2);
-    expect(bench!.ability_icons[SHADOW_BLADES]).toEqual({ icon: 'sb', name: 'Shadow Blades' });
-    expect(bench!.major_cooldowns).toHaveLength(1);
+    const result = await TestBed.inject(RotationTransformService).getBench('SubtletyRogue', 1);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const bench = result.value;
+      expect(bench.sample_count).toBe(2);
+      expect(bench.encounter_name).toBe('Boss');
+      expect(bench.cd_spell_ids).toEqual({ 'Shadow Blades': SHADOW_BLADES });
+      expect(bench.per_cd_benchmarks['Shadow Blades'].sample_count).toBe(2);
+      expect(bench.ability_icons[SHADOW_BLADES]).toEqual({ icon: 'sb', name: 'Shadow Blades' });
+      expect(bench.major_cooldowns).toHaveLength(1);
+    }
   });
 
   it('backfills past a private (unfetchable) top parse to keep the sample count full', async () => {
-    const candidates = Array.from({ length: 11 }, (_, i) => ({ name: `P${i + 1}`, report: { code: `r${i + 1}`, fightID: i + 1 } }));
+    const candidates = Array.from({ length: CANDIDATE_COUNT }, (_, i) => ({ name: `P${i + 1}`, report: { code: `r${i + 1}`, fightID: i + 1 } }));
     const backfillWcl = {
       ...wclFake,
       getRankings: async () => ({ rankings: candidates }),
       getReport: async (code: string) => {
-        if (code === 'r5') throw new Error('You do not have permission to view this report.');
+        if (code === PRIVATE_CODE) throw new Error('You do not have permission to view this report.');
         const idx = Number(code.slice(1));
         return reportFor(idx * 10, `P${idx}`, idx);
       },
@@ -272,18 +278,21 @@ describe('RotationTransformService (live, in-browser)', () => {
         { provide: DataFileApiService, useValue: filesFake as unknown as DataFileApiService },
       ],
     });
-    const bench = await TestBed.inject(RotationTransformService).getBench('SubtletyRogue', 1);
+    const result = await TestBed.inject(RotationTransformService).getBench('SubtletyRogue', 1);
+    expect(result.ok).toBe(true);
     // 11 candidates, one private: the 11th backfills the skipped parse to a full 10.
-    expect(bench!.sample_count).toBe(10);
+    if (result.ok) expect(result.value.sample_count).toBe(FULL_SAMPLE_COUNT);
   });
 
-  it('returns null when the spec has no rulebook cooldowns', async () => {
+  it('propagates a missing error when the spec has no rulebook cooldowns', async () => {
     TestBed.configureTestingModule({
       providers: [
         { provide: WclApiService, useValue: wclFake as unknown as WclApiService },
-        { provide: DataFileApiService, useValue: { getRulebook: async () => null } as unknown as DataFileApiService },
+        // A rulebook with no cooldowns is nothing to analyze - the transform reports missing.
+        { provide: DataFileApiService, useValue: { getRulebook: async () => ok(rulebook()) } as unknown as DataFileApiService },
       ],
     });
-    expect(await TestBed.inject(RotationTransformService).getBench('SubtletyRogue', 1)).toBeNull();
+    expect(await TestBed.inject(RotationTransformService).getBench('SubtletyRogue', 1))
+      .toEqual(missing('No rulebook cooldowns for this spec.'));
   });
 });

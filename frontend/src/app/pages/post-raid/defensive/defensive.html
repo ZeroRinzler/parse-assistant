@@ -1,35 +1,33 @@
-<!-- No top-parse bench yet: the whole card has nothing to grade against. -->
-@if (!available()) {
-  <wl-waiting-placeholder heading="Defensives" subtitle="Defensive cooldowns vs top parses."></wl-waiting-placeholder>
+@if (error() || !available()) {
+  <wl-load-state heading="Defensives" subtitle="Defensive cooldowns vs top parses." [error]="error()"></wl-load-state>
 }
+@else {
+  @if (findingRows().length || onPlan().length) {
+    <wl-finding-table
+      heading="Defensives"
+      subtitle="Defensive cooldowns vs top parses."
+      [rows]="findingRows()"
+      [onPlan]="onPlan()"
+      [showMap]="showMap()"
+      [showClip]="showClip()"
+      (openMap)="onFindingMap($event)"
+      (openClip)="onFindingClip($event)">
+    </wl-finding-table>
+  }
 
-<!-- Per-defensive findings -->
-@if (available() && (findingRows().length || onPlan().length)) {
-  <wl-finding-table
-    heading="Defensives"
-    subtitle="Defensive cooldowns vs top parses."
-    [rows]="findingRows()"
-    [onPlan]="onPlan()"
-    [showMap]="showMap()"
-    [showClip]="showClip()"
-    (openMap)="onFindingMap($event)"
-    (openClip)="onFindingClip($event)">
-  </wl-finding-table>
-}
-
-<!-- Defensive windows: when top parsers use each defensive and how much damage they absorbed -->
-@if (windows().length > 0) {
-  <wl-window-comparison
-    [class.mt-6]="findingRows().length > 0 || onPlan().length > 0"
-    [windows]="windows()"
-    [higherIsBetter]="false"
-    [fightDuration]="fightDuration()"
-    [showCasts]="false"
-    [showMap]="showMap()"
-    [showClip]="showClip()"
-    heading="Defensive Windows"
-    subtitle="Damage taken in top-parse defensive windows vs top parses."
-    (openMap)="onOpenMap($event)"
-    (openClip)="onOpenClip($event)">
-  </wl-window-comparison>
+  @if (windows().length > 0) {
+    <wl-window-comparison
+      [class.mt-6]="findingRows().length > 0 || onPlan().length > 0"
+      [windows]="windows()"
+      [higherIsBetter]="false"
+      [fightDuration]="fightDuration()"
+      [showCasts]="false"
+      [showMap]="showMap()"
+      [showClip]="showClip()"
+      heading="Defensive Windows"
+      subtitle="Damage taken in top-parse defensive windows vs top parses."
+      (openMap)="onOpenMap($event)"
+      (openClip)="onOpenClip($event)">
+    </wl-window-comparison>
+  }
 }

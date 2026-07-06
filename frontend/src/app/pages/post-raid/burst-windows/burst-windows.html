@@ -1,4 +1,6 @@
-@if (available()) {
+@if (error() || !available()) {
+  <wl-load-state heading="Burst Windows" subtitle="Damage in each burst window vs top parses." [error]="error()"></wl-load-state>
+} @else {
   <wl-window-comparison
     [windows]="windows()"
     [higherIsBetter]="true"
@@ -9,6 +11,4 @@
     (openMap)="onOpenMap($event)"
     (openClip)="onOpenClip($event)">
   </wl-window-comparison>
-} @else {
-  <wl-waiting-placeholder heading="Burst Windows" subtitle="Damage in each burst window vs top parses."></wl-waiting-placeholder>
 }

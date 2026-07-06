@@ -1,0 +1,28 @@
+@let err = error();
+<div class="bg-[var(--surface)] border border-[var(--border)] rounded-[10px] overflow-hidden">
+  @if (heading()) {
+    <div class="px-4 pt-3 pb-2">
+      <div class="text-[17px] font-semibold text-[var(--text)]">{{ heading() }}</div>
+      @if (subtitle()) {
+        <div class="text-xs text-[var(--muted)] mt-0.5">{{ subtitle() }}</div>
+      }
+    </div>
+  }
+  <div class="px-4 py-6 flex flex-col items-center gap-2 text-center {{ heading() ? 'border-t border-dashed border-[var(--border)]' : '' }}">
+    @if (err) {
+      <mat-icon class="icon-seg text-[var(--info)]">{{ err.kind === 'permanent' ? 'error' : 'cloud_off' }}</mat-icon>
+      <div class="text-[13px] text-[var(--muted)]">{{ err.message }}</div>
+      <div class="text-[11.5px] text-[var(--muted)]/70">
+        {{ err.kind === 'permanent'
+          ? 'This analysis is bugged. Retrying will not fix it.'
+          : 'Retries on the next sync, or reselect the fight.' }}
+      </div>
+    } @else {
+      <mat-icon class="icon-seg text-[var(--muted)]">schedule</mat-icon>
+      <div class="text-[13px] text-[var(--muted)]">Waiting for top parses</div>
+      @if (caption()) {
+        <div class="text-[11.5px] text-[var(--muted)]/70">{{ caption() }}</div>
+      }
+    }
+  </div>
+</div>

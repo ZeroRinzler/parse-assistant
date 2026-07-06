@@ -6,6 +6,9 @@ export class SignedPercentPipe implements PipeTransform {
   transform(value: number | null | undefined): string {
     if (value == null) return '';
     const sign = value > 0 ? '+' : '';
-    return `${sign}${value.toFixed(0)}%`;
+    // A small negative that rounds to zero yields "-0" from toFixed; render it as plain "0".
+    const magnitude = value.toFixed(0);
+    const normalized = magnitude === '-0' ? '0' : magnitude;
+    return `${sign}${normalized}%`;
   }
 }
