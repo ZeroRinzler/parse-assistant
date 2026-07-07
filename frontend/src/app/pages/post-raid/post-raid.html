@@ -74,8 +74,12 @@
       }
     </mat-card>
 
-    @if (error()) {
-      <div class="mb-4 rounded-lg border border-[var(--critical)]/30 bg-[var(--critical)]/10 px-4 py-3.5 text-[13px] text-[var(--critical)]">{{ error() }}</div>
+    @if (notice()) {
+      <div class="mb-4 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-4 py-3.5 text-[13px] text-[var(--muted)]">{{ notice() }}</div>
+    }
+
+    @if (loadError(); as err) {
+      <wl-load-state class="mb-4" [error]="err"></wl-load-state>
     }
 
     @if (loadingReport() || loadingAnalysis() || (ready() && cardsBusy())) {

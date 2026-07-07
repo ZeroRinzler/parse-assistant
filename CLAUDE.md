@@ -10,8 +10,9 @@ This file is the always-on **router**: the few rules that apply on every turn, p
 
 - **Never use em-dashes (U+2014) or en-dashes (U+2013)** anywhere - not in docs, code comments, commit messages, UI copy, or generated output. Also avoid the Unicode minus (U+2212). Use a plain ASCII hyphen (`-`) for ranges and parenthetical asides, or rephrase. This applies to every file in the repo and any text the tooling emits.
 - **Describe only current behavior, never past behavior.** Documentation, skill files, and code comments MUST describe what the code does now, not what it used to do, what was removed, or how it changed. Never write "the old code...", "previously...", "was removed", "no longer...", "used to...", or contrast against a prior approach ("X instead of the old Y", "not the absolute-clock target anymore"). Describing what is no longer there is noise. State the current behavior directly; the change history lives in git, commit messages, and PR descriptions, not in the source or docs.
+- **Comment the why, not the what.** A code comment earns its place only by explaining what the code cannot say itself: the reason, the constraint, the non-obvious consequence. Never narrate what the next line plainly does. Prefer one terse line over a paragraph, and no comment over a redundant one. The reader can read the code; write down only what they cannot infer from it.
 
-(Both rules stay here because they govern all output, not just one kind of work - everything else is in a skill.)
+(These rules stay here because they govern all output, not just one kind of work - everything else is in a skill.)
 
 ## Architecture at a glance
 
