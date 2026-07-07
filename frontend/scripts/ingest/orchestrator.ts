@@ -18,7 +18,7 @@ import { RATE_LIMIT_QUERY, CLASSES_QUERY } from './wcl-queries.ts';
 import { INGEST_VERSION } from './ingest-version.ts';
 import { type LoadError } from '../../src/app/core/result.ts';
 import {
-  orderSpecsByVersion, orderEncountersByMissingFirst, type SpecOrderEntry,
+  orderSpecsByVersion, orderEncountersByMissingFirst, SPEC_LIMIT, type SpecOrderEntry,
 } from './ordering.ts';
 import {
   encounterSkipKey, signatureAfterFetch, readStoredSignature, readStoredVersion, signatureMatches,
@@ -350,7 +350,7 @@ async function main(): Promise<void> {
       return;
     }
     // Order specs so a budget-bounded run fixes the most out-of-date data first: empty ->
-    // old-version -> current, alphabetical within each group. Cheap disk reads, zero WCL budget.
+    // old-version -> current, randomized within each group. Cheap disk reads, zero WCL budget.
     const orderInputs = await Promise.all(withRulebook.map(async spec => {
       const burstFiles = (await runtime.dataFile.listSliceFiles(spec, 'burst'))
         .filter(file => file.endsWith('.json'));
@@ -368,7 +368,9 @@ async function main(): Promise<void> {
       const displayVersion = storedVersions.length ? Math.min(...storedVersions) : null;
       return { spec, entry, displayVersion };
     }));
-    specs = orderSpecsByVersion(orderInputs.map(input => input.entry));
+    // Cap each run at SPEC_LIMIT specs so it stays within the WCL point budget; the randomized
+    // within-group order (see orderSpecsByVersion) gives the remaining specs a turn on later runs.
+    specs = orderSpecsByVersion(orderInputs.map(input => input.entry)).slice(0, SPEC_LIMIT);
     const displayBySpec = new Map(orderInputs.map(input => [input.spec, input] as const));
     const versionLines = specs.map(spec => {
       const info = displayBySpec.get(spec);

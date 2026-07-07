@@ -7,8 +7,11 @@
  * cheap disk signals (zero WCL budget); the ordering itself is pure and total.
  */
 
-/** Spec pinned to the front of its bracket, ahead of the alphabetical order. */
+/** Spec pinned to the front of its bracket, ahead of the rest of the order. */
 export const PRIORITY_SPEC = 'SubtletyRogue';
+
+/** Cap on how many specs one run ingests, so a single run stays within the WCL point budget. */
+export const SPEC_LIMIT = 10;
 
 /** One spec's ordering inputs - all derived from cheap disk reads. */
 export interface SpecOrderEntry {
@@ -24,19 +27,28 @@ export interface SpecOrderEntry {
  *   1. empty specs (never ingested),
  *   2. old-version specs (data not fully at the current INGEST_VERSION),
  *   3. current-version specs,
- * PRIORITY_SPEC is pinned to the front of its own bracket (ahead of alphabetical), so it is
- * always refreshed first among specs in the same version group. Otherwise, within each group
- * the order is alphabetical to keep it stable and deterministic.
+ * PRIORITY_SPEC is pinned to the front of its own bracket, so it is always refreshed first among
+ * specs in the same version group. Otherwise the order within each group is randomized, so that
+ * over many runs every spec in a group gets a turn at the front rather than the alphabetically
+ * earliest always winning the budget. `random` is injected to keep the function pure and testable.
  */
-export function orderSpecsByVersion(entries: readonly SpecOrderEntry[]): string[] {
+export function orderSpecsByVersion(
+  entries: readonly SpecOrderEntry[],
+  random: () => number = Math.random,
+): string[] {
   const group = (entry: SpecOrderEntry): number =>
     entry.dataCount === 0 ? 0 : entry.onCurrentVersion ? 2 : 1;
   const priority = (entry: SpecOrderEntry): number => (entry.spec === PRIORITY_SPEC ? 0 : 1);
+  // One fixed random key per entry keeps the comparator a valid total order (unlike calling
+  // random() inside the comparator), while shuffling entries that tie on group and priority.
+  const shuffleKey = new Map(entries.map(entry => [entry, random()] as const));
   return entries
     .slice()
     .sort(
       (a, b) =>
-        group(a) - group(b) || priority(a) - priority(b) || a.spec.localeCompare(b.spec),
+        group(a) - group(b) ||
+        priority(a) - priority(b) ||
+        shuffleKey.get(a)! - shuffleKey.get(b)!,
     )
     .map(entry => entry.spec);
 }

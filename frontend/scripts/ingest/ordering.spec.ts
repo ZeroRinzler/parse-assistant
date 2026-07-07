@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  orderSpecsByVersion, orderEncountersByMissingFirst, PRIORITY_SPEC, type SpecOrderEntry,
+  orderSpecsByVersion, orderEncountersByMissingFirst, PRIORITY_SPEC, SPEC_LIMIT,
+  type SpecOrderEntry,
 } from './ordering.ts';
 
 const entry = (over: Partial<SpecOrderEntry> & { spec: string }): SpecOrderEntry => ({
@@ -27,22 +28,28 @@ describe('orderSpecsByVersion', () => {
     expect(order).toEqual(['OldApple', 'CurrentZebra']);
   });
 
-  it('sorts alphabetically within a group (stable, deterministic order)', () => {
-    const order = orderSpecsByVersion([
-      entry({ spec: 'Charlie' }),
-      entry({ spec: 'Alpha' }),
-      entry({ spec: 'Bravo' }),
-    ]);
-    expect(order).toEqual(['Alpha', 'Bravo', 'Charlie']);
+  it('orders a group by the injected random key (smaller key first)', () => {
+    // Keys are drawn per entry in input order; here Charlie < Bravo < Alpha.
+    const keys = [0.1, 0.9, 0.5];
+    let next = 0;
+    const order = orderSpecsByVersion(
+      [entry({ spec: 'Charlie' }), entry({ spec: 'Alpha' }), entry({ spec: 'Bravo' })],
+      () => keys[next++],
+    );
+    expect(order).toEqual(['Charlie', 'Bravo', 'Alpha']);
   });
 
-  it('pins the priority spec first within its bracket, then alphabetical for the rest', () => {
-    const order = orderSpecsByVersion([
-      entry({ spec: 'OutlawRogue' }),
-      entry({ spec: PRIORITY_SPEC }),
-      entry({ spec: 'AssassinationRogue' }),
-    ]);
-    expect(order).toEqual([PRIORITY_SPEC, 'AssassinationRogue', 'OutlawRogue']);
+  it('pins the priority spec first within its bracket, ahead of the randomized rest', () => {
+    const order = orderSpecsByVersion(
+      [
+        entry({ spec: 'OutlawRogue' }),
+        entry({ spec: PRIORITY_SPEC }),
+        entry({ spec: 'AssassinationRogue' }),
+      ],
+      () => 0,
+    );
+    expect(order[0]).toBe(PRIORITY_SPEC);
+    expect(order.slice(1).sort()).toEqual(['AssassinationRogue', 'OutlawRogue']);
   });
 
   it('does not pull the priority spec ahead of an earlier (emptier/older-version) bracket', () => {
@@ -63,6 +70,10 @@ describe('orderSpecsByVersion', () => {
 
   it('returns an empty list for no specs', () => {
     expect(orderSpecsByVersion([])).toEqual([]);
+  });
+
+  it('caps a run at ten specs', () => {
+    expect(SPEC_LIMIT).toBe(10);
   });
 });
 
