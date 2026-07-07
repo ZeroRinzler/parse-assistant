@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { Apollo, gql } from 'apollo-angular';
 import { ServerError, CombinedGraphQLErrors, type FetchPolicy, type OperationVariables } from '@apollo/client';
-import { WclTransport, WclTransportError } from './wcl-transport';
+import { WclTransport, WclTransportError, WCL_UNUSABLE_STATUS } from './wcl-transport';
 
 /**
  * Browser WCL transport: apollo-angular. Lives in its own file (not `wcl-transport.ts`)
@@ -33,9 +33,10 @@ export class ApolloWclTransport implements WclTransport {
       if (ServerError.is(error)) {
         throw new WclTransportError(`WCL API error (${error.statusCode})`, error.statusCode);
       }
-      // A 200 response carrying a top-level `errors` array surfaces as CombinedGraphQLErrors.
+      // A 200 with a top-level `errors` array (report not found, private, denied) surfaces as
+      // CombinedGraphQLErrors. Retrying can't help, so classify permanent, not transient.
       if (CombinedGraphQLErrors.is(error)) {
-        throw new WclTransportError(error.errors[0]?.message || 'WCL GraphQL error', 0);
+        throw new WclTransportError(error.errors[0]?.message || 'WCL GraphQL error', WCL_UNUSABLE_STATUS);
       }
       throw error;
     }

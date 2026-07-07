@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { WclAuthService } from './wcl-auth';
 import { LiveModeState } from './live-mode-state';
-import { WCL_TRANSPORT, WCL_INGEST_MODE, WclTransportError } from './wcl-transport';
+import { WCL_TRANSPORT, WCL_INGEST_MODE, WclTransportError, WCL_UNUSABLE_STATUS } from './wcl-transport';
 import {
   WclReport, WclEvent,
   PlayerDetailGroups, WclRankingsBlob, WclRawAbility, WclCombatantInfo, WclTableBlob,
@@ -38,22 +38,25 @@ export class WclApiService {
    * fetched here and passed per request (it is renewed on expiry). `fetchPolicy`
    * defaults to `cache-first` to dedupe repeat reads within a session; callers that
    * must always see fresh data (report polling, large event fetches) pass `network-only`.
-   * On a 401 the cached token is dropped so the next request re-authenticates.
+   * A 401 refreshes the token and retries once so an early-rejected token recovers in
+   * place; the `WclTransportError` propagates intact so `toLoadError` can classify it.
    */
   async query<TData = unknown>(
     gqlString: string, variables: object = {}, fetchPolicy: 'cache-first' | 'network-only' = 'cache-first',
   ): Promise<TData> {
+    const cacheFirst = fetchPolicy === 'cache-first';
     const token = await this.auth.getToken();
     try {
-      return await this.transport.query<TData>(gqlString, variables, token, fetchPolicy === 'cache-first');
+      return await this.transport.query<TData>(gqlString, variables, token, cacheFirst);
     } catch (error) {
       if (error instanceof WclTransportError && error.status === 401) {
-        // Token was rejected (e.g. expired early or the secret was rotated); drop the
-        // cached token so the next request fetches a fresh one.
+        // A stale token (early expiry, rotated secret) shouldn't surface as a failure:
+        // refresh and retry once. A second 401 propagates and classifies as permanent.
         this.auth.invalidate();
-        throw new Error('WCL API error (401) - token rejected.', { cause: error });
+        const freshToken = await this.auth.getToken();
+        return await this.transport.query<TData>(gqlString, variables, freshToken, cacheFirst);
       }
-      throw error instanceof WclTransportError ? new Error(error.message, { cause: error }) : error;
+      throw error;
     }
   }
 
@@ -61,17 +64,31 @@ export class WclApiService {
     const vars: ReportQueryVars = { code };
     // Saved reports are immutable, so the read is cache-first (see livePolicy); only while
     // live-syncing does it go network-only, so a poll never hides newly-recorded fights.
-    const result = await this.query<{ reportData: { report: WclReport } }>(REPORT_Q, vars, this.livePolicy());
-    return result.reportData.report;
+    const result = await this.query<{ reportData: { report: WclReport | null } }>(REPORT_Q, vars, this.livePolicy());
+    const report = result?.reportData?.report;
+    // WCL returns report: null for a code it won't serve (missing, private, expired) with no
+    // GraphQL error. Fail typed so a caller can't dereference the null into a TypeError.
+    if (!report) throw this.reportUnavailable(code);
+    return report;
   }
 
   /** Raw `playerDetails` groups (dps / healers / tanks / unknown). Consumers map to spec. */
   async getPlayerDetails(code: string, fightId: number): Promise<PlayerDetailGroups> {
     const vars: PlayerDetailsQueryVars = { code, fightIDs: [fightId] };
-    const result = await this.query<{ reportData: { report: { playerDetails: { data: { playerDetails: PlayerDetailGroups } } } } }>(
+    const result = await this.query<{ reportData: { report: { playerDetails: { data: { playerDetails: PlayerDetailGroups } } } | null } }>(
       PLAYER_DETAILS_Q, vars,
     );
-    return result.reportData.report.playerDetails.data.playerDetails;
+    const playerDetails = result?.reportData?.report?.playerDetails?.data?.playerDetails;
+    // Same unserved-report case as getReport; fail typed rather than into a TypeError.
+    if (!playerDetails) throw this.reportUnavailable(code);
+    return playerDetails;
+  }
+
+  /** A report WCL won't serve (missing, private, expired): permanent, since a retry can't help. */
+  private reportUnavailable(code: string): WclTransportError {
+    return new WclTransportError(
+      `WCL report ${code} is unavailable (not found, private, or expired).`, WCL_UNUSABLE_STATUS,
+    );
   }
 
   async getAllEvents(

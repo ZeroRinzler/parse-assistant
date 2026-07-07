@@ -22,6 +22,13 @@ export class WclTransportError extends Error {
 }
 
 /**
+ * Synthetic status for a WCL 200 that is semantically unusable (a GraphQL error or a null
+ * report), so `toLoadError` classifies it `permanent`: retrying a missing/private/expired
+ * report never helps. 422 because a client-error status is never in the retryable set.
+ */
+export const WCL_UNUSABLE_STATUS = 422;
+
+/**
  * The low-level GraphQL transport `WclApiService` delegates to. Swapped per
  * environment: the browser binds {@link ApolloWclTransport}; the Node ingestion
  * binds a plain-`fetch` implementation (apollo-angular does not run headless).
