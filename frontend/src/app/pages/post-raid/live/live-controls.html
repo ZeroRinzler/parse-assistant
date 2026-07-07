@@ -24,6 +24,8 @@
       } @else if (capture.isCapturing()) {
         <span class="h-[9px] w-[9px] rounded-full bg-[var(--critical)]"></span>
         <span>Recording "{{ capture.sourceLabel() }}" in the background</span>
+      } @else if (capture.captureError()) {
+        <span class="text-[var(--critical)]">{{ capture.captureError() }}</span>
       } @else {
         <span>stays in this browser session, nothing is uploaded</span>
       }

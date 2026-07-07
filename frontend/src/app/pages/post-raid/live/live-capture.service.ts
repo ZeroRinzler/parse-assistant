@@ -158,6 +158,15 @@ function mimeFor(profile: CaptureProfile): string {
   return candidates.find(candidate => MediaRecorder.isTypeSupported(candidate)) ?? 'video/webm';
 }
 
+/**
+ * Whether a `getDisplayMedia` rejection is the user dismissing the picker (a benign no-op),
+ * as opposed to a real failure worth surfacing. The picker-cancel and permission-deny paths
+ * both reject with a `NotAllowedError`.
+ */
+function isPickerDismissal(err: unknown): boolean {
+  return err instanceof DOMException && err.name === 'NotAllowedError';
+}
+
 /* ----------------------------- feature service ---------------------------- */
 
 @Injectable({ providedIn: 'root' })
@@ -169,6 +178,10 @@ export class LiveCaptureFeatureService {
   readonly isStarting = signal(false);
   readonly sourceLabel = signal('');
   readonly captureProfile = signal<CaptureProfile>(DEFAULT_CAPTURE_PROFILE);
+  /** Non-null when recording could not start or stopped unexpectedly; the controls strip renders it. */
+  readonly captureError = signal<string | null>(null);
+  /** Non-null when the last clip export failed; the clip player renders it next to the button. */
+  readonly downloadError = signal<string | null>(null);
 
   /**
    * Drives the record toggle's `checked`. Includes `isStarting` so a cancelled picker
@@ -190,6 +203,8 @@ export class LiveCaptureFeatureService {
   // --- clip flyover state ---
   readonly open = signal(false);
   readonly handle = signal<ClipHandle | null>(null);
+  /** True once the clip player's `<video>` fails to decode (MSE assembly and the single-blob fallback both failed). */
+  readonly playbackFailed = signal(false);
 
   private readonly ctx = signal<{ reportCode: string; reportStartTime: number; fight: WclFight } | null>(null);
   private currentAnchor: ClipAnchor | null = null;
@@ -204,9 +219,16 @@ export class LiveCaptureFeatureService {
   /** Opt in to recording: prompt for a window, then run the rolling-buffer loop. */
   async startRecording(profile: CaptureProfile = DEFAULT_CAPTURE_PROFILE): Promise<void> {
     if (this.recording || this.isStarting()) return;
+    // Insecure context or an unsupported browser leaves `getDisplayMedia` absent; say so rather than fail silently.
+    if (!navigator.mediaDevices?.getDisplayMedia) {
+      this.captureError.set('screen recording is not available in this browser');
+      return;
+    }
+    this.captureError.set(null);
     this.isStarting.set(true);
+    let stream: MediaStream | null = null;
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+      stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
       const [track] = stream.getVideoTracks();
       await track.applyConstraints({ width: { max: 1920 }, height: { max: profile.maxHeight }, frameRate: { max: profile.fps } });
       this.stream = stream;
@@ -219,7 +241,14 @@ export class LiveCaptureFeatureService {
       this.isCapturing.set(true);
       this.cycleSegment();
     } catch (err) {
-      // A user who dismisses the picker is not an error to surface loudly.
+      // Tear down any half-started capture (an unsupported recorder throws after the stream opens) so the toggle never sticks on "Recording".
+      stream?.getTracks().forEach(track => track.stop());
+      this.stream = null;
+      this.recording = false;
+      this.isCapturing.set(false);
+      this.sourceLabel.set('');
+      // A dismissed picker is benign; a real failure (unsupported codec, denied by policy) surfaces so the user learns why nothing records.
+      if (!isPickerDismissal(err)) this.captureError.set('recording could not start');
       logWarn('LiveCaptureFeatureService.startRecording', err);
     } finally {
       this.isStarting.set(false);
@@ -245,10 +274,20 @@ export class LiveCaptureFeatureService {
     const recorder = new MediaRecorder(this.stream, { mimeType: this.mimeType, videoBitsPerSecond: this.captureProfile().bitrateBps });
     const start = Date.now();
     recorder.ondataavailable = event => { if (event.data.size) chunks.push(event.data); };
+    // A runtime encoder failure would otherwise stall the buffer silently: surface it and tear the recording down.
+    recorder.onerror = event => {
+      logWarn('LiveCaptureFeatureService.cycleSegment', event);
+      this.captureError.set('recording stopped unexpectedly');
+      this.stopRecording();
+    };
     recorder.onstop = () => {
-      const segment: Segment = { idx: this.segIdx++, start, end: Date.now(), blob: new Blob(chunks, { type: this.mimeType }) };
+      const blob = new Blob(chunks, { type: this.mimeType });
       const cutoff = Date.now() - BUFFER_MS;
-      this.segments.update(buffer => [...buffer.filter(existing => existing.end >= cutoff), segment]);
+      // Only a segment with footage counts toward clip coverage; a zero-byte blob cannot decode.
+      if (blob.size) {
+        const segment: Segment = { idx: this.segIdx++, start, end: Date.now(), blob };
+        this.segments.update(buffer => [...buffer.filter(existing => existing.end >= cutoff), segment]);
+      }
       if (this.recording) this.cycleSegment();
     };
     recorder.start();
@@ -278,6 +317,8 @@ export class LiveCaptureFeatureService {
   openClip(anchor: ClipAnchor): void {
     this.currentAnchor = anchor;
     this.open.set(true);
+    this.downloadError.set(null);
+    this.playbackFailed.set(false);
     const ctx = this.ctx();
     if (!ctx) {
       this.handle.set(null);
@@ -292,11 +333,19 @@ export class LiveCaptureFeatureService {
     const anchor = this.currentAnchor;
     const handle = this.handle();
     if (!anchor || !handle) return;
+    this.downloadError.set(null);
     try {
       this.triggerDownload(await this.reRecord(handle), `${anchor.key}.webm`);
     } catch (err) {
+      this.downloadError.set('Download failed.');
       logWarn(`LiveCaptureFeatureService.download ${anchor.key}`, err);
     }
+  }
+
+  /** The clip player's `<video>` could not decode the assembled footage; flip to the dead-clip message. */
+  onPlaybackError(): void {
+    logWarn('LiveCaptureFeatureService.onPlaybackError', this.currentAnchor?.key ?? '');
+    this.playbackFailed.set(true);
   }
 
   close(): void { this.open.set(false); }
@@ -308,6 +357,8 @@ export class LiveCaptureFeatureService {
     this.ctx.set(null);
     this.currentAnchor = null;
     this.resolved.clear();
+    this.downloadError.set(null);
+    this.playbackFailed.set(false);
   }
 
   private clipWindowFor(anchor: ClipAnchor): ClipWindow {
@@ -357,14 +408,16 @@ export class LiveCaptureFeatureService {
     await pipeIntoElement(video, handle.blobs, handle.mimeType);
     if (video.readyState < 1) await onceEvent(video, 'loadedmetadata');
     return new Promise((resolve, reject) => {
+      let stream: MediaStream | null = null;
       try {
-        const stream = (video as unknown as CapturableMedia).captureStream();
+        stream = (video as unknown as CapturableMedia).captureStream();
         const recorder = new MediaRecorder(stream, { mimeType: handle.mimeType, videoBitsPerSecond: this.captureProfile().bitrateBps });
         const out: Blob[] = [];
         let stopped = false;
         const stop = (): void => { if (!stopped && recorder.state !== 'inactive') { stopped = true; recorder.stop(); } };
         recorder.ondataavailable = event => { if (event.data.size) out.push(event.data); };
         recorder.onstop = () => {
+          stream?.getTracks().forEach(track => track.stop());
           releaseElement(video);
           resolve(new Blob(out, { type: handle.mimeType }));
         };
@@ -375,6 +428,7 @@ export class LiveCaptureFeatureService {
         recorder.start();
         void video.play();
       } catch (err) {
+        stream?.getTracks().forEach(track => track.stop());
         releaseElement(video);
         reject(err instanceof Error ? err : new Error(String(err)));
       }
