@@ -33,9 +33,8 @@ jobs:
         with:
           ref: main
           token: ${{ steps.app-token.outputs.token }}
-          # Full history: the orchestrator orders specs by the git last-commit time of each
-          # spec's data dir (git-mtime.ts). A shallow clone collapses every path's git log to
-          # one commit, which would make all specs tie.
+          # Fetch all refs so origin/gh-pages survives locally even if the overlay step's explicit
+          # fetch fails; losing it before the clean:true publish would wipe the gh-pages-only data.
           fetch-depth: 0
 
       # The generated bench data is NOT tracked on main - it lives once at the gh-pages root
@@ -49,8 +48,16 @@ jobs:
           set -euo pipefail
           git fetch origin gh-pages || true
           rm -rf frontend/public/data/specs
-          git archive origin/gh-pages data/specs 2>/dev/null | tar -x -C frontend/public || \
-            echo "No existing data on gh-pages; starting from empty."
+          # When gh-pages has data, a failed extraction must abort (no `|| echo` swallow): an empty
+          # tree would otherwise reach the clean:true publish and delete every spec and rulebook.
+          # An absent tree is a legitimate first run.
+          if git rev-parse --verify --quiet origin/gh-pages >/dev/null \
+            && git ls-tree --name-only "origin/gh-pages:data/specs" >/dev/null 2>&1; then
+            git archive origin/gh-pages data/specs | tar -x -C frontend/public
+            echo "Overlaid existing bench data from gh-pages."
+          else
+            echo "No existing data on gh-pages; starting from empty (first run)."
+          fi
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -71,6 +78,21 @@ jobs:
           WCL_CLIENT_SECRET: ${{ secrets.WCL_CLIENT_SECRET }}
         working-directory: frontend
         run: npm run ingest
+
+      # Backstop for the clean:true publish: an empty tree over a populated gh-pages would delete
+      # every spec and rulebook. Pruning never removes whole spec dirs, so this only trips on the
+      # empty/partial-overlay catastrophe, not a quiet hour.
+      - name: Guard against an empty publish tree
+        run: |
+          set -euo pipefail
+          dir=frontend/public/data/specs
+          local_specs=$( { find "$dir" -mindepth 1 -maxdepth 1 -type d 2>/dev/null || true; } | wc -l | tr -d ' ')
+          remote_specs=$( { git ls-tree -d --name-only "origin/gh-pages:data/specs" 2>/dev/null || true; } | wc -l | tr -d ' ')
+          echo "Working tree has $local_specs spec dir(s); gh-pages has $remote_specs."
+          if [ "$remote_specs" -gt 0 ] && [ "$local_specs" -eq 0 ]; then
+            echo "::error::Refusing to publish: the working tree has no spec data while gh-pages has $remote_specs spec dir(s). A clean:true publish would wipe the published data and rulebooks."
+            exit 1
+          fi
 
       # Publish the fresh (minified) data into the data/specs/ folder at the gh-pages root.
       # clean:true is scoped to the target-folder, so it replaces data/specs/ only and never

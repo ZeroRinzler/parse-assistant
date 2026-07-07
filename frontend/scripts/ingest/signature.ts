@@ -134,6 +134,17 @@ export function readStoredVersion(file: SignedFile): number {
 }
 
 /**
+ * True when a file was written by a later ingest whose shape this build does not know (a code
+ * deploy racing a data-shape change), so a reader can fail it instead of casting blindly. Files
+ * with no numeric `ingest_version` (manifests, rulebooks) are never future.
+ */
+export function isFutureVersion(parsed: unknown, currentVersion: number): boolean {
+  if (typeof parsed !== 'object' || parsed === null) return false;
+  const version = (parsed as { ingest_version?: unknown }).ingest_version;
+  return typeof version === 'number' && Number.isFinite(version) && version > currentVersion;
+}
+
+/**
  * True when a previously written file's stamped signature matches the freshly computed
  * one: nothing the output depends on (transform code or parse set) has changed, so the
  * encounter can be skipped. A missing stored signature never matches (always recompute).

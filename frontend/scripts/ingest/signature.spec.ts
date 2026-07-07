@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   encounterSignature, encounterSkipKey, signatureAfterFetch, readStoredSignature, readStoredVersion,
   signatureMatches, stampSignature, selectSignatureRankings, parseKey, readInaccessibleParses,
+  isFutureVersion,
   type SignatureRanking, type RawSignatureRanking,
 } from './signature.ts';
 
@@ -245,6 +246,31 @@ describe('readStoredVersion', () => {
   it('reads ingest_version off a stamped file', () => {
     expect(readStoredVersion({ ingest_version: 1 })).toBe(1);
     expect(readStoredVersion({ ingest_version: 0 })).toBe(0);
+  });
+});
+
+describe('isFutureVersion', () => {
+  const CURRENT = 6;
+
+  it('flags a file stamped with a newer ingest version', () => {
+    expect(isFutureVersion({ ingest_version: CURRENT + 1 }, CURRENT)).toBe(true);
+  });
+
+  it('passes a matching or older version', () => {
+    expect(isFutureVersion({ ingest_version: CURRENT }, CURRENT)).toBe(false);
+    expect(isFutureVersion({ ingest_version: CURRENT - 1 }, CURRENT)).toBe(false);
+  });
+
+  it('passes a file with no version stamp (manifest / rulebook)', () => {
+    expect(isFutureVersion({ spec: 'X' }, CURRENT)).toBe(false);
+    expect(isFutureVersion([{ spec: 'X' }], CURRENT)).toBe(false);
+  });
+
+  it('passes a non-object or a non-numeric version stamp', () => {
+    expect(isFutureVersion(null, CURRENT)).toBe(false);
+    expect(isFutureVersion('nope', CURRENT)).toBe(false);
+    expect(isFutureVersion({ ingest_version: 'seven' }, CURRENT)).toBe(false);
+    expect(isFutureVersion({ ingest_version: Number.NaN }, CURRENT)).toBe(false);
   });
 });
 

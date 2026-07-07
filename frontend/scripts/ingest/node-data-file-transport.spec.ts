@@ -3,6 +3,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { FsDataFileTransport } from './node-data-file-transport.ts';
+import { INGEST_VERSION } from './ingest-version.ts';
 import { ok, missing } from '../../src/app/core/result.ts';
 
 // A relative path that climbs out of the data root: the exact shape the containment check must reject.
@@ -34,6 +35,26 @@ describe('FsDataFileTransport', () => {
 
   it('resolves missing for a missing file (ENOENT-tolerant read)', async () => {
     expect(await transport.readJson(MISSING_REL_PATH)).toEqual(missing('Not yet ingested.'));
+  });
+
+  it('resolves permanent for a file stamped with a newer ingest version (schema guard)', async () => {
+    await transport.writeJson(SAFE_REL_PATH, { ...PAYLOAD, ingest_version: INGEST_VERSION + 1 });
+    const result = await transport.readJson(SAFE_REL_PATH);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.kind).toBe('permanent');
+  });
+
+  it('reads a file stamped at the current ingest version normally', async () => {
+    const body = { ...PAYLOAD, ingest_version: INGEST_VERSION };
+    await transport.writeJson(SAFE_REL_PATH, body);
+    expect(await transport.readJson(SAFE_REL_PATH)).toEqual(ok(body));
+  });
+
+  it('leaves no temp file behind after an atomic write', async () => {
+    await transport.writeJson(SAFE_REL_PATH, PAYLOAD);
+    const dir = path.join(root, path.dirname(SAFE_REL_PATH));
+    const entries = await fs.promises.readdir(dir);
+    expect(entries).toEqual([path.basename(SAFE_REL_PATH)]);
   });
 
   it('returns an empty list for a missing directory (ENOENT-tolerant list)', async () => {

@@ -299,7 +299,15 @@ async function main(): Promise<void> {
   const metas = mapClassesToSpecMeta(classesData.gameData?.classes ?? []);
   for (const meta of metas) {
     const rulebook = await runtime.dataFile.getRulebook(meta.spec);
-    meta.specIcon = rulebook.ok ? rulebook.value.spec_icon : '';
+    if (rulebook.ok) {
+      meta.specIcon = rulebook.value.spec_icon;
+    } else {
+      // Only a corrupt file (permanent) is worth logging; a missing rulebook is an un-authored spec.
+      if (rulebook.error.kind === 'permanent') {
+        logWarn(`orchestrator ${meta.spec}: corrupt rulebook.json, shipping blank spec icon`, rulebook.error);
+      }
+      meta.specIcon = '';
+    }
   }
   const specWcl: SpecWclMap = specWclFromMetas(metas);
   runtime.hydrateSpecMeta(metas);
@@ -329,7 +337,13 @@ async function main(): Promise<void> {
     const onDisk = await runtime.dataFile.listSpecs();
     const withRulebook: string[] = [];
     for (const spec of onDisk) {
-      if ((await runtime.dataFile.getRulebook(spec)).ok) withRulebook.push(spec);
+      const rulebook = await runtime.dataFile.getRulebook(spec);
+      if (rulebook.ok) {
+        withRulebook.push(spec);
+      } else if (rulebook.error.kind === 'permanent') {
+        // A corrupt rulebook silently freezes the spec on stale data; log so it is diagnosable.
+        logWarn(`orchestrator ${spec}: corrupt rulebook.json, excluded from this run`, rulebook.error);
+      }
     }
     if (!withRulebook.length) {
       console.log('No known specs (no rulebook.json found). Nothing to do.');
@@ -364,9 +378,36 @@ async function main(): Promise<void> {
     console.log(`Specs (old version first):\n${versionLines.join('\n')}`);
   }
 
+  // Isolate each spec so one throw drops only that spec, not the whole hour. Publishing partial
+  // progress is safe: a total WCL outage already aborted at raid resolution above, and a failed
+  // spec keeps its overlaid data untouched.
+  const succeeded: string[] = [];
+  const failed: { spec: string; error: unknown }[] = [];
+  let budgetStopped = false;
   for (const spec of specs) {
-    const budgetExhausted = await ingestSpec(runtime, client, spec, encounters, protectedIds, version);
-    if (budgetExhausted) break;
+    try {
+      const budgetExhausted = await ingestSpec(runtime, client, spec, encounters, protectedIds, version);
+      succeeded.push(spec);
+      if (budgetExhausted) { budgetStopped = true; break; }
+    } catch (err) {
+      logWarn(`orchestrator: spec ${spec} aborted, continuing with the remaining specs`, err);
+      failed.push({ spec, error: err });
+    }
+  }
+
+  // Distinguish a clean hour from one that aborted partway; otherwise failures are only scattered logs.
+  console.log('\n=== Ingestion summary ===');
+  console.log(`Specs processed: ${succeeded.length} of ${specs.length}`);
+  if (budgetStopped) {
+    console.log('Stopped early: WCL point budget exhausted; the remaining specs resume next run.');
+  }
+  if (failed.length) {
+    console.log(`Specs failed (${failed.length}): ${failed.map(entry => entry.spec).join(', ')}`);
+    for (const entry of failed) {
+      console.log(`  ${entry.spec}: ${entry.error instanceof Error ? entry.error.message : String(entry.error)}`);
+    }
+  } else {
+    console.log('No spec-level failures.');
   }
 }
 
