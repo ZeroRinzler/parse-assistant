@@ -45,6 +45,15 @@ html {
   @include mat.toolbar-overrides((
     container-background-color: var(--surface),
   ));
+  // Roomier navigation-drawer rows (taller targets, generous leading space) with a
+  // fully rounded active indicator: a pill in the expanded drawer, a circle on the
+  // collapsed rail (the item there is square), matching the Material spec.
+  @include mat.list-overrides((
+    active-indicator-shape: 9999px,
+    list-item-one-line-container-height: 48px,
+    list-item-leading-icon-start-space: 16px,
+    list-item-leading-icon-end-space: 16px,
+  ));
 }
 
 body {
@@ -59,6 +68,34 @@ body {
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* Navigation-drawer widths. Material sizes `.mat-drawer` with an unlayered rule, so
+ * layered Tailwind `w-*` utilities lose; an element+class rule (specificity 0,1,1)
+ * outranks Material's `.mat-drawer` (0,1,0) without `!important`, the same mechanism
+ * the mat-icon sizes below use. The three widths are the drawer's states: a modal
+ * overlay on mobile, an expanded permanent drawer, and a collapsed icons-only rail. */
+mat-sidenav.nav-drawer-modal { width: 18rem; }
+mat-sidenav.nav-drawer-full { width: 16rem; }
+mat-sidenav.nav-drawer-rail { width: 5rem; }
+
+/* Navigation-drawer row rhythm: space the rows apart. */
+mat-nav-list .mdc-list-item { margin-block: 4px; }
+
+/* Collapsed rail: center each row's icon in a 48px circular target.
+ * The element-qualified selectors outrank Material's item padding / leading-icon
+ * rules (injected unlayered after this sheet) without `!important`. Material's
+ * content span keeps `flex: 1` even when empty, so hiding it lets the lone icon
+ * sit centered. */
+mat-sidenav.nav-drawer-rail .mdc-list-item {
+  width: 48px;
+  padding: 0;
+  margin-inline: auto;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+mat-sidenav.nav-drawer-rail .mdc-list-item__content { display: none; }
+mat-sidenav.nav-drawer-rail .mat-mdc-list-item-icon { margin: 0; padding: 0; align-self: center; }
 
 /* mat-icon sizes. Material injects an unlayered `.mat-icon { width/height: 24px }`
  * and the Material Symbols font class sets `font-size: 24px`; Tailwind v4 utilities
