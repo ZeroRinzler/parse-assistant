@@ -125,12 +125,14 @@ export type WclTableBlob = string | { data?: { entries?: { id: number; total: nu
 /**
  * One raw `gameData.ability` entry. The `icon` carries the trailing `.jpg` zamimg
  * extension; consumers strip it (see `abilityIcons`). WCL returns `null` for an id
- * it cannot resolve, so the batched map is `entry | null` per alias.
+ * it cannot resolve, so the batched map is `entry | null` per alias. It can also
+ * resolve `id`/`name` while leaving `icon` null (some passives have no art), so
+ * `icon` is nullable and consumers fall back to name-only.
  */
 export interface WclRawAbility {
   id: number;
   name: string;
-  icon: string;
+  icon: string | null;
 }
 
 export interface CharacterGear {

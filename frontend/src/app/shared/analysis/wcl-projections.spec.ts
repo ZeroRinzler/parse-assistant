@@ -83,6 +83,11 @@ describe('abilityIcons', () => {
     expect(abilityIcons(raw)).toEqual({ [SHADOW_BLADES]: { icon: 'ability_sb', name: 'Shadow Blades' } });
   });
 
+  it('projects a resolved entry with a null icon to an empty icon (name-only)', () => {
+    const raw = { [`a${SHADOW_BLADES}`]: { id: SHADOW_BLADES, name: 'Shadow Blades', icon: null } };
+    expect(abilityIcons(raw)).toEqual({ [SHADOW_BLADES]: { icon: '', name: 'Shadow Blades' } });
+  });
+
 });
 
 describe('windowSpells', () => {

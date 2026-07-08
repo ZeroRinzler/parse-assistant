@@ -48,14 +48,15 @@ function safeParseRankings(raw: string): { rankings?: WclRawRanking[] } | null {
  * Project WCL's aliased `gameData.ability` map into an id-keyed `{ icon, name }`
  * record, stripping the trailing `.jpg` so the value is the bare zamimg filename
  * `wl-game-icon` expects. WCL returns `null` for any alias it could not resolve;
- * those are skipped.
+ * those are skipped. A resolved entry can still carry a null `icon` (some passives
+ * have no art), which projects to an empty string so the icon renders name-only.
  */
 export function abilityIcons(
   raw: Record<string, WclRawAbility | null>,
 ): Record<number, { icon: string; name: string }> {
   const icons: Record<number, { icon: string; name: string }> = {};
   for (const entry of Object.values(raw)) {
-    if (entry) icons[entry.id] = { icon: entry.icon.replace(/\.jpg$/i, ''), name: entry.name };
+    if (entry) icons[entry.id] = { icon: entry.icon?.replace(/\.jpg$/i, '') ?? '', name: entry.name };
   }
   return icons;
 }
