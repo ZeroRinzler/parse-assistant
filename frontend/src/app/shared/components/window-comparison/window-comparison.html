@@ -88,12 +88,12 @@
            top-parse damage; a not-reached player window shows the italic label. -->
       <div class="basis-full md:basis-auto md:ml-auto flex items-center gap-2">
         @if (showMap()) {
-          <button mat-icon-button aria-label="Open positioning map" (click)="openMap.emit(activeIndex())">
+          <button mat-icon-button title="Open positioning map" (click)="openMap.emit(activeIndex())">
             <mat-icon>my_location</mat-icon>
           </button>
         }
         @if (showClip()) {
-          <button mat-icon-button aria-label="Watch clip" (click)="openClip.emit(activeIndex())">
+          <button mat-icon-button title="Watch clip" (click)="openClip.emit(activeIndex())">
             <mat-icon>videocam</mat-icon>
           </button>
         }

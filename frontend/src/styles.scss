@@ -114,6 +114,11 @@ mat-sidenav.nav-drawer-rail .mdc-list-item__content { display: none; }
  * live in `@layer utilities` and always lose to those unlayered rules, so `w-*` /
  * `text-*` utilities silently do nothing on a mat-icon. These mat-icon-scoped
  * classes (specificity 0,1,1) beat both without `!important`. */
+
+/* Without this, the icon inherits ambient line-height (varies by container) and sits
+ * a couple pixels off-center inside the button's fixed height. */
+.mdc-icon-button { line-height: 1; }
+
 mat-icon.icon-16 { font-size: 16px; width: 16px; height: 16px; line-height: 16px; }
 mat-icon.icon-18 { font-size: 18px; width: 18px; height: 18px; line-height: 18px; }
 
@@ -122,17 +127,6 @@ mat-icon.icon-18 { font-size: 18px; width: 18px; height: 18px; line-height: 18px
 mat-icon.icon-seg { font-size: 22px; width: 22px; height: 22px; line-height: 1; }
 @media (min-width: 48rem) {
   mat-icon.icon-seg { font-size: 18px; width: 18px; height: 18px; }
-}
-
-/* Compact inline icon button (finding-table map jump). Sizing the button via the
- * supported tokens keeps the inner padding math intact, and dropping the invisible
- * 48px touch-target overlay stops it from stealing clicks from neighbouring text. */
-.icon-button-compact {
-  @include mat.icon-button-overrides((
-    state-layer-size: 20px,
-    icon-size: 16px,
-    touch-target-display: none,
-  ));
 }
 
 /* Severity badges - text color by status. Templates select one via a

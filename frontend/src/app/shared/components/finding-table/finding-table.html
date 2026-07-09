@@ -38,13 +38,13 @@
             @if (row.timestampMs != null) {
               <span class="text-[13px] text-[var(--accent)] tabular-nums">{{ row.timestampMs / 1000 | formatDuration }}</span>
               @if (showMap()) {
-                <button mat-icon-button class="icon-button-compact" aria-label="Open positioning map" (click)="onOpenMap(row)">
-                  <mat-icon class="icon-16">my_location</mat-icon>
+                <button mat-icon-button title="Open positioning map" (click)="onOpenMap(row)">
+                  <mat-icon>my_location</mat-icon>
                 </button>
               }
               @if (showClip()) {
-                <button mat-icon-button class="icon-button-compact" aria-label="Watch clip" (click)="onOpenClip(row)">
-                  <mat-icon class="icon-16">videocam</mat-icon>
+                <button mat-icon-button title="Watch clip" (click)="onOpenClip(row)">
+                  <mat-icon>videocam</mat-icon>
                 </button>
               }
             }
