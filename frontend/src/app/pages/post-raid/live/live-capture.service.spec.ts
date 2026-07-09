@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ClipRoll, ClipWindow, Segment,
-  absoluteWindowStart, buildClipWindows, interSegmentGapMs, segmentSeekOffset, segmentsCover, selectSegments,
+  absoluteWindowStart, buildClipWindows, fullPullWindow, interSegmentGapMs, segmentSeekOffset, segmentsCover, selectSegments,
 } from './live-capture.service';
 import { ClipAnchor } from '../../../core/models/capture.models';
 
@@ -55,6 +55,21 @@ describe('buildClipWindows', () => {
 
   it('returns [] for no windows', () => {
     expect(buildClipWindows(REPORT_START_MS, FIGHT_START_MS, [], ROLL)).toEqual([]);
+  });
+});
+
+describe('fullPullWindow', () => {
+  // A fight ending 5 minutes after it starts on the report clock.
+  const FIGHT_END_MS = FIGHT_START_MS + 5 * 60 * 1000;
+
+  it('spans the whole fight on the report clock', () => {
+    const window = fullPullWindow(REPORT_START_MS, FIGHT_START_MS, FIGHT_END_MS);
+    expect(window.fromMs).toBe(REPORT_START_MS + FIGHT_START_MS);
+    expect(window.toMs).toBe(REPORT_START_MS + FIGHT_END_MS);
+  });
+
+  it('keys the window so its clip is distinct from any bench window', () => {
+    expect(fullPullWindow(REPORT_START_MS, FIGHT_START_MS, FIGHT_END_MS).key).toBe('full-pull');
   });
 });
 

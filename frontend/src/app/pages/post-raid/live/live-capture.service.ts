@@ -4,7 +4,7 @@
  * It owns three concerns:
  *
  *  1. Recording engine - `getDisplayMedia` + a per-segment `MediaRecorder` rolling
- *     buffer, MSE clip assembly, and `captureStream` export.
+ *     buffer, MSE clip assembly for playback, and single-file WebM export by remux.
  *  2. Live-sync toggle + status the controls strip renders (the page owns the polling).
  *  3. Clip flyover state - panel open/close, the current `ClipHandle`, and the
  *     correlation context captured from `prepare`.
@@ -13,6 +13,9 @@
  * written to disk.
  */
 import { Injectable, computed, inject, signal } from '@angular/core';
+import {
+  BlobSource, BufferTarget, EncodedPacketSink, EncodedVideoPacketSource, Input, Output, WEBM, WebMOutputFormat,
+} from 'mediabunny';
 import { WclFight } from '../../../core/models/wcl.models';
 import { ClipAnchor } from '../../../core/models/capture.models';
 import { logWarn } from '../../../core/log';
@@ -111,6 +114,11 @@ export function buildClipWindows(
   });
 }
 
+/** The whole-fight wall-clock window (unix epoch ms) whose segments make up a full-pull clip. */
+export function fullPullWindow(reportStartTime: number, fightStartTime: number, fightEndTime: number): ClipWindow {
+  return { fromMs: reportStartTime + fightStartTime, toMs: reportStartTime + fightEndTime, key: 'full-pull' };
+}
+
 /** Segments overlapping `[fromMs, toMs]`, sorted by start. Half-open on neither end (any touch counts). */
 export function selectSegments(segments: Segment[], window: ClipWindow): Segment[] {
   return segments
@@ -144,9 +152,6 @@ export function segmentsCover(segments: Segment[], fromMs: number, toMs: number)
 }
 
 /* --------------------------- media type helpers --------------------------- */
-
-/** A video element exposing `captureStream`, which the DOM lib types only on canvas. */
-interface CapturableMedia { captureStream(): MediaStream }
 
 /**
  * Most specific supported recording mime: profile codec, then VP8, then bare WebM. MSE
@@ -329,16 +334,34 @@ export class LiveCaptureFeatureService {
   }
 
   /** Export the clip currently in the player to one downloadable WebM file. */
-  async download(): Promise<void> {
+  download(): void {
     const anchor = this.currentAnchor;
     const handle = this.handle();
     if (!anchor || !handle) return;
+    void this.saveSegments(handle.blobs, `${anchor.key}.webm`);
+  }
+
+  /** Export the whole prepared fight from the rolling buffer to one downloadable WebM file. */
+  downloadFullPull(): void {
+    const ctx = this.ctx();
+    if (!ctx) return;
+    const segments = selectSegments(this.segments(), fullPullWindow(ctx.reportStartTime, ctx.fight.startTime, ctx.fight.endTime));
+    void this.saveSegments(segments.map(segment => segment.blob), 'full-pull.webm');
+  }
+
+  /** Remux the buffered segments into one seekable WebM and save it. No re-encode, so it stays near-instant. */
+  private async saveSegments(blobs: Blob[], filename: string): Promise<void> {
     this.downloadError.set(null);
+    if (!blobs.length) {
+      this.downloadError.set('Download failed.');
+      logWarn('LiveCaptureFeatureService.saveSegments', `no footage for ${filename}`);
+      return;
+    }
     try {
-      this.triggerDownload(await this.reRecord(handle), `${anchor.key}.webm`);
+      this.triggerDownload(await remuxSegments(blobs), filename);
     } catch (err) {
       this.downloadError.set('Download failed.');
-      logWarn(`LiveCaptureFeatureService.download ${anchor.key}`, err);
+      logWarn('LiveCaptureFeatureService.saveSegments', err);
     }
   }
 
@@ -398,43 +421,6 @@ export class LiveCaptureFeatureService {
     };
   }
 
-  /**
-   * Re-record the assembled clip in real time into one clean WebM, playing only
-   * `[startOffsetS, endOffsetS]` so the file matches the on-screen clip.
-   */
-  private async reRecord(handle: ClipHandle): Promise<Blob> {
-    const video = document.createElement('video');
-    video.muted = true;
-    await pipeIntoElement(video, handle.blobs, handle.mimeType);
-    if (video.readyState < 1) await onceEvent(video, 'loadedmetadata');
-    return new Promise((resolve, reject) => {
-      let stream: MediaStream | null = null;
-      try {
-        stream = (video as unknown as CapturableMedia).captureStream();
-        const recorder = new MediaRecorder(stream, { mimeType: handle.mimeType, videoBitsPerSecond: this.captureProfile().bitrateBps });
-        const out: Blob[] = [];
-        let stopped = false;
-        const stop = (): void => { if (!stopped && recorder.state !== 'inactive') { stopped = true; recorder.stop(); } };
-        recorder.ondataavailable = event => { if (event.data.size) out.push(event.data); };
-        recorder.onstop = () => {
-          stream?.getTracks().forEach(track => track.stop());
-          releaseElement(video);
-          resolve(new Blob(out, { type: handle.mimeType }));
-        };
-        // Stop at the window end (single pass, no loop for the downloaded file).
-        video.addEventListener('timeupdate', () => { if (video.currentTime >= handle.endOffsetS) stop(); });
-        video.addEventListener('ended', stop, { once: true });
-        video.currentTime = handle.startOffsetS;
-        recorder.start();
-        void video.play();
-      } catch (err) {
-        stream?.getTracks().forEach(track => track.stop());
-        releaseElement(video);
-        reject(err instanceof Error ? err : new Error(String(err)));
-      }
-    });
-  }
-
   private triggerDownload(blob: Blob, filename: string): void {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
@@ -471,14 +457,47 @@ export async function pipeIntoElement(video: HTMLVideoElement, blobs: Blob[], mi
   }
 }
 
+/**
+ * Stitch the independently-recorded WebM segments into one continuous, seekable WebM by remuxing,
+ * no re-encode. Each segment is a self-contained WebM whose clusters restart at 0, so a plain blob
+ * concat repeats the header and timeline and players read only the first segment's ~SEG_MS. Here each
+ * segment's encoded packets are re-timed onto one gapless timeline (offset by the running duration) and
+ * written to a single output, so the file plays and seeks its full length while staying near-instant.
+ */
+export async function remuxSegments(blobs: Blob[]): Promise<Blob> {
+  const output = new Output({ format: new WebMOutputFormat(), target: new BufferTarget() });
+  let source: EncodedVideoPacketSource | null = null;
+  // The decoder config only needs to ride the first packet; every segment shares one codec.
+  let firstMeta: Parameters<EncodedVideoPacketSource['add']>[1];
+  let timeOffset = 0;
+  for (const blob of blobs) {
+    const track = await new Input({ formats: [WEBM], source: new BlobSource(blob) }).getPrimaryVideoTrack();
+    if (!track) continue;
+    if (!source) {
+      source = new EncodedVideoPacketSource(track.codec ?? 'vp8');
+      output.addVideoTrack(source);
+      await output.start();
+      const config = await track.getDecoderConfig();
+      firstMeta = config ? { decoderConfig: config } : undefined;
+    }
+    let segmentEnd = 0;
+    for await (const packet of new EncodedPacketSink(track).packets()) {
+      await source.add(packet.clone({ timestamp: packet.timestamp + timeOffset }), firstMeta);
+      firstMeta = undefined;
+      segmentEnd = Math.max(segmentEnd, packet.timestamp + packet.duration);
+    }
+    timeOffset += segmentEnd;
+  }
+  if (!source) throw new Error('no decodable video track in the buffered segments');
+  await output.finalize();
+  const buffer = output.target.buffer;
+  if (!buffer) throw new Error('remux produced no output');
+  return new Blob([buffer], { type: 'video/webm' });
+}
+
 /** Revoke a media element's blob src (a no-op for an already-revoked or non-blob src). */
 export function releaseElement(video: HTMLVideoElement): void {
   if (video.src.startsWith('blob:')) URL.revokeObjectURL(video.src);
-}
-
-/** Resolve once a media element fires `event`. */
-function onceEvent(el: HTMLMediaElement, event: string): Promise<void> {
-  return new Promise(resolve => el.addEventListener(event, () => resolve(), { once: true }));
 }
 
 /** Resolve once a `MediaSource` reaches `sourceopen`. */
