@@ -72,10 +72,8 @@ export interface ParseRanking {
   fight_id: number;
 }
 
-// ---------------------------------------------------------------------------
 // Raw WCL response shapes (bytes as WCL returns them; consumers map these to
 // application models). These belong to the API contract, not the domain model.
-// ---------------------------------------------------------------------------
 
 /** A single gear array entry from a WCL CombatantInfo / ranking. */
 export interface WclGearItem {

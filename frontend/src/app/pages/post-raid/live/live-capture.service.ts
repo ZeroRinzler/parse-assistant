@@ -20,11 +20,10 @@ import { WclFight } from '../../../core/models/wcl.models';
 import { ClipAnchor } from '../../../core/models/capture.models';
 import { logWarn } from '../../../core/log';
 
-/* ------------------------- slice-private data shapes ----------------------- */
-/* Only `ClipAnchor`, the shape cards emit across the layer boundary, lives in
- * core/models. All wall-clock fields are unix-epoch milliseconds: recorder and WCL
- * timeline share one clock, so `report.startTime + fight.startTime` maps directly onto
- * a segment's `start`/`end` with no skew term. */
+// Slice-private data shapes. Only `ClipAnchor`, the shape cards emit across the layer
+// boundary, lives in core/models. All wall-clock fields are unix-epoch milliseconds:
+// recorder and WCL timeline share one clock, so `report.startTime + fight.startTime`
+// maps directly onto a segment's `start`/`end` with no skew term.
 
 /** Capture quality knobs passed to `getDisplayMedia` + `MediaRecorder`. */
 export interface CaptureProfile {
@@ -92,7 +91,7 @@ export const NO_CLIP_ROLL: ClipRoll = { preMs: 0, postMs: 0 };
 /** Grace period before a downloaded clip's object URL is revoked, so the browser can read the blob. */
 const DOWNLOAD_URL_TTL_MS = 10_000;
 
-/* ----------------------------- pure functions ----------------------------- */
+// Pure functions
 
 /** Absolute wall-clock start (unix epoch ms) of a bench offset. */
 export function absoluteWindowStart(reportStartTime: number, fightStartTime: number, timeS: number): number {
@@ -150,7 +149,7 @@ export function segmentsCover(segments: Segment[], fromMs: number, toMs: number)
   return segments.some(segment => segment.end > fromMs && segment.start < toMs);
 }
 
-/* --------------------------- media type helpers --------------------------- */
+// Media type helpers
 
 /**
  * Most specific supported recording mime: profile codec, then VP8, then bare WebM. MSE
@@ -171,14 +170,14 @@ function isPickerDismissal(err: unknown): boolean {
   return err instanceof DOMException && err.name === 'NotAllowedError';
 }
 
-/* ----------------------------- feature service ---------------------------- */
+// Feature service
 
 @Injectable({ providedIn: 'root' })
 export class LiveCaptureFeatureService {
   // Live-sync on/off. Lives here because this is the only service that reads it.
   private readonly liveActive = signal(false);
 
-  // --- recording engine state ---
+  // Recording engine state
   readonly isCapturing = signal(false);
   readonly isStarting = signal(false);
   readonly sourceLabel = signal('');
@@ -201,11 +200,11 @@ export class LiveCaptureFeatureService {
   private segIdx = 0;
   private mimeType = 'video/webm';
 
-  // --- live-sync toggle + status (rendered by wl-live-controls) ---
+  // Live-sync toggle + status (rendered by wl-live-controls)
   readonly liveEnabled = this.liveActive.asReadonly();
   readonly status = signal('');
 
-  // --- clip flyover state ---
+  // Clip flyover state
   readonly open = signal(false);
   readonly handle = signal<ClipHandle | null>(null);
   /** True once the clip player's `<video>` fails to decode (MSE assembly and the single-blob fallback both failed). */
@@ -219,7 +218,7 @@ export class LiveCaptureFeatureService {
   setLive(on: boolean): void { this.liveActive.set(on); }
   setStatus(message: string): void { this.status.set(message); }
 
-  /* ------------------------- recording engine ---------------------------- */
+  // Recording engine
 
   /** Opt in to recording: prompt for a window, then run the rolling-buffer loop. */
   async startRecording(profile: CaptureProfile = DEFAULT_CAPTURE_PROFILE): Promise<void> {
@@ -299,7 +298,7 @@ export class LiveCaptureFeatureService {
     setTimeout(() => { if (recorder.state === 'recording') recorder.stop(); }, SEG_MS);
   }
 
-  /* --------------------------- clip flyover ------------------------------ */
+  // Clip flyover
 
   /**
    * Capture the correlation context for the resolved fight so a clip button can map a

@@ -6,9 +6,7 @@
  * than the stringly-typed `Record<string, unknown>` fallback.
  */
 
-// ---------------------------------------------------------------------------
 // Variable interfaces
-// ---------------------------------------------------------------------------
 
 export interface ReportQueryVars { code: string }
 export interface PlayerDetailsQueryVars { code: string; fightIDs: number[] }
@@ -28,9 +26,7 @@ export interface RankingsQueryVars { encounterID: number; className: string; spe
 export interface TableQueryVars { code: string; fightIDs: number[]; dataType: string }
 export interface ResurrectsQueryVars { code: string; fightIDs: number[]; filter: string; startTime: number; endTime: number }
 
-// ---------------------------------------------------------------------------
 // Query strings
-// ---------------------------------------------------------------------------
 
 export const REPORT_Q = `
 query($code:String!){reportData{report(code:$code){
@@ -134,9 +130,7 @@ export function buildAbilityIconsQuery(ids: number[]): string {
   return `query{gameData{${fields}}}`;
 }
 
-// ---------------------------------------------------------------------------
 // Ingest discovery queries (used only by src/app/ingest, bundled only there)
-// ---------------------------------------------------------------------------
 
 /** The WCL hourly point budget - the ingest orchestrator's budget gate. */
 export const RATE_LIMIT_Q = `query { rateLimitData { limitPerHour pointsSpentThisHour pointsResetIn } }`;
