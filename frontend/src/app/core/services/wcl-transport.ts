@@ -30,19 +30,8 @@ export const WCL_UNUSABLE_STATUS = 422;
  * concrete {@link HttpWclTransport}) so specs can fake it through the token.
  */
 export interface WclTransport {
-  /**
-   * `cacheFirst` dedupes repeat reads within a session (the ng-http-caching memory
-   * store); false always hits the network. Throws {@link WclTransportError} on failure.
-   */
-  query<TData>(gqlString: string, variables: object, token: string, cacheFirst: boolean): Promise<TData>;
+  /** Runs the GraphQL POST; caching is the query's own concern (`wclCachingHeaders`). Throws {@link WclTransportError} on failure. */
+  query<TData>(gqlString: string, variables: object, token: string): Promise<TData>;
 }
 
 export const WCL_TRANSPORT = new InjectionToken<WclTransport>('WCL_TRANSPORT');
-
-/**
- * When true, the otherwise `network-only` report/event reads use `cache-first` so one
- * ingest run fetches each report/event stream once even though the 5 transforms request
- * overlapping streams. Defaults to false: the runtime keeps `network-only` for live-poll
- * freshness. The ingest environment provides `true`.
- */
-export const WCL_INGEST_MODE = new InjectionToken<boolean>('WCL_INGEST_MODE', { factory: () => false });

@@ -1,7 +1,6 @@
-import { Injectable, inject, untracked } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { WclAuthService } from './wcl-auth';
-import { LiveModeState } from './live-mode-state';
-import { WCL_TRANSPORT, WCL_INGEST_MODE, WclTransportError, WCL_UNUSABLE_STATUS } from './wcl-transport';
+import { WCL_TRANSPORT, WclTransportError, WCL_UNUSABLE_STATUS } from './wcl-transport';
 import {
   WclReport, WclEvent,
   PlayerDetailGroups, WclRankingsBlob, WclRawAbility, WclCombatantInfo, WclTableBlob,
@@ -18,45 +17,21 @@ import { specMetaOf } from '../spec-meta';
 export class WclApiService {
   private readonly auth = inject(WclAuthService);
   private readonly transport = inject(WCL_TRANSPORT);
-  private readonly ingestMode = inject(WCL_INGEST_MODE);
-  private readonly liveMode = inject(LiveModeState);
 
   /**
-   * Fetch policy for the otherwise per-pull report/event reads. Ingestion shares one fetch
-   * across the 5 transforms (cache-first). In the browser a saved report is immutable, so
-   * those reads are cache-first too - the report is fetched once and re-selecting a
-   * fight/player is free; only while live-syncing do they go network-only so a poll sees
-   * newly-recorded fights.
+   * A 401 refreshes the token and retries once, so an early-rejected token (early expiry, rotated
+   * secret) recovers in place; other `WclTransportError`s propagate intact for `toLoadError`.
    */
-  private livePolicy(): 'cache-first' | 'network-only' {
-    // untracked: card load effects reach this read synchronously; tracking it would refetch
-    // a card's whole slice on every live-toggle flip.
-    return this.ingestMode || !untracked(this.liveMode.active) ? 'cache-first' : 'network-only';
-  }
-
-  /**
-   * Runs a GraphQL query against WCL through the injected transport (an `HttpClient`
-   * POST behind the ng-http-caching memory cache). The client-credentials bearer token is
-   * fetched here and passed per request (it is renewed on expiry). `fetchPolicy`
-   * defaults to `cache-first` to dedupe repeat reads within a session; callers that
-   * must always see fresh data (report polling, large event fetches) pass `network-only`.
-   * A 401 refreshes the token and retries once so an early-rejected token recovers in
-   * place; the `WclTransportError` propagates intact so `toLoadError` can classify it.
-   */
-  async query<TData = unknown>(
-    gqlString: string, variables: object = {}, fetchPolicy: 'cache-first' | 'network-only' = 'cache-first',
-  ): Promise<TData> {
-    const cacheFirst = fetchPolicy === 'cache-first';
+  async query<TData = unknown>(gqlString: string, variables: object = {}): Promise<TData> {
     const token = await this.auth.getToken();
     try {
-      return await this.transport.query<TData>(gqlString, variables, token, cacheFirst);
+      return await this.transport.query<TData>(gqlString, variables, token);
     } catch (error) {
       if (error instanceof WclTransportError && error.status === 401) {
-        // A stale token (early expiry, rotated secret) shouldn't surface as a failure:
-        // refresh and retry once. A second 401 propagates and classifies as permanent.
+        // A second 401 propagates and classifies as permanent.
         this.auth.invalidate();
         const freshToken = await this.auth.getToken();
-        return await this.transport.query<TData>(gqlString, variables, freshToken, cacheFirst);
+        return await this.transport.query<TData>(gqlString, variables, freshToken);
       }
       throw error;
     }
@@ -64,9 +39,7 @@ export class WclApiService {
 
   async getReport(code: string): Promise<WclReport> {
     const vars: ReportQueryVars = { code };
-    // Saved reports are immutable, so the read is cache-first (see livePolicy); only while
-    // live-syncing does it go network-only, so a poll never hides newly-recorded fights.
-    const result = await this.query<{ reportData: { report: WclReport | null } }>(REPORT_Q, vars, this.livePolicy());
+    const result = await this.query<{ reportData: { report: WclReport | null } }>(REPORT_Q, vars);
     const report = result?.reportData?.report;
     // WCL returns report: null for a code it won't serve (missing, private, expired) with no
     // GraphQL error. Fail typed so a caller can't dereference the null into a TypeError.
@@ -78,7 +51,7 @@ export class WclApiService {
   async getReportFights(code: string): Promise<WclReport['fights']> {
     const vars: ReportQueryVars = { code };
     const result = await this.query<{ reportData: { report: { fights: WclReport['fights'] } | null } }>(
-      REPORT_FIGHTS_Q, vars, this.livePolicy(),
+      REPORT_FIGHTS_Q, vars,
     );
     const report = result?.reportData?.report;
     // Same unserved-report case as getReport; fail typed rather than into a TypeError.
@@ -117,11 +90,8 @@ export class WclApiService {
       if (sourceId != null) vars.sourceID = sourceId;
       if (includeResources) vars.includeResources = true;
       if (hostilityType) vars.hostilityType = hostilityType;
-      // Event pages for a saved report are immutable, so the read is cache-first (see
-      // livePolicy) - re-analysis is served from cache; only while live-syncing does it go
-      // network-only, so the still-recording fight's events are always fresh.
       const result = await this.query<{ reportData: { report: { events: { data: WclEvent[]; nextPageTimestamp?: number } } } }>(
-        EVENTS_Q, vars, this.livePolicy(),
+        EVENTS_Q, vars,
       );
       const page = result.reportData.report.events;
       events.push(...(page.data ?? []));
@@ -148,12 +118,12 @@ export class WclApiService {
   /**
    * Raw damage-done summary table for a fight (JSON blob, string or object). Consumers
    * pick their player's `data.entries` row by actor id and derive DPS from `total` over
-   * the fight duration. Cache-first per `livePolicy` (a saved report's table is immutable).
+   * the fight duration.
    */
   async getDamageDoneTable(code: string, fightId: number): Promise<WclTableBlob | null> {
     const vars: TableQueryVars = { code, fightIDs: [fightId], dataType: 'DamageDone' };
     const result = await this.query<{ reportData: { report: { table: WclTableBlob } } }>(
-      TABLE_Q, vars, this.livePolicy(),
+      TABLE_Q, vars,
     );
     return result?.reportData?.report?.table ?? null;
   }
@@ -169,7 +139,7 @@ export class WclApiService {
     for (;;) {
       const vars: ResurrectsQueryVars = { code, fightIDs: [fightId], filter: 'type = "resurrect"', startTime: currentStart, endTime };
       const result = await this.query<{ reportData: { report: { events: { data: WclEvent[]; nextPageTimestamp?: number } } } }>(
-        RESURRECTS_Q, vars, this.livePolicy(),
+        RESURRECTS_Q, vars,
       );
       const page = result.reportData.report.events;
       events.push(...(page.data ?? []));

@@ -12,7 +12,6 @@ import { EnvironmentProviders, Provider, inject, provideAppInitializer } from '@
 import { WCL_PUBLIC_CLIENT_ID, WCL_PUBLIC_CLIENT_SECRET } from './wcl-public-client';
 import { provideLiveDataSource } from '../app/core/data-source/provide-data-source';
 import { DATA_FILE_TRANSPORT } from '../app/core/services/data-file-transport';
-import { WCL_INGEST_MODE } from '../app/core/services/wcl-transport';
 import { RETRY_MAX_ATTEMPTS } from '../app/core/interceptors/retry-transient.interceptor';
 import { IngestHttpDataFileTransport } from '../app/ingest/ingest-data-file-transport';
 import { IngestOrchestratorService } from '../app/ingest/ingest-orchestrator.service';
@@ -47,7 +46,6 @@ export const environmentProviders: (Provider | EnvironmentProviders)[] = [
   provideLiveDataSource(DEFENSIVE_DATA_SOURCE, DefensiveTransformService),
   provideLiveDataSource(GEAR_DATA_SOURCE, GearTransformService),
   provideLiveDataSource(MAP_DATA_SOURCE, MapTransformService),
-  { provide: WCL_INGEST_MODE, useValue: true },
   { provide: DATA_FILE_TRANSPORT, useExisting: IngestHttpDataFileTransport },
   { provide: RETRY_MAX_ATTEMPTS, useValue: INGEST_RETRY_MAX_ATTEMPTS },
   provideAppInitializer(() => {

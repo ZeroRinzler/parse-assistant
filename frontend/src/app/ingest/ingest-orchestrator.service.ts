@@ -64,8 +64,8 @@ class ApiWclClient implements WclQueryClient {
   constructor(private readonly wclApi: WclApiService) {}
 
   query<T = unknown, TVars extends object = Record<string, never>>(gql: string, variables?: TVars): Promise<T> {
-    // network-only: the budget gate must see fresh rateLimitData, and discovery reads are one-shot.
-    return this.wclApi.query<T>(gql, (variables ?? {}) as object, 'network-only');
+    // These reads are marked uncached (see wclCachingHeaders), so the budget gate sees fresh data.
+    return this.wclApi.query<T>(gql, (variables ?? {}) as object);
   }
 
   async assertBudget(margin: number): Promise<void> {

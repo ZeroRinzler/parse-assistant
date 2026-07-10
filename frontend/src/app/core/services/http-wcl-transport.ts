@@ -1,8 +1,8 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
-import { NgHttpCachingHeaders } from 'ng-http-caching';
 import { WclTransport, WclTransportError, WCL_API_URL, WCL_UNUSABLE_STATUS } from './wcl-transport';
+import { wclCachingHeaders } from './wcl-caching';
 
 interface GraphQLResponse<TData> {
   data?: TData;
@@ -10,10 +10,8 @@ interface GraphQLResponse<TData> {
 }
 
 /**
- * WCL transport: an `HttpClient` GraphQL POST. Caching lives in the ng-http-caching
- * interceptor (see `provideWclCaching`); `cacheFirst` only decides whether the request
- * opts out via the DISALLOW_CACHE header. The bearer is attached per request because
- * the token renews on expiry.
+ * WCL GraphQL transport (`HttpClient` POST). The bearer is attached per request because the token
+ * renews on expiry; the query's cache-control headers come from `wclCachingHeaders`.
  */
 @Injectable({ providedIn: 'root' })
 export class HttpWclTransport implements WclTransport {
@@ -31,9 +29,8 @@ export class HttpWclTransport implements WclTransport {
     return codes;
   }
 
-  async query<TData>(gqlString: string, variables: object, token: string, cacheFirst: boolean): Promise<TData> {
-    const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
-    if (!cacheFirst) headers[NgHttpCachingHeaders.DISALLOW_CACHE] = '1';
+  async query<TData>(gqlString: string, variables: object, token: string): Promise<TData> {
+    const headers: Record<string, string> = { Authorization: `Bearer ${token}`, ...wclCachingHeaders(gqlString) };
     let body: GraphQLResponse<TData>;
     try {
       body = await firstValueFrom(this.http.post<GraphQLResponse<TData>>(

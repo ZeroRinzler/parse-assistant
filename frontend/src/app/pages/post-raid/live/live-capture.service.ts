@@ -12,14 +12,13 @@
  * Clips are session-scoped: a resolved clip is memoized in memory and nothing is
  * written to disk.
  */
-import { Injectable, computed, inject, signal } from '@angular/core';
+import { Injectable, computed, signal } from '@angular/core';
 import {
   BlobSource, BufferTarget, EncodedPacketSink, EncodedVideoPacketSource, Input, Output, WEBM, WebMOutputFormat,
 } from 'mediabunny';
 import { WclFight } from '../../../core/models/wcl.models';
 import { ClipAnchor } from '../../../core/models/capture.models';
 import { logWarn } from '../../../core/log';
-import { LiveModeState } from '../../../core/services/live-mode-state';
 
 /* ------------------------- slice-private data shapes ----------------------- */
 /* Only `ClipAnchor`, the shape cards emit across the layer boundary, lives in
@@ -176,7 +175,8 @@ function isPickerDismissal(err: unknown): boolean {
 
 @Injectable({ providedIn: 'root' })
 export class LiveCaptureFeatureService {
-  private readonly liveMode = inject(LiveModeState);
+  // Live-sync on/off. Lives here because this is the only service that reads it.
+  private readonly liveActive = signal(false);
 
   // --- recording engine state ---
   readonly isCapturing = signal(false);
@@ -202,7 +202,7 @@ export class LiveCaptureFeatureService {
   private mimeType = 'video/webm';
 
   // --- live-sync toggle + status (rendered by wl-live-controls) ---
-  readonly liveEnabled = this.liveMode.active.asReadonly();
+  readonly liveEnabled = this.liveActive.asReadonly();
   readonly status = signal('');
 
   // --- clip flyover state ---
@@ -216,7 +216,7 @@ export class LiveCaptureFeatureService {
   /** Clips already cut this session, keyed `reportCode:fightId:windowKey`; keeps a window openable after the buffer rolls past it. */
   private readonly resolved = new Map<string, ClipHandle>();
 
-  setLive(on: boolean): void { this.liveMode.active.set(on); }
+  setLive(on: boolean): void { this.liveActive.set(on); }
   setStatus(message: string): void { this.status.set(message); }
 
   /* ------------------------- recording engine ---------------------------- */
