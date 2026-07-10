@@ -6,9 +6,9 @@ on:
   # dropped most fires under load (3 fires in 7 hours observed) and ignores the set minute.
   workflow_dispatch:
 
-# Shared with deploy-pages and pr-preview - see the note there. This job owns the data/ tree
-# on gh-pages; serializing all gh-pages writers keeps their single-commit force-pushes from
-# reverting each other's folder.
+# Shared with deploy-pages - see the note there. This job owns the data/ tree on gh-pages;
+# serializing all gh-pages writers keeps their single-commit force-pushes from reverting
+# each other's folder.
 concurrency:
   group: gh-pages
   cancel-in-progress: false

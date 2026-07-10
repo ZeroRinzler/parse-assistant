@@ -3,23 +3,34 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
   workflow_dispatch:
 
+# GITHUB_TOKEN scopes for the github-script steps only; the gh-pages push authenticates
+# with the app token persisted by the checkout.
 permissions:
   contents: write
+  pull-requests: read
+  deployments: write
 
-# All three gh-pages writers - this workflow (main shell), pr-preview (preview shells) and
-# ingest-parses (the data/ tree) - share ONE concurrency group. Each writes a disjoint folder
-# (main/, pr-*, data/), but every deploy force-pushes a single squashed commit built from
-# a start-of-job checkout of gh-pages, so two concurrent writers would revert each other's
-# folder. Serializing them (cancel-in-progress: false) keeps the branch consistent.
+# Shared with ingest-parses (the data/ tree): every gh-pages writer force-pushes a single
+# squashed commit built from a start-of-job checkout, so concurrent writers would revert
+# each other's folders. cancel-in-progress: false serializes them instead.
 concurrency:
   group: gh-pages
   cancel-in-progress: false
 
 jobs:
-  build-and-deploy:
+  build-and-publish:
     runs-on: ubuntu-latest
+    # The gh-pages root slices this run owns: push -> the prod shell (main/ plus the root
+    # index.html and 404.html), pull_request -> the pr-* previews, dispatch -> both (full
+    # resync). data/ (owned by ingest-parses) and CNAME ride along untouched.
+    env:
+      BUILD_SHELL: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
+      BUILD_PREVIEWS: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' }}
+
     steps:
       - name: Mint GitHub App token
         id: app-token
@@ -28,9 +39,13 @@ jobs:
           app-id: ${{ secrets.INGEST_APP_ID }}
           private-key: ${{ secrets.INGEST_APP_PRIVATE_KEY }}
 
+      # Every trigger builds the current tip of main (idempotent under the serialized
+      # group); the persisted app token authenticates the pull/N/head fetches and the
+      # gh-pages force-push below.
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
-          persist-credentials: false
+          ref: main
+          token: ${{ steps.app-token.outputs.token }}
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -38,50 +53,156 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install dependencies
-        run: npm ci
-        working-directory: frontend
-
-      # The site is composed on gh-pages, not baked whole here: this build ships ONLY the app
-      # shell (no data overlay). The ~100 MB minified data lives once at the gh-pages root under
-      # data/specs/ (maintained solely by ingest-parses) and every environment fetches that one
-      # shared copy via the absolute dataBaseHref, so `main` never re-pushes the dataset.
-      # The site is served from the custom domain root (see the gh-pages `CNAME` file), so the
-      # base-href carries no repo-name segment - just the environment folder, matching the
-      # frontend `dataBaseHref` root.
-      - name: Build
-        run: npm run build -- --base-href "/main/"
-        working-directory: frontend
-
-      # Root of the site: a 3-line index.html that redirects to the `main` environment, plus a
-      # 404.html copy of the built shell so GitHub Pages' site-wide 404 boots the SPA for deep
-      # links under /main/ (client-side routes survive a hard refresh).
-      - name: Assemble root overlay
+      # Ships the shell only: the site reads the one shared data/specs/ copy at the
+      # gh-pages root via the absolute dataBaseHref, and the custom-domain root (gh-pages
+      # CNAME) keeps the base-href free of a repo-name segment.
+      # Built FIRST, staged into the untracked shell-out/: the preview loop below rewrites
+      # the tracked worktree, including .github/pages-root/index.html.
+      - name: Build main shell
+        if: env.BUILD_SHELL == 'true'
         run: |
           set -euo pipefail
-          mkdir -p root-overlay
-          cp .github/pages-root/index.html root-overlay/index.html
-          cp static/angular/browser/index.html root-overlay/404.html
+          npm --prefix frontend ci
+          npm --prefix frontend run build -- --base-href "/main/"
+          rm -rf shell-out
+          mkdir -p shell-out/main
+          cp -a static/angular/browser/. shell-out/main/
+          cp .github/pages-root/index.html shell-out/index.html
+          # Pages serves 404.html site-wide, booting the SPA for deep links under /main/.
+          cp static/angular/browser/index.html shell-out/404.html
 
-      # Publish the shell into its own environment folder. clean:true is scoped to the
-      # target-folder, so it replaces `main/` only and never touches data/ or the pr-* previews.
-      - name: Deploy main shell
-        uses: JamesIves/github-pages-deploy-action@d92aa235d04922e8f08b40ce78cc5442fcfbfa2f # v4.8.0
+      # The previews that should exist are exactly the OPEN base:main PRs: each run
+      # rebuilds all of them and replaces the pr-* dirs wholesale, so a closed PR's preview
+      # vanishes by not being rebuilt (PRs against other branches have no buildable app).
+      - name: List open PR numbers
+        id: open-prs
+        if: env.BUILD_PREVIEWS == 'true'
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
         with:
-          token: ${{ steps.app-token.outputs.token }}
-          branch: gh-pages
-          single-commit: true
-          folder: static/angular/browser
-          target-folder: main
-          clean: true
+          script: |
+            const prs = await github.paginate(github.rest.pulls.list, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              base: 'main',
+              per_page: 100,
+            });
+            const numbers = prs.map((pr) => pr.number);
+            core.info(`Open PRs (base main): ${numbers.join(', ') || '(none)'}`);
+            core.setOutput('numbers', numbers.join(' '));
 
-      # Publish the root index.html / 404.html. clean:false so it only adds/updates those two
-      # files at the site root and leaves main/, data/ and the pr-* previews intact.
-      - name: Deploy root redirect and 404 fallback
-        uses: JamesIves/github-pages-deploy-action@d92aa235d04922e8f08b40ce78cc5442fcfbfa2f # v4.8.0
+      # A preview that fails to build is skipped with a warning, so one bad PR never
+      # blocks the reap of the others. The loop ends detached on the last PR head; fine,
+      # the publish below works in its own worktree.
+      - name: Build all open PR previews
+        if: env.BUILD_PREVIEWS == 'true'
+        env:
+          OPEN_PRS: ${{ steps.open-prs.outputs.numbers }}
+        run: |
+          set -uo pipefail
+          rm -rf preview-out
+          mkdir -p preview-out
+          for n in $OPEN_PRS; do
+            echo "::group::Build preview for PR #$n"
+            if git fetch --no-tags --quiet origin "pull/$n/head" \
+              && git checkout --quiet --detach FETCH_HEAD \
+              && npm --prefix frontend ci \
+              && npm --prefix frontend run build -- --base-href "/pr-$n/"; then
+              rm -rf "preview-out/pr-$n"
+              mkdir -p "preview-out/pr-$n"
+              cp -a static/angular/browser/. "preview-out/pr-$n/"
+            else
+              echo "::warning::Preview build failed for PR #$n; it gets no preview this run."
+            fi
+            echo "::endgroup::"
+          done
+
+      # Compose gh-pages in a scratch worktree: replace only the slices this run owns and
+      # force-push one flat commit; everything unowned rides along from origin/gh-pages.
+      # A byte-identical tree pushes nothing, so no-op runs cause no Pages redeploy.
+      - name: Publish to gh-pages
+        env:
+          OPEN_PRS: ${{ steps.open-prs.outputs.numbers }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth 1 origin gh-pages
+          rm -rf ghp
+          git worktree add --detach ghp origin/gh-pages
+          (
+            cd ghp
+            if [ "$BUILD_SHELL" = "true" ]; then
+              rm -rf main index.html 404.html
+              cp -a ../shell-out/. .
+            fi
+            if [ "$BUILD_PREVIEWS" = "true" ]; then
+              # previews/ is a legacy wrapper dir that may still exist at the root.
+              rm -rf pr-* previews
+              if compgen -G "../preview-out/pr-*" > /dev/null; then
+                cp -a ../preview-out/pr-* .
+              fi
+            fi
+            git checkout --quiet --orphan _deploy
+            git add -A
+            NEW_TREE=$(git write-tree)
+            OLD_TREE=$(git rev-parse origin/gh-pages^{tree})
+            if [ "$NEW_TREE" = "$OLD_TREE" ]; then
+              echo "gh-pages already up to date; nothing to publish."
+            else
+              parts=""
+              if [ "$BUILD_SHELL" = "true" ]; then
+                parts="main shell"
+              fi
+              if [ "$BUILD_PREVIEWS" = "true" ]; then
+                parts="${parts:+$parts + }PR previews: ${OPEN_PRS:-(none)}"
+              fi
+              git -c user.name="github-actions[bot]" \
+                  -c user.email="github-actions[bot]@users.noreply.github.com" \
+                  commit --quiet -m "Publish $parts"
+              git push --force origin _deploy:gh-pages
+            fi
+          )
+          git worktree remove --force ghp
+
+      # Keeps the per-PR "View deployment" link in sync: live on open/update, inactive on
+      # close. Only pull_request events carry a single PR.
+      - name: Update deployment status for the triggering PR
+        if: github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'main'
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
         with:
-          token: ${{ steps.app-token.outputs.token }}
-          branch: gh-pages
-          single-commit: true
-          folder: root-overlay
-          clean: false
+          script: |
+            const pr = context.payload.pull_request.number;
+            const environment = `pr-preview-${pr}`;
+            if (context.payload.action === 'closed') {
+              const { data: deployments } = await github.rest.repos.listDeployments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                environment,
+              });
+              for (const deployment of deployments) {
+                await github.rest.repos.createDeploymentStatus({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  deployment_id: deployment.id,
+                  state: 'inactive',
+                });
+              }
+              return;
+            }
+            const { data: deployment } = await github.rest.repos.createDeployment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: context.payload.pull_request.head.sha,
+              environment,
+              description: `Preview for PR #${pr}`,
+              auto_merge: false,
+              required_contexts: [],
+              transient_environment: true,
+            });
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: deployment.id,
+              state: 'success',
+              environment_url: `https://${context.repo.owner}.github.io/${context.repo.repo}/pr-${pr}/`,
+              description: 'Preview ready',
+            });

@@ -33,9 +33,8 @@ export const environment = {
    *
    * The site is served from the custom domain root (see the gh-pages `CNAME` file), so
    * this is just the site-root path to the shared data folder - no repo-name segment.
-   * It must stay a sibling of every environment folder (`main/`, `pr-N/`), which the
-   * workflows derive their `--base-href` from in `.github/workflows/deploy-pages.yml`
-   * and `pr-preview.yml`.
+   * It must stay a sibling of every environment folder (`main/`, `pr-N/`), which
+   * `.github/workflows/deploy-pages.yml` derives each build's `--base-href` from.
    */
   dataBaseHref: '/data/specs/',
   /** True only in the ingest environment: boots the ingest orchestrator on startup. */
