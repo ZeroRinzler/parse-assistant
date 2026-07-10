@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach, MockInstance } from 'vitest';
 import {
   abilityIcons, normalizeAbilityId, toParseRankings, unwrapRankings, windowSpells,
-  WCL_MELEE_EVENT_ABILITY_ID, WOW_AUTO_ATTACK_SPELL_ID,
+  WCL_MELEE_EVENT_ABILITY_ID, WOW_AUTO_ATTACK_SPELL_ID, WCL_SYNTHETIC_SOURCE_FALLBACK_ID,
 } from './wcl-projections';
 
 // A raw ranking row as WCL surfaces it in the characterRankings blob.
@@ -124,6 +124,14 @@ describe('windowSpells', () => {
 describe('normalizeAbilityId', () => {
   it('maps the WCL melee event id (which gameData resolves to "Word of Recall (OLD)") to Auto Attack', () => {
     expect(normalizeAbilityId(WCL_MELEE_EVENT_ABILITY_ID)).toBe(WOW_AUTO_ATTACK_SPELL_ID);
+  });
+
+  it('folds every negative (synthetic, sourceless) id onto the "I Don\'t Know" catch-all', () => {
+    // -32 is the priest-log id that warned; any negative id WCL synthesizes maps the same way.
+    const SHADOWFIEND_MELEE = -32;
+    const ENVIRONMENTAL = -5;
+    expect(normalizeAbilityId(SHADOWFIEND_MELEE)).toBe(WCL_SYNTHETIC_SOURCE_FALLBACK_ID);
+    expect(normalizeAbilityId(ENVIRONMENTAL)).toBe(WCL_SYNTHETIC_SOURCE_FALLBACK_ID);
   });
 
   it('passes other ability ids through unchanged', () => {

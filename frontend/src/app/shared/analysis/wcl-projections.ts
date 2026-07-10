@@ -17,9 +17,15 @@ const ANONYMIZED_NAME = /^Character \d+-\d+$/;
 export const WCL_MELEE_EVENT_ABILITY_ID = 1;
 export const WOW_AUTO_ATTACK_SPELL_ID = 6603;
 
-/** Map the WCL melee auto-attack event id to the real Auto Attack spell id; other ids pass through. */
+// Negative ability ids are WCL's unresolvable synthetic sources (pet melee, environmental); 291807
+// is the game spell literally named "I Don't Know", a fitting catch-all.
+export const WCL_SYNTHETIC_SOURCE_FALLBACK_ID = 291807;
+
+/** Map WCL's synthetic event ability ids to real spells: melee to Auto Attack, negatives to the "I Don't Know" catch-all; real ids pass through. */
 export function normalizeAbilityId(id: number): number {
-  return id === WCL_MELEE_EVENT_ABILITY_ID ? WOW_AUTO_ATTACK_SPELL_ID : id;
+  if (id === WCL_MELEE_EVENT_ABILITY_ID) return WOW_AUTO_ATTACK_SPELL_ID;
+  if (id < 0) return WCL_SYNTHETIC_SOURCE_FALLBACK_ID;
+  return id;
 }
 
 /**
