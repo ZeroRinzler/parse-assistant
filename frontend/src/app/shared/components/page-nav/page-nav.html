@@ -33,7 +33,7 @@
       <div class="flex-1 px-2">
         <mat-nav-list>
           <a mat-list-item routerLink="/pre" routerLinkActive #pre="routerLinkActive"
-             [activated]="pre.isActive" (click)="onNavigate()"
+             [activated]="pre.isActive" (click)="onNavigate()" aria-label="Pre-Fight"
              [matTooltip]="railCollapsed() ? 'Pre-Fight' : ''" matTooltipPosition="right">
             <mat-icon matListItemIcon>lightbulb</mat-icon>
             @if (!railCollapsed()) {
@@ -42,6 +42,7 @@
           </a>
           <a mat-list-item routerLink="/" routerLinkActive #post="routerLinkActive"
              [routerLinkActiveOptions]="{exact:true}" [activated]="post.isActive" (click)="onNavigate()"
+             aria-label="Analyze"
              [matTooltip]="railCollapsed() ? 'Analyze' : ''" matTooltipPosition="right">
             <mat-icon matListItemIcon>analytics</mat-icon>
             @if (!railCollapsed()) {
@@ -54,6 +55,7 @@
       <div class="px-2 pt-1">
         <mat-nav-list>
           <a mat-list-item [href]="githubUrl" target="_blank" rel="noopener noreferrer"
+             aria-label="View on GitHub"
              [matTooltip]="railCollapsed() ? 'View on GitHub' : ''" matTooltipPosition="right">
             <mat-icon matListItemIcon svgIcon="github"></mat-icon>
             @if (!railCollapsed()) {
@@ -66,6 +68,8 @@
   </mat-sidenav>
 
   <mat-sidenav-content class="overflow-auto">
-    <ng-content></ng-content>
+    <main class="block">
+      <ng-content></ng-content>
+    </main>
   </mat-sidenav-content>
 </mat-sidenav-container>

@@ -64,6 +64,10 @@
                   "inlineCritical": false
                 }
               },
+              "sourceMap": {
+                "scripts": true,
+                "styles": true
+              },
               "budgets": [
                 {
                   "type": "initial",

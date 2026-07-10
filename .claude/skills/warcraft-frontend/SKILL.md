@@ -72,6 +72,6 @@ The Material Symbols Outlined stylesheet is requested with an explicit `icon_nam
 
 The Google Fonts request loads weights **400, 500, 600** only. Those cover the body default and Material typography (400), Tailwind `font-medium` (500), and `font-semibold` (600). Stay within them when styling text: `font-bold` (700) is not loaded, so it renders as synthetic ("faux") bold rather than a real face - use `font-semibold` for emphasis instead. Adding a heavier weight means adding it to the `wght@` list (an extra woff2 download), so prefer reusing a loaded weight.
 
-### Wowhead tooltips - deferred progressive enhancement
+### Wowhead tooltips - on-demand progressive enhancement
 
-`wh-tooltips-config.js` and the zamimg `tooltips.js` both load with `defer`: they decorate spell/item links after load, so deferring keeps first paint off a third-party CDN round trip. `defer` preserves order, so the config runs before `tooltips.js`.
+`index.html` does not load the Wowhead scripts. `WowheadTooltipsService` injects `wh-tooltips-config.js` then zamimg `tooltips.js` the first time a Wowhead link renders (`wl-game-icon` calls `ensureLoaded()` from an `afterNextRender`); it is idempotent and `tooltips.js` self-observes the DOM, so one injection covers every later link. This keeps ~100 kB of tooltip CSS/JS off pages with no spell/item links.
