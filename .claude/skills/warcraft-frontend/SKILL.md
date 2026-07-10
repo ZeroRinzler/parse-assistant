@@ -1,6 +1,6 @@
 ---
 name: warcraft-frontend
-description: warcraft-learner project Angular conventions - hard rules for all Angular/TypeScript code in frontend/src. Covers Material + Tailwind styling, the no-hardcoded-colors rule, template-owns-styling, all-formatting-through-pipes, get*/GraphQL-string API service rules, polling/async state, the ESLint-enforced conventions, and the lint setup. Load this before editing or creating anything under frontend/src (components, templates, services, pipes). Pairs with the generic angular-developer skill; on conflict these project rules win.
+description: warcraft-learner project Angular conventions - hard rules for all Angular/TypeScript code in frontend/src. Covers Material + Tailwind styling, the no-hardcoded-colors rule, template-owns-styling, all-formatting-through-pipes, get*/GraphQL-string API service rules, polling/async state, the ESLint-enforced conventions, the lint setup, and the shared index.html head (CSP, font/icon subsetting, loaded font weights, deferred tooltips). Load this before editing or creating anything under frontend/src (components, templates, services, pipes, index.html). Pairs with the generic angular-developer skill; on conflict these project rules win.
 ---
 
 # warcraft-learner frontend conventions
@@ -44,3 +44,34 @@ These are the general Angular/TypeScript best practices for the app. The mechani
 ## Linting
 
 `npm run lint` (see CLAUDE.md) runs ESLint over both trees: `ng lint` covers `src/**` and a second `eslint scripts` pass covers the Node `scripts/**`. Both share the one `frontend/eslint.config.js`, which is the source of truth for the pinned convention rules and their deliberate option tweaks (each explained in an inline comment) - read it there rather than duplicating the list here. The config is split into per-`files` blocks: a base TypeScript block for `**/*.ts` (recommended + stylistic rules), an Angular block scoped to `src/**/*.ts` (component/directive selectors, `prefer-*` rules, inline-template processor), and a `scripts/**/*.{js,mjs}` block for the plain-Node ingest file server + headless harness that declares their Node globals and keeps `console` allowed since it is their user-facing output.
+
+## index.html head
+
+`frontend/src/index.html` is the one shell every build configuration ships, so its `<head>` is kept minimal and every entry below has a reason to be there. Keep these in sync with the app when the relevant surface changes.
+
+### Content-Security-Policy (meta tag)
+
+The app has no backend, so the policy is tight. Each directive lists exactly what it needs and why (the host allowlist mirrors the external-API catalog in **warcraft-wcl-data**):
+
+- `default-src 'self'` - the baseline everything else narrows from.
+- `script-src 'self' https://wow.zamimg.com` - own bundle plus the Wowhead `tooltips.js` CDN.
+- `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://wow.zamimg.com` - `'unsafe-inline'` is required because Angular and Angular Material inject `<style>` blocks at runtime (the standard, unavoidable Angular CSP concession); `wow.zamimg.com` is where `tooltips.js` link-injects its `universal.css`.
+- `font-src 'self' https://fonts.gstatic.com` - the subset Google Fonts woff2 files.
+- `img-src 'self' data: https://wow.zamimg.com https://assets.rpglogs.com` - zamimg spell/item icons plus `assets.rpglogs.com`, which serves the per-encounter boss icons (see `shared/boss-icon.ts`).
+- `connect-src 'self' http://localhost:3000 https://www.warcraftlogs.com https://www.wowhead.com https://nether.wowhead.com` - the WCL API plus the wowhead hosts `tooltips.js` XHRs tooltip data from. `http://localhost:3000` is the ingest configuration's file server, listed because every configuration shares this one index; the runtime never calls it.
+- `media-src 'self' blob:` - `blob:` lets the recording flyover play a MediaSource-assembled clip from the in-browser rolling buffer (nothing remote).
+- `base-uri 'self'`, `object-src 'none'` - lockdown defaults.
+
+`frame-ancestors` and `report-uri` are intentionally absent: a meta-tag CSP ignores them.
+
+### Material Symbols - subset by ligature
+
+The Material Symbols Outlined stylesheet is requested with an explicit `icon_names=` list, so Google serves only the glyphs the app renders (the full variable font is ~312 kB for ~17 icons). Keep `icon_names` in sync with every `<mat-icon>` ligature in the templates and every status-icon literal the view-models emit (burst / defensive / gear / finding-table / window-comparison / map / nav). `display=block` hides a glyph until the font loads, so a raw ligature name never flashes as text.
+
+### Schibsted Grotesk - style within the loaded weights
+
+The Google Fonts request loads weights **400, 500, 600** only. Those cover the body default and Material typography (400), Tailwind `font-medium` (500), and `font-semibold` (600). Stay within them when styling text: `font-bold` (700) is not loaded, so it renders as synthetic ("faux") bold rather than a real face - use `font-semibold` for emphasis instead. Adding a heavier weight means adding it to the `wght@` list (an extra woff2 download), so prefer reusing a loaded weight.
+
+### Wowhead tooltips - deferred progressive enhancement
+
+`wh-tooltips-config.js` and the zamimg `tooltips.js` both load with `defer`: they decorate spell/item links after load, so deferring keeps first paint off a third-party CDN round trip. `defer` preserves order, so the config runs before `tooltips.js`.

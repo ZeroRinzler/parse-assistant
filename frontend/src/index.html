@@ -5,20 +5,6 @@
     <title>warcraft-learner</title>
     <base href="/" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <!--
-      Content-Security-Policy: this app has no backend, so the only script origins are
-      'self' and the Wowhead tooltip CDN (wow.zamimg.com). style-src needs 'unsafe-inline'
-      because Angular and Angular Material inject <style> blocks at runtime (the standard,
-      unavoidable Angular CSP concession) plus wow.zamimg.com, which is where tooltips.js
-      link-injects its universal.css stylesheet. connect-src covers the WCL API plus the
-      wowhead.com hosts that tooltips.js XHRs tooltip data from. img-src covers zamimg
-      spell/item icons plus assets.rpglogs.com, which serves the per-encounter boss icons
-      (see shared/boss-icon.ts). media-src allows blob: so the recording flyover can play a
-      MediaSource-assembled clip from the in-browser rolling buffer (nothing remote).
-      connect-src allows http://localhost:3000 - the ingest configuration's file server -
-      so every configuration shares this one index; nothing calls it at runtime.
-      frame-ancestors / report-uri are omitted because they are ignored in a meta-tag CSP.
-    -->
     <meta
       http-equiv="Content-Security-Policy"
       content="default-src 'self'; script-src 'self' https://wow.zamimg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://wow.zamimg.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://wow.zamimg.com https://assets.rpglogs.com; connect-src 'self' http://localhost:3000 https://www.warcraftlogs.com https://www.wowhead.com https://nether.wowhead.com; media-src 'self' blob:; base-uri 'self'; object-src 'none'"
@@ -31,23 +17,10 @@
       href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
-    <!--
-      Material Symbols is subset to only the glyphs the app actually renders via
-      `icon_names` (the full variable font is ~312 kB for ~17 icons). Keep this list in
-      sync with every `<mat-icon>` ligature in the templates and every status-icon literal
-      the view-models emit (burst/defensive/gear/finding-table/window-comparison/map/nav).
-      `display=block` hides the glyph until the font loads, so the raw ligature name never
-      flashes as text.
-    -->
     <link
       href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&icon_names=analytics,arrow_forward,check_circle,close,cloud_off,cloud_sync,download,emoji_events,error,expand_less,expand_more,flag,help_outline,info,insights,lightbulb,menu,military_tech,more_vert,my_location,pause,play_arrow,schedule,skull,videocam,warning_amber&display=block"
       rel="stylesheet"
     />
-    <!--
-      Wowhead tooltips are a progressive enhancement (they decorate spell/item links after
-      load), so both scripts are deferred: they no longer block first paint on a third-party
-      CDN round trip. `defer` preserves order, so the config still runs before tooltips.js.
-    -->
     <script src="wh-tooltips-config.js" defer></script>
     <script src="https://wow.zamimg.com/js/tooltips.js" defer></script>
   </head>

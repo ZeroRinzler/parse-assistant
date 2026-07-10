@@ -72,7 +72,7 @@
         [class.badge-warning]="row.severity === 'warning'"
         [class.badge-info]="row.severity === 'info'">
         <span class="md:hidden font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">Measured</span>
-        <div class="text-[15px] font-bold tabular-nums">{{ row.measured.value }}</div>
+        <div class="text-[15px] font-semibold tabular-nums">{{ row.measured.value }}</div>
         @if (row.measured.unit) {
           <div class="text-[12px] text-[var(--muted)] md:text-inherit md:text-[10px] md:opacity-60 md:mt-px tabular-nums">{{ row.measured.unit }}</div>
         }
