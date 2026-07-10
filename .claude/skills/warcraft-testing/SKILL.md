@@ -1,15 +1,15 @@
 ---
 name: warcraft-testing
-description: warcraft-learner testing conventions and harness. Covers how tests run (ng test / Vitest via the @angular/build:unit-test builder, the three-step npm test, zoneless TestBed), the functional-core/imperative-shell per-slice spec layout, tests-as-documentation naming, the hard no-magic-numbers/named-constants rule, the shared event/rulebook fixture factories and per-slice local bench factories, the end-to-end fake-WclApiService pattern, the mountVm signal harness, and the lowest-altitude rule. Load this before writing, changing, or debugging any *.spec.ts or test setup.
+description: warcraft-learner testing conventions and harness. Covers how tests run (ng test / Vitest via the @angular/build:unit-test builder, one suite over src/** incl. the ingest specs, zoneless TestBed), the functional-core/imperative-shell per-slice spec layout, tests-as-documentation naming, the hard no-magic-numbers/named-constants rule, the shared event/rulebook fixture factories and per-slice local bench factories, the end-to-end fake-WclApiService pattern, the mountVm signal harness, and the lowest-altitude rule. Load this before writing, changing, or debugging any *.spec.ts or test setup.
 ---
 
 # warcraft-learner testing
 
 The goals are readability, speed, and trivial testability: a test reads like a statement of the business rule, runs in milliseconds, and needs no ceremony.
 
-**Framework and layout.** Tests use [Vitest](https://vitest.dev) via Angular's official `@angular/build:unit-test` builder (configured in `angular.json`). jsdom is the DOM environment and the builder initializes the `TestBed` environment itself. The app is zoneless (no zone.js); component tests opt into zoneless change detection per-`TestBed` through the `mountVm` harness, so there is no global setup file. The builder needs Node `>= 22.22.3` (the Angular CLI floor). The `npm test` command (see CLAUDE.md) runs three suites in sequence: the frontend specs under `src/**` (TestBed-backed, via the Angular builder), the script specs under `scripts/**` (plain Node Vitest, `vitest.scripts.config.ts`), and a `tsc` typecheck of the Node scripts.
+**Framework and layout.** Tests use [Vitest](https://vitest.dev) via Angular's official `@angular/build:unit-test` builder (configured in `angular.json`). jsdom is the DOM environment and the builder initializes the `TestBed` environment itself. The app is zoneless (no zone.js); component tests opt into zoneless change detection per-`TestBed` through the `mountVm` harness, so there is no global setup file. The builder needs Node `>= 22.22.3` (the Angular CLI floor). The `npm test` command (see CLAUDE.md) is one suite: every spec under `src/**` - including the ingest specs under `src/app/ingest/` - runs through the Angular builder.
 
-The `src/**` specs cannot run under a bare `npx vitest` - they need the `@angular/build:unit-test` builder to set up the Angular TestBed; the `scripts/**` specs are plain Node Vitest.
+The `src/**` specs cannot run under a bare `npx vitest` - they need the `@angular/build:unit-test` builder to set up the Angular TestBed (the pure ingest specs simply don't touch it).
 
 **Functional core, imperative shell (per slice).** There is no central analysis module. Each vertical slice (`pages/post-raid/{rotation,burst-windows,defensive,gear,map}/`) owns its math as named, pure, **total** functions colocated in its own `*.service.ts` / `*-transform.service.ts` - no Angular, no async, no IO. The service classes are thin imperative shells that fetch and call those pure functions. So every slice has two kinds of spec, colocated next to the code:
 
@@ -18,7 +18,7 @@ The `src/**` specs cannot run under a bare `npx vitest` - they need the `@angula
 | `*-transform.service.spec.ts` | the slice's bench math (clustering / aggregation) as pure fns, **plus** an end-to-end pass through the `*TransformService` with a fake `WclApiService` |
 | `*.service.spec.ts` | the `*FeatureService`'s pure view-model fns (table-driven), **plus** an end-to-end pass with a fake `*_DATA_SOURCE` (and a fake `WclApiService` where the slice fetches the player log) |
 
-Ingestion runs these very `*TransformService`s headlessly, so the specs under `scripts/**` cover only the Node-side helpers: discovery (`wcl-fetchers`, `wcl-mappers`), `signature`, `ordering`, and `node-data-file-transport`.
+Ingestion runs these very `*TransformService`s, so the specs under `src/app/ingest/` cover only the orchestration helpers: discovery (`wcl-fetchers` with a fake `WclQueryClient`, `wcl-mappers`), `signature`, `ordering`, and `ingest-data-file-transport` (HttpTestingController against the file-server endpoints).
 
 **Conventions: tests as documentation.** Colocate specs next to the unit (`burst.service.spec.ts` beside `burst.service.ts`). For rule/threshold tests, pair every "triggers" case with a "does not trigger at the boundary" case - boundary comparisons are strict (a value exactly at `mean + 2*stddev` is **not** an outlier).
 

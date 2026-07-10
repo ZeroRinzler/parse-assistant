@@ -2,8 +2,8 @@
  * Live `DataSource<MapData>`: computes the top-parse position bench in the browser (no ingestion).
  * Fetches each top parse's position-bearing events (Casts with `includeResources` for friendlies +
  * enemies), groups samples per actor, resamples to a fixed cadence, and emits `EncounterPositions`.
- * The pure position math is owned here rather than shared with `scripts/ingest`. Bound by
- * `environment.useLiveTransform`.
+ * The pure position math is owned here (self-contained, per the layer rules). Bound by
+ * `environment.useLiveTransform`; ingestion drives this same service.
  *
  * Boss pick: the WCL master `enemies[]` carries gameID + name but no HP, so the boss is the actor
  * with the highest observed `maxHitPoints` (flattened onto events by `includeResources`). This can

@@ -1,26 +1,19 @@
 /**
- * Extract layer - encounter discovery.
- *
- * The v5 ingestion (orchestrator.ts) drives the Angular `*TransformService`s for all
- * per-parse fetching and analysis; the only `get*` fetcher that survives here is the
- * one piece of orchestration the transforms do not own: resolving which raids are
- * "current" from `worldData` plus a cheap rankings liveness probe. It composes the
- * transport client (wcl-client), the discovery query strings (wcl-queries), and the
- * pure mappers (wcl-mappers), accepting a `WclQueryClient` interface so tests can
- * inject a fake. Best-effort failures are logged via `logWarn`, never swallowed.
+ * Ingest discovery layer: resolves which raids are "current" from `worldData` plus a
+ * cheap rankings liveness probe - the one piece of orchestration the transforms do not
+ * own. Accepts a `WclQueryClient` so tests can inject a fake; best-effort failures are
+ * logged via `logWarn`, never swallowed.
  */
 
-import { logWarn } from '../../src/app/core/log.ts';
-import { BudgetExceededError, type WclQueryClient } from './wcl-client.ts';
+import { logWarn } from '../core/log';
+import { toParseRankings, unwrapRankings } from '../shared/analysis/wcl-projections';
+import { ENCOUNTERS_Q, RANKINGS_Q, type RankingsQueryVars } from '../core/services/wcl-queries';
+import type { ParseRanking, WclRankingsBlob } from '../core/models/wcl.models';
+import { BudgetExceededError, type WclQueryClient } from './wcl-client';
 import {
-  ENCOUNTERS_QUERY, RANKINGS_QUERY, type RankingsQueryVars,
-} from './wcl-queries.ts';
-import {
-  mapRankings, filterEncounters, groupEncountersByZone, protectedEncounterIds, type SpecWclMap,
-} from './wcl-mappers.ts';
-import type {
-  WclExpansion, WclRawRanking, ParseRanking, IngestEncounter,
-} from './models/wcl.models.ts';
+  filterEncounters, groupEncountersByZone, protectedEncounterIds, type SpecWclMap,
+} from './wcl-mappers';
+import type { WclExpansion, IngestEncounter } from './models/wcl.models';
 
 // Reliably-populated DPS specs used to probe a zone for liveness. A genuinely live
 // raid has many real parses for any of these; a beta/PTR/test zone has none, so one
@@ -42,9 +35,8 @@ export interface CurrentContent {
   protectedIds: Set<number>;
 }
 
-// Probe one representative encounter of a zone across PROBE_SPECS; the zone is live if
-// the summed non-anonymous ranking count reaches LIVE_RANKINGS_THRESHOLD. BudgetExceeded
-// propagates (stop cleanly); other per-spec errors are logged and treated as zero.
+// BudgetExceeded propagates (a clean stop); other per-spec probe errors are logged and
+// treated as zero so one flaky spec cannot sink a live zone.
 async function isZoneLive(client: WclQueryClient, zoneEncounters: IngestEncounter[], specWcl: SpecWclMap): Promise<boolean> {
   const probeEncounter = zoneEncounters[0];
   if (!probeEncounter) return false;
@@ -63,12 +55,10 @@ async function isZoneLive(client: WclQueryClient, zoneEncounters: IngestEncounte
   return false;
 }
 
-// Resolve which raids are "current" entirely from WCL (1 worldData query + a cheap
-// per-candidate-zone rankings probe). Returns the live encounters to ingest plus the
-// prune-protected id set. The probe runs once here, not per spec, so beta/PTR/test
-// zones cost a handful of queries total instead of one per spec per run.
+// The probe runs once per zone here, not per spec, so beta/PTR/test zones cost a
+// handful of queries total instead of one per spec per run.
 export async function getEncounters(client: WclQueryClient, specWcl: SpecWclMap): Promise<CurrentContent> {
-  const data = await client.query<{ worldData: { expansions: WclExpansion[] } }>(ENCOUNTERS_QUERY);
+  const data = await client.query<{ worldData: { expansions: WclExpansion[] } }>(ENCOUNTERS_Q);
   const expansions = data.worldData.expansions;
   const candidates = filterEncounters(expansions);
   const protectedIds = protectedEncounterIds(expansions);
@@ -84,9 +74,8 @@ export async function getEncounters(client: WclQueryClient, specWcl: SpecWclMap)
   return { encounters, protectedIds };
 }
 
-// Cheap rankings fetch: tries partitions newest-first, falling back to null
-// (current) when a zone has none. Server slug resolution is deferred to
-// enrichRanking; talent key comes from the parse's CombatantInfo.
+// Partitions are tried newest-first because a fresh patch's partition carries the
+// current parses; a zone with no partitions falls back to null (WCL's current).
 export async function getRankingsLite(
   client: WclQueryClient, spec: string, encounterId: number, specWcl: SpecWclMap, count = 10, partitionIds: number[] = [],
 ): Promise<ParseRanking[]> {
@@ -98,10 +87,8 @@ export async function getRankingsLite(
   for (const partition of attempts) {
     const variables: RankingsQueryVars = { encounterID: encounterId, className, specName };
     if (partition != null) variables.partition = partition;
-    const data = await client.query<{ worldData: { encounter: { name: string; characterRankings: string | { rankings: WclRawRanking[] } } } }, RankingsQueryVars>(RANKINGS_QUERY, variables);
-    const rawRankings = data.worldData.encounter.characterRankings;
-    const rankingsData = typeof rawRankings === 'string' ? JSON.parse(rawRankings) as { rankings: WclRawRanking[] } : rawRankings;
-    const mapped = mapRankings(rankingsData.rankings ?? [], count);
+    const data = await client.query<{ worldData: { encounter: { characterRankings: WclRankingsBlob } } }, RankingsQueryVars>(RANKINGS_Q, variables);
+    const mapped = toParseRankings(unwrapRankings(data.worldData.encounter.characterRankings), count);
     if (mapped.length > 0) return mapped;
   }
   return [];

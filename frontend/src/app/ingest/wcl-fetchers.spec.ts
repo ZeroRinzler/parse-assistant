@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from 'vitest';
-import { getEncounters, getRankingsLite } from './wcl-fetchers.ts';
-import { BudgetExceededError } from './wcl-client.ts';
-import type { WclQueryClient, EventFetchOptions } from './wcl-client.ts';
-import type { SpecWclMap } from './wcl-mappers.ts';
-import type { WclResourceEvent, WclRawRanking } from './models/wcl.models.ts';
+import { getEncounters, getRankingsLite } from './wcl-fetchers';
+import { BudgetExceededError } from './wcl-client';
+import type { WclQueryClient } from './wcl-client';
+import type { SpecWclMap } from './wcl-mappers';
+import type { WclRawRanking } from '../core/models/wcl.models';
 
 // Folder -> [className, specName] for the probe specs plus the specs these tests query.
 const SPEC_WCL: SpecWclMap = {
@@ -15,23 +15,17 @@ const SPEC_WCL: SpecWclMap = {
 
 interface FakeHandlers {
   query?: (gql: string, vars?: object) => unknown;
-  getAllEvents?: (dataType: string, options: EventFetchOptions) => WclResourceEvent[];
-  resolveServerSlug?: (id: number) => [string, string];
   assertBudget?: (margin: number) => void;
 }
 
 function fakeClient(handlers: FakeHandlers): WclQueryClient {
   return {
     async query(gql: string, vars?: object) { return (handlers.query?.(gql, vars) ?? {}) as never; },
-    async getAllEvents(_code: string, _fightId: number, dataType: string, _start: number, _end: number, options: EventFetchOptions = {}) {
-      return handlers.getAllEvents?.(dataType, options) ?? [];
-    },
-    async resolveServerSlug(id: number) { return handlers.resolveServerSlug?.(id) ?? ['', '']; },
     async assertBudget(margin: number) { handlers.assertBudget?.(margin); },
-  } as WclQueryClient;
+  };
 }
 
-// Build `count` non-anonymous ranking rows (each has a report, so mapRankings keeps it).
+// Build `count` non-anonymous ranking rows (each has a report, so toParseRankings keeps it).
 const ranks = (count: number): WclRawRanking[] =>
   Array.from({ length: count }, (_unused, index) => ({ name: `P${index}`, report: { code: `r${index}`, fightID: index } }));
 
@@ -62,7 +56,7 @@ describe('getEncounters', () => {
     return fakeClient({
       query: (gql, vars) => {
         if (gql.includes('expansions')) return { worldData: { expansions } };
-        // RANKINGS_QUERY probe
+        // RANKINGS_Q probe
         if (probeCounter) probeCounter.count++;
         const encounterID = (vars as { encounterID: number }).encounterID;
         return { worldData: { encounter: { name: 'Boss', characterRankings: { rankings: ranks(rankingsByEncounter[encounterID] ?? 0) } } } };

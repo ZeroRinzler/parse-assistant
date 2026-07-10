@@ -19,20 +19,21 @@ This file is the always-on **router**: the few rules that apply on every turn, p
 The app is built as **per-use-case vertical slices** (rotation / burst / defensive / gear / map / live), functional-core / imperative-shell, fed by exactly **two pass-through API services** at runtime (`WclApiService`, `DataFileApiService`). Two symmetric pipelines meet at the static data files in `frontend/public/data/specs/**`. The `live` slice (`pages/post-raid/live/`) is the exception to the data pipeline: it owns the live-sync + screen-recording toggles and the per-window clip replay (a `getDisplayMedia` rolling buffer; clips are cut from it and memoized in memory), so it reads no bench data and keeps all footage in the browser session.
 
 ```
-INGEST (Node, scripts/ingest)            RUNTIME (browser, Angular)
-WclApi -> *TransformService -> DataFileApi  ->  data/specs/**  ->  DataFileApiService
-                                                                   -> *DataSource (token swap)
-                                                                   -> *FeatureService -> *Component
-                                                                   -> page shell -> leaves
+INGEST (browser, ingest environment)        RUNTIME (browser, Angular)
+WclApiService -> *TransformService          data/specs/**  ->  DataFileApiService
+  -> DataFileApiService -> file server                         -> *DataSource (token swap)
+     (:3000) -> data/specs/**                                  -> *FeatureService -> *Component
+                                                               -> page shell -> leaves
 ```
 
-Ingestion runs the **same** `*TransformService`s the browser uses, headlessly. The full directory map, the hard layer rules, and the data-flow diagram are in the **warcraft-architecture** skill.
+Ingestion is the **same Angular app** booted with the `ingest` build configuration: an app initializer runs `IngestOrchestratorService` (`src/app/ingest/`), which drives the same `*TransformService`s the runtime uses and persists through a micro file server (`scripts/ingest-server.js`, a dumb save/delete/list/load store over `public/data/`). The full directory map, the hard layer rules, and the data-flow diagram are in the **warcraft-architecture** skill.
 
 ```
 frontend/        # the entire Angular 22 app
   src/app/pages/ # post-raid (/, incl. the live/ slice: live-sync + recording toggles, clip replay), pre-fight (/pre)
   src/app/core/  # the two API services, data-source token, models
-  scripts/ingest # ingestion orchestrator + discovery helpers (run via tsx)
+  src/app/ingest # ingest orchestrator + discovery helpers (bundled only by the ingest configuration)
+  scripts/       # ingest-server.js (file store) + ingest-headless.mjs (CI harness) - plain Node, zero ingestion logic
   public/data/specs/  # static ingested data (slices, encounters, positions, rulebooks) - NOT tracked on main; see below
 .github/workflows/  # deploy-pages, ingest-parses (hourly), pr-preview, test
 .claude/skills/   # on-demand skills (rulebook schema in warcraft-ingestion/, generation in warcraft-rulebook/)
@@ -46,9 +47,10 @@ The ~100 MB of minified bench data under `frontend/public/data/specs/**` is **no
 |---|---|
 | `npm start` | Angular dev server on http://localhost:4200 |
 | `npm run build` | Production build to `../static/angular/` |
-| `npm test` | `ng test` (frontend Vitest) + scripts Vitest + scripts typecheck |
+| `npm test` | `ng test` (Vitest, the one test suite) |
 | `npm run lint` | `ng lint` over `src/**` then `eslint scripts` over `scripts/**` |
-| `npm run ingest` | Run the ingestion orchestrator (needs `WCL_CLIENT_ID`/`WCL_CLIENT_SECRET`) |
+| `npm run start:ingest` | Interactive ingestion: the file server + `ng serve --configuration ingest` (open :4200, watch the console) |
+| `npm run ingest` | Headless ingestion (CI entry): drives the ingest app in headless Chromium, exits on completion |
 
 ## Development workflow router
 
@@ -63,7 +65,7 @@ Load the matching skill(s) **before** you start that step. The `warcraft-*` skil
 | Touching WCL queries, gear / spec / talent / enchant extraction, positions, or `wcl-auth` / the embedded secret | **warcraft-wcl-data** |
 | Working on the live slice (live-sync, screen recording, the clip replay flyover) | **warcraft-frontend** + **warcraft-architecture** |
 | Generating or refreshing a spec's `rulebook.json` (one, some, or all specs) | **warcraft-rulebook** |
-| Ingestion, `data/specs` file shapes, rulebook consumption/schema, or `INGEST_VERSION` | **warcraft-ingestion** |
+| Ingestion (`src/app/ingest/**`, the `scripts/` file server + harness), `data/specs` file shapes, rulebook consumption/schema, or `INGEST_VERSION` | **warcraft-ingestion** |
 | Writing or changing tests | **warcraft-testing** |
 | General refactor / code-quality cleanup | **solid** + `/simplify` (project rules win on conflict) |
 | Reviewing code, a diff, or a PR | `/code-review` + **solid** + the domain skill(s) for the changed area |

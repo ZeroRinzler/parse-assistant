@@ -1,16 +1,11 @@
 /**
- * Extract layer - pure response-to-model mappers and the spec-universe derivation.
- *
- * No network, no filesystem, no client: every function takes a raw WCL response
- * fragment and returns an ingest model. The frontend runtime owns its own copy of
- * the equivalent projections inside each vertical slice. Unit-tested in
- * wcl-mappers.spec.ts.
+ * Pure response-to-model mappers for the ingest discovery layer: no network, no
+ * filesystem, no client. Ranking selection is the shared `toParseRankings`
+ * (shared/analysis/wcl-projections.ts).
  */
 
-import type {
-  WclRawRanking, WclExpansion, ParseRanking, IngestEncounter, WclGameClass,
-} from './models/wcl.models.ts';
-import type { SpecMeta } from '../../src/app/core/models/spec-meta.models.ts';
+import type { WclExpansion, IngestEncounter, WclGameClass } from './models/wcl.models';
+import type { SpecMeta } from '../core/models/spec-meta.models';
 
 /** Folder key -> [WCL className, WCL specName] - the small map the discovery fetchers read. */
 export type SpecWclMap = Record<string, [string, string]>;
@@ -49,35 +44,7 @@ export function specWclFromMetas(metas: SpecMeta[]): SpecWclMap {
   return map;
 }
 
-export const EXCLUDE_ZONE_PATTERNS = ['beta', 'ptr', 'mythic+', 'complete raids', 'delves', 'torghast'];
-
-// WCL replaces a privacy-anonymized parse's player name with "Character <id>-<id>".
-// A real WoW name is letters only, so such a parse can never count toward a zone's
-// liveness probe; it is dropped before the top-`count` slice in mapRankings.
-const ANONYMIZED_NAME = /^Character \d+-\d+$/;
-export function isAnonymizedPlayerName(name: string): boolean {
-  return ANONYMIZED_NAME.test(name);
-}
-
-// Filter raw rankings to public, fetchable, non-anonymized parses and map the top
-// `count` into ParseRanking rows. Parses with no report (report: null) and
-// privacy-anonymized parses are dropped before slicing so we always keep `count` rows
-// we can actually fetch. The raw entry is preserved on `_raw` for later gear extraction.
-export function mapRankings(rawRankings: WclRawRanking[], count: number): ParseRanking[] {
-  return rawRankings
-    .filter(rawRanking => rawRanking.report?.code && !isAnonymizedPlayerName(rawRanking.name ?? ''))
-    .slice(0, count)
-    .map((rawRanking, index) => ({
-      rank: index + 1,
-      player: rawRanking.name ?? '',
-      amount: Math.round(rawRanking.amount ?? 0),
-      duration_s: Math.round((rawRanking.duration ?? 0) / 100) / 10,
-      report_code: rawRanking.report?.code ?? '',
-      fight_id: rawRanking.report?.fightID ?? 0,
-      server: rawRanking.server?.name ?? '',
-      _raw: rawRanking,
-    }));
-}
+const EXCLUDE_ZONE_PATTERNS = ['beta', 'ptr', 'mythic+', 'complete raids', 'delves', 'torghast'];
 
 // Build the candidate current-expansion encounter list from the worldData blob.
 // WCL returns newest expansion first, so only the first expansion's zones are used.

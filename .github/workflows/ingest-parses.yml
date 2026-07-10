@@ -73,9 +73,6 @@ jobs:
       # non-frozen zones confirmed live by a rankings probe) and self-prunes data for
       # encounters that are no longer current. No manual per-patch edits needed.
       - name: Run parse ingestion
-        env:
-          WCL_CLIENT_ID: ${{ secrets.WCL_CLIENT_ID }}
-          WCL_CLIENT_SECRET: ${{ secrets.WCL_CLIENT_SECRET }}
         working-directory: frontend
         run: npm run ingest
 

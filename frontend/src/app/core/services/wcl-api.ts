@@ -33,8 +33,8 @@ export class WclApiService {
   }
 
   /**
-   * Runs a GraphQL query against WCL through the injected transport (Apollo in the
-   * browser, plain fetch in Node ingestion). The client-credentials bearer token is
+   * Runs a GraphQL query against WCL through the injected transport (an `HttpClient`
+   * POST behind the ng-http-caching memory cache). The client-credentials bearer token is
    * fetched here and passed per request (it is renewed on expiry). `fetchPolicy`
    * defaults to `cache-first` to dedupe repeat reads within a session; callers that
    * must always see fresh data (report polling, large event fetches) pass `network-only`.

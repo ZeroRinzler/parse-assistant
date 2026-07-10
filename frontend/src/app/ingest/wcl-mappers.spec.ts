@@ -1,34 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { mapRankings, filterEncounters, groupEncountersByZone, protectedEncounterIds, mapClassesToSpecMeta, specWclFromMetas } from './wcl-mappers.ts';
-import type { WclRawRanking, WclExpansion, IngestEncounter, WclGameClass } from './models/wcl.models.ts';
-
-describe('mapRankings', () => {
-  const raw: WclRawRanking[] = [
-    { name: 'A', amount: 100, duration: 3000, report: { code: 'r1', fightID: 2 }, server: { name: 'S1' } },
-    { name: 'Anon' }, // no report -> anonymous, dropped
-    { name: 'B', amount: 90, report: { code: 'r2', fightID: 3 } },
-  ];
-
-  it('drops anonymous parses and maps the rest with 1-based ranks', () => {
-    const mapped = mapRankings(raw, 10);
-    expect(mapped).toHaveLength(2);
-    expect(mapped[0]).toMatchObject({ rank: 1, player: 'A', amount: 100, duration_s: 3, report_code: 'r1', fight_id: 2, server: 'S1' });
-    expect(mapped[1]).toMatchObject({ rank: 2, player: 'B', report_code: 'r2' });
-  });
-
-  it('slices to the requested count after filtering', () => {
-    expect(mapRankings(raw, 1)).toHaveLength(1);
-  });
-
-  it('drops privacy-anonymized parses (Character <id>-<id>) even when they have a report', () => {
-    const withAnon: WclRawRanking[] = [
-      { name: 'Real', report: { code: 'r1', fightID: 1 } },
-      { name: 'Character 136008374-11633002', report: { code: 'r2', fightID: 2 } }, // anonymized -> dropped
-    ];
-    const mapped = mapRankings(withAnon, 10);
-    expect(mapped.map(ranking => ranking.player)).toEqual(['Real']);
-  });
-});
+import { filterEncounters, groupEncountersByZone, protectedEncounterIds, mapClassesToSpecMeta, specWclFromMetas } from './wcl-mappers';
+import type { WclExpansion, IngestEncounter, WclGameClass } from './models/wcl.models';
 
 describe('filterEncounters', () => {
   it('uses only the first expansion, excludes beta/ptr zones, and sorts partitions descending', () => {

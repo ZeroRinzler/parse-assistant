@@ -37,20 +37,20 @@ The app is built as **per-use-case vertical slices** (map / burst / rotation / d
 The data path is two symmetric pipelines that meet at the static data files:
 
 ```
-INGEST (Node)                                        RUNTIME (browser)
-WclApi (read, pass-through)                          WclApiService (read, pass-through, cached)
+INGEST (browser, ingest environment)                 RUNTIME (browser)
+WclApiService (read, pass-through, cached)           WclApiService (read, pass-through, cached)
    -> *TransformService (the only transform)            DataFileApiService (read, pass-through)
-   -> DataFileApi (write)  ->  data/specs/**  ->         -> *DataSource (DI token, dev-flag swap)
-                                                         -> *FeatureService (runtime shell)
+   -> DataFileApiService (write, via the                 -> *DataSource (DI token, dev-flag swap)
+      local file server)  ->  data/specs/**  ->          -> *FeatureService (runtime shell)
                                                          -> *Component -> page shell -> leaves
 ```
 
 ```mermaid
 flowchart LR
-  subgraph Ingest["INGEST (Node, scripts/ingest)"]
+  subgraph Ingest["INGEST (browser, ingest environment - src/app/ingest)"]
     direction TB
-    IW["WclApi (read)"] --> IT["*TransformService (reshape + cluster)"]
-    IT --> ID["DataFileApi (write)"]
+    IW["WclApiService (read)"] --> IT["*TransformService (reshape + cluster)"]
+    IT --> ID["DataFileApiService (write, via the local file server)"]
   end
 
   ID --> DATA[("data/specs/**<br/>tailored slice files +<br/>encounters / positions / rulebook")]
@@ -89,14 +89,14 @@ Reading the runtime graph: in production each slice's `*_DATA_SOURCE` resolves t
 
 - **Pass-through API services - exactly two at runtime.** `WclApiService` (raw WCL events/report/rankings/combatant-info/player-details) and `DataFileApiService` (raw static-file reads). They do **no** remapping or aggregation: bytes in, typed bytes out. Every response projection (rankings -> `ParseRanking`, combatant info -> `CharacterGear`, player details -> spec) is a small pure function colocated in the consuming slice/shell, not in the transport. There is no `wcl-mappers.ts` on the runtime side.
 - **Self-contained services - import ONLY the two API services (or the slice `*DataSource` token) + models + `logWarn`.** Both the `*TransformService` and the `*FeatureService` follow this: no importing of outside analysis, mappers, or UI components. Each **reimplements/owns** its math as named, pure, **total** functions (returns `0`/`null`/`[]` for empty input, never throws; optional findings return `T | null`), **exported from and colocated in that service's own `*.service.ts`**, with no Angular/`inject()`/IO. Self-containment over sharing: the transform owns its own math and pulls nothing from outside analysis or mappers (ingestion runs this very service, so there is no second implementation to keep aligned). Data shapes a service needs (view-model rows like `ComparisonWindow`/`RangeRow`, ranking rows like `ParseRanking`) live in `core/models`, never in a component or mapper file. Tested directly in `*.service.spec.ts`. Cross-slice **presentational** derivations may still live under `shared/` (e.g. `shared/gear/gear-comparison.ts`); likewise generic, pure, **non-domain** math/formatting primitives (rounding, time clustering, outlier predicates, expected-use arithmetic, clock formatting, severity ordering) are blessed in `shared/analysis/analysis-math.ts`, and generic (non-domain) WCL-response projections and window view-row builders in `shared/analysis/wcl-projections.ts` (it owns `toParseRankings` and `windowSpells`) - both may be imported by the transform/feature services rather than re-declared per slice, while each slice still owns its own DOMAIN clustering/benchmark math, colocated in its `*.service.ts`. **Never add a separate `*.vm.ts` view-model file** - a page shell's pure helpers (report-code parsing, fight/player projection, auto-select) are colocated and exported from the page's own `*.ts`, e.g. `post-raid.ts`, and tested in its `*.spec.ts`. One carve-out: importing generic statistics primitives from `d3-array` (`mean`/`median`/`deviation`/`quantile`) directly is permitted, the same way `Math` is - they are pure arithmetic, not domain analysis. Call them directly at the use site (guard d3's `undefined`-on-empty return with `?? 0` to preserve the total-function contract); the shared `round` (and the other generic primitives listed above) come from the blessed `shared/analysis/analysis-math.ts` rather than being re-declared per service, since `d3-array` has no rounding function.
-- **`*TransformService` - one per use case, self-contained.** Reimplements its own derivation (its colocated pure functions) to build a slice's prepared data from the two API services - it does NOT import the ingest analysis. Selectable at runtime under the dev flag to compute the prepared data live (no ingestion). Ingestion runs this **very same** `*TransformService` headlessly (booted through the Angular injector in `scripts/ingest/orchestrator.ts`) to write the slice's tailored file (`data/specs/{spec}/burst/{enc}.json`, denormalized + ready to render); ingest and the dev-flag live mode are the same implementation, not just the same shape.
+- **`*TransformService` - one per use case, self-contained.** Reimplements its own derivation (its colocated pure functions) to build a slice's prepared data from the two API services - it does NOT import the ingest analysis. Selectable at runtime under the dev flag to compute the prepared data live (no ingestion). Ingestion runs this **very same** `*TransformService` (driven by `IngestOrchestratorService` in `src/app/ingest/` under the ingest build configuration) to write the slice's tailored file (`data/specs/{spec}/burst/{enc}.json`, denormalized + ready to render); ingest and the dev-flag live mode are the same implementation, not just the same shape.
 - **`*DataSource` interface + `*_DATA_SOURCE` InjectionToken - the swap point.** Two impls per slice: `*DataFileService` (reads the tailored file - production) and `*TransformService` (computes live - no-ingestion dev). The provider helper `core/data-source/provide-data-source.ts` binds one impl per `environment.useLiveTransform`. This is the ONLY place the data source differs.
 - **`*FeatureService` - the runtime shell, one per feature component.** Injects its `*DataSource` token + the cached `WclApiService` (the player's chosen log), calls the pure transform functions colocated in its `*.service.ts`, and exposes signals. It contains **no arithmetic** and no other domain service.
 - **Feature components - inject exactly one service: their `*FeatureService`.** No reaching sideways into another feature's service. Spell/item art is the ingest-baked `icon`+`name` passed as inputs to `wl-game-icon`. Cross-feature actions (e.g. "open map") are an `output()` the page wires.
 - **Page shells - zero domain services.** They read `report`/`fight`/`player` from the route and compose feature components, passing selection as inputs. Framework tokens (`ActivatedRoute`, `Router`) do not count.
 - **Presentational leaves - inputs/outputs only.** `game-icon`, `compact-ability-row`, `window-comparison`, `range-chart`, `callout`, `loading-spinner`. No services beyond framework tokens.
 
-`DataFileApiService` is the single static-file reader; each per-slice `*TransformService` computes its tailored file directly from WCL (no generic bench is reshaped), and `wl-game-icon` is inputs-only with each slice/shell owning the small WCL-response projection it needs (the ingest side keeps a slim discovery `scripts/ingest/wcl-mappers.ts` for rankings/encounter filtering).
+`DataFileApiService` is the single static-file reader; each per-slice `*TransformService` computes its tailored file directly from WCL (no generic bench is reshaped), and `wl-game-icon` is inputs-only with each slice/shell owning the small WCL-response projection it needs (the ingest side keeps a slim discovery `src/app/ingest/wcl-mappers.ts` for encounter filtering and the spec-universe mapping; ranking selection is the one shared `toParseRankings` in `shared/analysis/wcl-projections.ts`, used by the transforms, the ingest signature, and the liveness probe alike).
 
 ## Key flows
 

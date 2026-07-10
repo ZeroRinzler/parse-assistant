@@ -23,7 +23,8 @@ export interface EventsQueryVars {
   hostilityType?: 'Friendlies' | 'Enemies';
 }
 export interface CombatantInfoQueryVars { code: string; fightIDs: number[]; sourceID: number }
-export interface RankingsQueryVars { encounterID: number; className: string; specName: string }
+/** `partition` is optional: absent means WCL's current partition (the ingest liveness probe tries newest-first). */
+export interface RankingsQueryVars { encounterID: number; className: string; specName: string; partition?: number }
 export interface TableQueryVars { code: string; fightIDs: number[]; dataType: string }
 export interface ResurrectsQueryVars { code: string; fightIDs: number[]; filter: string; startTime: number; endTime: number }
 
@@ -82,12 +83,14 @@ query($code:String!,$fightIDs:[Int]!,$filter:String,$startTime:Float,$endTime:Fl
 /**
  * Top DPS parses for an encounter + spec. `characterRankings` returns a JSON blob
  * (string or object) carrying each parse's report code + fight id + player name -
- * enough for the burst transform to refetch and recompute the bench live.
+ * enough for the burst transform to refetch and recompute the bench live. `$partition`
+ * is nullable: absent selects WCL's current partition (what the runtime always wants);
+ * the ingest liveness probe passes explicit partitions newest-first.
  */
 export const RANKINGS_Q = `
-query($encounterID:Int!,$className:String!,$specName:String!){
+query($encounterID:Int!,$className:String!,$specName:String!,$partition:Int){
   worldData{encounter(id:$encounterID){
-    characterRankings(className:$className,specName:$specName,metric:dps)
+    characterRankings(className:$className,specName:$specName,metric:dps,partition:$partition)
   }}
 }`;
 
@@ -125,3 +128,29 @@ export function buildAbilityIconsQuery(ids: number[]): string {
   const fields = ids.map(id => `a${id}: ability(id:${id}){id name icon}`).join(' ');
   return `query{gameData{${fields}}}`;
 }
+
+// ---------------------------------------------------------------------------
+// Ingest discovery queries (used only by src/app/ingest, bundled only there)
+// ---------------------------------------------------------------------------
+
+/** The WCL hourly point budget - the ingest orchestrator's budget gate. */
+export const RATE_LIMIT_Q = `query { rateLimitData { limitPerHour pointsSpentThisHour pointsResetIn } }`;
+
+// The full spec universe: all classes and their specs. `class.slug`/`spec.slug` are the exact
+// `className`/`specName` the rankings query takes; the folder key is `spec.slug + class.slug`.
+export const CLASSES_Q = `query { gameData { classes { id name slug specs { id name slug } } } }`;
+
+/** The worldData expansion tree the current-raid discovery filters. */
+export const ENCOUNTERS_Q = `
+query {
+  worldData {
+    expansions {
+      id name
+      zones {
+        id name frozen
+        partitions { id name }
+        encounters { id name }
+      }
+    }
+  }
+}`;

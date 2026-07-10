@@ -6,8 +6,8 @@ import angular from 'angular-eslint';
 
 export default defineConfig([
   {
-    // Base TypeScript rules shared by the Angular app (src/**) and the Node CLI
-    // scripts (scripts/**). Angular-specific rules live in the src-only block below.
+    // Base TypeScript rules for the Angular app (src/**). Angular-specific rules live
+    // in the src-only block below; the plain-JS Node scripts have their own block.
     files: ['**/*.ts'],
     extends: [eslint.configs.recommended, tseslint.configs.recommended, tseslint.configs.stylistic],
     rules: {
@@ -21,7 +21,6 @@ export default defineConfig([
   },
   {
     // Angular-specific rules + the inline-template processor apply to the app only.
-    // The Node CLI scripts under scripts/** are plain tsx, so they never see these.
     files: ['src/**/*.ts'],
     extends: [angular.configs.tsRecommended],
     processor: angular.processInlineTemplates,
@@ -48,11 +47,21 @@ export default defineConfig([
     },
   },
   {
-    // Node CLI scripts under scripts/** are plain tsx entrypoints, not Angular.
-    // console.log/console.error are their user-facing output, so keep it allowed.
-    // Node globals (process, etc) need no globals block: typescript-eslint disables
-    // core `no-undef` for .ts, so TypeScript itself owns undefined-symbol checks.
-    files: ['scripts/**/*.ts'],
+    // Plain-JS Node scripts (the ingest file server + headless harness). console is
+    // their user-facing logging, so it stays allowed; plain JS keeps core `no-undef`,
+    // so the Node globals they use are declared here.
+    files: ['scripts/**/*.{js,mjs}'],
+    extends: [eslint.configs.recommended],
+    languageOptions: {
+      globals: {
+        process: 'readonly',
+        console: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        fetch: 'readonly',
+        URL: 'readonly',
+      },
+    },
     rules: {
       'no-console': 'off',
     },

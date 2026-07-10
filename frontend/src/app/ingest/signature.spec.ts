@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
   encounterSignature, encounterSkipKey, signatureAfterFetch, readStoredSignature, readStoredVersion,
-  signatureMatches, stampSignature, selectSignatureRankings, parseKey, readInaccessibleParses,
+  signatureMatches, stampSignature, parseKey, readInaccessibleParses,
   isFutureVersion,
-  type SignatureRanking, type RawSignatureRanking,
-} from './signature.ts';
+  type SignatureRanking,
+} from './signature';
 
 const rankings = (...rows: [string, number][]): SignatureRanking[] =>
   rows.map(([report_code, fight_id]) => ({ report_code, fight_id }));
@@ -41,32 +41,6 @@ describe('encounterSignature', () => {
 describe('parseKey', () => {
   it('joins report code and fight id', () => {
     expect(parseKey({ report_code: 'r1', fight_id: 3 })).toBe('r1:3');
-  });
-});
-
-describe('selectSignatureRankings', () => {
-  const raw = (...rows: [string, string, number][]): RawSignatureRanking[] =>
-    rows.map(([name, code, fightID]) => ({ name, report: { code, fightID } }));
-
-  it('drops anonymized "Character <id>-<id>" parses', () => {
-    const rows = raw(['Realname', 'r1', 1], ['Character 12-34', 'r2', 2], ['Other', 'r3', 3]);
-    expect(selectSignatureRankings(rows, 10)).toEqual([
-      { report_code: 'r1', fight_id: 1 },
-      { report_code: 'r3', fight_id: 3 },
-    ]);
-  });
-
-  it('drops rows with no report code', () => {
-    const rows: RawSignatureRanking[] = [{ name: 'A', report: { fightID: 1 } }, { name: 'B', report: { code: 'r2', fightID: 2 } }];
-    expect(selectSignatureRankings(rows, 10)).toEqual([{ report_code: 'r2', fight_id: 2 }]);
-  });
-
-  it('slices to count, preserving rank order', () => {
-    const rows = raw(['A', 'r1', 1], ['B', 'r2', 2], ['C', 'r3', 3]);
-    expect(selectSignatureRankings(rows, 2)).toEqual([
-      { report_code: 'r1', fight_id: 1 },
-      { report_code: 'r2', fight_id: 2 },
-    ]);
   });
 });
 

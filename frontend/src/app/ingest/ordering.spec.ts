@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   orderSpecsByVersion, orderEncountersByMissingFirst, PRIORITY_SPEC, SPEC_LIMIT,
   type SpecOrderEntry,
-} from './ordering.ts';
+} from './ordering';
 
 const entry = (over: Partial<SpecOrderEntry> & { spec: string }): SpecOrderEntry => ({
   dataCount: 5,

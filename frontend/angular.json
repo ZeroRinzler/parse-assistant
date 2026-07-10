@@ -99,6 +99,24 @@
                   "with": "src/environments/environment.empty.ts"
                 }
               ]
+            },
+            "ingest": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true,
+              "assets": [
+                {
+                  "glob": "**/*",
+                  "input": "public",
+                  "ignore": ["data/**"]
+                }
+              ],
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.ingest.ts"
+                }
+              ]
             }
           },
           "defaultConfiguration": "production"
@@ -114,6 +132,10 @@
             },
             "empty": {
               "buildTarget": "frontend:build:empty"
+            },
+            "ingest": {
+              "buildTarget": "frontend:build:ingest",
+              "watch": false
             }
           },
           "defaultConfiguration": "development"

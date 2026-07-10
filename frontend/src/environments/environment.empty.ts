@@ -10,6 +10,7 @@
  * `dataBaseHref` is empty so they resolve against `document.baseURI`; `npm run data:pull` first.
  */
 import { Provider } from '@angular/core';
+import { WCL_PUBLIC_CLIENT_ID, WCL_PUBLIC_CLIENT_SECRET } from './wcl-public-client';
 import { provideEmptyDataSource } from '../app/core/data-source/provide-data-source';
 import { BURST_DATA_SOURCE } from '../app/pages/post-raid/burst-windows/burst-data-source';
 import { ROTATION_DATA_SOURCE } from '../app/pages/post-raid/rotation/rotation-data-source';
@@ -22,10 +23,15 @@ export const environment = {
   /** Empty resolves `data/specs/` relative to `document.baseURI` (the `data:pull`ed
    * `public/data/specs/`), so manifests + rulebooks load while the benches stay empty. */
   dataBaseHref: '',
+  ingest: false,
+  ingestSpec: null as string | null,
+  /** WCL client-credentials pair (intentionally public - see wcl-public-client.ts). */
+  wclClientId: WCL_PUBLIC_CLIENT_ID,
+  wclClientSecret: WCL_PUBLIC_CLIENT_SECRET,
 };
 
 /** Empty-encounter data-source bindings: every slice reads a null bench. */
-export const dataSourceProviders: Provider[] = [
+export const environmentProviders: Provider[] = [
   provideEmptyDataSource(BURST_DATA_SOURCE),
   provideEmptyDataSource(ROTATION_DATA_SOURCE),
   provideEmptyDataSource(DEFENSIVE_DATA_SOURCE),

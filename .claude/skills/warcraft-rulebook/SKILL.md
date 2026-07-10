@@ -33,8 +33,8 @@ spell-id uncertainty; put that in `id_note`).
 ## Step 1 - pick the specs and get one WCL token
 
 Get a single WCL client-credentials token up front and reuse it for everything in Step 2 - one OAuth
-handshake per session, never one per spec or per subagent. Credentials: the embedded pair in
-`frontend/src/app/core/services/wcl-auth.ts`, or `WCL_CLIENT_ID`/`WCL_CLIENT_SECRET`. POST
+handshake per session, never one per spec or per subagent. Credentials: the embedded public pair
+in `frontend/src/environments/wcl-public-client.ts`. POST
 `grant_type=client_credentials` to `https://www.warcraftlogs.com/oauth/token`, then POST GraphQL to
 `https://www.warcraftlogs.com/api/v2/client` with `Authorization: Bearer <token>`.
 
