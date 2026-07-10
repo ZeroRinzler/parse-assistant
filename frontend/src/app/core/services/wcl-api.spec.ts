@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { computed } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { WclApiService } from './wcl-api';
 import { WclAuthService } from './wcl-auth';
@@ -49,6 +50,15 @@ describe('WclApiService fetch policy', () => {
     expect(transport.cacheFirstCalls).toEqual([false]);
   });
 
+  it('reads the fights-only new-pull probe cache-first when saved and network-only while live-syncing', async () => {
+    const { api, transport, live } = setup({ ingest: false });
+    live.active.set(false);
+    await api.getReportFights('code');
+    live.active.set(true);
+    await api.getReportFights('code');
+    expect(transport.cacheFirstCalls).toEqual([true, false]);
+  });
+
   it('reads events cache-first for a saved report and network-only while live-syncing', async () => {
     const { api, transport, live } = setup({ ingest: false });
     live.active.set(false);
@@ -64,5 +74,18 @@ describe('WclApiService fetch policy', () => {
     await api.getReport('code');
     await api.getAllEvents('code', 1, 'Casts', 0, 100, 6);
     expect(transport.cacheFirstCalls).toEqual([true, true]);
+  });
+
+  it('keeps the policy read untracked, so a reactive consumer does not re-run on the live toggle', () => {
+    const { api, live } = setup({ ingest: false });
+    live.active.set(false);
+    // Stands in for a card's load effect: the pre-await prefix of getReport (where the
+    // fetch policy is read) runs inside the reactive context.
+    let runs = 0;
+    const consumer = computed(() => { runs++; void api.getReport('code'); return runs; });
+    consumer();
+    live.active.set(true);
+    consumer();
+    expect(runs).toBe(1);
   });
 });

@@ -105,6 +105,19 @@ export function pickPlayerId(
   return visiblePlayers[0]?.id ?? null;
 }
 
+export type LivePollAction = 'none' | 'skip' | 'analyze';
+
+/** 'analyze' also covers an unfinished selection, so a failed resolve retries on the next tick. */
+export function livePollActionOf(
+  fights: WclFight[],
+  selectedFightId: number | null | undefined,
+  analyzed: boolean,
+): LivePollAction {
+  const latest = fights[fights.length - 1];
+  if (!latest) return 'none';
+  return latest.id === selectedFightId && analyzed ? 'skip' : 'analyze';
+}
+
 /**
  * Choose which player to track across live-sync pulls.
  *
@@ -406,17 +419,22 @@ export class PostRaidComponent {
     this.loadError.set(null);
     this.liveCapture.setStatus('Checking for new pulls…');
     try {
+      // Cheap probe first: an idle tick costs one fights-only read, and skipping the apply
+      // on an unchanged report keeps the rebuilt fight objects from retriggering the cards'
+      // own WCL fetches.
+      const probedFights = buildFights(await this.wclApi.getReportFights(this.reportCode()));
+      const action = livePollActionOf(probedFights, this.selectedFightId(), this.ready());
+      if (action === 'none') { this.liveCapture.setStatus('No boss pulls found.'); return; }
+      if (action === 'skip') {
+        this.liveCapture.setStatus(`Last updated ${new Date().toLocaleTimeString()} · Polling every ${POLL_INTERVAL_MS / 1000}s`);
+        return;
+      }
+
       const report = await this.wclApi.getReport(this.reportCode());
       this._applyReport(report);
 
       const latest = this.fights()[this.fights().length - 1];
       if (!latest) { this.liveCapture.setStatus('No boss pulls found.'); return; }
-
-      // Cheap-diff: latest pull unchanged and already analyzed - skip re-analysis.
-      if (this.selectedFightId() === latest.id && this.ready()) {
-        this.liveCapture.setStatus(`Last updated ${new Date().toLocaleTimeString()} · Polling every ${POLL_INTERVAL_MS / 1000}s`);
-        return;
-      }
 
       const currentName = this.players().find(player => player.id === this.selectedPlayerId())?.name ?? null;
       const visible = visiblePlayersOf(this.fights(), this.players(), latest.id);

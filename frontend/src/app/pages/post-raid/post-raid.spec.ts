@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { PlayerDetailGroups, WclFight, WclPlayer, WclReport } from '../../core/models/wcl.models';
 import {
   specOf, extractCode, isValidReportCode, buildFights, buildPlayers, visiblePlayersOf, pickPlayerId, pickLivePlayerId,
+  livePollActionOf,
 } from './post-raid';
 
 function fight(p: Partial<WclFight>): WclFight {
@@ -118,6 +119,32 @@ describe('pickPlayerId', () => {
 
   it('returns null when there is nobody to pick', () => {
     expect(pickPlayerId([], null)).toBeNull();
+  });
+});
+
+describe('livePollActionOf', () => {
+  const pulls = [fight({ id: 1, encounterID: 100 }), fight({ id: 2, encounterID: 100 })];
+  const LATEST_PULL_ID = 2;
+  const EARLIER_PULL_ID = 1;
+
+  it('returns none when the report has no boss pulls', () => {
+    expect(livePollActionOf([], LATEST_PULL_ID, true)).toBe('none');
+  });
+
+  it('skips when the latest pull is already the analyzed selection', () => {
+    expect(livePollActionOf(pulls, LATEST_PULL_ID, true)).toBe('skip');
+  });
+
+  it('analyzes when a pull newer than the selection appears', () => {
+    expect(livePollActionOf(pulls, EARLIER_PULL_ID, true)).toBe('analyze');
+  });
+
+  it('analyzes when the selected latest pull has not finished analyzing', () => {
+    expect(livePollActionOf(pulls, LATEST_PULL_ID, false)).toBe('analyze');
+  });
+
+  it('analyzes when nothing is selected yet', () => {
+    expect(livePollActionOf(pulls, null, false)).toBe('analyze');
   });
 });
 
