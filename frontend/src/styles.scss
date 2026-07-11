@@ -29,14 +29,10 @@ html {
   --info: #58a6ff;
   --gold: #e5cc80; /* Warcraft Logs 100-parse ("Astounding") gold - brand color */
 
-  /* Positioning-map canvas: outline behind the player marker so it stays visible
-   * over any trail color. Read at draw time via getComputedStyle (map-canvas.ts). */
+  /* Outline behind the map player marker, visible over any trail color; read at draw time via getComputedStyle (map-canvas.ts). */
   --map-dot-outline: rgba(0, 0, 0, 0.55);
 
-  /* Material component tokens, restyled with the app tokens above. Material injects
-   * its component styles unlayered while Tailwind v4 utilities live in
-   * `@layer utilities`, so plain utilities cannot restyle what Material sets;
-   * these override mixins are the supported mechanism (no `!important`). */
+  /* Restyle Material through its override mixins: its unlayered styles beat layered Tailwind utilities, so mixins are the only no-!important lever. */
   @include mat.card-overrides((
     outlined-container-color: var(--surface),
     outlined-outline-color: var(--border),
@@ -45,9 +41,7 @@ html {
   @include mat.toolbar-overrides((
     container-background-color: var(--surface),
   ));
-  // Roomier navigation-drawer rows (taller targets, generous leading space) with a
-  // fully rounded active indicator: a pill in the expanded drawer, a circle on the
-  // collapsed rail (the item there is square), matching the Material spec.
+  // Roomier drawer rows with a fully rounded active indicator: a pill when expanded, a circle on the square collapsed rail.
   @include mat.list-overrides((
     active-indicator-shape: 9999px,
     list-item-one-line-container-height: 48px,
@@ -69,39 +63,20 @@ body {
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
-/* Navigation-drawer widths. Material sizes `.mat-drawer` with an unlayered rule, so
- * layered Tailwind `w-*` utilities lose; an element+class rule (specificity 0,1,1)
- * outranks Material's `.mat-drawer` (0,1,0) without `!important`, the same mechanism
- * the mat-icon sizes below use. The three widths are the drawer's states: a modal
- * overlay on mobile, an expanded permanent drawer, and a collapsed icons-only rail. */
+/* Drawer widths (modal / expanded / collapsed rail): element+class (0,1,1) outranks Material's unlayered .mat-drawer (0,1,0) without !important. */
 mat-sidenav.nav-drawer-modal { width: 18rem; }
 mat-sidenav.nav-drawer-full { width: 16rem; }
 mat-sidenav.nav-drawer-rail { width: 5rem; }
 
-/* Navigation-drawer row rhythm: space the rows apart. Icon inset is pinned to
- * 12px (down from Material's 16px default) in both drawer states, because the
- * collapsed rail below needs a perfectly round 48px hit target with the icon
- * centered in it (48 - 24px icon = 24px to split, 12px per side) - a 16px
- * inset would force a non-square, non-circular hit target instead. Applying
- * the same 12px inset to the expanded row keeps the icon at one fixed inline
- * offset across both states, so toggling the rail never shifts it. */
+/* 12px icon inset (both drawer states) centers the 24px icon in the collapsed rail's round 48px target and keeps it fixed when the rail toggles. */
 mat-nav-list .mdc-list-item { margin-block: 4px; }
-/* Material sets the icon inset via `margin-inline-start/end` on
- * `.mdc-list-item--with-leading-icon .mdc-list-item__start` (specificity 0,2,0);
- * matching those same two classes plus the `mat-nav-list` element (0,2,1) is
- * needed to outrank it without `!important`. */
+/* mat-nav-list plus the two leading-icon classes (0,2,1) outranks Material's icon-inset rule (0,2,0) without !important. */
 mat-nav-list .mdc-list-item--with-leading-icon .mdc-list-item__start {
   margin-inline-start: 12px;
   margin-inline-end: 12px;
 }
 
-/* Collapsed rail: shrink each row to a 48px circular hit target, flush with
- * the expanded row's own left edge (list inset, unchanged) so the
- * highlight's left edge never shifts when the rail toggles either. The
- * element-qualified selectors outrank Material's item padding / leading-icon
- * rules (injected unlayered after this sheet) without `!important`.
- * Material's content span keeps `flex: 1` even when empty, so hiding it lets
- * the lone icon sit centered. */
+/* Collapsed rail: a 48px circular target flush with the expanded row's left edge (no shift on toggle); hiding the flex:1 content span centers the lone icon. Element selectors outrank Material's unlayered rules without !important. */
 mat-sidenav.nav-drawer-rail .mdc-list-item {
   width: 48px;
   padding: 0;
@@ -109,29 +84,24 @@ mat-sidenav.nav-drawer-rail .mdc-list-item {
 }
 mat-sidenav.nav-drawer-rail .mdc-list-item__content { display: none; }
 
-/* mat-icon sizes. Material injects an unlayered `.mat-icon { width/height: 24px }`
- * and the Material Symbols font class sets `font-size: 24px`; Tailwind v4 utilities
- * live in `@layer utilities` and always lose to those unlayered rules, so `w-*` /
- * `text-*` utilities silently do nothing on a mat-icon. These mat-icon-scoped
- * classes (specificity 0,1,1) beat both without `!important`. */
+/* mat-icon sizes: element+class (0,1,1) beats Material's unlayered .mat-icon and the 24px symbol font, which layered Tailwind utilities cannot. */
 
-/* Without this, the icon inherits ambient line-height (varies by container) and sits
- * a couple pixels off-center inside the button's fixed height. */
+/* Pin line-height so the glyph does not inherit ambient line-height and sit off-center in the button. */
 .mdc-icon-button { line-height: 1; }
+
+/* Top-align the trigger so a custom icon+text trigger's bottom-edge baseline does not leave line-height strut space below the value, floating it above the field center. Element+class (0,1,1) beats Material's rule without !important. */
+mat-select .mat-mdc-select-trigger { vertical-align: top; }
 
 mat-icon.icon-16 { font-size: 16px; width: 16px; height: 16px; line-height: 16px; }
 mat-icon.icon-18 { font-size: 18px; width: 18px; height: 18px; line-height: 18px; }
 
-/* window-comparison timeline glyphs: 22px inside the 42px mobile tap targets,
- * 18px on the compact md rail (48rem mirrors Tailwind's `md` breakpoint). */
+/* Timeline glyphs: 22px in the 42px mobile tap targets, 18px on the md rail (48rem = Tailwind md). */
 mat-icon.icon-seg { font-size: 22px; width: 22px; height: 22px; line-height: 1; }
 @media (min-width: 48rem) {
   mat-icon.icon-seg { font-size: 18px; width: 18px; height: 18px; }
 }
 
-/* Severity badges - text color by status. Templates select one via a
- * bracket-free [class.badge-*] binding driven by a status enum in the
- * component (the component never returns the class string itself). */
+/* Severity badges: text color by status; templates toggle via a bracket-free [class.badge-*] binding driven by a status enum, never a component-built class string. */
 .badge-critical { color: var(--critical); }
 .badge-warning  { color: var(--warning); }
 .badge-success  { color: var(--success); }
@@ -145,12 +115,7 @@ mat-icon.icon-seg { font-size: 22px; width: 22px; height: 22px; line-height: 1; 
 .fill-muted    { background-color: var(--muted); }
 .fill-info     { background-color: var(--info); }
 
-/* window-comparison timeline segment states. These bundle background tint +
- * border + text into one token-driven class so the template can pick a state
- * with a [class.seg-*] binding (Tailwind arbitrary-value utilities such as
- * bg-[var(--success)]/55 cannot be toggled via [class.x] because of the
- * brackets). The opacity blends mirror Tailwind's color-mix output exactly so
- * there is no visual change from the previous inline utility strings. */
+/* Per-state tint + border + text bundled into one class so the template toggles with [class.seg-*]; bracketed Tailwind arbitrary-value utilities cannot be toggled that way. */
 .seg-good      { background-color: color-mix(in oklab, var(--success) 55%, transparent); border: 1px solid var(--success); color: var(--success); }
 .seg-warn      { background-color: color-mix(in oklab, var(--warning) 55%, transparent); border: 1px solid var(--warning); color: var(--warning); }
 .seg-bad       { background-color: color-mix(in oklab, var(--critical) 55%, transparent); border: 1px solid var(--critical); color: var(--critical); }
@@ -162,11 +127,7 @@ mat-icon.icon-seg { font-size: 22px; width: 22px; height: 22px; line-height: 1; 
 /* finding-table: faint critical wash behind a critical finding row. */
 .row-critical { background-color: color-mix(in srgb, var(--critical) 4%, transparent); }
 
-/* "On plan" markers: quiet neutral tags for cooldowns/gear that need no fix.
- * Deliberately understated - a plain surface tag in muted text, no success-green
- * fill and no check-circle glyph - so a clean result reads as calm rather than a
- * celebratory badge. Applied statically across the finding-table, rotation, and
- * gear cards so every "nothing to fix here" state looks the same. */
+/* "On plan" markers: deliberately understated (muted surface tag, no green fill or check glyph) so a clean result reads calm, not celebratory. */
 .chip-onplan {
   display: inline-flex;
   align-items: center;
