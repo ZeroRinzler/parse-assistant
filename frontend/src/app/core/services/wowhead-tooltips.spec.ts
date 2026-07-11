@@ -22,6 +22,24 @@ function setup(): { service: WowheadTooltipsService; doc: Document } {
   };
 }
 
+// Stub of the $WowheadPower global that tooltips.js publishes; the service calls its refreshLinks.
+type PowerWindow = Window & { $WowheadPower?: { refreshLinks: () => void } };
+
+function stubWowheadPower(doc: Document): ReturnType<typeof vi.fn> {
+  const refreshLinks = vi.fn();
+  (doc.defaultView as PowerWindow).$WowheadPower = { refreshLinks };
+  return refreshLinks;
+}
+
+// Drive both script `load` events so the service reaches its `ready` state.
+function finishLoading(service: WowheadTooltipsService, doc: Document): void {
+  service.ensureLoaded();
+  scriptWith(doc, CONFIG_SRC)!.dispatchEvent(new Event('load'));
+  scriptWith(doc, TOOLTIPS_SRC)!.dispatchEvent(new Event('load'));
+}
+
+const flushMicrotasks = () => Promise.resolve();
+
 describe('WowheadTooltipsService', () => {
   beforeEach(() => {
     for (const s of Array.from(document.head.querySelectorAll('script'))) {
@@ -31,6 +49,7 @@ describe('WowheadTooltipsService', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    delete (document.defaultView as PowerWindow).$WowheadPower;
     for (const s of Array.from(document.head.querySelectorAll('script'))) {
       if (s.src.includes('tooltips') || s.src.includes(CONFIG_SRC)) s.remove();
     }
@@ -69,5 +88,46 @@ describe('WowheadTooltipsService', () => {
     scriptWith(doc, CONFIG_SRC)!.dispatchEvent(new Event('error'));
 
     expect(warn).toHaveBeenCalled();
+  });
+
+  describe('refreshLinks (re-scan for links added after the one-time load scan)', () => {
+    it('re-scans via $WowheadPower once the tooltip script has loaded', async () => {
+      const { service, doc } = setup();
+      const refreshLinks = stubWowheadPower(doc);
+
+      finishLoading(service, doc);
+      await flushMicrotasks();
+      refreshLinks.mockClear(); // ignore the automatic re-scan the load itself triggers
+
+      service.refreshLinks();
+      await flushMicrotasks();
+
+      expect(refreshLinks).toHaveBeenCalledTimes(1);
+    });
+
+    it('is a no-op before the script is ready, so it never throws on a missing global', async () => {
+      const { service, doc } = setup();
+      const refreshLinks = stubWowheadPower(doc);
+
+      service.ensureLoaded(); // scripts requested but their load events have not fired
+      service.refreshLinks();
+      await flushMicrotasks();
+
+      expect(refreshLinks).not.toHaveBeenCalled();
+    });
+
+    it('coalesces a burst of calls into a single scan per microtask', async () => {
+      const { service, doc } = setup();
+      const refreshLinks = stubWowheadPower(doc);
+      finishLoading(service, doc);
+      refreshLinks.mockClear();
+
+      service.refreshLinks();
+      service.refreshLinks();
+      service.refreshLinks();
+      await flushMicrotasks();
+
+      expect(refreshLinks).toHaveBeenCalledTimes(1);
+    });
   });
 });

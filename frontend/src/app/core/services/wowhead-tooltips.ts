@@ -6,10 +6,18 @@ import { logWarn } from '../log';
 const CONFIG_SRC = 'wh-tooltips-config.js';
 const TOOLTIPS_SRC = 'https://wow.zamimg.com/js/tooltips.js';
 
+interface WowheadPower {
+  refreshLinks(): void;
+}
+type WowheadWindow = Window & { $WowheadPower?: WowheadPower };
+
 @Injectable({ providedIn: 'root' })
 export class WowheadTooltipsService {
   private readonly document = inject(DOCUMENT);
   private loaded = false;
+  // tooltips.js enhances each link once on load and never re-observes the DOM.
+  private ready = false;
+  private refreshScheduled = false;
 
   ensureLoaded(): void {
     if (this.loaded) return;
@@ -24,8 +32,23 @@ export class WowheadTooltipsService {
       const tooltips = this.document.createElement('script');
       tooltips.src = TOOLTIPS_SRC;
       tooltips.addEventListener('error', (err) => logWarn('wowhead tooltips script load', err));
+      tooltips.addEventListener('load', () => {
+        this.ready = true;
+        this.refreshLinks();
+      });
       this.document.head.appendChild(tooltips);
     });
     this.document.head.appendChild(config);
+  }
+
+  /** Re-scan so links rendered after the load-time scan get enhanced; coalesced per microtask, no-op until ready. */
+  refreshLinks(): void {
+    if (this.refreshScheduled) return;
+    this.refreshScheduled = true;
+    queueMicrotask(() => {
+      this.refreshScheduled = false;
+      if (!this.ready) return;
+      (this.document.defaultView as WowheadWindow | null)?.$WowheadPower?.refreshLinks?.();
+    });
   }
 }

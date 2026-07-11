@@ -40,7 +40,11 @@ export class GameIconComponent {
   constructor() {
     // Load the tooltip enhancer on first render; afterNextRender is browser-only, so prerender skips it.
     const tooltips = inject(WowheadTooltipsService);
-    afterNextRender(() => tooltips.ensureLoaded());
+    afterNextRender(() => {
+      tooltips.ensureLoaded();
+      // Re-scan so an icon rendered after the load-time scan still gets a tooltip.
+      tooltips.refreshLinks();
+    });
   }
 
   readonly id = input.required<number>();
