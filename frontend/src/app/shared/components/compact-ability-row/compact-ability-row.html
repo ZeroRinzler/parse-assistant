@@ -1,17 +1,8 @@
-<!--
-  Sorted-impact table row.
-  Desktop (md+): one flex row of 4 columns (flex-1 / w-[7.5rem] / w-[9rem] / w-[9rem]) that mirror the
-  header row in window-comparison.html so the two stay aligned. The two wrapper divs use `md:contents`
-  so their children are promoted into this single flex row at md, and `md:order-*` restores the
-  name / casts / top-avg / gap column order.
-  Mobile: the wrappers become two stacked lines - name + gap on top, then top-avg + casts with inline
-  labels - so nothing overflows a phone width.
--->
-<div class="md:flex md:items-center md:gap-3 px-4 py-1.5 min-w-0 border-t md:border-t-0 border-[var(--border)]">
+<!-- Desktop grid tracks mirror the window-comparison header + finding-table (keeps the casts|top-avg divider on the measured|fix divider); md:row-start-1 pins each cell to row 1 since the mobile DOM order (name, gap, top-avg, casts) is out of column order. -->
+<div class="md:grid md:grid-cols-[minmax(0,1fr)_96px_96px_90px] md:gap-x-[14px] md:items-center px-4 py-1.5 min-w-0 border-t md:border-t-0 border-[var(--border)]">
 
-  <!-- Line 1 (mobile): name + gap. Promoted to columns 1 and 4 at md. -->
   <div class="flex items-baseline gap-2 min-w-0 md:contents">
-    <div class="flex-1 min-w-0 overflow-hidden md:order-1">
+    <div class="flex-1 min-w-0 overflow-hidden md:col-start-1 md:row-start-1">
       @if (row().spellId; as spellId) {
         <wl-game-icon [id]="spellId" [icon]="row().icon" [name]="row().label"></wl-game-icon>
       } @else {
@@ -20,7 +11,7 @@
     </div>
 
     @if (!hidePlayer()) {
-      <span class="shrink-0 md:order-4 md:w-[9rem] text-right tabular-nums text-xs font-semibold"
+      <span class="shrink-0 md:col-start-4 md:row-start-1 text-right tabular-nums text-xs font-semibold"
             [class.badge-success]="gapStatus() === 'success'"
             [class.badge-warning]="gapStatus() === 'warning'"
             [class.badge-critical]="gapStatus() === 'critical'"
@@ -34,19 +25,18 @@
     }
   </div>
 
-  <!-- Line 2 (mobile): top avg + casts with inline labels. Promoted to columns 3 and 2 at md. -->
   <div class="flex items-baseline flex-wrap gap-x-1.5 gap-y-1 mt-1.5 md:mt-0 md:contents">
-    <span class="shrink-0 mr-2 md:mr-0 md:order-3 md:w-[9rem] md:text-right tabular-nums text-xs text-[var(--muted)]">
+    <span class="shrink-0 mr-2 md:mr-0 md:col-start-3 md:row-start-1 md:text-left tabular-nums text-xs text-[var(--muted)]">
       <span class="md:hidden font-mono text-[10px] uppercase tracking-wider">Top avg </span>{{ row().topAvg | formatDamage }}
     </span>
 
     @if (showCasts() && !hidePlayer()) {
       @if (isPassive()) {
-        <!-- Passive ability (proc/auto/pet damage): no cast count, just a muted tag. -->
-        <span class="shrink-0 md:order-2 w-auto md:w-[7.5rem] text-center text-xs rounded px-2 py-0.5 border border-current badge-muted">passive</span>
+        <!-- Passive ability (proc/auto/pet damage) has no player cast count. -->
+        <span class="shrink-0 md:col-start-2 md:row-start-1 w-auto text-center text-xs rounded px-2 py-0.5 border border-current badge-muted">passive</span>
       } @else {
         <span class="md:hidden font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">Casts</span>
-        <span class="shrink-0 md:order-2 w-auto md:w-[7.5rem] text-center tabular-nums text-xs rounded px-2 py-0.5 border border-current"
+        <span class="shrink-0 md:col-start-2 md:row-start-1 w-auto text-center tabular-nums text-xs rounded px-2 py-0.5 border border-current"
               [class.badge-success]="castsStatus() === 'success'"
               [class.badge-warning]="castsStatus() === 'warning'"
               [class.badge-critical]="castsStatus() === 'critical'"

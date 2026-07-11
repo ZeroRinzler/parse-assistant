@@ -67,62 +67,78 @@
 
   <!-- Detail panel: driven by activeIndex(), inside the same card. -->
   @if (activeWindow(); as w) {
-    <!-- Status fill color, shared by the header dot and the overview bar player fill. -->
+    <!-- Status fill color for the overview bar player fill. -->
     @let fillBg =
       w.status === 'good' ? 'bg-[var(--success)]' :
       w.status === 'warn' ? 'bg-[var(--warning)]' :
       w.status === 'bad' ? 'bg-[var(--critical)]' :
       w.status === 'muted' ? 'bg-[var(--muted)]' : 'bg-[var(--info)]';
 
-    <!-- Header: status dot · window title · spell icons, then a meta group (map + value/delta).
-         The title never wraps; the meta group drops to its own line on mobile and sits right at md. -->
-    <div class="flex flex-wrap items-center gap-2 px-4 py-2.5 bg-[var(--surface)] border-t border-[var(--border)]">
-      <span [class]="'w-2.5 h-2.5 rounded-full shrink-0 ' + fillBg"></span>
-      <span class="text-sm font-medium whitespace-nowrap">
-        Window {{ activeIndex() + 1 }} - {{ w.timeStartS | formatDuration }} to {{ w.timeEndS | formatDuration }}
-      </span>
-      @for (spell of w.spells; track spell.id) {
-        <wl-game-icon [id]="spell.id" [icon]="spell.icon" [name]="spell.name"></wl-game-icon>
-      }
-      @for (lbl of w.labels; track lbl) {
-        <span class="text-sm text-[var(--muted)]">{{ lbl }}</span>
-      }
-      <!-- Meta group: map button + value. Drops to its own line on mobile, sits right at md.
-           Reached windows show the player's damage + delta; bench-only (pre) windows show the
-           top-parse damage; a not-reached player window shows the italic label. -->
-      <div class="basis-full md:basis-auto md:ml-auto flex items-center gap-2">
-        @if (showMap()) {
-          <button mat-icon-button title="Open positioning map" (click)="openMap.emit(activeIndex())">
-            <mat-icon>my_location</mat-icon>
-          </button>
-        }
-        @if (showClip()) {
-          <button mat-icon-button title="Watch clip" (click)="openClip.emit(activeIndex())">
-            <mat-icon>videocam</mat-icon>
-          </button>
-        }
-        @if (!activeIsMuted()) {
-          <span class="tabular-nums text-xs flex items-baseline gap-2">
-            <span class="text-[var(--muted)]">{{ w.overview.playerPct | formatDamage }}</span>
-            @if (overviewDelta() !== null) {
-              <span
-                [class.badge-muted]="overviewDeltaStatus() === 'muted'"
-                [class.badge-success]="overviewDeltaStatus() === 'better'"
-                [class.badge-critical]="overviewDeltaStatus() === 'worse'">{{ overviewDelta() | signedPercent }}</span>
-            }
+    <!-- Two-tier header: only row 2's cast chips wrap, so row 1's metric cluster + action buttons never get pushed off-screen. -->
+    <div class="px-4 py-2.5 bg-[var(--surface)] border-t border-[var(--border)]">
+      <div class="flex items-center gap-4 md:gap-[22px]">
+        <div class="flex flex-col shrink-0">
+          <span class="text-[9px] uppercase tracking-[1px] text-[var(--muted)]">window</span>
+          <span class="text-[13px] font-semibold tabular-nums text-[var(--text)] whitespace-nowrap">
+            {{ w.timeStartS | formatDuration }} - {{ w.timeEndS | formatDuration }}
           </span>
-        } @else if (activeIsBenchOnly()) {
-          <span class="tabular-nums text-xs text-[var(--muted)]">{{ w.overview.topAvg | formatDamage }}</span>
-        } @else if (activeIsNotReached()) {
-          <span class="text-xs text-[var(--muted)] italic">not reached</span>
+        </div>
+        <!-- Burst value: player damage when reached, top-parse damage for bench-only, else the not-reached label. -->
+        <div class="flex flex-col shrink-0">
+          <span class="text-[9px] uppercase tracking-[1px] text-[var(--muted)]">burst</span>
+          @if (!activeIsMuted()) {
+            <span class="text-[13px] font-semibold tabular-nums text-[var(--text)]">{{ w.overview.playerPct | formatDamage }}</span>
+          } @else if (activeIsBenchOnly()) {
+            <span class="text-[13px] font-semibold tabular-nums text-[var(--text)]">{{ w.overview.topAvg | formatDamage }}</span>
+          } @else {
+            <span class="text-[13px] font-semibold italic text-[var(--muted)]">not reached</span>
+          }
+        </div>
+        @if (!activeIsMuted() && overviewDelta() !== null) {
+          <div class="flex flex-col shrink-0">
+            <span class="text-[9px] uppercase tracking-[1px] text-[var(--muted)]">vs top average</span>
+            <span class="text-[13px] font-semibold tabular-nums"
+              [class.badge-muted]="overviewDeltaStatus() === 'muted'"
+              [class.badge-success]="overviewDeltaStatus() === 'better'"
+              [class.badge-critical]="overviewDeltaStatus() === 'worse'">{{ overviewDelta() | signedPercent }}</span>
+          </div>
         }
+        <div class="ml-auto flex items-center gap-[7px] shrink-0">
+          @if (showMap()) {
+            <button mat-icon-button title="Open positioning map" (click)="openMap.emit(activeIndex())">
+              <mat-icon>my_location</mat-icon>
+            </button>
+          }
+          @if (showClip()) {
+            <button mat-icon-button title="Watch clip" (click)="openClip.emit(activeIndex())">
+              <mat-icon>videocam</mat-icon>
+            </button>
+          }
+        </div>
       </div>
+      @if (w.spells.length || w.labels.length) {
+        <div class="mt-2.5">
+          <span class="block text-[10px] uppercase tracking-widest text-[var(--muted)] mb-1.5">Recommended cooldowns</span>
+          <div class="flex flex-wrap items-center gap-2">
+            @for (spell of w.spells; track spell.id) {
+              <span class="chip-onplan">
+                <wl-game-icon [id]="spell.id" [icon]="spell.icon" [name]="spell.name"></wl-game-icon>
+              </span>
+            }
+            @for (lbl of w.labels; track lbl) {
+              <span class="chip-onplan">
+                <span class="text-[13px] text-[var(--muted)]">{{ lbl }}</span>
+              </span>
+            }
+          </div>
+        </div>
+      }
     </div>
 
-    <!-- Full-width overview bar: player fill + range band + avg tick. Hidden for bench-only
-         (pre-fight) windows, where there is no player to compare against. -->
+    <!-- Damage-spread bar, hidden for bench-only (pre-fight) windows that have no player to compare against. -->
     @if (!activeIsBenchOnly()) {
-      <div class="px-4 py-2 border-t border-[var(--border)]">
+      <div class="px-4 pb-2">
+        <span class="block text-[10px] uppercase tracking-widest text-[var(--muted)] mb-1.5">Damage vs top range</span>
         <div class="relative h-5 rounded bg-[var(--bg)]" aria-hidden="true">
           @if (overviewPlayerWidthPct() !== null) {
             <div [class]="'absolute inset-y-0 left-0 rounded opacity-[0.65] ' + fillBg"
@@ -138,21 +154,19 @@
       </div>
     }
 
-    <!-- Per-ability breakdown: sorted-impact table (biggest gap first).
-         Column widths (flex-1 / w-[7.5rem] / w-[9rem] / w-[9rem]) mirror compact-ability-row.html. -->
+    <!-- Grid tracks mirror compact-ability-row.html and the finding-table so the casts|top-avg divider lines up with its measured|fix divider; a fixed grid holds columns in place when casts/gap are hidden. -->
     @if (w.detailRows.length) {
-      <!-- Wrapper border is desktop-only; on mobile the per-row borders own the dividers (so the
-           first row does not double up with this one). -->
+      <!-- Border is desktop-only so it does not double up with the mobile per-row borders. -->
       <div class="md:border-t border-[var(--border)] pt-2 pb-2">
         <!-- Column labels are desktop-only; on mobile each row carries inline labels instead. -->
-        <div class="hidden md:flex items-center gap-3 px-4 pb-1">
-          <span class="flex-1 text-[10px] text-[var(--muted)]">ability</span>
+        <div class="hidden md:grid grid-cols-[minmax(0,1fr)_96px_96px_90px] gap-x-[14px] items-center px-4 pb-1">
+          <span class="col-start-1 text-[10px] uppercase tracking-widest text-[var(--muted)]">ability</span>
           @if (showCasts() && !activeIsMuted()) {
-            <span class="w-[7.5rem] text-center text-[10px] text-[var(--muted)]">casts</span>
+            <span class="col-start-2 text-right text-[10px] uppercase tracking-widest text-[var(--muted)]">casts</span>
           }
-          <span class="w-[9rem] text-right text-[10px] text-[var(--muted)]">top avg</span>
+          <span class="col-start-3 text-left text-[10px] uppercase tracking-widest text-[var(--muted)]">top avg</span>
           @if (!activeIsMuted()) {
-            <span class="w-[9rem] text-right text-[10px] text-[var(--muted)]">gap</span>
+            <span class="col-start-4 text-right text-[10px] uppercase tracking-widest text-[var(--muted)]">gap</span>
           }
         </div>
         @for (row of activeDetailRows(); track row.spellId) {

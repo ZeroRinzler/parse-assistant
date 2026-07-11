@@ -106,11 +106,6 @@ export class WindowComparisonComponent {
     return status === 'muted' || status === 'info';
   });
 
-  // "Not reached" only applies to a real player window the player never entered
-  // ('muted'); a bench-only ('info', pre-fight) window has no player to reach, so
-  // the label is suppressed there.
-  protected readonly activeIsNotReached = computed(() => this.activeWindow()?.status === 'muted');
-
   // Bench-only (pre-fight) window: no player overlay at all, so the You/Top
   // comparison bar is hidden and the header shows the top-parse damage instead.
   protected readonly activeIsBenchOnly = computed(() => this.activeWindow()?.status === 'info');
