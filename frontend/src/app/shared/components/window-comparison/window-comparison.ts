@@ -8,6 +8,11 @@ import { FormatDamagePipe } from '../../pipes/format-damage-pipe';
 import { SignedPercentPipe } from '../../pipes/signed-percent-pipe';
 import { RangeRow, ComparisonWindow } from '../../../core/models/window-comparison.models';
 
+/** One slot on the timeline row: a real window chip, or a dashed pacing spacer. */
+type TimelineCell =
+  | { readonly kind: 'window'; readonly index: number }
+  | { readonly kind: 'gap'; readonly id: string };
+
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-window-comparison',
@@ -19,7 +24,6 @@ import { RangeRow, ComparisonWindow } from '../../../core/models/window-comparis
 export class WindowComparisonComponent {
   readonly windows = input.required<ComparisonWindow[]>();
   readonly higherIsBetter = input<boolean>(true);
-  readonly fightDuration = input<number>(0);
   readonly showMap = input<boolean>(false);
   /** Whether a "watch clip" button shows (the page owns recording + the clip panel). */
   readonly showClip = input<boolean>(false);
@@ -31,12 +35,10 @@ export class WindowComparisonComponent {
   /** Emits the active window index when its clip button is clicked; the page forwards it. */
   readonly openClip = output<number>();
 
-  // Minimum center-to-center gap between adjacent segments, as a percentage of
-  // the track width, so buttons never visually collide on a crowded timeline.
-  private static readonly MIN_GAP_PCT = 5;
-  // Keep each segment center this far (in % of track width) from either rail end
-  // so a half-button never overhangs the rail tips.
-  private static readonly EDGE_INSET_PCT = 4;
+  // Each dashed pacing slot stands for this many seconds of pause before the next
+  // window, so a sub-slot pause is the same burst (0 slots) and longer lulls add
+  // proportionally more slots.
+  private static readonly GAP_SLOT_SECONDS = 20;
 
   protected readonly selectedIndex = computed(() => {
     const windows = this.windows();
@@ -65,17 +67,25 @@ export class WindowComparisonComponent {
   protected readonly activeWindow = computed(() =>
     this.windows()[this.activeIndex()] ?? null);
 
-  protected readonly timelineEnd = computed(() => {
+  // Flat left-to-right sequence of chips interleaved with dashed pacing slots, so
+  // the template renders one row without measuring time: chip size is fixed and
+  // the gap count carries the rhythm of the fight.
+  protected readonly timelineCells = computed<TimelineCell[]>(() => {
     const windows = this.windows();
-    if (!windows.length) return Math.max(this.fightDuration(), 1);
-    return Math.max(...windows.map(w => w.timeEndS), 1);
+    const cells: TimelineCell[] = [];
+    windows.forEach((w, i) => {
+      cells.push({ kind: 'window', index: i });
+      const next = windows[i + 1];
+      if (!next) return;
+      const slots = this.gapSlots(next.timeStartS - w.timeEndS);
+      for (let s = 0; s < slots; s++) cells.push({ kind: 'gap', id: `${i}-${s}` });
+    });
+    return cells;
   });
 
-  protected readonly timeTicks = computed<number[]>(() => {
-    const end = this.timelineEnd();
-    const steps = 5;
-    return Array.from({ length: steps + 1 }, (_, i) => (end / steps) * i);
-  });
+  private gapSlots(pauseS: number): number {
+    return Math.max(0, Math.floor(pauseS / WindowComparisonComponent.GAP_SLOT_SECONDS));
+  }
 
   protected select(i: number): void {
     this._manualIndex.set(i);
@@ -117,40 +127,6 @@ export class WindowComparisonComponent {
       return higherIsBetter ? gap : -gap; // negative = worse
     };
     return [...rows].sort((a, b) => loss(a) - loss(b));
-  });
-
-  protected leftPct(timeS: number): number {
-    const end = this.timelineEnd();
-    return Math.min(100, Math.max(0, (timeS / end) * 100));
-  }
-
-  // `left` per segment as a raw percentage (bound via [style.left.%]), so no DOM
-  // measurement is needed. A two-pass collision algorithm nudges overlapping
-  // buttons apart inside the inset band [inset, 100 - inset]. The inset is part
-  // of the spread bounds (not a post-hoc clamp, which would re-collide the rail
-  // markers), and the gap shrinks to fit when there are too many buttons to hold
-  // the full MIN_GAP_PCT, so markers never visually overlap on a crowded timeline.
-  protected readonly segmentLeftPcts = computed<number[]>(() => {
-    const windows = this.windows();
-    const inset = WindowComparisonComponent.EDGE_INSET_PCT;
-    const lo = inset;
-    const hi = 100 - inset;
-    const centers = windows.map(w => Math.min(hi, Math.max(lo, this.leftPct(w.timeStartS))));
-    if (centers.length < 2) return centers;
-    // Effective gap fits all buttons edge-to-edge within the band when crowded.
-    const gap = Math.min(WindowComparisonComponent.MIN_GAP_PCT, (hi - lo) / (centers.length - 1));
-    // Forward pass: push later buttons right to clear the gap.
-    for (let i = 1; i < centers.length; i++) {
-      centers[i] = Math.max(centers[i], centers[i - 1] + gap);
-    }
-    // Anchor the rightmost inside the band, then backward pass pulls earlier
-    // buttons left. (hi - lo) >= (n - 1) * gap by construction, so the backward
-    // pass cannot push the leftmost below lo - no trailing clamp is needed.
-    centers[centers.length - 1] = Math.min(centers[centers.length - 1], hi);
-    for (let i = centers.length - 2; i >= 0; i--) {
-      centers[i] = Math.min(centers[i], centers[i + 1] - gap);
-    }
-    return centers;
   });
 
   protected readonly overviewMax = computed(() => {

@@ -11,53 +11,55 @@
     </div>
   }
 
-  <!-- Timeline track: segments float on a guide line, positioned proportionally along the fight. -->
+  <!-- Timeline track: equal fixed chips on one scrolling row. Chip size is decoupled
+       from fight time, so windows never overlap however tightly they fire; dashed
+       half-width slots between chips stand in for the pause before the next window. -->
   <div class="px-4" [class.pt-3]="!heading()" [class.pb-3]="!activeWindow()">
-    <!-- Mobile: a horizontal scroll rail (min-w) so the larger 42px tap targets never overlap; at md the
-         inner holder collapses to the full width and the markers space out by % exactly as before. -->
-    <div class="overflow-x-auto md:overflow-visible pt-2 md:pt-0">
-      <div class="min-w-[540px] md:min-w-0">
-        <div
-          class="relative mx-2 h-[42px] md:h-9"
-          role="listbox"
-          tabindex="0"
-          aria-label="Burst windows"
-          (keydown)="onKeydown($event)">
-          <!-- Track: rounded rail the segments sit on. -->
-          <div class="absolute left-0 right-0 top-0 h-[42px] md:h-9 rounded-lg bg-[var(--bg)] border border-[var(--border)]" aria-hidden="true"></div>
-
-          @for (w of windows(); track $index; let i = $index) {
-            <!-- Per-status tint/border/text: opacity modifiers use color-mix(oklab), matching the token blend. -->
-            @let segTone =
-              w.status === 'good' ? 'bg-[var(--success)]/55 border border-[var(--success)] text-[var(--success)]' :
-              w.status === 'warn' ? 'bg-[var(--warning)]/55 border border-[var(--warning)] text-[var(--warning)]' :
-              w.status === 'bad' ? 'bg-[var(--critical)]/55 border border-[var(--critical)] text-[var(--critical)]' :
-              w.status === 'info' ? 'bg-[var(--info)]/15 border border-[var(--info)]/50 text-[var(--info)]' :
-              w.status === 'muted' && w.statusIcon === 'schedule' ? 'border border-dashed border-[var(--border)] text-[var(--muted)]' :
-              w.status === 'muted' ? 'bg-[var(--critical)]/10 border border-dashed border-[var(--critical)]/40 text-[var(--muted)]' : '';
-            <div
-              class="absolute top-0 flex flex-col items-center -translate-x-1/2"
-              [style.left.%]="segmentLeftPcts()[i]"
-              [style.z-index]="activeIndex() === i ? 2 : 1">
+    <div
+      class="overflow-x-auto pt-2 pb-1"
+      role="listbox"
+      tabindex="0"
+      [attr.aria-label]="heading()"
+      (keydown)="onKeydown($event)">
+      <div class="flex items-start gap-1.5 w-max px-0.5">
+        @for (cell of timelineCells(); track cell.kind === 'window' ? 'w' + cell.index : 'g' + cell.id) {
+          @if (cell.kind === 'gap') {
+            <!-- Pacing slot: half-width dashed placeholder, no interaction. The hidden
+                 label keeps its box top-aligned with the chips' timestamp row. -->
+            <div class="flex flex-col items-center gap-1.5 shrink-0" aria-hidden="true">
+              <div class="w-5 h-10 rounded-md border border-dashed border-[var(--border)] opacity-40"></div>
+              <span class="text-[10px] invisible">0</span>
+            </div>
+          } @else {
+            @let w = windows()[cell.index];
+            @let active = activeIndex() === cell.index;
+            <!-- Neutral chip; status shows as the icon tint and a bottom accent bar. -->
+            @let iconTone =
+              w.status === 'good' ? 'text-[var(--success)]' :
+              w.status === 'warn' ? 'text-[var(--warning)]' :
+              w.status === 'bad' ? 'text-[var(--critical)]' :
+              w.status === 'info' ? 'text-[var(--info)]' : 'text-[var(--muted)]';
+            @let barTone =
+              w.status === 'good' ? 'bg-[var(--success)]' :
+              w.status === 'warn' ? 'bg-[var(--warning)]' :
+              w.status === 'bad' ? 'bg-[var(--critical)]' :
+              w.status === 'info' ? 'bg-[var(--info)]' : 'bg-[var(--muted)]';
+            <div class="flex flex-col items-center gap-1.5 shrink-0">
               <button
                 type="button"
                 role="option"
-                [class]="'flex items-center justify-center w-[42px] h-[42px] md:w-9 md:h-9 rounded ' + segTone + (activeIndex() === i ? ' outline outline-2 outline-offset-2 outline-[var(--gold)]' : '')"
-                [attr.aria-selected]="activeIndex() === i"
+                [class]="'relative flex items-center justify-center w-10 h-10 rounded-lg overflow-hidden bg-[var(--bg)] border ' + iconTone + (active ? ' border-[var(--gold)] outline outline-2 outline-offset-1 outline-[var(--gold)]' : ' border-[var(--border)]')"
+                [attr.aria-selected]="active"
                 [attr.aria-label]="(w.timeStartS | formatDuration)"
-                (click)="select(i)">
+                (click)="select(cell.index)">
                 <mat-icon class="icon-seg">{{ w.statusIcon }}</mat-icon>
+                <span [class]="'absolute bottom-0 left-0 right-0 h-1 ' + barTone" aria-hidden="true"></span>
               </button>
+              <span [class]="'tabular-nums text-[10px] ' + (active ? 'text-[var(--gold)]' : 'text-[var(--muted)]')">
+                {{ w.timeStartS | formatDuration }}
+              </span>
             </div>
           }
-        </div>
-
-        @if (timeTicks().length) {
-          <div class="flex justify-between tabular-nums text-[10px] text-[var(--muted)] mt-2">
-            @for (tick of timeTicks(); track $index) {
-              <span>{{ tick | formatDuration }}</span>
-            }
-          </div>
         }
       </div>
     </div>

@@ -168,76 +168,59 @@ describe('WindowComparisonComponent showCasts', () => {
   });
 });
 
-describe('WindowComparisonComponent segmentLeftPcts', () => {
-  // MIN_GAP_PCT = 5, EDGE_INSET_PCT = 4 -> band [4, 96], default gap 5.
-  const INSET = 4;
-  const DEFAULT_GAP = 5;
+describe('WindowComparisonComponent timelineCells', () => {
+  // GAP_SLOT_SECONDS = 20: each dashed pacing slot stands for 20s of pause
+  // (next.start - this.end), floored, so a sub-20s pause is the same burst (0 slots)
+  // and longer lulls add proportionally more slots with no cap.
+  const SLOT_SECONDS = 20;
 
-  const winAt = (timeStartS: number, timeEndS: number): ComparisonWindow => ({
+  type Cell = { kind: 'window'; index: number } | { kind: 'gap'; id: string };
+
+  const winSpan = (timeStartS: number, timeEndS: number): ComparisonWindow => ({
     ...win({}),
     timeStartS,
     timeEndS,
   });
 
-  const leftPctsOf = (windows: ComparisonWindow[]): number[] => {
-    const { vm } = mountVm(WindowComparisonComponent, { windows });
-    return (vm['segmentLeftPcts'] as () => number[])();
+  // One mount whose `windows` input is re-set per case (mountVm's TestBed configures
+  // once, so a test never mounts twice). Two windows: the first ends at 0, the second
+  // starts at `pauseS`, so the gap count is a direct function of the pause between them.
+  const gapCounter = () => {
+    const { vm, setInput } = mountVm(WindowComparisonComponent, { windows: [] as ComparisonWindow[] });
+    const cells = vm['timelineCells'] as () => Cell[];
+    return (pauseS: number): number => {
+      setInput('windows', [winSpan(0, 0), winSpan(pauseS, pauseS + 10)]);
+      return cells().filter(c => c.kind === 'gap').length;
+    };
   };
 
-  it('leaves well-separated markers at their exact time position', () => {
-    // timelineEnd = 100, so timeStartS maps 1:1 to a percent. 20 and 80 are far
-    // apart and inside the band, so neither is nudged.
-    expect(leftPctsOf([winAt(20, 100), winAt(80, 100)])).toEqual([20, 80]);
+  it('emits no gap slots for a pause under one slot (same burst)', () => {
+    const gaps = gapCounter();
+    expect(gaps(SLOT_SECONDS - 1)).toBe(0);
+    expect(gaps(SLOT_SECONDS)).toBe(1);
   });
 
-  it('spreads near-coincident markers to at least the gap apart', () => {
-    const pcts = leftPctsOf([winAt(50, 100), winAt(51, 100)]);
-    expect(pcts[1] - pcts[0]).toBeGreaterThanOrEqual(DEFAULT_GAP - 1e-9);
+  it('adds one more slot per further 20s of pause', () => {
+    const gaps = gapCounter();
+    expect(gaps(2 * SLOT_SECONDS - 1)).toBe(1);
+    expect(gaps(2 * SLOT_SECONDS)).toBe(2);
+    expect(gaps(3 * SLOT_SECONDS)).toBe(3);
   });
 
-  it('keeps every marker inside the inset band and ordered', () => {
-    const pcts = leftPctsOf([winAt(0, 100), winAt(50, 100), winAt(100, 100)]);
-    expect(pcts[0]).toBeGreaterThanOrEqual(INSET);
-    expect(pcts[pcts.length - 1]).toBeLessThanOrEqual(100 - INSET);
-    for (let i = 1; i < pcts.length; i++) expect(pcts[i]).toBeGreaterThan(pcts[i - 1]);
+  it('is uncapped, so a long lull keeps adding slots', () => {
+    expect(gapCounter()(10 * SLOT_SECONDS)).toBe(10);
   });
 
-  it('never overlaps even when many markers crowd the right edge', () => {
-    // 25 windows bunched into the last quarter of the fight. A fixed 5% gap
-    // (24 * 5 = 120%) cannot fit, so the gap shrinks to fill the band exactly.
-    const windows = Array.from({ length: 25 }, (_, i) => winAt(76 + i, 100));
-    const pcts = leftPctsOf(windows);
-    const band = 100 - 2 * INSET;
-    const gap = Math.min(DEFAULT_GAP, band / (windows.length - 1));
-    expect(pcts[0]).toBeGreaterThanOrEqual(INSET - 1e-9);
-    expect(pcts[pcts.length - 1]).toBeLessThanOrEqual(100 - INSET + 1e-9);
-    for (let i = 1; i < pcts.length; i++) {
-      expect(pcts[i] - pcts[i - 1]).toBeGreaterThanOrEqual(gap - 1e-9);
-    }
+  it('interleaves window and gap cells in fight order', () => {
+    // 0->0 (start), then a 40s pause (2 slots) to the second window.
+    const { vm } = mountVm(WindowComparisonComponent, { windows: [winSpan(0, 0), winSpan(2 * SLOT_SECONDS, 2 * SLOT_SECONDS + 10)] });
+    const cells = (vm['timelineCells'] as () => Cell[])();
+    expect(cells.map(c => c.kind)).toEqual(['window', 'gap', 'gap', 'window']);
+    expect(cells.filter(c => c.kind === 'window').map(c => (c as { index: number }).index)).toEqual([0, 1]);
   });
 
-  it('returns a lone marker at its exact time without spreading', () => {
-    expect(leftPctsOf([winAt(50, 100)])).toEqual([50]);
-  });
-});
-
-describe('WindowComparisonComponent timeTicks', () => {
-  const ticksForEnd = (timeEndS: number): number[] => {
-    const w = { ...win({}), timeEndS };
-    const { vm } = mountVm(WindowComparisonComponent, { windows: [w] });
-    return (vm['timeTicks'] as () => number[])();
-  };
-
-  it('returns 6 evenly spaced ticks from 0 to the max window end', () => {
-    expect(ticksForEnd(300)).toEqual([0, 60, 120, 180, 240, 300]);
-  });
-
-  it('handles short fights', () => {
-    expect(ticksForEnd(10)).toEqual([0, 2, 4, 6, 8, 10]);
-  });
-
-  it('falls back to fightDuration when no windows are present', () => {
-    const { vm } = mountVm(WindowComparisonComponent, { windows: [], fightDuration: 300 });
-    expect((vm['timeTicks'] as () => number[])()).toEqual([0, 60, 120, 180, 240, 300]);
+  it('is empty when there are no windows', () => {
+    const { vm } = mountVm(WindowComparisonComponent, { windows: [] });
+    expect((vm['timelineCells'] as () => Cell[])()).toEqual([]);
   });
 });

@@ -29,7 +29,6 @@ export class DefensiveComponent {
   readonly showMap = input<boolean>(false);
   /** Clip button is available once the page's rolling buffer covers this fight. */
   readonly showClip = input<boolean>(false);
-  readonly fightDuration = input<number>(0);
 
   readonly openMap = output<DefensiveMapAnchor>();
   readonly openClip = output<ClipAnchor>();

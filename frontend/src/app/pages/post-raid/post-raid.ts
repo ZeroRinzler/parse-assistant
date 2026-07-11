@@ -295,10 +295,6 @@ export class PostRaidComponent {
   protected readonly selectedEncounterId = computed(() =>
     this.fights().find(f => f.id === this.selectedFightId())?.encounterID ?? 0);
 
-  /** Duration of the selected fight, for the defensive window time axis. */
-  protected readonly selectedFightDuration = computed(() =>
-    this.fights().find(f => f.id === this.selectedFightId())?.duration_s ?? 0);
-
   /** The cards render once a spec, fight, player and encounter are all resolved. */
   protected readonly ready = computed(() =>
     !!this.spec() && !!this.reportCode() && !!this.selectedFightId() && !!this.selectedPlayerId() && !!this.selectedEncounterId());
