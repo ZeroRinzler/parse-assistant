@@ -21,7 +21,6 @@
                 </span>
               }
             </mat-select-trigger>
-            <mat-option value="">- select class -</mat-option>
             @for (c of classes(); track c.className) {
               <mat-option [value]="c.className">
                 <span class="flex items-center gap-2">
@@ -45,7 +44,6 @@
                   </span>
                 }
               </mat-select-trigger>
-              <mat-option value="">- select spec -</mat-option>
               @for (m of specsForSelectedClass(); track m.spec) {
                 <mat-option [value]="m.spec">
                   <span class="flex items-center gap-2">
@@ -71,7 +69,6 @@
                 </span>
               }
             </mat-select-trigger>
-            <mat-option [value]="0">- select encounter -</mat-option>
             @for (e of encounters(); track e.id) {
               <mat-option [value]="e.id">
                 <span class="flex items-center gap-2">
