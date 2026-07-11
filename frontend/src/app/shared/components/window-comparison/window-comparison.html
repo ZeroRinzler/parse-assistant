@@ -27,6 +27,14 @@
           <div class="absolute left-0 right-0 top-0 h-[42px] md:h-9 rounded-lg bg-[var(--bg)] border border-[var(--border)]" aria-hidden="true"></div>
 
           @for (w of windows(); track $index; let i = $index) {
+            <!-- Per-status tint/border/text: opacity modifiers use color-mix(oklab), matching the token blend. -->
+            @let segTone =
+              w.status === 'good' ? 'bg-[var(--success)]/55 border border-[var(--success)] text-[var(--success)]' :
+              w.status === 'warn' ? 'bg-[var(--warning)]/55 border border-[var(--warning)] text-[var(--warning)]' :
+              w.status === 'bad' ? 'bg-[var(--critical)]/55 border border-[var(--critical)] text-[var(--critical)]' :
+              w.status === 'info' ? 'bg-[var(--info)]/15 border border-[var(--info)]/50 text-[var(--info)]' :
+              w.status === 'muted' && w.statusIcon === 'schedule' ? 'border border-dashed border-[var(--border)] text-[var(--muted)]' :
+              w.status === 'muted' ? 'bg-[var(--critical)]/10 border border-dashed border-[var(--critical)]/40 text-[var(--muted)]' : '';
             <div
               class="absolute top-0 flex flex-col items-center -translate-x-1/2"
               [style.left.%]="segmentLeftPcts()[i]"
@@ -34,14 +42,7 @@
               <button
                 type="button"
                 role="option"
-                class="flex items-center justify-center w-[42px] h-[42px] md:w-9 md:h-9 rounded"
-                [class.seg-good]="w.status === 'good'"
-                [class.seg-warn]="w.status === 'warn'"
-                [class.seg-bad]="w.status === 'bad'"
-                [class.seg-scheduled]="w.status === 'muted' && w.statusIcon === 'schedule'"
-                [class.seg-missing]="w.status === 'muted' && w.statusIcon !== 'schedule'"
-                [class.seg-info]="w.status === 'info'"
-                [class.seg-active]="activeIndex() === i"
+                [class]="'flex items-center justify-center w-[42px] h-[42px] md:w-9 md:h-9 rounded ' + segTone + (activeIndex() === i ? ' outline outline-2 outline-offset-2 outline-[var(--gold)]' : '')"
                 [attr.aria-selected]="activeIndex() === i"
                 [attr.aria-label]="(w.timeStartS | formatDuration)"
                 (click)="select(i)">
@@ -64,16 +65,17 @@
 
   <!-- Detail panel: driven by activeIndex(), inside the same card. -->
   @if (activeWindow(); as w) {
+    <!-- Status fill color, shared by the header dot and the overview bar player fill. -->
+    @let fillBg =
+      w.status === 'good' ? 'bg-[var(--success)]' :
+      w.status === 'warn' ? 'bg-[var(--warning)]' :
+      w.status === 'bad' ? 'bg-[var(--critical)]' :
+      w.status === 'muted' ? 'bg-[var(--muted)]' : 'bg-[var(--info)]';
 
     <!-- Header: status dot · window title · spell icons, then a meta group (map + value/delta).
          The title never wraps; the meta group drops to its own line on mobile and sits right at md. -->
     <div class="flex flex-wrap items-center gap-2 px-4 py-2.5 bg-[var(--surface)] border-t border-[var(--border)]">
-      <span class="w-2.5 h-2.5 rounded-full shrink-0"
-        [class.fill-success]="w.status === 'good'"
-        [class.fill-warning]="w.status === 'warn'"
-        [class.fill-critical]="w.status === 'bad'"
-        [class.fill-muted]="w.status === 'muted'"
-        [class.fill-info]="w.status === 'info'"></span>
+      <span [class]="'w-2.5 h-2.5 rounded-full shrink-0 ' + fillBg"></span>
       <span class="text-sm font-medium whitespace-nowrap">
         Window {{ activeIndex() + 1 }} - {{ w.timeStartS | formatDuration }} to {{ w.timeEndS | formatDuration }}
       </span>
@@ -121,12 +123,7 @@
       <div class="px-4 py-2 border-t border-[var(--border)]">
         <div class="relative h-5 rounded bg-[var(--bg)]" aria-hidden="true">
           @if (overviewPlayerWidthPct() !== null) {
-            <div class="absolute inset-y-0 left-0 rounded opacity-[0.65]"
-              [class.fill-success]="w.status === 'good'"
-              [class.fill-warning]="w.status === 'warn'"
-              [class.fill-critical]="w.status === 'bad'"
-              [class.fill-muted]="w.status === 'muted'"
-              [class.fill-info]="w.status === 'info'"
+            <div [class]="'absolute inset-y-0 left-0 rounded opacity-[0.65] ' + fillBg"
               [style.width.%]="overviewPlayerWidthPct()"></div>
           }
           @if (overviewRangeLeftPct() !== null) {
