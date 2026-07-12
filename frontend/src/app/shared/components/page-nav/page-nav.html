@@ -30,7 +30,7 @@
                [mode]="sidenavMode()" [opened]="sidenavOpened()"
                (openedChange)="onOpenedChange($event)">
     <div class="flex flex-col h-full py-2">
-      <div class="flex-1 px-2">
+      <div class="flex-1 px-3">
         <mat-nav-list>
           <a mat-list-item routerLink="/pre" routerLinkActive #pre="routerLinkActive"
              [activated]="pre.isActive" (click)="onNavigate()" aria-label="Pre-Fight"
@@ -52,7 +52,7 @@
         </mat-nav-list>
       </div>
 
-      <div class="px-2 pt-1">
+      <div class="px-3 pt-1">
         <mat-nav-list>
           <a mat-list-item [href]="githubUrl" target="_blank" rel="noopener noreferrer"
              aria-label="View on GitHub"
