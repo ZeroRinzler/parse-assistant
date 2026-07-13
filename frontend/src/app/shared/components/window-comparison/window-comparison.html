@@ -11,17 +11,17 @@
     </div>
   }
 
-  <!-- Timeline track: equal fixed chips on one scrolling row. Chip size is decoupled
+  <!-- Timeline track: equal fixed chips wrapping across rows. Chip size is decoupled
        from fight time, so windows never overlap however tightly they fire; dashed
        half-width slots between chips stand in for the pause before the next window. -->
   <div class="px-4" [class.pt-3]="!heading()" [class.pb-3]="!activeWindow()">
     <div
-      class="overflow-x-auto pt-2 pb-1"
+      class="pt-2 pb-1"
       role="listbox"
       tabindex="0"
       [attr.aria-label]="heading()"
       (keydown)="onKeydown($event)">
-      <div class="flex items-start gap-1.5 w-max px-0.5">
+      <div class="flex flex-wrap items-start gap-1.5 px-0.5">
         @for (cell of timelineCells(); track cell.kind === 'window' ? 'w' + cell.index : 'g' + cell.id) {
           @if (cell.kind === 'gap') {
             <!-- Pacing slot: half-width dashed placeholder, no interaction. The hidden
