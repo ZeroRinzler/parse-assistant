@@ -431,6 +431,8 @@ export class PostRaidComponent {
 
       const latest = this.fights()[this.fights().length - 1];
       if (!latest) { this.liveCapture.setStatus('No boss pulls found.'); return; }
+      // A poll that lands a pull clears the zero-pull notice from the initial empty load.
+      this.notice.set('');
 
       const currentName = this.players().find(player => player.id === this.selectedPlayerId())?.name ?? null;
       const visible = visiblePlayersOf(this.fights(), this.players(), latest.id);
