@@ -11,6 +11,8 @@ const ENCHANTED_SLOT = 15;
 const TRINKET_A_ID = 200;
 const TRINKET_B_ID = 201;
 const ENCHANT_ID = 8041;
+// WCL emits {id: 0} for an unfilled gear slot.
+const EMPTY_SLOT_ID = 0;
 
 describe('TRINKET_SLOTS', () => {
   it('is the two WCL trinket slot indices, in slot order', () => {
@@ -69,6 +71,13 @@ describe('extractGear', () => {
 
     expect(extractGear(gear).trinkets).toEqual([]);
     expect(extractGear(undefined)).toEqual({ trinkets: [], enchants: [] });
+  });
+
+  it('skips an empty trinket slot (WCL id 0) so the downstream !player branch fires', () => {
+    const gear: WclGearItem[] = Array(16).fill(null);
+    gear[TRINKET_1_SLOT] = { id: EMPTY_SLOT_ID, name: '', icon: '' };
+
+    expect(extractGear(gear).trinkets).toEqual([]);
   });
 });
 

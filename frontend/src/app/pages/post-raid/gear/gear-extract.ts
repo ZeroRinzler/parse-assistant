@@ -60,7 +60,7 @@ export function extractGear(gear: WclGearItem[] | undefined): {
   const enchants: NonNullable<CharacterGear['enchants']> = [];
 
   (gear ?? []).forEach((item, slotIndex) => {
-    if (item?.id == null) return;
+    if (!item?.id) return;
     const itemId = typeof item.id === 'string' ? parseInt(item.id, 10) : item.id;
 
     if ((TRINKET_SLOTS as readonly number[]).includes(slotIndex)) {
