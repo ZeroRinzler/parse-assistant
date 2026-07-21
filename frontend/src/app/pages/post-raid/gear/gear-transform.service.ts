@@ -113,7 +113,8 @@ export function aggregateTrinkets(parses: ParseGear[]): EncounterGearStats['trin
       if ((TRINKET_SLOTS as readonly number[]).includes(slot) && trinket.id) {
         const slotMap = getOrInsert(trinketCounters, slot, () => new Map<number, number>());
         slotMap.set(trinket.id, (slotMap.get(trinket.id) ?? 0) + 1);
-        if (!trinketNames.has(trinket.id)) trinketNames.set(trinket.id, trinket.name ?? '');
+        // A parse whose name lookup failed stores '', which a later real name replaces.
+        if (!trinketNames.get(trinket.id) && trinket.name) trinketNames.set(trinket.id, trinket.name);
         if (!trinketIcons.has(trinket.id)) trinketIcons.set(trinket.id, trinket.icon);
       }
     }
@@ -146,7 +147,8 @@ export function aggregateEnchants(parses: ParseGear[]): EncounterGearStats['ench
       if (slot != null && enchant.id) {
         const slotMap = getOrInsert(enchantCounters, slot, () => new Map<number, number>());
         slotMap.set(enchant.id, (slotMap.get(enchant.id) ?? 0) + 1);
-        if (!enchantNames.has(enchant.id)) enchantNames.set(enchant.id, enchant.name ?? '');
+        // A parse whose name lookup failed stores '', which a later real name replaces.
+        if (!enchantNames.get(enchant.id) && enchant.name) enchantNames.set(enchant.id, enchant.name);
       }
     }
   }

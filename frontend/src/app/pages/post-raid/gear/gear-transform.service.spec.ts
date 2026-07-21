@@ -108,6 +108,15 @@ describe('aggregateTrinkets', () => {
       gearParse({ trinkets: [{ slot: TRINKET_1_SLOT, id: 100 + i, name: `T${i}`, icon: `t${i}` }] }));
     expect(aggregateTrinkets(parses)[TRINKET_1_SLOT]).toHaveLength(MAX_TRINKETS_PER_SLOT);
   });
+
+  it('replaces a first-seen empty name (failed lookup) with a later real name, count unchanged', () => {
+    const trinkets = aggregateTrinkets([
+      gearParse({ trinkets: [{ slot: TRINKET_1_SLOT, id: 100, name: '', icon: 'inv_a' }] }),
+      gearParse({ trinkets: [{ slot: TRINKET_1_SLOT, id: 100, name: 'A', icon: 'inv_a' }] }),
+    ]);
+    // Both parses ran trinket 100, so pct 100 confirms the empty-name parse still counted.
+    expect(trinkets[TRINKET_1_SLOT]).toEqual([{ id: 100, name: 'A', icon: 'inv_a', pct: 100 }]);
+  });
 });
 
 describe('aggregateEnchants', () => {
@@ -132,6 +141,15 @@ describe('aggregateEnchants', () => {
     const parses = Array.from({ length: MAX_ENCHANTS_PER_SLOT + 1 }, (_, i) =>
       gearParse({ enchants: [{ slot: ENCHANT_SLOT, id: 8041 + i, name: `E${i}` }] }));
     expect(aggregateEnchants(parses)[ENCHANT_SLOT]).toHaveLength(MAX_ENCHANTS_PER_SLOT);
+  });
+
+  it('replaces a first-seen empty name (failed lookup) with a later real name, count unchanged', () => {
+    const enchants = aggregateEnchants([
+      gearParse({ enchants: [{ slot: ENCHANT_SLOT, id: 8041, name: '' }] }),
+      gearParse({ enchants: [{ slot: ENCHANT_SLOT, id: 8041, name: 'Soph' }] }),
+    ]);
+    // Both parses ran enchant 8041, so pct 100 confirms the empty-name parse still counted.
+    expect(enchants[ENCHANT_SLOT]).toEqual([{ id: 8041, name: 'Soph', pct: 100 }]);
   });
 });
 
