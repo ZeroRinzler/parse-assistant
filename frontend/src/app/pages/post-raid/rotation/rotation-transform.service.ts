@@ -203,7 +203,7 @@ export function buildCdBenchmark(entries: CdSummary[], effectiveCd: number): Per
     avg_uses_per_min: upmList.length ? round((mean(upmList) ?? 0), 2) : 0,
     uses_per_min: usesPerMin,
     bl_pct: entries.length ? Math.round((blCount / entries.length) * 100) : 0,
-    majority_hold: entries.filter(entry => entry.cast_pattern === 'hold').length > entries.length * 0.5,
+    majority_hold: entries.filter(entry => entry.cast_pattern === 'hold').length >= entries.length * HOLD_CONSENSUS_FRAC,
     hold_targets: buildHoldTargets(entries, effectiveCd),
   };
 }

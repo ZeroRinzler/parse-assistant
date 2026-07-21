@@ -102,6 +102,10 @@ describe('buildCdBenchmark', () => {
     name: 'Shadow Blades', total_uses: uses, first_cast_s: firstCast, bl_aligned: blAligned, bl_offset_s: blOffset,
     cast_times_s: times, hold_windows: [], cast_pattern: 'on_cooldown', fight_duration_s: dur,
   });
+  const withHolders = (holding: number, total: number): CdSummary[] => [
+    ...Array.from({ length: holding }, () => ({ ...entry(0, 1, 200, null, false, [0]), cast_pattern: 'hold' as const })),
+    ...Array.from({ length: total - holding }, () => entry(0, 1, 200, null, false, [0])),
+  ];
 
   it('rolls first cast, gaps, BL offset and uses/min across parses', () => {
     const bench = buildCdBenchmark([
@@ -135,6 +139,18 @@ describe('buildCdBenchmark', () => {
     expect(bench.avg_gap_s).toBeNull();
     expect(bench.avg_bl_offset_s).toBeNull();
     expect(bench.bl_pct).toBe(0);
+  });
+
+  it('sets majority_hold at an exact consensus tie, aligning it with hold_targets', () => {
+    const TOTAL_PARSES = 10;
+    const HOLDERS_AT_TIE = 5;  // exactly HOLD_CONSENSUS_FRAC of 10 -> the consensus boundary is inclusive
+    expect(buildCdBenchmark(withHolders(HOLDERS_AT_TIE, TOTAL_PARSES), 90).majority_hold).toBe(true);
+  });
+
+  it('clears majority_hold when fewer than the consensus fraction hold', () => {
+    const TOTAL_PARSES = 10;
+    const HOLDERS_BELOW = 4;  // below HOLD_CONSENSUS_FRAC of 10
+    expect(buildCdBenchmark(withHolders(HOLDERS_BELOW, TOTAL_PARSES), 90).majority_hold).toBe(false);
   });
 });
 
