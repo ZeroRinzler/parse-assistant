@@ -220,6 +220,28 @@ describe('buildTrinketRows', () => {
     expect(rows[1]).toMatchObject({ status: 'info', note: "Switch to Algeth'ar Puzzle Box (55%)" });
   });
 
+  it('suggests the remaining trinket when the player wears one recommendation in both slots', () => {
+    // A recommendation is consumed by at most one slot: the same top pick worn in both
+    // trinket slots yields one on-plan row plus a switch to the other bench trinket, never
+    // two on-plan rows that silently drop the second recommendation.
+    const rows = buildTrinketRows(
+      gear({
+        trinkets: [
+          { slot: 12, id: 249343, name: 'Gaze of the Alnseer' },
+          { slot: 13, id: 249343, name: 'Gaze of the Alnseer' },
+        ],
+      }),
+      benchStats,
+    );
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({ slotLabel: 'Trinket 1', id: 249343, status: 'ok', note: null });
+    expect(rows[1]).toMatchObject({
+      slotLabel: 'Trinket 2',
+      status: 'info',
+      note: "Switch to Algeth'ar Puzzle Box (50%)",
+    });
+  });
+
   it('surfaces the top recommendation when the player has no trinket in a slot', () => {
     const rows = buildTrinketRows(
       gear({ trinkets: [{ slot: 12, id: 193701, name: "Algeth'ar Puzzle Box" }] }),

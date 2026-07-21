@@ -194,6 +194,7 @@ export function buildTrinketRows(gear: CharacterGear, stats: EncounterGearStats 
   const wornIds = new Set(playerTrinkets.map(trinket => trinket.id));
   const remainingRecs = pair.filter(rec => !wornIds.has(rec.id));
   let recIndex = 0;
+  const claimedRecIds = new Set<number>();
 
   for (const slot of [12, 13]) {
     const label = slotName(slot);
@@ -209,10 +210,12 @@ export function buildTrinketRows(gear: CharacterGear, stats: EncounterGearStats 
       continue;
     }
 
-    if (wornIds.has(player.id) && pair.some(rec => rec.id === player.id)) {
-      // Player wears one of the two recommended trinkets; this slot is optimal.
+    const matchedRec = pair.find(rec => rec.id === player.id && !claimedRecIds.has(rec.id));
+    if (matchedRec) {
+      // Claim the matched recommendation so a duplicate slot is compared against what remains.
+      claimedRecIds.add(matchedRec.id);
       rows.push({ slotLabel: label, id: player.id, name: player.name, icon: player.icon ?? '',
-        status: 'ok', topPct: pair.find(rec => rec.id === player.id)!.pct, note: null });
+        status: 'ok', topPct: matchedRec.pct, note: null });
       continue;
     }
 
