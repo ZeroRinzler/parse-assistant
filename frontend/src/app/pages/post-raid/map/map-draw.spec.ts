@@ -14,8 +14,29 @@ describe('positionAt', () => {
     { t: 10, x: 100, y: 0 },
   ]);
 
+  const crossMap = timeline([
+    { t: 0, x: 0, y: 0, facing: 1, mapID: 1 },
+    { t: 10, x: 100, y: 0, facing: 2, mapID: 2 },
+  ]);
+
   it('interpolates between samples', () => {
     expect(positionAt(tl, 5)).toMatchObject({ x: 50, y: 0 });
+  });
+
+  it('interpolates within a shared mapID', () => {
+    const sameMap = timeline([{ t: 0, x: 0, y: 0, mapID: 5 }, { t: 10, x: 100, y: 0, mapID: 5 }]);
+    expect(positionAt(sameMap, 5)).toMatchObject({ x: 50, y: 0, mapID: 5 });
+  });
+
+  it('snaps to the near sample across a mapID change instead of blending void coordinates', () => {
+    // t=4 sits below the 0..10 midpoint, so the pair straddling a map swap resolves to the `before` sample.
+    expect(positionAt(crossMap, 4)).toMatchObject({ x: 0, y: 0, facing: 1, mapID: 1 });
+  });
+
+  it('snaps to the far sample once past the midpoint of a mapID change', () => {
+    // t=6 is past the midpoint and t=5 lands exactly on it; both take the `after` sample's map and coordinates.
+    expect(positionAt(crossMap, 6)).toMatchObject({ x: 100, y: 0, facing: 2, mapID: 2 });
+    expect(positionAt(crossMap, 5)).toMatchObject({ x: 100, mapID: 2 });
   });
 
   it('clamps at the ends within tolerance', () => {
@@ -45,6 +66,11 @@ describe('toReferenceLocal', () => {
   it('reports distance regardless of orientation', () => {
     const rel = toReferenceLocal({ t: 0, x: 3, y: 4 }, { t: 0, x: 0, y: 0, facing: 1.2 });
     expect(rel.dist).toBeCloseTo(5, 6);
+  });
+
+  it('carries the player sample mapID so a trail can break its line at a map swap', () => {
+    const rel = toReferenceLocal({ t: 0, x: 5, y: 0, mapID: 4 }, { t: 0, x: 0, y: 0, mapID: 4 });
+    expect(rel.mapID).toBe(4);
   });
 });
 

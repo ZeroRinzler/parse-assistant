@@ -241,7 +241,10 @@ export class MapCanvasComponent {
     ctx.strokeStyle = muted; ctx.globalAlpha = 0.25; ctx.lineWidth = 1.5;
     for (const trail of benchTrails) {
       ctx.beginPath();
-      trail.forEach((point, index) => { const [x, y] = toScreen(point); if (index) ctx.lineTo(x, y); else ctx.moveTo(x, y); });
+      trail.forEach((point, index) => {
+        const [x, y] = toScreen(point);
+        if (index && point.mapID === trail[index - 1].mapID) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+      });
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
@@ -258,7 +261,10 @@ export class MapCanvasComponent {
     if (liveTrail.length) {
       ctx.strokeStyle = gold; ctx.globalAlpha = 0.5; ctx.lineWidth = 2;
       ctx.beginPath();
-      liveTrail.forEach((point, index) => { const [x, y] = toScreen(point); if (index) ctx.lineTo(x, y); else ctx.moveTo(x, y); });
+      liveTrail.forEach((point, index) => {
+        const [x, y] = toScreen(point);
+        if (index && point.mapID === liveTrail[index - 1].mapID) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+      });
       ctx.stroke(); ctx.globalAlpha = 1;
     }
     // Live player current position at the scrubbed moment.

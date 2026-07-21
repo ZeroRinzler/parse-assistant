@@ -23,6 +23,8 @@ export interface RelPos {
   dist: number;
   /** Clock angle around the reference, degrees (0 = directly in front). */
   angleDeg: number;
+  /** The map this relative frame sits on; a trail draws no segment where it changes. */
+  mapID?: number;
 }
 
 /** Shortest signed angular difference b - a, radians, in (-pi, pi]. */
@@ -58,19 +60,20 @@ export function positionAt(timeline: ActorTimeline | undefined, t: number, toler
   const before = samples[lo - 1];
   const span = after.t - before.t;
   const fraction = span > 0 ? (t - before.t) / span : 0;
+  // Coordinates only compare within one mapID, so a bracket straddling a map swap snaps to the nearer sample.
+  if (before.mapID !== after.mapID) return { ...(fraction < 0.5 ? before : after), t };
   let facing: number | undefined;
   if (before.facing != null && after.facing != null) {
     facing = before.facing + angleDelta(before.facing, after.facing) * fraction;
   } else {
     facing = before.facing ?? after.facing;
   }
-  const mapID = fraction < 0.5 ? before.mapID : after.mapID;
   return {
     t,
     x: before.x + (after.x - before.x) * fraction,
     y: before.y + (after.y - before.y) * fraction,
     facing,
-    mapID,
+    mapID: before.mapID,
   };
 }
 
@@ -88,7 +91,7 @@ export function toReferenceLocal(player: PosSample, ref: PosSample, t = 0): RelP
   const right = dx * sin - dy * cos;
   const dist = Math.hypot(dx, dy);
   const angleDeg = (Math.atan2(right, fwd) * 180) / Math.PI;
-  return { t, fwd, right, dist, angleDeg };
+  return { t, fwd, right, dist, angleDeg, mapID: player.mapID };
 }
 
 /** Build an actor timeline from stored position rows (scaling raw units to yards/radians). */
