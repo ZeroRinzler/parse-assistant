@@ -7,7 +7,7 @@ import { ClipAnchor } from '../../../core/models/capture.models';
 import { logWarn } from '../../../core/log';
 import { Result, LoadError, ok } from '../../../core/result';
 import { toLoadError } from '../../../core/http-load-error';
-import { windowSpells } from '../../../shared/analysis/wcl-projections';
+import { normalizeAbilityId, windowSpells } from '../../../shared/analysis/wcl-projections';
 import { BURST_DATA_SOURCE } from './burst-data-source';
 
 export type AbilityIcons = Record<number, { icon: string; name: string }>;
@@ -141,7 +141,10 @@ function playerWindowAggregate(
   const winTotal = winEvents.reduce((sum, event) => sum + eventDamage(event), 0);
   const byAbility: Record<number, number> = {};
   for (const event of winEvents) {
-    if (event.abilityGameID) byAbility[event.abilityGameID] = (byAbility[event.abilityGameID] || 0) + eventDamage(event);
+    if (!event.abilityGameID) continue;
+    // Match the bench breakdown's normalized spell_id keys so the detail-row join hits.
+    const spellId = normalizeAbilityId(event.abilityGameID);
+    byAbility[spellId] = (byAbility[spellId] || 0) + eventDamage(event);
   }
   const castsByName = new Map<string, number>();
   for (const event of casts) {

@@ -12,6 +12,15 @@ import {
 } from './burst.service';
 import { SHADOW_BLADES, SHADOW_BLADES_DAMAGE } from '../../../../testing/spell-ids';
 import { cast, damage } from '../../../../testing/builders/events';
+import { WCL_MELEE_EVENT_ABILITY_ID, WOW_AUTO_ATTACK_SPELL_ID, WCL_SYNTHETIC_SOURCE_FALLBACK_ID } from '../../../shared/analysis/wcl-projections';
+
+// A melee auto-attack (event id 1) folds onto Auto Attack; two distinct synthetic negatives fold onto
+// the "I Don't Know" fallback. Each raw hit carries this much damage.
+const MELEE_HIT = 300;
+const SYNTHETIC_HIT = 100;
+// Two distinct negative ids WCL synthesizes for sourceless events; both normalize to the fallback spell.
+const PET_MELEE_ID = -32;
+const ENVIRONMENTAL_ID = -7;
 
 describe('burstWindowStatus', () => {
   // topAvg 1000, topMin 800, stddev 100 -> bad below 700, warn below 900.
@@ -65,6 +74,37 @@ describe('burstDetailRows', () => {
     const rows = burstDetailRows(breakdown, null, {});
     expect(rows[0].label).toBe(`Ability #${SHADOW_BLADES_DAMAGE}`);
     expect(rows[0].icon).toBe('');
+  });
+
+  it('joins the player normalized melee and synthetic damage onto the bench auto-attack and fallback rows', () => {
+    const window: BurstWindow = {
+      time_s: 10, window_length_s: 20, dmg_avg: 0, dmg_min: 0, dmg_max: 0, dmg_stddev: 0, common_cds: [], ability_breakdown: [],
+    };
+    const [playerWindow] = findPlayerBurstWindows(
+      [window],
+      [
+        damage(WCL_MELEE_EVENT_ABILITY_ID, 12, MELEE_HIT),
+        damage(WCL_MELEE_EVENT_ABILITY_ID, 15, MELEE_HIT),
+        damage(PET_MELEE_ID, 13, SYNTHETIC_HIT),
+      ],
+      [],
+      0,
+      new Map(),
+    );
+    const benchBreakdown = [
+      { spell_id: WOW_AUTO_ATTACK_SPELL_ID, avg_damage: 500, min_damage: 400, max_damage: 800, count: 5, avg_casts: 0 },
+      { spell_id: WCL_SYNTHETIC_SOURCE_FALLBACK_ID, avg_damage: 200, min_damage: 100, max_damage: 300, count: 5, avg_casts: 0 },
+    ];
+    const abilities = {
+      [WOW_AUTO_ATTACK_SPELL_ID]: { icon: 'aa', name: 'Auto Attack' },
+      [WCL_SYNTHETIC_SOURCE_FALLBACK_ID]: { icon: 'idk', name: 'Synthetic' },
+    };
+    const rows = burstDetailRows(benchBreakdown, playerWindow, abilities);
+    const melee = rows.find(row => row.spellId === WOW_AUTO_ATTACK_SPELL_ID)!;
+    expect(melee.playerPct).toBe(2 * MELEE_HIT);
+    expect(melee.playerCasts).toBe(0);
+    const synthetic = rows.find(row => row.spellId === WCL_SYNTHETIC_SOURCE_FALLBACK_ID)!;
+    expect(synthetic.playerPct).toBe(SYNTHETIC_HIT);
   });
 });
 
@@ -133,6 +173,26 @@ describe('findPlayerBurstWindows', () => {
     );
     expect(out[0].window_damage).toBe(1000);
     expect(out[0].ability_breakdown![0]).toMatchObject({ spell_id: SHADOW_BLADES_DAMAGE, damage: 1000 });
+  });
+
+  it('folds synthetic damage ids onto their normalized spells, summing raw ids that collapse together', () => {
+    const out = findPlayerBurstWindows(
+      [window],
+      [
+        damage(WCL_MELEE_EVENT_ABILITY_ID, 12, MELEE_HIT),
+        damage(WCL_MELEE_EVENT_ABILITY_ID, 15, MELEE_HIT),
+        damage(PET_MELEE_ID, 13, SYNTHETIC_HIT),
+        damage(ENVIRONMENTAL_ID, 16, SYNTHETIC_HIT),
+      ],
+      [],
+      0,
+      new Map(),
+    );
+    const breakdown = out[0].ability_breakdown!;
+    expect(breakdown.find(row => row.spell_id === WOW_AUTO_ATTACK_SPELL_ID)?.damage).toBe(2 * MELEE_HIT);
+    expect(breakdown.find(row => row.spell_id === WCL_SYNTHETIC_SOURCE_FALLBACK_ID)?.damage).toBe(2 * SYNTHETIC_HIT);
+    // No raw synthetic id survives as its own row.
+    expect(breakdown.some(row => row.spell_id === WCL_MELEE_EVENT_ABILITY_ID || row.spell_id < 0)).toBe(false);
   });
 
   it('excludes an event at exactly the window end (half-open)', () => {
