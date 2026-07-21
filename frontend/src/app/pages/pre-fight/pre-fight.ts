@@ -127,7 +127,8 @@ export class PreFightComponent implements OnInit {
     this.specControl.setValue('', { emitEvent: true });
     this.selectionStore.savePreFight({ spec: null });
     this.mapFeature.clear();
-    this.encControl.setValue(0, { emitEvent: false });
+    // selectedEncId mirrors valueChanges; emit so the reset closes the encounter-gated cards.
+    this.encControl.setValue(0, { emitEvent: true });
     this.encControl.disable({ emitEvent: false });
     this.encounters.set([]);
     const available = this.specs().map(entry => entry.spec);
@@ -142,7 +143,8 @@ export class PreFightComponent implements OnInit {
     const spec = this.specControl.value;
     this.selectionStore.savePreFight({ spec: spec || null });
     this.mapFeature.clear();
-    this.encControl.setValue(0, { emitEvent: false });
+    // selectedEncId mirrors valueChanges; emit so the reset closes the encounter-gated cards.
+    this.encControl.setValue(0, { emitEvent: true });
     this.encControl.disable({ emitEvent: false });
     this.encounters.set([]);
     if (!spec) return;
