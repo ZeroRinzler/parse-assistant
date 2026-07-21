@@ -11,6 +11,7 @@ const SERVER_PROBE_URL = 'http://localhost:3000/api/dirs/specs';
 const READY_TIMEOUT_MS = 5 * 60_000;
 const READY_POLL_MS = 500;
 const DONE_POLL_MS = 1_000;
+const DONE_TIMEOUT_MS = 15 * 60_000;
 
 const children = [];
 
@@ -84,8 +85,13 @@ async function main() {
   page.on('pageerror', err => console.error(`[app] pageerror: ${err.message}`));
   await page.goto(APP_URL);
 
-  // No timeout: the WCL point budget bounds the run, so it always ends.
-  await page.waitForFunction(() => globalThis.__INGEST_DONE__, undefined, { timeout: 0, polling: DONE_POLL_MS });
+  // Bound the wait so a bootstrap failure fails fast instead of hanging the job and stalling the shared gh-pages group.
+  try {
+    await page.waitForFunction(() => globalThis.__INGEST_DONE__, undefined, { timeout: DONE_TIMEOUT_MS, polling: DONE_POLL_MS });
+  } catch {
+    console.error(`[harness] ingestion did not signal completion within ${DONE_TIMEOUT_MS / 60_000} minutes`);
+    await shutdown(1);
+  }
   const summary = await page.evaluate(() => globalThis.__INGEST_DONE__);
 
   if (summary.fatal) {
