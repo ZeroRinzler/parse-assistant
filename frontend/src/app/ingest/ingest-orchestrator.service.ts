@@ -21,7 +21,7 @@ import { DefensiveTransformService } from '../pages/post-raid/defensive/defensiv
 import { GearTransformService } from '../pages/post-raid/gear/gear-transform.service';
 import { MapTransformService } from '../pages/post-raid/map/map-transform.service';
 import { environment } from '../../environments/environment';
-import { getEncounters } from './wcl-fetchers';
+import { getEncounters, type CurrentContent } from './wcl-fetchers';
 import { mapClassesToSpecMeta, specWclFromMetas, type SpecWclMap } from './wcl-mappers';
 import { type WclQueryClient, BudgetExceededError } from './wcl-client';
 import { INGEST_VERSION } from './ingest-version';
@@ -54,6 +54,12 @@ export interface IngestRunSummary {
 
 function publishSummary(summary: IngestRunSummary): void {
   (globalThis as { __INGEST_DONE__?: IngestRunSummary }).__INGEST_DONE__ = summary;
+}
+
+/** A budget exhaustion at discovery is a clean stop; any other error returns null to propagate as fatal. */
+export function discoveryBudgetSummary(err: unknown): IngestRunSummary | null {
+  if (err instanceof BudgetExceededError) return { succeeded: [], failed: [], budgetStopped: true };
+  return null;
 }
 
 /** Budget-gated `WclQueryClient` over `WclApiService`. */
@@ -136,7 +142,17 @@ export class IngestOrchestratorService {
     console.log(`Resolved ${metas.length} specs from WCL`);
 
     console.log('Resolving current raids...');
-    const { encounters, protectedIds } = await getEncounters(client, specWcl);
+    let discovery: CurrentContent;
+    try {
+      discovery = await getEncounters(client, specWcl);
+    } catch (err) {
+      const budgetSummary = discoveryBudgetSummary(err);
+      if (!budgetSummary) throw err;
+      console.log(`\n[budget] Stopping cleanly at discovery: ${err instanceof Error ? err.message : String(err)}`);
+      publishSummary(budgetSummary);
+      return;
+    }
+    const { encounters, protectedIds } = discovery;
     console.log(`${encounters.length} live encounters`);
 
     let specs: string[];
