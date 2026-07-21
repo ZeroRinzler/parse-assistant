@@ -64,19 +64,19 @@ export function defensivePlanMeta(defensives: RulebookDefensive[]): DefensivePla
   }));
 }
 
-/** Map<spell_id, [[start_s, end_s | null], ...]> from the buff apply/remove stream. */
+/** Map<spell_id, [[startMs, endMs | null], ...]> in fight-relative milliseconds from the buff apply/remove stream. */
 export function buildBuffWindows(buffEvents: WclEvent[], fightStartMs: number): Map<number, [number, number | null][]> {
   const buffWindows = new Map<number, [number, number | null][]>();
   for (const event of buffEvents) {
     const spellId = event.abilityGameID;
     if (spellId == null) continue;
-    const timeS = (event.timestamp - fightStartMs) / 1000;
+    const timeMs = event.timestamp - fightStartMs;
     if (event.type === 'applybuff') {
-      getOrInsert(buffWindows, spellId, () => []).push([timeS, null]);
+      getOrInsert(buffWindows, spellId, () => []).push([timeMs, null]);
     } else if (event.type === 'removebuff') {
       const windows = buffWindows.get(spellId) ?? [];
       for (let i = windows.length - 1; i >= 0; i--) {
-        if (windows[i][1] == null) { windows[i][1] = timeS; break; }
+        if (windows[i][1] == null) { windows[i][1] = timeMs; break; }
       }
     }
   }
@@ -126,7 +126,7 @@ export function summarizeDefensiveCasts(
     const cooldownS = defensive.cooldown;
     const castTimes: number[] = [];
 
-    for (const buffWindow of (buffWindows.get(spellId) ?? [])) castTimes.push(round(buffWindow[0]));
+    for (const buffWindow of (buffWindows.get(spellId) ?? [])) castTimes.push(round(buffWindow[0] / 1000));
 
     if (castTimes.length === 0) {
       for (const cast of castEvents) {
@@ -193,17 +193,18 @@ export function findParseDefensiveWindows(
     .sort((a, b) => a[0] - b[0]);
   if (!hits.length) return [];
   const total = hits.reduce((sum, hit) => sum + hit[1], 0);
+  const fightDurationMs = fightDurationS * 1000;
 
   const result: ParseDefWindow[] = [];
   for (const defensive of defensives) {
     const spellId = defensive.spell_id;
 
     for (const buffWindow of (buffWindows.get(spellId) ?? [])) {
-      const startS = buffWindow[0];
-      const endS = buffWindow[1] != null ? buffWindow[1] : fightDurationS;
-      const startMs = fightStartMs + startS * 1000;
-      const endMs = fightStartMs + endS * 1000;
-      const windowHits = hits.filter(hit => hit[0] >= startMs && hit[0] <= endMs);
+      const startMs = buffWindow[0];
+      const endMs = buffWindow[1] != null ? buffWindow[1] : fightDurationMs;
+      const startTs = fightStartMs + startMs;
+      const endTs = fightStartMs + endMs;
+      const windowHits = hits.filter(hit => hit[0] >= startTs && hit[0] <= endTs);
       const windowDmg = windowHits.reduce((sum, hit) => sum + hit[1], 0);
 
       const ability_breakdown = windowDamageBreakdown(windowHits);
@@ -216,8 +217,8 @@ export function findParseDefensiveWindows(
       const refGameId = topSource != null ? (gameIdByActorId.get(topSource) ?? null) : null;
 
       result.push({
-        time_s: round(startS),
-        window_length_s: round(endS - startS),
+        time_s: round(startMs / 1000),
+        window_length_s: round((endMs - startMs) / 1000),
         window_damage: windowDmg,
         pct_of_total: total > 0 ? windowDmg / total : 0,
         parse_index: 0,

@@ -41,13 +41,15 @@ describe('defensivePlanMeta', () => {
 });
 
 describe('buildBuffWindows', () => {
-  it('pairs apply with the latest open remove', () => {
-    const windows = buildBuffWindows([applyBuff(CLOAK_OF_SHADOWS, 10), removeBuff(CLOAK_OF_SHADOWS, 15)], 0);
-    expect(windows.get(CLOAK_OF_SHADOWS)).toEqual([[10, 15]]);
+  // Spans are carried in raw fight-relative milliseconds; the fixtures take fight-relative seconds.
+  const APPLY_S = 10, REMOVE_S = 15, MS_PER_S = 1000;
+  it('pairs apply with the latest open remove, in raw milliseconds', () => {
+    const windows = buildBuffWindows([applyBuff(CLOAK_OF_SHADOWS, APPLY_S), removeBuff(CLOAK_OF_SHADOWS, REMOVE_S)], 0);
+    expect(windows.get(CLOAK_OF_SHADOWS)).toEqual([[APPLY_S * MS_PER_S, REMOVE_S * MS_PER_S]]);
   });
   it('leaves an unmatched apply open (null end)', () => {
-    const windows = buildBuffWindows([applyBuff(CLOAK_OF_SHADOWS, 10)], 0);
-    expect(windows.get(CLOAK_OF_SHADOWS)).toEqual([[10, null]]);
+    const windows = buildBuffWindows([applyBuff(CLOAK_OF_SHADOWS, APPLY_S)], 0);
+    expect(windows.get(CLOAK_OF_SHADOWS)).toEqual([[APPLY_S * MS_PER_S, null]]);
   });
 });
 
@@ -98,6 +100,18 @@ describe('findParseDefensiveWindows', () => {
     );
     expect(result[0].window_length_s).toBe(290); // 10 -> 300 (fight end), not 10 + duration
     expect(result[0].window_damage).toBe(400);
+  });
+
+  it('includes a hit landing at the exact applybuff millisecond', () => {
+    // A hit at the exact buff-apply ms must count: rebuilding the bound from seconds overshoots (2.007 * 1000 = 2007.0000000000002).
+    const APPLY_MS = 2007;
+    const HIT_DAMAGE = 500;
+    const buffApply = { ...applyBuff(CLOAK_OF_SHADOWS, 0), timestamp: APPLY_MS };
+    const hit = { ...damageTaken(BOSS_HIT, 0, HIT_DAMAGE, { source: BOSS_ACTOR }), timestamp: APPLY_MS };
+    const windows = buildBuffWindows([buffApply], 0);
+    const result = findParseDefensiveWindows([hit], 0, FIGHT_DUR_S, windows, [CLOAK], new Map([[BOSS_ACTOR, BOSS_GAME_ID]]));
+    expect(result).toHaveLength(1);
+    expect(result[0].window_damage).toBe(HIT_DAMAGE);
   });
 });
 
