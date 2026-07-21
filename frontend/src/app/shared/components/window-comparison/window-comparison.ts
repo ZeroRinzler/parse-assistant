@@ -118,7 +118,9 @@ export class WindowComparisonComponent {
     const rows = this.activeWindow()?.detailRows ?? [];
     const higherIsBetter = this.higherIsBetter();
     const loss = (row: RangeRow): number => {
-      const gap = (row.playerPct ?? 0) - (row.topAvg ?? 0);
+      // No player value (an unreached window's breakdown): the loss is the whole top-parse damage.
+      if (row.playerPct == null) return -(row.topAvg ?? 0);
+      const gap = row.playerPct - (row.topAvg ?? 0);
       return higherIsBetter ? gap : -gap; // negative = worse
     };
     return [...rows].sort((a, b) => loss(a) - loss(b));

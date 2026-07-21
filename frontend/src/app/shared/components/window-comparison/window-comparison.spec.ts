@@ -127,9 +127,17 @@ describe('WindowComparisonComponent activeIsMuted', () => {
 });
 
 describe('WindowComparisonComponent activeDetailRows', () => {
-  function winWithRows(rows: RangeRow[]): ComparisonWindow {
-    return { ...win({}), detailRows: rows };
+  function winWithRows(rows: RangeRow[], status: WindowStatus = 'good'): ComparisonWindow {
+    return { ...win({}, status), detailRows: rows };
   }
+
+  // A muted window's breakdown has top-parse damage but no player value; the whole top value is the loss.
+  const SMALL_TOP_DAMAGE = 40_000;
+  const LARGE_TOP_DAMAGE = 900_000;
+  const mutedNullRows = (): RangeRow[] => [
+    { label: 'small', icon: '', playerPct: null, topAvg: SMALL_TOP_DAMAGE, topMin: null, topMax: null },
+    { label: 'large', icon: '', playerPct: null, topAvg: LARGE_TOP_DAMAGE, topMin: null, topMax: null },
+  ];
 
   it('sorts rows by gap ascending (biggest loss first) when higherIsBetter', () => {
     const rows: RangeRow[] = [
@@ -153,6 +161,20 @@ describe('WindowComparisonComponent activeDetailRows', () => {
     (vm['select'] as (i: number) => void)(0);
     const sorted = (vm['activeDetailRows'] as () => RangeRow[])();
     expect(sorted.map(r => r.label)).toEqual(['B', 'A', 'C']);
+  });
+
+  it('ranks null-player rows (muted window) by top damage biggest-first when lower is better', () => {
+    const { vm } = mountVm(WindowComparisonComponent, { windows: [winWithRows(mutedNullRows(), 'muted')], higherIsBetter: false });
+    (vm['select'] as (i: number) => void)(0);
+    const sorted = (vm['activeDetailRows'] as () => RangeRow[])();
+    expect(sorted.map(r => r.label)).toEqual(['large', 'small']);
+  });
+
+  it('ranks null-player rows by top damage biggest-first when higher is better too', () => {
+    const { vm } = mountVm(WindowComparisonComponent, { windows: [winWithRows(mutedNullRows(), 'muted')], higherIsBetter: true });
+    (vm['select'] as (i: number) => void)(0);
+    const sorted = (vm['activeDetailRows'] as () => RangeRow[])();
+    expect(sorted.map(r => r.label)).toEqual(['large', 'small']);
   });
 });
 
