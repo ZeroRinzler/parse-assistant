@@ -4,7 +4,7 @@ import { Pipe, PipeTransform } from '@angular/core';
 @Pipe({ name: 'formatDamage' })
 export class FormatDamagePipe implements PipeTransform {
   transform(value: number | null | undefined): string {
-    if (!value) return '';
+    if (value == null) return '';
     if (value >= 1e6 || Math.round(value / 1e3) >= 1000) return `${(value / 1e6).toFixed(1)}M`;
     if (value >= 1e3) return `${Math.round(value / 1e3)}K`;
     return String(Math.round(value));

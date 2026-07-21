@@ -5,9 +5,9 @@ const pipe = new FormatDamagePipe();
 
 describe('FormatDamagePipe', () => {
   it.each([
-    { input: null,        expected: '',       why: 'null is falsy - no damage to show' },
-    { input: undefined,   expected: '',       why: 'undefined is falsy' },
-    { input: 0,           expected: '',       why: '0 is falsy - intentionally blank rather than "0"' },
+    { input: null,        expected: '',       why: 'null means no measurement to show' },
+    { input: undefined,   expected: '',       why: 'undefined means no measurement to show' },
+    { input: 0,           expected: '0',      why: '0 is a real measurement (a fully immuned window), not absent' },
     { input: 500,         expected: '500',    why: 'sub-1K rounds to integer' },
     { input: 999,         expected: '999',    why: 'just below K threshold' },
     { input: 1_000,       expected: '1K',     why: 'exact lower boundary for the K branch' },
