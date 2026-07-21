@@ -21,6 +21,8 @@ export class HttpWclTransport implements WclTransport {
   // deterministic permission denials land here - a transient error must not stick a
   // usable log as inaccessible.
   private readonly inaccessibleCodes = new Set<string>();
+  // Every code-bearing fetch that failed this run (permission + transient), so the stamp keys on the parses actually used.
+  private readonly failedCodes = new Set<string>();
 
   /** Return + clear the report codes that hit a permission-denied error since the last call. */
   takeInaccessibleCodes(): string[] {
@@ -29,8 +31,16 @@ export class HttpWclTransport implements WclTransport {
     return codes;
   }
 
+  /** Return + clear every report code whose fetch failed since the last call. */
+  takeFailedCodes(): string[] {
+    const codes = [...this.failedCodes];
+    this.failedCodes.clear();
+    return codes;
+  }
+
   async query<TData>(gqlString: string, variables: object, token: string): Promise<TData> {
     const headers: Record<string, string> = { Authorization: `Bearer ${token}`, ...wclCachingHeaders(gqlString) };
+    const code = (variables as { code?: string }).code;
     let body: GraphQLResponse<TData>;
     try {
       body = await firstValueFrom(this.http.post<GraphQLResponse<TData>>(
@@ -40,6 +50,8 @@ export class HttpWclTransport implements WclTransport {
       ));
     } catch (error) {
       if (error instanceof HttpErrorResponse) {
+        // 401 is the auth layer's to retry; any other HTTP error has spent the transient-retry interceptor.
+        if (code && error.status !== 401) this.failedCodes.add(code);
         throw new WclTransportError(`WCL API error (${error.status})`, error.status);
       }
       throw error;
@@ -48,11 +60,14 @@ export class HttpWclTransport implements WclTransport {
     // improves on retry, so it classifies permanent, not transient.
     if (body.errors?.length) {
       const message = body.errors[0]?.message || 'WCL GraphQL error';
-      const code = (variables as { code?: string }).code;
-      if (code && /permission/i.test(message)) this.inaccessibleCodes.add(code);
+      if (code) {
+        this.failedCodes.add(code);
+        if (/permission/i.test(message)) this.inaccessibleCodes.add(code);
+      }
       throw new WclTransportError(message, WCL_UNUSABLE_STATUS);
     }
     if (body.data === undefined) {
+      if (code) this.failedCodes.add(code);
       throw new WclTransportError('WCL response had no data', WCL_UNUSABLE_STATUS);
     }
     return body.data;

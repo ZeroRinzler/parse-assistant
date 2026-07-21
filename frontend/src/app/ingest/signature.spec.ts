@@ -74,7 +74,9 @@ describe('inaccessible-aware skip key', () => {
   // return the stamped signature + the inaccessible key set persisted on the burst file.
   // Codes never fetched (e.g. a parse below the 10th accessible) are naturally pruned.
   const stampAfterCompute = (rows: SignatureRanking[], inaccessibleCodes: string[], n = 10) => {
-    const { signature, inaccessibleParses } = signatureAfterFetch(rows, new Set(inaccessibleCodes), '1', n);
+    // A permission denial is both persisted (inaccessible) and stamp-shaping (failed).
+    const codes = new Set(inaccessibleCodes);
+    const { signature, inaccessibleParses } = signatureAfterFetch(rows, codes, codes, '1', n);
     return { signature, inaccessible_parses: inaccessibleParses };
   };
 
@@ -190,18 +192,30 @@ describe('signatureAfterFetch', () => {
   const VERSION = '1';
   const TOP_N = 3;
 
-  it('maps inaccessible report codes to parse keys and signs the accessible top-N', () => {
+  it('maps permission-denied report codes to parse keys and signs the accessible top-N', () => {
     const rows = pool('a', 'b', 'c', 'd');
-    const result = signatureAfterFetch(rows, new Set(['b']), VERSION, TOP_N);
+    const denied = new Set(['b']);
+    const result = signatureAfterFetch(rows, denied, denied, VERSION, TOP_N);
     expect(result.inaccessibleParses).toEqual(['b:1']);
     expect(result.signature).toBe(encounterSkipKey(rows, new Set(['b:1']), VERSION, TOP_N));
   });
 
   it('returns no inaccessible parses when no code matches the pool', () => {
     const rows = pool('a', 'b', 'c');
-    const result = signatureAfterFetch(rows, new Set(['zzz']), VERSION, TOP_N);
+    const codes = new Set(['zzz']);
+    const result = signatureAfterFetch(rows, codes, codes, VERSION, TOP_N);
     expect(result.inaccessibleParses).toEqual([]);
     expect(result.signature).toBe(encounterSignature(VERSION, pool('a', 'b', 'c')));
+  });
+
+  it('excludes a transient (non-permission) failure from the signature without persisting it', () => {
+    // b failed transiently: it shapes the signature but is not persisted, so a healthy rerun mismatches and re-ingests.
+    const rows = pool('a', 'b', 'c', 'd');
+    const result = signatureAfterFetch(rows, new Set(), new Set(['b']), VERSION, TOP_N);
+    expect(result.inaccessibleParses).toEqual([]);
+    expect(result.signature).toBe(encounterSignature(VERSION, pool('a', 'c', 'd')));
+    // The healthy rerun's cheap check keys on the full top-N (b included), so it differs.
+    expect(encounterSkipKey(rows, new Set(result.inaccessibleParses), VERSION, TOP_N)).not.toBe(result.signature);
   });
 });
 

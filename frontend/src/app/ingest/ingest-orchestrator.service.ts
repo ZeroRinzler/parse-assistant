@@ -332,7 +332,8 @@ export class IngestOrchestratorService {
     ]);
 
     const inaccessibleCodes = new Set(this.wclTransport.takeInaccessibleCodes());
-    const { signature, inaccessibleParses } = signatureAfterFetch(poolRows, inaccessibleCodes, version, TOP_N);
+    const failedCodes = new Set(this.wclTransport.takeFailedCodes());
+    const { signature, inaccessibleParses } = signatureAfterFetch(poolRows, inaccessibleCodes, failedCodes, version, TOP_N);
 
     // Skip on any failure so a slice is never overwritten with partial data.
     const skipNote = (slice: string, error: LoadError): string =>

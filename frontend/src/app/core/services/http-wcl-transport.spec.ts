@@ -16,6 +16,7 @@ const REPORT_CODE = 'AbCdEfGh12345678';
 const TOKEN = 'token-1';
 const REPORT_DATA = { reportData: { report: { title: 'Weekly clear' } } };
 const UNAUTHORIZED_STATUS = 401;
+const SERVICE_UNAVAILABLE_STATUS = 503;
 const PERMISSION_MESSAGE = 'You do not have permission to view this report.';
 const OTHER_GRAPHQL_MESSAGE = 'Unknown fight id.';
 
@@ -123,7 +124,42 @@ describe('HttpWclTransport', () => {
     httpMock.expectOne(WCL_API_URL).flush({ errors: [{ message: PERMISSION_MESSAGE }] });
     await expect(pending).rejects.toMatchObject({ status: WCL_UNUSABLE_STATUS });
 
+    // A permission denial is both persisted (inaccessible) and stamp-shaping (failed).
+    expect(transport.takeFailedCodes()).toEqual([REPORT_CODE]);
     expect(transport.takeInaccessibleCodes()).toEqual([REPORT_CODE]);
     expect(transport.takeInaccessibleCodes()).toEqual([]);
+  });
+
+  it('records a transient HTTP failure in the failed set, not the inaccessible set', async () => {
+    const { transport, httpMock } = setup();
+
+    const pending = transport.query(QUERY, { code: REPORT_CODE }, TOKEN);
+    httpMock.expectOne(WCL_API_URL)
+      .flush('Unavailable', { status: SERVICE_UNAVAILABLE_STATUS, statusText: 'Service Unavailable' });
+    await expect(pending).rejects.toMatchObject({ name: 'WclTransportError', status: SERVICE_UNAVAILABLE_STATUS });
+
+    expect(transport.takeFailedCodes()).toEqual([REPORT_CODE]);
+    expect(transport.takeInaccessibleCodes()).toEqual([]);
+  });
+
+  it('records a non-permission GraphQL error in the failed set, not the inaccessible set', async () => {
+    const { transport, httpMock } = setup();
+
+    const pending = transport.query(QUERY, { code: REPORT_CODE }, TOKEN);
+    httpMock.expectOne(WCL_API_URL).flush({ errors: [{ message: OTHER_GRAPHQL_MESSAGE }] });
+    await expect(pending).rejects.toMatchObject({ status: WCL_UNUSABLE_STATUS });
+
+    expect(transport.takeFailedCodes()).toEqual([REPORT_CODE]);
+    expect(transport.takeInaccessibleCodes()).toEqual([]);
+  });
+
+  it('does not record a 401 in the failed set (the auth layer retries it)', async () => {
+    const { transport, httpMock } = setup();
+
+    const pending = transport.query(QUERY, { code: REPORT_CODE }, TOKEN);
+    httpMock.expectOne(WCL_API_URL).flush('Unauthorized', { status: UNAUTHORIZED_STATUS, statusText: 'Unauthorized' });
+    await expect(pending).rejects.toMatchObject({ status: UNAUTHORIZED_STATUS });
+
+    expect(transport.takeFailedCodes()).toEqual([]);
   });
 });

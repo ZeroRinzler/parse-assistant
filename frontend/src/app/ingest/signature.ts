@@ -63,17 +63,13 @@ export function encounterSkipKey(
   return encounterSignature(version, usedRows);
 }
 
-/**
- * Derives both the inaccessible parse keys to persist on the burst file and the
- * signature to stamp. `inaccessibleCodes` holds bare report codes (what the transport
- * reports), not `parseKey`s - the conversion happens here, which also prunes codes
- * below the `topN`th accessible parse that no future check will ever fetch.
- */
+/** Persist only permission-denied `inaccessibleCodes`; sign the top-N minus every `failedCodes` fetch, so a backfilled bench is stamped as the set it used. */
 export function signatureAfterFetch(
-  poolRows: SignatureRanking[], inaccessibleCodes: Set<string>, version: string, topN: number,
+  poolRows: SignatureRanking[], inaccessibleCodes: Set<string>, failedCodes: Set<string>, version: string, topN: number,
 ): { signature: string; inaccessibleParses: string[] } {
   const inaccessibleParses = poolRows.filter(row => inaccessibleCodes.has(row.report_code)).map(parseKey);
-  const signature = encounterSkipKey(poolRows, new Set(inaccessibleParses), version, topN);
+  const failedParses = poolRows.filter(row => failedCodes.has(row.report_code)).map(parseKey);
+  const signature = encounterSkipKey(poolRows, new Set(failedParses), version, topN);
   return { signature, inaccessibleParses };
 }
 
