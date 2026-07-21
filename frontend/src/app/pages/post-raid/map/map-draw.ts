@@ -6,7 +6,7 @@
  * only this slice-local module + `MapFeatureService`. Coordinates here are already
  * scaled to yards / radians (the bench rows are scaled by `rowsToTimeline`).
  */
-import { EncounterPositions, ParsePositions, PosRow, ReferenceSelector } from '../../../core/models/positioning.models';
+import { EncounterPositions, ParsePositions, PlayerPosRow, PosRow, ReferenceSelector } from '../../../core/models/positioning.models';
 import { ActorTimeline, PosSample, FACING_OFFSET_RAD } from './map.service';
 
 const RAW_TO_YARDS = 1 / 100;
@@ -94,13 +94,24 @@ export function toReferenceLocal(player: PosSample, ref: PosSample, t = 0): RelP
   return { t, fwd, right, dist, angleDeg, mapID: player.mapID };
 }
 
-/** Build an actor timeline from stored position rows (scaling raw units to yards/radians). */
+/** Build an enemy timeline from stored position rows (scaling raw units to yards/radians). */
 export function rowsToTimeline(id: number, rows: PosRow[]): ActorTimeline {
   const samples: PosSample[] = rows.map(([t, x, y, facing, mapID]) => ({
     t,
     x: x * RAW_TO_YARDS,
     y: y * RAW_TO_YARDS,
     facing: facing == null ? undefined : facing * FACING_TO_RAD,
+    mapID: mapID == null ? undefined : mapID,
+  }));
+  return { id, samples };
+}
+
+/** Build the player timeline from stored [t, x, y, mapID] rows (player rows store no facing). */
+export function playerRowsToTimeline(id: number, rows: PlayerPosRow[]): ActorTimeline {
+  const samples: PosSample[] = rows.map(([t, x, y, mapID]) => ({
+    t,
+    x: x * RAW_TO_YARDS,
+    y: y * RAW_TO_YARDS,
     mapID: mapID == null ? undefined : mapID,
   }));
   return { id, samples };
@@ -131,7 +142,7 @@ export function buildParseTimelines(positions: EncounterPositions, selector: Ref
   for (const parse of positions.parses) {
     const rows = refRows(parse, selector);
     if (!rows) continue;
-    out.push({ player: rowsToTimeline(-1, parse.player), ref: rowsToTimeline(-2, rows) });
+    out.push({ player: playerRowsToTimeline(-1, parse.player), ref: rowsToTimeline(-2, rows) });
   }
   return out;
 }

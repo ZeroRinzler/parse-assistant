@@ -7,7 +7,7 @@ import { DataFileApiService } from '../../../core/services/data-file-api';
 import { missing, transient } from '../../../core/result';
 import {
   MapTransformService,
-  posActorId, collectPositionSamples, resampleTimeline, buildParsePositions, selectBossAndEnemies,
+  posActorId, collectPositionSamples, resampleTimeline, resamplePlayerTimeline, buildParsePositions, selectBossAndEnemies,
   RawPosSample, EnemyMeta, POSITIONS_INTERVAL_S,
 } from './map-transform.service';
 
@@ -117,6 +117,36 @@ describe('resampleTimeline', () => {
   });
 });
 
+describe('resamplePlayerTimeline', () => {
+  it('returns [] for no samples', () => {
+    expect(resamplePlayerTimeline([], 10, 1.5)).toEqual([]);
+  });
+
+  it('emits [t, x, y, mapID] rows with no facing element, lerping within one mapID', () => {
+    const SHARED_MAP = 1;
+    const samples: RawPosSample[] = [
+      { t: 0, x: 0, y: 0, facing: 100, mapID: SHARED_MAP, maxHp: 0 },
+      { t: 3, x: 300, y: 600, facing: 200, mapID: SHARED_MAP, maxHp: 0 },
+    ];
+    const rows = resamplePlayerTimeline(samples, 3, 1.5);
+    expect(rows.map(r => r[0])).toEqual([0, 1.5, 3]);
+    // same mapID: midpoint interpolates x to 150, y to 300; the sampled facing is dropped from the row
+    expect(rows[1]).toEqual([1.5, 150, 300, SHARED_MAP]);
+  });
+
+  it('snaps to the nearest sample across a mapID change, like the enemy resample', () => {
+    const NEAR_MAP = 1;
+    const FAR_MAP = 2;
+    const samples: RawPosSample[] = [
+      { t: 0, x: 0, y: 0, facing: 100, mapID: NEAR_MAP, maxHp: 0 },
+      { t: 3, x: 300, y: 600, facing: 200, mapID: FAR_MAP, maxHp: 0 },
+    ];
+    const rows = resamplePlayerTimeline(samples, 3, 1.5);
+    // mapIDs differ: the midpoint (fraction 0.5 -> after) emits the far sample's own x/y, never the blend (150, 300)
+    expect(rows[1]).toEqual([1.5, 300, 600, FAR_MAP]);
+  });
+});
+
 describe('selectBossAndEnemies', () => {
   // Mirrors the module-private MAX_TRACKED_ENEMIES (kept enemy cap, boss excepted).
   const MAX_TRACKED_ENEMIES = 5;
@@ -206,10 +236,11 @@ describe('buildParsePositions', () => {
     // duration 6s, interval 1.5 -> rows resample at t = 0, 1.5, 3, 4.5, 6 when
     // samples span the fight, so an enemy with samples across the window clears
     // the MIN_ENEMY_SAMPLES (4) resampled-row gate.
+    const PLAYER_FACING = 1500; // sampled on the wire, but player rows store no facing
     const events: WclEvent[] = [
       // player (id 5), not in enemyMeta
-      resEvent({ ts: 0, source: 5, x: 0, y: 0 }),
-      resEvent({ ts: 6000, source: 5, x: 150, y: 0 }),
+      resEvent({ ts: 0, source: 5, x: 0, y: 0, facing: PLAYER_FACING }),
+      resEvent({ ts: 6000, source: 5, x: 150, y: 0, facing: PLAYER_FACING }),
       // boss (id 10) high HP
       resEvent({ ts: 0, source: 10, x: 0, y: 0, maxHp: 9000 }),
       resEvent({ ts: 6000, source: 10, x: 10, y: 0, maxHp: 9000 }),
@@ -227,6 +258,9 @@ describe('buildParsePositions', () => {
     expect(parse.player_name).toBe('Me');
     expect(parse.interval_s).toBe(POSITIONS_INTERVAL_S);
     expect(parse.player.length).toBeGreaterThan(0);
+    // player rows are [t, x, y, mapID]; enemy rows keep facing at index 3
+    expect(parse.player.every(row => row.length === 4)).toBe(true);
+    expect(parse.enemies.every(enemy => enemy.samples.every(row => row.length === 5))).toBe(true);
     const boss = parse.enemies.find(e => e.is_boss);
     expect(boss?.game_id).toBe(100);
     expect(parse.enemies.some(e => e.game_id === 200 && !e.is_boss)).toBe(true);

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { EncounterPositions } from '../../../core/models/positioning.models';
 import { ActorTimeline } from './map.service';
 import {
-  positionAt, toReferenceLocal, rowsToTimeline, topParsePoints, topParseTrails,
+  positionAt, toReferenceLocal, rowsToTimeline, playerRowsToTimeline, topParsePoints, topParseTrails,
   buildParseTimelines, parsePointsAt, parseTrailsOf,
 } from './map-draw';
 
@@ -83,15 +83,25 @@ describe('rowsToTimeline', () => {
   });
 });
 
+describe('playerRowsToTimeline', () => {
+  it('scales [t, x, y, mapID] player rows to yards and leaves facing unset', () => {
+    const tl = playerRowsToTimeline(7, [[1, 250, 500, 3], [2, 0, 0, null]]);
+    expect(tl.id).toBe(7);
+    expect(tl.samples[0]).toEqual({ t: 1, x: 2.5, y: 5, mapID: 3 });
+    expect(tl.samples[0].facing).toBeUndefined();
+    expect(tl.samples[1]).toEqual({ t: 2, x: 0, y: 0, mapID: undefined });
+  });
+});
+
 describe('topParsePoints / topParseTrails', () => {
   const positions: EncounterPositions = {
     spec: 'X', encounter_id: 1, encounter_name: 'E', interval_s: 1.5, sample_count: 2,
     parses: [
       { report_code: 'a', fight_id: 1, player_name: 'P', duration_s: 6, interval_s: 1.5,
-        player: [[0, 500, 0, null, null], [6, 500, 0, null, null]],
+        player: [[0, 500, 0, null], [6, 500, 0, null]],
         enemies: [{ game_id: 100, name: 'Boss', is_boss: true, samples: [[0, 0, 0, null, null], [6, 0, 0, null, null]] }] },
       { report_code: 'b', fight_id: 2, player_name: 'Q', duration_s: 6, interval_s: 1.5,
-        player: [[0, 500, 0, null, null], [6, 500, 0, null, null]],
+        player: [[0, 500, 0, null], [6, 500, 0, null]],
         enemies: [{ game_id: 100, name: 'Boss', is_boss: true, samples: [[0, 0, 0, null, null], [6, 0, 0, null, null]] }] },
     ],
   };
@@ -120,10 +130,10 @@ describe('buildParseTimelines / parsePointsAt / parseTrailsOf', () => {
     spec: 'X', encounter_id: 1, encounter_name: 'E', interval_s: 1.5, sample_count: 2,
     parses: [
       { report_code: 'a', fight_id: 1, player_name: 'P', duration_s: 6, interval_s: 1.5,
-        player: [[0, 500, 0, null, null], [6, 500, 0, null, null]],
+        player: [[0, 500, 0, null], [6, 500, 0, null]],
         enemies: [{ game_id: 100, name: 'Boss', is_boss: true, samples: [[0, 0, 0, null, null], [6, 0, 0, null, null]] }] },
       { report_code: 'b', fight_id: 2, player_name: 'Q', duration_s: 6, interval_s: 1.5,
-        player: [[0, 500, 0, null, null], [6, 500, 0, null, null]],
+        player: [[0, 500, 0, null], [6, 500, 0, null]],
         enemies: [{ game_id: 100, name: 'Boss', is_boss: true, samples: [[0, 0, 0, null, null], [6, 0, 0, null, null]] }] },
     ],
   };

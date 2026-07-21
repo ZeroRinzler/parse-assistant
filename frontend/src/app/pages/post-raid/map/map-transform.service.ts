@@ -13,7 +13,7 @@ import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
 import { WclEvent, WclFight, ParseRanking } from '../../../core/models/wcl.models';
-import { ParsePositions, PosRow } from '../../../core/models/positioning.models';
+import { ParsePositions, PlayerPosRow, PosRow } from '../../../core/models/positioning.models';
 import { logWarn } from '../../../core/log';
 import { Result, LoadError, ok, missing } from '../../../core/result';
 import { toLoadError } from '../../../core/http-load-error';
@@ -75,12 +75,15 @@ export function collectPositionSamples(events: WclEvent[], fightStartMs: number)
   return byActor;
 }
 
-/** Resample to a fixed cadence: [t, x, y, facing, mapID] rows; lerp x/y within a mapID, snap to the nearest sample across a mapID change. */
-export function resampleTimeline(samples: RawPosSample[], durationS: number, intervalS: number): PosRow[] {
+/** One cadence point of the shared resample walk, before row projection. */
+interface CadencePoint { t: number; x: number; y: number; nearest: RawPosSample; }
+
+/** Walk the fixed cadence: lerp x/y within a mapID, snap to the nearest sample across a mapID change. */
+function resamplePoints(samples: RawPosSample[], durationS: number, intervalS: number): CadencePoint[] {
   if (!samples.length) return [];
   const first = samples[0].t;
   const last = samples[samples.length - 1].t;
-  const out: PosRow[] = [];
+  const out: CadencePoint[] = [];
   let idx = 0;
   for (let t = 0; t <= durationS + 1e-6; t += intervalS) {
     if (t < first - intervalS || t > last + intervalS) continue;
@@ -100,12 +103,21 @@ export function resampleTimeline(samples: RawPosSample[], durationS: number, int
         y = nearest.y;
       }
     }
-    out.push([
-      Math.round(t * DECISECONDS_PER_S) / DECISECONDS_PER_S, Math.round(x), Math.round(y),
-      nearest.facing == null ? null : Math.round(nearest.facing), nearest.mapID,
-    ]);
+    out.push({ t: Math.round(t * DECISECONDS_PER_S) / DECISECONDS_PER_S, x: Math.round(x), y: Math.round(y), nearest });
   }
   return out;
+}
+
+/** Resample an enemy timeline to [t, x, y, facing, mapID] rows at the fixed cadence. */
+export function resampleTimeline(samples: RawPosSample[], durationS: number, intervalS: number): PosRow[] {
+  return resamplePoints(samples, durationS, intervalS).map(({ t, x, y, nearest }) => [
+    t, x, y, nearest.facing == null ? null : Math.round(nearest.facing), nearest.mapID,
+  ]);
+}
+
+/** Resample the player timeline to [t, x, y, mapID] rows. Only the reference frame reads facing, so player rows store none. */
+export function resamplePlayerTimeline(samples: RawPosSample[], durationS: number, intervalS: number): PlayerPosRow[] {
+  return resamplePoints(samples, durationS, intervalS).map(({ t, x, y, nearest }) => [t, x, y, nearest.mapID]);
 }
 
 export interface EnemyMeta { gameID: number | null; name: string; }
@@ -179,7 +191,7 @@ export function buildParsePositions(input: ParsePositionInput): ParsePositions {
     player_name: playerName,
     duration_s: Math.round(durationS * DECISECONDS_PER_S) / DECISECONDS_PER_S,
     interval_s: POSITIONS_INTERVAL_S,
-    player: resampleTimeline(playerSamples, durationS, POSITIONS_INTERVAL_S),
+    player: resamplePlayerTimeline(playerSamples, durationS, POSITIONS_INTERVAL_S),
     enemies: kept.map(enemy => ({
       game_id: enemy.meta.gameID ?? null,
       name: enemy.meta.name ?? '',
