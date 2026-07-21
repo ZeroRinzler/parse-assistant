@@ -9,11 +9,13 @@ import {
   DefensiveFeatureService,
   analyzeDefensives, analyzeDefensiveFindings, computePlayerDefensiveWindows,
   defensiveWindowStatus, defensiveMapAnchor, defensiveClipAnchor, defensiveFindingClipAnchor, buildDefensiveWindows, buildDefensivePlanRows,
+  defensiveDetailRows,
   playerCoveredWindow,
   buildDefensiveUsageWindows, analyzeOneDefensive, gapDelayFindings, holdSuggestionFindings,
 } from './defensive.service';
 import { applyBuff, removeBuff, damageTaken, cast } from '../../../../testing/builders/events';
 import { CLOAK_OF_SHADOWS } from '../../../../testing/spell-ids';
+import { WCL_MELEE_EVENT_ABILITY_ID, WOW_AUTO_ATTACK_SPELL_ID, WCL_SYNTHETIC_SOURCE_FALLBACK_ID } from '../../../shared/analysis/wcl-projections';
 import { Result, LoadError, ok, missing, transient } from '../../../core/result';
 
 const CLOAK_META = { name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS, cooldown: 120, duration: 5, usage_rule: 'Use on big hits', talent_gated: false };
@@ -232,6 +234,45 @@ describe('computePlayerDefensiveWindows', () => {
     const out = computePlayerDefensiveWindows(top, [damageTaken(700, 12, 400), damageTaken(701, 14, 100), damageTaken(700, 15, 999)], 0);
     expect(out[0].window_damage).toBe(500); // event at exactly 15 (== end) excluded
     expect(out[0].ability_breakdown![0]).toMatchObject({ spell_id: 700, damage: 400 });
+  });
+
+  it('folds melee and synthetic-negative ability ids to normalized spell ids so the bench detail join resolves', () => {
+    const WIN_START_S = 10;
+    const WIN_LEN_S = 5;
+    const MELEE_HIT_A = 400;
+    const MELEE_HIT_B = 100;
+    const SYNTH_NEG_ID_A = -32;   // WCL synthesizes distinct negative ids for sourceless hits
+    const SYNTH_NEG_ID_B = -45;
+    const SYNTH_HIT_A = 300;
+    const SYNTH_HIT_B = 250;
+    const MELEE_TOTAL = MELEE_HIT_A + MELEE_HIT_B;
+    const SYNTH_TOTAL = SYNTH_HIT_A + SYNTH_HIT_B;
+    // The bench breakdown stores NORMALIZED spell ids, so the player fold must match or the join renders null.
+    const top: BurstWindow[] = [{
+      time_s: WIN_START_S, window_length_s: WIN_LEN_S, dmg_avg: 0, dmg_min: 0, dmg_max: 0, dmg_stddev: 0, common_cds: [],
+      ability_breakdown: [
+        { spell_id: WOW_AUTO_ATTACK_SPELL_ID, avg_damage: 0, min_damage: 0, max_damage: 0, count: 1 },
+        { spell_id: WCL_SYNTHETIC_SOURCE_FALLBACK_ID, avg_damage: 0, min_damage: 0, max_damage: 0, count: 1 },
+      ],
+    }];
+    const [playerWindow] = computePlayerDefensiveWindows(top, [
+      damageTaken(WCL_MELEE_EVENT_ABILITY_ID, WIN_START_S + 1, MELEE_HIT_A),
+      damageTaken(WCL_MELEE_EVENT_ABILITY_ID, WIN_START_S + 2, MELEE_HIT_B),
+      damageTaken(SYNTH_NEG_ID_A, WIN_START_S + 2, SYNTH_HIT_A),
+      damageTaken(SYNTH_NEG_ID_B, WIN_START_S + 3, SYNTH_HIT_B),
+    ], 0);
+
+    const breakdown = playerWindow.ability_breakdown!;
+    expect(breakdown).toContainEqual({ spell_id: WOW_AUTO_ATTACK_SPELL_ID, damage: MELEE_TOTAL });
+    expect(breakdown).toContainEqual({ spell_id: WCL_SYNTHETIC_SOURCE_FALLBACK_ID, damage: SYNTH_TOTAL });
+
+    const abilities = {
+      [WOW_AUTO_ATTACK_SPELL_ID]: { icon: 'melee', name: 'Auto Attack' },
+      [WCL_SYNTHETIC_SOURCE_FALLBACK_ID]: { icon: '', name: 'Unknown Source' },
+    };
+    const rows = defensiveDetailRows(top[0].ability_breakdown, playerWindow, abilities);
+    expect(rows.find(row => row.spellId === WOW_AUTO_ATTACK_SPELL_ID)?.playerPct).toBe(MELEE_TOTAL);
+    expect(rows.find(row => row.spellId === WCL_SYNTHETIC_SOURCE_FALLBACK_ID)?.playerPct).toBe(SYNTH_TOTAL);
   });
 });
 

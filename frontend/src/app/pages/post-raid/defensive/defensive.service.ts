@@ -13,7 +13,7 @@ import { toLoadError } from '../../../core/http-load-error';
 import {
   benchExpectedUses, fmtClock, isOutlierAbove, sortBySeverity,
 } from '../../../shared/analysis/analysis-math';
-import { windowSpells } from '../../../shared/analysis/wcl-projections';
+import { normalizeAbilityId, windowSpells } from '../../../shared/analysis/wcl-projections';
 import {
   DEFENSIVE_DATA_SOURCE, DefensiveBench, DefensivePlanMeta, BakedAbility,
 } from './defensive-data-source';
@@ -259,7 +259,9 @@ export function computePlayerDefensiveWindows(topDefWindows: BurstWindow[], dtEv
     const winTotal = winEvents.reduce((sum, event) => sum + dmgOf(event), 0);
     const byAbility: Record<number, number> = {};
     for (const event of winEvents) {
-      if (event.abilityGameID) byAbility[event.abilityGameID] = (byAbility[event.abilityGameID] || 0) + dmgOf(event);
+      if (!event.abilityGameID) continue;
+      const spellId = normalizeAbilityId(event.abilityGameID);
+      byAbility[spellId] = (byAbility[spellId] || 0) + dmgOf(event);
     }
     const ability_breakdown = Object.entries(byAbility)
       .sort((a, b) => b[1] - a[1])
