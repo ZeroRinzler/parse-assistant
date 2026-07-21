@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input, linkedSignal, output } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { GameIconComponent } from '../game-icon/game-icon';
@@ -59,7 +59,11 @@ export class WindowComparisonComponent {
     return worst;
   });
 
-  private readonly _manualIndex = signal<number | null>(null);
+  // The instance is reused across encounter switches on /pre, so manual state cannot outlive its windows set.
+  private readonly _manualIndex = linkedSignal<ComparisonWindow[], number | null>({
+    source: this.windows,
+    computation: () => null,
+  });
 
   protected readonly activeIndex = computed(() =>
     this._manualIndex() ?? this.selectedIndex());

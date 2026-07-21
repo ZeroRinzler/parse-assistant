@@ -107,6 +107,33 @@ describe('WindowComparisonComponent selection', () => {
   });
 });
 
+describe('WindowComparisonComponent selection reset on windows swap', () => {
+  it('drops a stale manual pick when the windows input swaps, falling back to the worst-window auto-selection', () => {
+    // List A has four windows so chip index 3 is a valid manual pick.
+    const listA = [
+      win({ playerPct: 95, topAvg: 100 }),
+      win({ playerPct: 90, topAvg: 100 }),
+      win({ playerPct: 85, topAvg: 100 }),
+      win({ playerPct: 80, topAvg: 100 }),
+    ];
+    const MANUAL_PICK = 3;
+    const { vm, setInput } = mountVm(WindowComparisonComponent, { windows: listA, higherIsBetter: true });
+    (vm['select'] as (i: number) => void)(MANUAL_PICK);
+    expect((vm['activeIndex'] as () => number)()).toBe(MANUAL_PICK);
+
+    // A shorter List B no longer has index 3, so the stale pick would blank the detail pane.
+    const WORST_IN_LIST_B = 1; // lowest player/top ratio when higher is better
+    const listB = [
+      win({ playerPct: 95, topAvg: 100 }), // ratio 0.95
+      win({ playerPct: 40, topAvg: 100 }), // ratio 0.40 - worst
+    ];
+    setInput('windows', listB);
+
+    expect((vm['activeIndex'] as () => number)()).toBe(WORST_IN_LIST_B);
+    expect((vm['activeWindow'] as () => ComparisonWindow | null)()).not.toBeNull();
+  });
+});
+
 describe('WindowComparisonComponent activeIsMuted', () => {
   const activeIsMutedFor = (status: WindowStatus): boolean => {
     const { vm } = mountVm(WindowComparisonComponent, { windows: [win({}, status)] });
