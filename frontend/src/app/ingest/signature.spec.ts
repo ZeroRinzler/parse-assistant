@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
   encounterSignature, encounterSkipKey, signatureAfterFetch, readStoredSignature, readStoredVersion,
-  signatureMatches, stampSignature, parseKey, readInaccessibleParses,
+  signatureMatches, stampSignature, stampBurstFile, parseKey, readInaccessibleParses,
   isFutureVersion,
   type SignatureRanking,
 } from './signature';
+import { ok, missing, transient, permanent, type Result, type LoadError } from '../core/result';
 
 const rankings = (...rows: [string, number][]): SignatureRanking[] =>
   rows.map(([report_code, fight_id]) => ({ report_code, fight_id }));
@@ -270,5 +271,62 @@ describe('stampSignature', () => {
     const stamped = stampSignature({ data: true }, sig, 1);
     expect(signatureMatches(readStoredSignature(stamped), sig)).toBe(true);
     expect(readStoredVersion(stamped)).toBe(1);
+  });
+});
+
+describe('stampBurstFile', () => {
+  // The skip check reads only the burst file's source_signature: a stamped burst makes the next
+  // run skip the encounter; an unstamped one makes it recompute (so a failed sibling is retried).
+  const SIGNATURE = encounterSignature('1', rankings(['r1', 1]));
+  const VERSION = 1;
+  const INACCESSIBLE = ['r2:2'];
+  const data = { spec: 'X', encounter_id: 1 };
+
+  // Only .ok and .error.kind matter to the stamp, so the ok payload is a placeholder; the five
+  // entries stand for burst, rotation, defensive, gear and map results.
+  const OK: Result<unknown, LoadError> = ok('slice');
+  const ALL_OK: Result<unknown, LoadError>[] = [OK, OK, OK, OK, OK];
+  const withSibling = (sibling: Result<unknown, LoadError>): Result<unknown, LoadError>[] => [OK, sibling, OK, OK, OK];
+
+  const nextRunSkips = (file: { source_signature?: string }): boolean =>
+    signatureMatches(readStoredSignature(file), SIGNATURE);
+
+  it('stamps the signature when every slice produced data, so the next run skips', () => {
+    const file = stampBurstFile(data, SIGNATURE, VERSION, INACCESSIBLE, ALL_OK);
+    expect(readStoredSignature(file)).toBe(SIGNATURE);
+    expect(nextRunSkips(file)).toBe(true);
+  });
+
+  it('leaves the burst unstamped when a sibling slice fails transiently, so the next run redoes it', () => {
+    const file = stampBurstFile(data, SIGNATURE, VERSION, INACCESSIBLE, withSibling(transient('WCL request failed')));
+    expect(readStoredSignature(file)).toBeNull();
+    expect(nextRunSkips(file)).toBe(false);
+  });
+
+  it('leaves the burst unstamped when a sibling slice fails permanently', () => {
+    const file = stampBurstFile(data, SIGNATURE, VERSION, INACCESSIBLE, withSibling(permanent('bad shape', 'burst.bench')));
+    expect(readStoredSignature(file)).toBeNull();
+    expect(nextRunSkips(file)).toBe(false);
+  });
+
+  it('still stamps when a sibling is legitimately empty (missing is not a failure), so a valid encounter is not redone forever', () => {
+    const file = stampBurstFile(data, SIGNATURE, VERSION, INACCESSIBLE, withSibling(missing('No top parses')));
+    expect(readStoredSignature(file)).toBe(SIGNATURE);
+    expect(nextRunSkips(file)).toBe(true);
+  });
+
+  it('persists the ingest version and the inaccessible set for the next cheap check, stamped or not', () => {
+    const stamped = stampBurstFile(data, SIGNATURE, VERSION, INACCESSIBLE, ALL_OK);
+    const unstamped = stampBurstFile(data, SIGNATURE, VERSION, INACCESSIBLE, withSibling(transient('WCL request failed')));
+    for (const file of [stamped, unstamped]) {
+      expect(readStoredVersion(file)).toBe(VERSION);
+      expect(file.inaccessible_parses).toEqual(INACCESSIBLE);
+    }
+  });
+
+  it('does not mutate the input data', () => {
+    stampBurstFile(data, SIGNATURE, VERSION, INACCESSIBLE, ALL_OK);
+    expect(data).not.toHaveProperty('source_signature');
+    expect(data).not.toHaveProperty('ingest_version');
   });
 });

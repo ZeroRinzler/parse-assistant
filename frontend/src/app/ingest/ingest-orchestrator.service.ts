@@ -28,7 +28,7 @@ import { INGEST_VERSION } from './ingest-version';
 import { orderSpecsByVersion, orderEncountersByMissingFirst, SPEC_LIMIT, type SpecOrderEntry } from './ordering';
 import {
   encounterSkipKey, signatureAfterFetch, readStoredSignature, readStoredVersion, signatureMatches,
-  stampSignature, readInaccessibleParses,
+  stampSignature, stampBurstFile, readInaccessibleParses,
   type SignatureRanking, type SignedFile,
 } from './signature';
 import type { WclRateLimitData, IngestEncounter, WclGameClass } from './models/wcl.models';
@@ -40,8 +40,7 @@ const SIGNATURE_POOL_COUNT = TOP_N * 2;
 const POINTS_MARGIN = 500;     // stop cleanly when fewer than this many WCL points remain in the hour
 const SLICE_CONCURRENCY = 3;
 
-// `burst` carries the encounter's source_signature for the skip check (every slice shares the
-// same parse set, so any one would do).
+// The skip check reads only `burst`'s source_signature, stamped only when every slice of the encounter produced data.
 const SLICES = ['burst', 'rotation', 'defensive', 'gear'] as const;
 
 /** Published on `globalThis.__INGEST_DONE__` - the headless harness's exit signal. */
@@ -344,8 +343,9 @@ export class IngestOrchestratorService {
     let wroteAny = false;
     const writes: Promise<unknown>[] = [];
     if (burst.ok) {
-      // burst also persists the inaccessible set the skip check reads.
-      const stamped = { ...stampSignature(burst.value, signature, INGEST_VERSION), inaccessible_parses: inaccessibleParses };
+      const stamped = stampBurstFile(
+        burst.value, signature, INGEST_VERSION, inaccessibleParses, [burst, rotation, defensive, gear, map],
+      );
       writes.push(this.dataFile.writeSlice(spec, encId, 'burst', stamped));
       wroteAny = true;
     } else { console.log(skipNote('burst', burst.error)); }
