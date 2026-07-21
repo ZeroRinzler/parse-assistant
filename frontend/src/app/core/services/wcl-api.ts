@@ -109,10 +109,13 @@ export class WclApiService {
    */
   async getCombatantInfo(code: string, fightId: number, playerId: number): Promise<WclCombatantInfo[]> {
     const vars: CombatantInfoQueryVars = { code, fightIDs: [fightId], sourceID: playerId };
-    const result = await this.query<{ reportData: { report: { events: { data: WclCombatantInfo[] } } } }>(
+    const result = await this.query<{ reportData: { report: { events: { data: WclCombatantInfo[] } } | null } }>(
       COMBATANT_INFO_Q, vars,
     );
-    return result?.reportData?.report?.events?.data ?? [];
+    const report = result?.reportData?.report;
+    // Same unserved-report case as getReport; fail typed rather than folding null into a success [].
+    if (!report) throw this.reportUnavailable(code);
+    return report.events?.data ?? [];
   }
 
   /**
