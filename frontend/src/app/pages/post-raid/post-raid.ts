@@ -413,11 +413,14 @@ export class PostRaidComponent {
   private async _pollOnce(): Promise<void> {
     this.loadError.set(null);
     this.liveCapture.setStatus('Checking for new pulls…');
+    // Pin the report this poll fetches; a mid-flight live-off or report switch must abandon its late writes.
+    const code = this.reportCode();
     try {
       // Cheap probe first: an idle tick costs one fights-only read, and skipping the apply
       // on an unchanged report keeps the rebuilt fight objects from retriggering the cards'
       // own WCL fetches.
-      const probedFights = buildFights(await this.wclApi.getReportFights(this.reportCode()));
+      const probedFights = buildFights(await this.wclApi.getReportFights(code));
+      if (this._pollSuperseded(code)) return;
       const action = livePollActionOf(probedFights, this.selectedFightId(), this.ready());
       if (action === 'none') { this.liveCapture.setStatus('No boss pulls found.'); return; }
       if (action === 'skip') {
@@ -425,7 +428,8 @@ export class PostRaidComponent {
         return;
       }
 
-      const report = await this.wclApi.getReport(this.reportCode());
+      const report = await this.wclApi.getReport(code);
+      if (this._pollSuperseded(code)) return;
       this._applyReport(report);
 
       const latest = this.fights()[this.fights().length - 1];
@@ -438,13 +442,19 @@ export class PostRaidComponent {
       this.fightControl.setValue(latest.id);
       this.playerControl.setValue(pickLivePlayerId(visible, currentName));
       await this.resolveSelection();
+      if (this._pollSuperseded(code)) return;
       this.liveCapture.setStatus(`Updated ${new Date().toLocaleTimeString()} · ${latest.name}`);
     } catch (err) {
       logWarn('PostRaidComponent._pollOnce', err);
+      if (this._pollSuperseded(code)) return;
       this._showError(toLoadError(err, 'post-raid.poll'));
       // Overwrite the in-flight "Checking..." status so the strip stops claiming a live check.
       this.liveCapture.setStatus('Live sync error, retrying on the next check.');
     }
+  }
+
+  private _pollSuperseded(code: string): boolean {
+    return !this.liveSyncEnabled() || this.reportCode() !== code;
   }
 
   protected async onFightChange(): Promise<void> {
