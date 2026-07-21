@@ -221,9 +221,9 @@ export function findParseWindows(scan: ParseWindowScan): ParseWindow[] {
     const windowEndS = (trimmed.endBin + 1) * BIN_S;
     const startMs = fightStartMs + windowStartS * 1000;
     const endMs = fightStartMs + windowEndS * 1000;
-    // Half-open window end (< endMs) to match findPlayerBurstWindows, so a boundary hit/cast is
-    // attributed identically on the bench and player sides.
-    const windowHits = hits.filter(hit => hit[0] >= startMs && hit[0] < endMs);
+    // The fight-closing window counts the fight-end hit bucketDamagePerBin clamps into the last bin; interior windows stay half-open.
+    const closesFight = trimmed.endBin === binCount - 1;
+    const windowHits = hits.filter(hit => hit[0] >= startMs && (closesFight ? hit[0] <= endMs : hit[0] < endMs));
     const windowDmg = windowHits.reduce((sum, hit) => sum + hit[1], 0);
     if (!windowDmg || windowDmg / total < minPct) continue;
 

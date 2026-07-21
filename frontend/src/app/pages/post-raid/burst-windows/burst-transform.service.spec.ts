@@ -259,6 +259,24 @@ describe('findParseWindows', () => {
     expect(windows[0].ability_breakdown.map(ability => ability.spell_id)).toContain(BLACK_POWDER);
   });
 
+  it('counts a killing-blow hit at exactly fight end in the fight-closing window', () => {
+    const KILLING_BLOW_DMG = 5000;
+    // LONG_FIGHT_MS (300_000) is an exact BIN_MS multiple, so the killing blow at fightEndMs clamps into the last bin.
+    const events = [...burstAt(296), damage(EVISCERATE, 300, KILLING_BLOW_DMG)];
+    const closing = scanWindows(events, LONG_FIGHT_MS).find(window => window.time_s === 296);
+    expect(closing?.window_damage).toBe(4 * BIN_DAMAGE + KILLING_BLOW_DMG);
+    expect(closing?.ability_breakdown.map(ability => ability.spell_id)).toContain(EVISCERATE);
+  });
+
+  it('keeps a last-bin-only window whose only damage is a killing blow at exact fight end', () => {
+    const KILLING_BLOW_DMG = 2000;
+    // A lone killing blow at fightEndMs forms a last-bin-only window; the fight-closing window counts it.
+    const events = [...burstAt(10), damage(EVISCERATE, 300, KILLING_BLOW_DMG)];
+    const closing = scanWindows(events, LONG_FIGHT_MS).find(window => window.time_s === 299);
+    expect(closing?.window_damage).toBe(KILLING_BLOW_DMG);
+    expect(closing?.ability_breakdown.map(ability => ability.spell_id)).toContain(EVISCERATE);
+  });
+
   it('attributes a cooldown whose cast lands inside the window', () => {
     // Window is [10s, 14s); a Shadow Blades cast at 10s is inside.
     const timings = cdTimings([cast(SHADOW_BLADES, 10)], [{ name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 90 }], 0);
