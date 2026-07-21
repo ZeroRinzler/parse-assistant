@@ -56,15 +56,59 @@ describe('resampleTimeline', () => {
     expect(resampleTimeline([], 10, 1.5)).toEqual([]);
   });
 
-  it('linearly interpolates x/y and picks the nearest facing/mapID', () => {
+  it('linearly interpolates x/y within one mapID and picks the nearest facing', () => {
+    const SHARED_MAP = 1;
     const samples: RawPosSample[] = [
-      { t: 0, x: 0, y: 0, facing: 100, mapID: 1, maxHp: 0 },
-      { t: 3, x: 300, y: 600, facing: 200, mapID: 2, maxHp: 0 },
+      { t: 0, x: 0, y: 0, facing: 100, mapID: SHARED_MAP, maxHp: 0 },
+      { t: 3, x: 300, y: 600, facing: 200, mapID: SHARED_MAP, maxHp: 0 },
     ];
     const rows = resampleTimeline(samples, 3, 1.5);
     expect(rows.map(r => r[0])).toEqual([0, 1.5, 3]);
-    // midpoint interpolates x to 150, y to 300; facing nearest is the later (>=0.5 -> after)
-    expect(rows[1]).toEqual([1.5, 150, 300, 200, 2]);
+    // same mapID: midpoint interpolates x to 150, y to 300; facing/mapID from the nearer (>=0.5 -> after)
+    expect(rows[1]).toEqual([1.5, 150, 300, 200, SHARED_MAP]);
+  });
+
+  it('snaps to the nearest sample verbatim across a mapID change instead of blending', () => {
+    const NEAR_MAP = 1;
+    const FAR_MAP = 2;
+    const samples: RawPosSample[] = [
+      { t: 0, x: 0, y: 0, facing: 100, mapID: NEAR_MAP, maxHp: 0 },
+      { t: 3, x: 300, y: 600, facing: 200, mapID: FAR_MAP, maxHp: 0 },
+    ];
+    const rows = resampleTimeline(samples, 3, 1.5);
+    expect(rows.map(r => r[0])).toEqual([0, 1.5, 3]);
+    // mapIDs differ: the midpoint (fraction 0.5 -> after) emits the far sample's own x/y/facing, never the blend (150, 300)
+    expect(rows[1]).toEqual([1.5, 300, 600, 200, FAR_MAP]);
+  });
+
+  it('snaps a cadence point nearer the far-side sample to that sample across a mapID change', () => {
+    const NEAR_MAP = 1;
+    const FAR_MAP = 2;
+    const FAR_X = 400;
+    const FAR_Y = 800;
+    const FAR_FACING = 250;
+    const samples: RawPosSample[] = [
+      { t: 0, x: 0, y: 0, facing: 100, mapID: NEAR_MAP, maxHp: 0 },
+      { t: 4, x: FAR_X, y: FAR_Y, facing: FAR_FACING, mapID: FAR_MAP, maxHp: 0 },
+    ];
+    const rows = resampleTimeline(samples, 4, 1.5);
+    // t=3 sits 3/4 toward the far sample (fraction 0.75 -> after): snap emits its verbatim x/y/facing/mapID, not the blend (300, 600)
+    expect(rows.find(r => r[0] === 3)).toEqual([3, FAR_X, FAR_Y, FAR_FACING, FAR_MAP]);
+  });
+
+  it('snaps a cadence point nearer the near-side sample to that sample across a mapID change', () => {
+    const NEAR_MAP = 1;
+    const FAR_MAP = 2;
+    const NEAR_X = 0;
+    const NEAR_Y = 0;
+    const NEAR_FACING = 100;
+    const samples: RawPosSample[] = [
+      { t: 0, x: NEAR_X, y: NEAR_Y, facing: NEAR_FACING, mapID: NEAR_MAP, maxHp: 0 },
+      { t: 4, x: 400, y: 800, facing: 250, mapID: FAR_MAP, maxHp: 0 },
+    ];
+    const rows = resampleTimeline(samples, 4, 1.5);
+    // t=1.5 sits 3/8 toward the far sample (fraction < 0.5 -> before): snap emits the near sample's verbatim x/y, not the blend (150, 300)
+    expect(rows.find(r => r[0] === 1.5)).toEqual([1.5, NEAR_X, NEAR_Y, NEAR_FACING, NEAR_MAP]);
   });
 
   it('rounds coordinates and keeps null facing', () => {

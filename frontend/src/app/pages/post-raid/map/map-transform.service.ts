@@ -75,7 +75,7 @@ export function collectPositionSamples(events: WclEvent[], fightStartMs: number)
   return byActor;
 }
 
-/** Resample to a fixed cadence: [t, x, y, facing, mapID] rows (linear x/y, nearest facing/mapID). */
+/** Resample to a fixed cadence: [t, x, y, facing, mapID] rows; lerp x/y within a mapID, snap to the nearest sample across a mapID change. */
 export function resampleTimeline(samples: RawPosSample[], durationS: number, intervalS: number): PosRow[] {
   if (!samples.length) return [];
   const first = samples[0].t;
@@ -90,9 +90,15 @@ export function resampleTimeline(samples: RawPosSample[], durationS: number, int
     let x = before.x, y = before.y, nearest = before;
     if (after && after.t > before.t && t >= before.t) {
       const fraction = Math.min(1, Math.max(0, (t - before.t) / (after.t - before.t)));
-      x = before.x + (after.x - before.x) * fraction;
-      y = before.y + (after.y - before.y) * fraction;
       nearest = fraction < 0.5 ? before : after;
+      if (before.mapID === after.mapID) {
+        x = before.x + (after.x - before.x) * fraction;
+        y = before.y + (after.y - before.y) * fraction;
+      } else {
+        // coords compare only within one mapID, so snap to the nearest sample rather than blend across a map swap
+        x = nearest.x;
+        y = nearest.y;
+      }
     }
     out.push([
       Math.round(t * DECISECONDS_PER_S) / DECISECONDS_PER_S, Math.round(x), Math.round(y),
