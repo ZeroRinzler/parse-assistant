@@ -205,7 +205,7 @@ export function buildTrinketRows(gear: CharacterGear, stats: EncounterGearStats 
       const rec = remainingRecs[recIndex];
       if (!rec) continue;
       recIndex++;
-      rows.push({ slotLabel: label, id: rec.id, name: rec.name, icon: '',
+      rows.push({ slotLabel: label, id: rec.id, name: rec.name, icon: rec.icon,
         status: 'info', topPct: rec.pct, note: `${rec.pct}% run this trinket` });
       continue;
     }

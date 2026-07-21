@@ -252,6 +252,7 @@ describe('buildTrinketRows', () => {
     expect(rows[1]).toMatchObject({
       slotLabel: 'Trinket 2',
       id: 249343,
+      icon: 'gaze',
       status: 'info',
       note: '80% run this trinket',
     });
