@@ -99,7 +99,12 @@ async function main() {
     await shutdown(1);
   }
   console.log(`[harness] ingestion complete: ${summary.succeeded.length} spec(s) processed, ${summary.failed.length} failed${summary.budgetStopped ? ', stopped on WCL budget' : ''}`);
-  await shutdown(0);
+  if (summary.failed.length) {
+    console.error(`[harness] failed specs: ${summary.failed.map(entry => entry.spec).join(', ')}`);
+  }
+  // Partial per-spec failure is deliberately tolerated; only an all-failed run is a broken build.
+  const allSpecsFailed = summary.failed.length > 0 && summary.succeeded.length === 0;
+  await shutdown(allSpecsFailed ? 1 : 0);
 }
 
 main().catch(async err => {
