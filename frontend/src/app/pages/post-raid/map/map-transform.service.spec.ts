@@ -27,6 +27,8 @@ describe('posActorId', () => {
   it.each([
     { name: 'source by default', e: { ts: 0, source: 3, x: 1, y: 1 }, expected: 3 },
     { name: 'target when resourceActor 2', e: { ts: 0, source: 3, target: 9, resourceActor: 2, x: 1, y: 1 }, expected: 9 },
+    { name: 'target when resourceActor 2 without a sourceID', e: { ts: 0, target: 9, resourceActor: 2, x: 1, y: 1 }, expected: 9 },
+    { name: 'null when resourceActor 2 has no targetID', e: { ts: 0, source: 3, resourceActor: 2, x: 1, y: 1 }, expected: null },
   ])('$name', ({ e, expected }) => {
     expect(posActorId(resEvent(e))).toBe(expected);
   });
