@@ -291,6 +291,19 @@ describe('checkBloodlustAlignment', () => {
     expect(out.findings).toEqual([]);
   });
 
+  it('stamps the judged cast, not the earliest in-window cast', () => {
+    // avg_bl_offset -8, stddev 2 -> in-band [-12, -4]. Two in-window casts: an early one at
+    // offset -8 (in-band) and a later one at offset -2 (closest to zero, so judged, and a late
+    // outlier). The finding must anchor the judged late cast, not the earlier in-band one.
+    const EARLY_IN_BAND_MS = (BL_AT_S - 8) * ONE_SEC_MS;
+    const LATE_JUDGED_MS = (BL_AT_S - 2) * ONE_SEC_MS;
+    const out = checkBloodlustAlignment(
+      'Shadow Blades', [EARLY_IN_BAND_MS, LATE_JUDGED_MS],
+      cdBench({ avg_bl_offset_s: -8, stddev_bl_offset_s: 2 }), BL_AT_S, true);
+    expect(out.findings[0]?.measured).toEqual({ value: 'late', unit: 'in BL' });
+    expect(out.findings[0]?.timestamp_ms).toBe(LATE_JUDGED_MS);
+  });
+
   it('returns not-aligned with no BL', () => {
     expect(checkBloodlustAlignment('Shadow Blades', [5 * ONE_SEC_MS], cdBench(), null, true))
       .toEqual({ blAligned: false, findings: [] });

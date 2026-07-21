@@ -256,8 +256,10 @@ export function checkBloodlustAlignment(
     const playerOffset = closestToZero(offsets);
     if (isOutlierBeyond(playerOffset, cdBench.avg_bl_offset_s, cdBench.stddev_bl_offset_s)) {
       const dir = playerOffset > cdBench.avg_bl_offset_s ? 'late' : 'early';
+      // The judged cast (closest-to-zero offset) is not always the earliest in the window.
+      const judgedCastMs = inWindow[offsets.indexOf(playerOffset)];
       findings.push({ severity: 'warning', category: 'cooldown_alignment', cd_name: cdName,
-        timestamp_ms: inWindow[0],
+        timestamp_ms: judgedCastMs,
         measured: { value: dir, unit: 'in BL' },
         message: `${cdName} ${dir} in the Bloodlust window.`,
         details: { remedy: `Tighten ${cdName} to the Bloodlust window.` } });
