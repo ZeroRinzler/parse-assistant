@@ -5,7 +5,7 @@ import { EncounterGearStats } from '../../core/models/encounter.models';
 export type GearStatus = 'ok' | 'warn' | 'info' | 'unknown';
 
 const SLOT_NAMES: Record<number, string> = {
-  0:'Head', 1:'Neck', 2:'Shoulder', 3:'Back', 4:'Chest', 5:'Waist', 6:'Legs',
+  0:'Head', 1:'Neck', 2:'Shoulder', 3:'Shirt', 4:'Chest', 5:'Waist', 6:'Legs',
   7:'Feet', 8:'Wrists', 9:'Hands', 10:'Ring 1', 11:'Ring 2',
   12:'Trinket 1', 13:'Trinket 2', 14:'Back', 15:'Main Hand', 16:'Off Hand',
 };
