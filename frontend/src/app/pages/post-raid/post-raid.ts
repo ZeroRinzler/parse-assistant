@@ -271,6 +271,9 @@ export class PostRaidComponent {
 
   private _enemies: { id: number; name: string; gameID: number }[] = [];
 
+  /** Monotonic load tag: a slow earlier loadReport must not overwrite a newer one's state. */
+  private _loadSeq = 0;
+
   protected readonly visiblePlayers = computed(() =>
     visiblePlayersOf(this.fights(), this.players(), this.selectedFightId()));
 
@@ -370,6 +373,7 @@ export class PostRaidComponent {
       if (code) this.notice.set('Enter a valid Warcraft Logs report URL or 16-character report code.');
       return;
     }
+    const seq = ++this._loadSeq;
     // Setting reportCode to '' stops any active poll before the fetch completes.
     this.reportCode.set('');
 
@@ -384,6 +388,7 @@ export class PostRaidComponent {
     try {
       this.loadingMsg.set('Fetching report from WCL…');
       const report = await this.wclApi.getReport(code);
+      if (seq !== this._loadSeq) return;
       this._applyReport(report);
 
       const lastFight = this.fights()[this.fights().length - 1];
@@ -396,9 +401,9 @@ export class PostRaidComponent {
       await this.resolveSelection();
     } catch (err) {
       logWarn('PostRaidComponent.loadReport', err);
-      this._showError(toLoadError(err, 'post-raid.load-report'));
+      if (seq === this._loadSeq) this._showError(toLoadError(err, 'post-raid.load-report'));
     } finally {
-      this.loadingReport.set(false);
+      if (seq === this._loadSeq) this.loadingReport.set(false);
     }
   }
 

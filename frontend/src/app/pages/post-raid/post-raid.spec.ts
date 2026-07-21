@@ -433,3 +433,99 @@ describe('PostRaidComponent live-sync poll', () => {
     expect(liveCapture.status()).toMatch(/^Updated/);
   });
 });
+
+describe('PostRaidComponent loadReport latest-wins', () => {
+  const CODE_A = 'aaaaaaaaaaaaaaaa'; // 16-char valid code for the slow, superseded load
+  const CODE_B = 'bbbbbbbbbbbbbbbb'; // 16-char valid code for the newer, winning load
+  const ENCOUNTER_ID = 3144;
+  const FIGHT_B_ID = 7;
+  const PLAYER_B_ID = 3;
+  const REPORT_A_START = 1_000; // distinct report clocks reveal which _applyReport landed
+  const REPORT_B_START = 2_000;
+  const EXPECTED_SPEC = 'SubtletyRogue';
+
+  const reportB: WclReport = {
+    title: 'B', startTime: REPORT_B_START,
+    fights: [fight({ id: FIGHT_B_ID, encounterID: ENCOUNTER_ID, startTime: 0, endTime: 10_000, friendlyPlayers: [PLAYER_B_ID] })],
+    masterData: { actors: [{ id: PLAYER_B_ID, name: 'Bee', subType: 'Rogue', server: '' }], enemies: [], abilities: [] },
+  };
+  const reportA: WclReport = {
+    title: 'A', startTime: REPORT_A_START, fights: [],
+    masterData: { actors: [], enemies: [], abilities: [] },
+  };
+  const detailsB: PlayerDetailGroups = { dps: [{ id: PLAYER_B_ID, type: 'Rogue', name: 'Bee', specs: [{ spec: 'Subtlety' }] }] };
+
+  /** Fake WCL client whose getReport / getPlayerDetails stay pending until the test settles them. */
+  class FakeWclApi {
+    private readonly reportResolvers = new Map<string, (report: WclReport) => void>();
+    private readonly playerDetailResolvers: ((groups: PlayerDetailGroups) => void)[] = [];
+    getReport(code: string): Promise<WclReport> {
+      return new Promise(resolve => this.reportResolvers.set(code, resolve));
+    }
+    getPlayerDetails(): Promise<PlayerDetailGroups> {
+      return new Promise(resolve => this.playerDetailResolvers.push(resolve));
+    }
+    settleReport(code: string, report: WclReport): void { this.reportResolvers.get(code)!(report); }
+    settlePlayerDetails(groups: PlayerDetailGroups): void { this.playerDetailResolvers.shift()!(groups); }
+  }
+
+  /** Drain microtasks + the macrotask queue so each awaited loadReport step settles. */
+  const settle = (): Promise<void> => new Promise(resolve => setTimeout(resolve, 0));
+
+  // Construct the shell directly (no view attached) so loadReport runs without rendering the
+  // card templates, whose own data sources are out of scope here.
+  function setup(): { api: FakeWclApi; vm: Record<string, unknown> } {
+    const api = new FakeWclApi();
+    TestBed.configureTestingModule({
+      providers: [
+        provideZonelessChangeDetection(),
+        PostRaidComponent,
+        { provide: WclApiService, useValue: api },
+        { provide: MapFeatureService, useValue: { clear: vi.fn(), prepare: vi.fn(() => Promise.resolve()), ready: () => false, openAt: vi.fn() } },
+        { provide: LiveCaptureFeatureService, useValue: { liveEnabled: signal(false), clear: vi.fn(), prepare: vi.fn(), setStatus: vi.fn(), clipReady: () => false, openClip: vi.fn() } },
+        { provide: LiveReportSyncService, useValue: { pollTriggers: () => EMPTY } },
+        { provide: SelectionStore, useValue: { loadPostRaid: () => null, savePostRaid: vi.fn() } },
+      ],
+    });
+    return { api, vm: TestBed.inject(PostRaidComponent) as unknown as Record<string, unknown> };
+  }
+
+  it('keeps the newer report and its spinner when a slower earlier load resolves late', async () => {
+    const { api, vm } = setup();
+    const reportControl = vm['reportControl'] as FormControl<string>;
+    const loadReport = () => (vm['loadReport'] as () => Promise<void>)();
+    const reportCode = vm['reportCode'] as () => string;
+    const loadingReport = vm['loadingReport'] as () => boolean;
+    const reportStartTime = vm['reportStartTime'] as () => number;
+    const fights = vm['fights'] as () => WclFight[];
+    const spec = vm['spec'] as () => string;
+
+    reportControl.setValue(CODE_A);
+    const loadA = loadReport(); // parks on getReport(A)
+    reportControl.setValue(CODE_B);
+    const loadB = loadReport(); // parks on getReport(B)
+
+    // B's report resolves first and advances to its still-pending spec resolve.
+    api.settleReport(CODE_B, reportB);
+    await settle();
+    expect(reportCode()).toBe(CODE_B);
+    expect(loadingReport()).toBe(true);
+
+    // A's report resolves late: neither its state writes nor its finally may land.
+    api.settleReport(CODE_A, reportA);
+    await settle();
+    expect(reportCode()).toBe(CODE_B);
+    expect(reportStartTime()).toBe(REPORT_B_START);
+    expect(fights().map(f => f.id)).toEqual([FIGHT_B_ID]);
+    expect(loadingReport()).toBe(true); // A's finally did not clear B's in-flight spinner
+
+    // B finishes: its own finally clears the spinner and its spec lands.
+    api.settlePlayerDetails(detailsB);
+    await settle();
+    expect(loadingReport()).toBe(false);
+    expect(spec()).toBe(EXPECTED_SPEC);
+    expect(reportCode()).toBe(CODE_B);
+
+    await Promise.all([loadA, loadB]);
+  });
+});
