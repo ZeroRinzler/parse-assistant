@@ -150,7 +150,11 @@ export function windowAbilityBreakdown(
   castNamesInParse: Set<string>,
 ): ParseWindow['ability_breakdown'] {
   const byAbility = new Map<number, number>();
-  for (const [, dmg, abilityId] of windowHits) if (abilityId) byAbility.set(abilityId, (byAbility.get(abilityId) ?? 0) + dmg);
+  // Normalize before grouping so raw ids that fold to one spell (melee, synthetic negatives) sum, not split into rows.
+  for (const [, dmg, abilityId] of windowHits) if (abilityId) {
+    const spellId = normalizeAbilityId(abilityId);
+    byAbility.set(spellId, (byAbility.get(spellId) ?? 0) + dmg);
+  }
 
   const castsByName = new Map<string, number>();
   for (const [timestamp, abilityId] of castRows) {
@@ -159,12 +163,11 @@ export function windowAbilityBreakdown(
 
   return [...byAbility.entries()]
     .sort((a, b) => b[1] - a[1]).slice(0, 6)
-    .map(([abilityId, dmg]) => ({
-      // The melee auto-attack event id resolves to the real Auto Attack spell (name/icon/Wowhead).
-      spell_id: normalizeAbilityId(abilityId),
+    .map(([spell_id, dmg]) => ({
+      spell_id,
       damage: dmg,
-      casts: castsByName.get(nameOf(abilityId)) ?? 0,
-      is_passive: !castNamesInParse.has(nameOf(abilityId)),
+      casts: castsByName.get(nameOf(spell_id)) ?? 0,
+      is_passive: !castNamesInParse.has(nameOf(spell_id)),
     }));
 }
 

@@ -10,6 +10,7 @@ import {
   windowAbilityBreakdown, BinRun,
 } from './burst-transform.service';
 import { SHADOW_BLADES, SHADOW_BLADES_DAMAGE, EVISCERATE, BLACK_POWDER, CLOAK_OF_SHADOWS } from '../../../../testing/spell-ids';
+import { WCL_SYNTHETIC_SOURCE_FALLBACK_ID } from '../../../shared/analysis/wcl-projections';
 import { cast, damage } from '../../../../testing/builders/events';
 import { rulebook } from '../../../../testing/builders/rulebook';
 
@@ -176,6 +177,15 @@ describe('windowAbilityBreakdown', () => {
     const breakdown = windowAbilityBreakdown(windowHits, [], 1000, 3000, nameOf, new Set());
     expect(breakdown).toHaveLength(6);
     expect(breakdown[0].damage).toBe(ABILITY_COUNT * 100);
+  });
+
+  it('folds distinct synthetic ids that normalize together into one summed row', () => {
+    const SYNTH_A = -3, SYNTH_B = -7;  // distinct negatives, both normalize to the synthetic catch-all
+    const DMG_A = 600, DMG_B = 400;
+    const windowHits: [number, number, number][] = [[1000, DMG_A, SYNTH_A], [1500, DMG_B, SYNTH_B]];
+    expect(windowAbilityBreakdown(windowHits, [], 1000, 3000, nameOf, new Set())).toEqual([
+      { spell_id: WCL_SYNTHETIC_SOURCE_FALLBACK_ID, damage: DMG_A + DMG_B, casts: 0, is_passive: true },
+    ]);
   });
 });
 
@@ -372,6 +382,22 @@ describe('clusterParseWindows', () => {
     const out = clusterParseWindows([small, big, other], SAMPLE_COUNT);
     expect(out).toHaveLength(1);
     expect(out[0].dmg_avg).toBe(EXPECTED_AVG);
+  });
+
+  it('gates and counts clustered abilities by distinct parses (1 of 4 does not surface)', () => {
+    const SAMPLE_COUNT = 4;
+    const MAIN_DMG = 500, RARE_DMG = 100;
+    const withAbilities = (parseIndex: number, abilities: ParseWindow['ability_breakdown']): ParseWindow =>
+      ({ ...window(10 + parseIndex, false, parseIndex), ability_breakdown: abilities });
+    const main = { spell_id: SHADOW_BLADES_DAMAGE, damage: MAIN_DMG, casts: 1, is_passive: false };
+    const rare = { spell_id: EVISCERATE, damage: RARE_DMG, casts: 1, is_passive: false };
+    // 4 distinct parses share MAIN; only parse 0 carries RARE -> 0.25 < 0.5 majority -> dropped.
+    const out = clusterParseWindows([
+      withAbilities(0, [main, rare]), withAbilities(1, [main]), withAbilities(2, [main]), withAbilities(3, [main]),
+    ], SAMPLE_COUNT);
+    expect(out).toHaveLength(1);
+    expect(out[0].ability_breakdown).toHaveLength(1);
+    expect(out[0].ability_breakdown[0]).toMatchObject({ spell_id: SHADOW_BLADES_DAMAGE, count: 4 });  // count = distinct parses
   });
 });
 

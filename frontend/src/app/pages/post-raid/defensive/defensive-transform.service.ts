@@ -165,16 +165,19 @@ export function summarizeDefensiveCasts(
 /** One window hit: `[timestampMs, damage, abilityId, sourceId]` (sorted by time). */
 type WindowHit = [number, number, number, number | null];
 
-/** Top-N damage sources in a window, summed by ability id, highest damage first. */
+/** Top-N damage sources in a window, summed by normalized spell id, highest damage first. */
 export function windowDamageBreakdown(windowHits: WindowHit[]): { spell_id: number; damage: number }[] {
   const abilityDmg = new Map<number, number>();
+  // Normalize before grouping so raw ids that fold to one spell (melee, synthetic negatives) sum, not split into rows.
   for (const [, damage, abilityId] of windowHits) {
-    if (abilityId) abilityDmg.set(abilityId, (abilityDmg.get(abilityId) ?? 0) + damage);
+    if (abilityId) {
+      const spellId = normalizeAbilityId(abilityId);
+      abilityDmg.set(spellId, (abilityDmg.get(spellId) ?? 0) + damage);
+    }
   }
   return [...abilityDmg.entries()]
     .sort((a, b) => b[1] - a[1]).slice(0, ABILITY_BREAKDOWN_TOP_N)
-    // The melee auto-attack event id resolves to the real Auto Attack spell (name/icon/Wowhead).
-    .map(([abilityId, damage]) => ({ spell_id: normalizeAbilityId(abilityId), damage }));
+    .map(([spell_id, damage]) => ({ spell_id, damage }));
 }
 
 /**
@@ -242,23 +245,29 @@ export function clusterDamageStats(damages: number[]): { dmg_avg: number; dmg_st
   };
 }
 
-/** Cross-parse top-N ability breakdown: abilities in a majority of members, avg/min/max, highest avg first. */
+/** Cross-parse top-N ability breakdown: abilities in a majority of distinct parses, avg/min/max, highest avg first. */
 export function clusterAbilityBreakdown(cluster: ParseDefWindow[]): BurstWindow['ability_breakdown'] {
-  const abilityDamage = new Map<number, number[]>();
+  // Sum per parse first so a parse landing an ability across several of its windows counts once toward the gate.
+  const damageByAbilityParse = new Map<number, Map<number, number>>();
   for (const member of cluster) {
     for (const ability of member.ability_breakdown) {
-      getOrInsert(abilityDamage, ability.spell_id, () => []).push(ability.damage);
+      const byParse = getOrInsert(damageByAbilityParse, ability.spell_id, () => new Map<number, number>());
+      byParse.set(member.parse_index, (byParse.get(member.parse_index) ?? 0) + ability.damage);
     }
   }
-  return [...abilityDamage.entries()]
-    .filter(([, list]) => list.length >= cluster.length * MEMBER_MAJORITY_FRAC)
-    .map(([spell_id, list]) => ({
-      spell_id,
-      avg_damage: Math.round((mean(list) ?? 0)),
-      min_damage: Math.round(Math.min(...list)),
-      max_damage: Math.round(Math.max(...list)),
-      count: list.length,
-    }))
+  const distinctParses = new Set(cluster.map(member => member.parse_index)).size;
+  return [...damageByAbilityParse.entries()]
+    .filter(([, byParse]) => byParse.size >= distinctParses * MEMBER_MAJORITY_FRAC)
+    .map(([spell_id, byParse]) => {
+      const perParseDamage = [...byParse.values()];
+      return {
+        spell_id,
+        avg_damage: Math.round((mean(perParseDamage) ?? 0)),
+        min_damage: Math.round(Math.min(...perParseDamage)),
+        max_damage: Math.round(Math.max(...perParseDamage)),
+        count: byParse.size,
+      };
+    })
     .sort((a, b) => b.avg_damage - a.avg_damage)
     .slice(0, ABILITY_BREAKDOWN_TOP_N);
 }

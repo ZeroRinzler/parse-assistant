@@ -13,6 +13,7 @@ import {
 import { applyBuff, removeBuff, damageTaken, cast } from '../../../../testing/builders/events';
 import { rulebook } from '../../../../testing/builders/rulebook';
 import { CLOAK_OF_SHADOWS, EVASION } from '../../../../testing/spell-ids';
+import { WCL_SYNTHETIC_SOURCE_FALLBACK_ID } from '../../../shared/analysis/wcl-projections';
 import { ok } from '../../../core/result';
 
 // Enemy-side identifiers for the damage-taken fixtures (not player abilities, so local).
@@ -131,6 +132,13 @@ describe('windowDamageBreakdown', () => {
     const hits: Hit[] = Array.from({ length: SOURCE_COUNT }, (_, i) => [0, (i + 1) * 100, BOSS_HIT + i, BOSS_ACTOR]);
     expect(windowDamageBreakdown(hits)).toHaveLength(TOP_N);
   });
+
+  it('folds distinct synthetic ids that normalize together into one summed row', () => {
+    const SYNTH_A = -3, SYNTH_B = -7;  // distinct negatives, both normalize to the synthetic catch-all
+    const DMG_A = 300, DMG_B = 200;
+    const hits: Hit[] = [[0, DMG_A, SYNTH_A, null], [0, DMG_B, SYNTH_B, null]];
+    expect(windowDamageBreakdown(hits)).toEqual([{ spell_id: WCL_SYNTHETIC_SOURCE_FALLBACK_ID, damage: DMG_A + DMG_B }]);
+  });
 });
 
 describe('clusterDamageStats', () => {
@@ -142,26 +150,50 @@ describe('clusterDamageStats', () => {
 });
 
 describe('clusterAbilityBreakdown', () => {
-  const member = (abilities: { spell_id: number; damage: number }[]): ParseDefWindow => ({
-    time_s: 10, window_length_s: 5, window_damage: 700, pct_of_total: 0.2, parse_index: 0,
+  const member = (abilities: { spell_id: number; damage: number }[], parseIndex = 0): ParseDefWindow => ({
+    time_s: 10, window_length_s: 5, window_damage: 700, pct_of_total: 0.2, parse_index: parseIndex,
     defensive_name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS, ref_game_id: BOSS_GAME_ID, ability_breakdown: abilities,
   });
 
-  it('keeps an ability present in a majority of members with avg/min/max', () => {
+  it('keeps an ability present in a majority of parses with avg/min/max', () => {
     const out = clusterAbilityBreakdown([
-      member([{ spell_id: BOSS_HIT, damage: 400 }]), member([{ spell_id: BOSS_HIT, damage: 600 }]),
+      member([{ spell_id: BOSS_HIT, damage: 400 }], 0), member([{ spell_id: BOSS_HIT, damage: 600 }], 1),
     ]);
     expect(out).toHaveLength(1);
     expect(out[0]).toMatchObject({ spell_id: BOSS_HIT, avg_damage: 500, min_damage: 400, max_damage: 600, count: 2 });
   });
 
-  it('drops an ability below the member-majority share (boundary)', () => {
-    // 1 of 3 members carries ADD_HIT -> 0.33 < 0.5 majority -> dropped.
+  it('drops an ability below the parse-majority share (boundary)', () => {
+    // 1 of 3 parses carries ADD_HIT -> 0.33 < 0.5 majority -> dropped.
     const out = clusterAbilityBreakdown([
-      member([{ spell_id: BOSS_HIT, damage: 500 }]), member([{ spell_id: BOSS_HIT, damage: 500 }]),
-      member([{ spell_id: ADD_HIT, damage: 500 }]),
+      member([{ spell_id: BOSS_HIT, damage: 500 }], 0), member([{ spell_id: BOSS_HIT, damage: 500 }], 1),
+      member([{ spell_id: ADD_HIT, damage: 500 }], 2),
     ]);
     expect(out.map(ability => ability.spell_id)).toEqual([BOSS_HIT]);
+  });
+
+  it('gates and counts by DISTINCT parses, not window entries (1 of 4 does not surface)', () => {
+    // 4 distinct parses share BOSS_HIT; only parse 0 carries ADD_HIT -> 0.25 < 0.5 majority -> dropped.
+    const out = clusterAbilityBreakdown([
+      member([{ spell_id: BOSS_HIT, damage: 500 }, { spell_id: ADD_HIT, damage: 100 }], 0),
+      member([{ spell_id: BOSS_HIT, damage: 500 }], 1),
+      member([{ spell_id: BOSS_HIT, damage: 500 }], 2),
+      member([{ spell_id: BOSS_HIT, damage: 500 }], 3),
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ spell_id: BOSS_HIT, count: 4 });  // count = distinct parses
+  });
+
+  it('counts a parse contributing an ability across two of its windows once, summing its damage', () => {
+    const FIRST_S = 400, SECOND_S = 300;  // one parse's two windows in the cluster
+    const OTHER = 500;
+    const EXPECTED_AVG = Math.round((FIRST_S + SECOND_S + OTHER) / 2);  // mean over 2 parses' summed damage
+    const out = clusterAbilityBreakdown([
+      member([{ spell_id: BOSS_HIT, damage: FIRST_S }], 0),
+      member([{ spell_id: BOSS_HIT, damage: SECOND_S }], 0),
+      member([{ spell_id: BOSS_HIT, damage: OTHER }], 1),
+    ]);
+    expect(out[0]).toMatchObject({ spell_id: BOSS_HIT, count: 2, avg_damage: EXPECTED_AVG, min_damage: OTHER, max_damage: FIRST_S + SECOND_S });
   });
 });
 
