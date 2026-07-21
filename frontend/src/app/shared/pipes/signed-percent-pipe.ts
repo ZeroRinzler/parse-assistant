@@ -5,10 +5,9 @@ import { Pipe, PipeTransform } from '@angular/core';
 export class SignedPercentPipe implements PipeTransform {
   transform(value: number | null | undefined): string {
     if (value == null || !Number.isFinite(value)) return '';
-    const sign = value > 0 ? '+' : '';
-    // A small negative that rounds to zero yields "-0" from toFixed; render it as plain "0".
-    const magnitude = value.toFixed(0);
-    const normalized = magnitude === '-0' ? '0' : magnitude;
-    return `${sign}${normalized}%`;
+    // A delta that rounds to zero is neither ahead nor behind, so it carries no sign; -0 stringifies to "0".
+    const rounded = Math.round(value);
+    const sign = rounded > 0 ? '+' : '';
+    return `${sign}${rounded}%`;
   }
 }
