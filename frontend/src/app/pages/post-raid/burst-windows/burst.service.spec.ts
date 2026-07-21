@@ -139,6 +139,25 @@ describe('findPlayerBurstWindows', () => {
     const out = findPlayerBurstWindows([window], [damage(SHADOW_BLADES_DAMAGE, 30, 800)], [], 0, new Map());
     expect(out[0].window_damage).toBe(0);
   });
+
+  it('keeps a low-ranked ability the player used so the bench join surfaces its damage', () => {
+    const FILLER_COUNT = 10;
+    const FILLER_BASE_ID = 900_000; // synthetic ids distinct from the bench ability
+    const FILLER_DAMAGE = 1_000; // each filler out-damages the bench hit, ranking it last
+    const BENCH_HIT_DAMAGE = 50; // the player's damage on the bench ability, ranked past the filler abilities
+    const AT_S = 15; // inside the [10, 30) window
+    const fillerHits = Array.from({ length: FILLER_COUNT }, (_, i) => damage(FILLER_BASE_ID + i, AT_S, FILLER_DAMAGE));
+    const out = findPlayerBurstWindows(
+      [window],
+      [...fillerHits, damage(SHADOW_BLADES_DAMAGE, AT_S, BENCH_HIT_DAMAGE)],
+      [],
+      0,
+      new Map([[SHADOW_BLADES_DAMAGE, 'Eviscerate']]),
+    );
+    const benchBreakdown = [{ spell_id: SHADOW_BLADES_DAMAGE, avg_damage: 600, min_damage: 400, max_damage: 800, count: 5, avg_casts: 2 }];
+    const rows = burstDetailRows(benchBreakdown, out[0], { [SHADOW_BLADES_DAMAGE]: { icon: 'evis', name: 'Eviscerate' } });
+    expect(rows[0].playerPct).toBe(BENCH_HIT_DAMAGE);
+  });
 });
 
 const wclFake = {

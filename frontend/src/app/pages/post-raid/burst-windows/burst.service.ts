@@ -152,7 +152,6 @@ function playerWindowAggregate(
   }
   const ability_breakdown = Object.entries(byAbility)
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 10)
     .map(([sid, dmg]) => {
       const spell_id = parseInt(sid, 10);
       return { spell_id, damage: Math.round(dmg), casts: castsByName.get(nameOf(spell_id)) ?? 0 };
