@@ -527,13 +527,15 @@ export function buildCdPlan(
     const spellId = cd.spell_id ?? null;
     const ability = spellId != null ? abilities[spellId] : undefined;
     if (spellId != null && !ability) logWarn('buildCdPlan: ability id missing from ability map', spellId);
+    // First cast and uses/min are user-only stats; gate them on the same use-share majority the analysis uses.
+    const usedByMajority = cdBench != null && usedShare(cdBench) >= MIN_USE_SHARE_FRAC;
     return {
       name: cd.name,
       spellId,
       icon: ability?.icon ?? '',
-      firstCastS: cdBench?.avg_first_cast_s ?? null,
+      firstCastS: usedByMajority ? cdBench!.avg_first_cast_s : null,
       uses: cdBench?.avg_uses ?? null,
-      usesPerMin: cdBench?.uses_per_min.avg ?? null,
+      usesPerMin: usedByMajority ? cdBench!.uses_per_min.avg : null,
       bloodlust: (cdBench?.bl_pct ?? 0) >= BL_CONSENSUS_PCT,
       bloodlustPct: (cdBench?.bl_pct ?? 0) >= BL_CONSENSUS_PCT ? cdBench!.bl_pct : null,
       holds,
