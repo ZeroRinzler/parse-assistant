@@ -1,6 +1,16 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { TestBed } from '@angular/core/testing';
+import { provideZonelessChangeDetection, signal } from '@angular/core';
+import { FormControl } from '@angular/forms';
+import { EMPTY } from 'rxjs';
 import { PlayerDetailGroups, WclFight, WclPlayer, WclReport } from '../../core/models/wcl.models';
+import { WclApiService } from '../../core/services/wcl-api';
+import { SelectionStore } from '../../core/services/selection-store';
+import { LiveReportSyncService } from '../../core/services/live-report-sync';
+import { MapFeatureService } from './map/map.service';
+import { LiveCaptureFeatureService } from './live/live-capture.service';
 import {
+  PostRaidComponent,
   specOf, extractCode, isValidReportCode, buildFights, buildPlayers, visiblePlayersOf, pickPlayerId, pickLivePlayerId,
   livePollActionOf,
 } from './post-raid';
@@ -206,5 +216,90 @@ describe('specOf', () => {
 
   it('returns "" when the player id is not present', () => {
     expect(specOf({}, 99)).toBe('');
+  });
+});
+
+describe('PostRaidComponent sticky player name', () => {
+  const REPORT_CODE = 'grBQ3vTHXAtPa4JK';                         // a valid 16-character report code
+  const ABSENT_STICKY_NAME = 'Ghost';                            // a sticky character not present in the loaded report
+  const FALLBACK_PLAYER = { id: 1, name: 'Anya', spec: 'SubtletyRogue' }; // alphabetically first -> the auto-select fallback
+  const PICKED_PLAYER = { id: 2, name: 'Bram', spec: 'FrostMage' };       // the player the user explicitly switches to
+
+  const groups: PlayerDetailGroups = {
+    dps: [
+      { id: FALLBACK_PLAYER.id, type: 'Rogue', name: FALLBACK_PLAYER.name, specs: [{ spec: 'Subtlety' }] },
+      { id: PICKED_PLAYER.id, type: 'Mage', name: PICKED_PLAYER.name, specs: [{ spec: 'Frost' }] },
+    ],
+  };
+
+  function report(): WclReport {
+    return {
+      title: 'Test', startTime: 0,
+      fights: [fight({
+        id: 10, name: 'Boss', encounterID: 100, startTime: 0, endTime: 10_000, kill: true,
+        friendlyPlayers: [FALLBACK_PLAYER.id, PICKED_PLAYER.id],
+      })],
+      masterData: {
+        actors: [FALLBACK_PLAYER, PICKED_PLAYER].map(p => ({ id: p.id, name: p.name, subType: p.spec, server: '' })),
+        enemies: [], abilities: [],
+      },
+    };
+  }
+
+  const noop = (): void => undefined;
+
+  function mount(): { component: PostRaidComponent & Record<string, unknown>; store: SelectionStore } {
+    const wclApi = {
+      getReport: () => Promise.resolve(report()),
+      getReportFights: () => Promise.resolve(report().fights),
+      getPlayerDetails: () => Promise.resolve(groups),
+    } as unknown as WclApiService;
+    const mapFeature = { clear: noop, prepare: () => Promise.resolve() } as unknown as MapFeatureService;
+    const liveCapture = { liveEnabled: signal(false), clear: noop, prepare: noop, setStatus: noop } as unknown as LiveCaptureFeatureService;
+    const liveSync = { pollTriggers: () => EMPTY } as unknown as LiveReportSyncService;
+    TestBed.configureTestingModule({
+      providers: [
+        provideZonelessChangeDetection(),
+        PostRaidComponent,
+        { provide: WclApiService, useValue: wclApi },
+        { provide: MapFeatureService, useValue: mapFeature },
+        { provide: LiveCaptureFeatureService, useValue: liveCapture },
+        { provide: LiveReportSyncService, useValue: liveSync },
+      ],
+    });
+    return {
+      component: TestBed.inject(PostRaidComponent) as PostRaidComponent & Record<string, unknown>,
+      store: TestBed.inject(SelectionStore),
+    };
+  }
+
+  async function loadReport(component: Record<string, unknown>): Promise<void> {
+    (component['reportControl'] as FormControl<string>).setValue(REPORT_CODE);
+    await (component['loadReport'] as () => Promise<void>)();
+  }
+
+  beforeEach(() => localStorage.clear());
+
+  it('keeps the sticky name when a loaded report auto-selects a fallback player instead', async () => {
+    const { component, store } = mount();
+    store.savePostRaid({ playerName: ABSENT_STICKY_NAME });
+
+    await loadReport(component);
+
+    // The sticky character is absent, so the page auto-selects the alphabetical fallback...
+    expect((component['selectedPlayerId'] as () => number | null)()).toBe(FALLBACK_PLAYER.id);
+    // ...but that automatic pick must not overwrite the sticky name the user chose earlier.
+    expect(store.loadPostRaid()?.playerName).toBe(ABSENT_STICKY_NAME);
+  });
+
+  it('persists the player name when the user explicitly picks one', async () => {
+    const { component, store } = mount();
+    store.savePostRaid({ playerName: ABSENT_STICKY_NAME });
+    await loadReport(component);
+
+    (component['playerControl'] as FormControl<number | null>).setValue(PICKED_PLAYER.id);
+    await (component['onPlayerChange'] as () => Promise<void>)();
+
+    expect(store.loadPostRaid()?.playerName).toBe(PICKED_PLAYER.name);
   });
 });

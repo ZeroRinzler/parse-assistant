@@ -393,7 +393,6 @@ export class PostRaidComponent {
       this._applyAutoPlayer();
       // Set reportCode last - this activates the polling pipeline if liveSync is on.
       this.reportCode.set(code);
-      this._persistPlayerName();
       await this.resolveSelection();
     } catch (err) {
       logWarn('PostRaidComponent.loadReport', err);
@@ -438,7 +437,6 @@ export class PostRaidComponent {
       const visible = visiblePlayersOf(this.fights(), this.players(), latest.id);
       this.fightControl.setValue(latest.id);
       this.playerControl.setValue(pickLivePlayerId(visible, currentName));
-      this._persistPlayerName();
       await this.resolveSelection();
       this.liveCapture.setStatus(`Updated ${new Date().toLocaleTimeString()} · ${latest.name}`);
     } catch (err) {
@@ -452,11 +450,11 @@ export class PostRaidComponent {
   protected async onFightChange(): Promise<void> {
     if (this.liveSyncEnabled()) return;
     this._applyAutoPlayer();
-    this._persistPlayerName();
     await this.resolveSelection();
   }
 
   protected async onPlayerChange(): Promise<void> {
+    // Persist only on an explicit pick, so an auto-select fallback never overwrites the sticky name.
     this._persistPlayerName();
     await this.resolveSelection();
   }
@@ -515,9 +513,7 @@ export class PostRaidComponent {
   }
 
   private _persistPlayerName(): void {
-    // Persist only the player NAME, and only when one resolves - never clobber the sticky
-    // value with null while nothing is selected (e.g. mid report switch). Selection is not
-    // mirrored to the URL (see the class doc): this localStorage value is the only sticky state.
+    // Guard the write so an unresolved selection never overwrites the sticky name with null.
     const playerName = this.players().find(player => player.id === this.selectedPlayerId())?.name ?? null;
     if (playerName) this.selectionStore.savePostRaid({ playerName });
   }
