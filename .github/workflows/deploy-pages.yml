@@ -22,30 +22,30 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build-and-publish:
+  # Builds the shell + every open PR preview. Runs untrusted PR head code (npm ci lifecycle
+  # scripts + the PR's own build config), so it holds NO write credential: no app token, and
+  # persist-credentials:false keeps even the read-only GITHUB_TOKEN out of .git/config. A
+  # compromised PR build therefore has nothing to steal and cannot push anywhere. The built
+  # static output is handed to the publish job as artifacts.
+  build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     # The gh-pages root slices this run owns: push -> the prod shell (main/ plus the root
     # index.html and 404.html), pull_request -> the pr-* previews, dispatch -> both (full
     # resync). data/ (owned by ingest-parses) and CNAME ride along untouched.
     env:
       BUILD_SHELL: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
       BUILD_PREVIEWS: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' }}
+    outputs:
+      open_prs: ${{ steps.open-prs.outputs.numbers }}
 
     steps:
-      - name: Mint GitHub App token
-        id: app-token
-        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
-        with:
-          app-id: ${{ secrets.INGEST_APP_ID }}
-          private-key: ${{ secrets.INGEST_APP_PRIVATE_KEY }}
-
-      # Every trigger builds the current tip of main (idempotent under the serialized
-      # group); the persisted app token authenticates the pull/N/head fetches and the
-      # gh-pages force-push below.
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           ref: main
-          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: false
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -91,9 +91,9 @@ jobs:
             core.info(`Open PRs (base main): ${numbers.join(', ') || '(none)'}`);
             core.setOutput('numbers', numbers.join(' '));
 
-      # A preview that fails to build is skipped with a warning, so one bad PR never
-      # blocks the reap of the others. The loop ends detached on the last PR head; fine,
-      # the publish below works in its own worktree.
+      # A preview that fails to build is skipped with a warning, so one bad PR never blocks
+      # the reap of the others. pull/N/head is UNTRUSTED contributor code; this job holds no
+      # write credential, so the npm ci / build it runs cannot reach a token or push.
       - name: Build all open PR previews
         if: env.BUILD_PREVIEWS == 'true'
         env:
@@ -117,12 +117,73 @@ jobs:
             echo "::endgroup::"
           done
 
+      - name: Upload shell artifact
+        if: env.BUILD_SHELL == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: shell-out
+          path: shell-out
+          include-hidden-files: true
+          retention-days: 1
+
+      - name: Upload previews artifact
+        if: env.BUILD_PREVIEWS == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: preview-out
+          path: preview-out
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 1
+
+  # Composes gh-pages from the already-built artifacts and force-pushes. Runs NO PR-authored
+  # code - only trusted git plumbing over static files - so it is the only job that holds the
+  # write-scoped app token.
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    env:
+      BUILD_SHELL: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
+      BUILD_PREVIEWS: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' }}
+      OPEN_PRS: ${{ needs.build.outputs.open_prs }}
+
+    steps:
+      - name: Mint GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
+        with:
+          app-id: ${{ secrets.INGEST_APP_ID }}
+          private-key: ${{ secrets.INGEST_APP_PRIVATE_KEY }}
+
+      # The persisted app token authenticates the gh-pages force-push below. Safe here
+      # because this job never checks out or runs PR code.
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: main
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Download shell artifact
+        if: env.BUILD_SHELL == 'true'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: shell-out
+          path: shell-out
+
+      - name: Download previews artifact
+        if: env.BUILD_PREVIEWS == 'true'
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: preview-out
+          path: preview-out
+
       # Compose gh-pages in a scratch worktree: replace only the slices this run owns and
       # force-push one flat commit; everything unowned rides along from origin/gh-pages.
       # A byte-identical tree pushes nothing, so no-op runs cause no Pages redeploy.
       - name: Publish to gh-pages
-        env:
-          OPEN_PRS: ${{ steps.open-prs.outputs.numbers }}
         run: |
           set -euo pipefail
           git fetch --no-tags --depth 1 origin gh-pages
