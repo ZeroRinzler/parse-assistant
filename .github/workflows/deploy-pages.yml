@@ -8,9 +8,9 @@ on:
   workflow_dispatch:
 
 # GITHUB_TOKEN scopes for the github-script steps only; the gh-pages push authenticates
-# with the app token persisted by the checkout.
+# with the app token persisted by the checkout, so the default token needs no repo write.
 permissions:
-  contents: write
+  contents: read
   pull-requests: read
   deployments: write
 
