@@ -18,6 +18,12 @@ const DATA_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..
 // Position payloads reach tens of MB; express's default 100kb body cap would reject them.
 const BODY_LIMIT = '200mb';
 
+// The ingest app (ng serve) is the only legitimate caller; a wildcard origin would let any
+// site open in the dev's browser drive this unauthenticated, write-capable store.
+const ALLOWED_ORIGINS = ['http://localhost:4200', 'http://127.0.0.1:4200'];
+// Reject any other Host so a rebound DNS name resolving to loopback cannot reach the store.
+const ALLOWED_HOSTS = new Set([`localhost:${PORT}`, `127.0.0.1:${PORT}`]);
+
 // Monotonic suffix so two concurrent writes to the same path never collide on the temp name.
 let tempWriteCounter = 0;
 
@@ -31,7 +37,11 @@ function resolveContained(segments) {
 }
 
 const app = express();
-app.use(cors());
+app.use((req, res, next) => {
+  if (!ALLOWED_HOSTS.has(req.headers.host)) return res.status(403).end();
+  next();
+});
+app.use(cors({ origin: ALLOWED_ORIGINS }));
 app.use(express.text({ type: 'application/json', limit: BODY_LIMIT }));
 
 app.put('/api/data/*path', async (req, res) => {
@@ -92,6 +102,6 @@ app.get('/api/dirs/*path', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '127.0.0.1', () => {
   console.log(`[ingest-server] file store for ${DATA_ROOT} listening on http://localhost:${PORT}`);
 });
