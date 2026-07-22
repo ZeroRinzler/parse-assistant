@@ -108,6 +108,10 @@
               "optimization": false,
               "extractLicenses": false,
               "sourceMap": true,
+              "index": {
+                "input": "src/index.ingest.html",
+                "output": "index.html"
+              },
               "assets": [
                 {
                   "glob": "**/*",
