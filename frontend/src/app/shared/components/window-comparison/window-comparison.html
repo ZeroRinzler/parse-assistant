@@ -20,6 +20,7 @@
       role="listbox"
       tabindex="0"
       [attr.aria-label]="heading()"
+      [attr.aria-activedescendant]="activeOptionId()"
       (keydown)="onKeydown($event)">
       <div class="flex flex-wrap items-start gap-1.5 px-0.5">
         @for (cell of timelineCells(); track cell.kind === 'window' ? 'w' + cell.index : 'g' + cell.id) {
@@ -48,7 +49,9 @@
               <button
                 type="button"
                 role="option"
-                [class]="'relative flex items-center justify-center w-10 h-10 rounded-lg overflow-hidden bg-[var(--bg)] border border-[var(--border)] ' + iconTone + (active ? ' outline outline-2 outline-offset-0 outline-[var(--gold)]' : '')"
+                tabindex="-1"
+                [id]="optionId(cell.index)"
+                [class]="'relative flex items-center justify-center w-10 h-10 rounded-lg overflow-hidden bg-[var(--bg)] border border-[var(--border)] ' + iconTone + (active ? ' outline outline-2 outline-offset-0 outline-[var(--gold)]' : ' focus:outline-none')"
                 [attr.aria-selected]="active"
                 [attr.aria-label]="(w.timeStartS | formatDuration)"
                 (click)="select(cell.index)">

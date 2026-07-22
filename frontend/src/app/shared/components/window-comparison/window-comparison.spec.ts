@@ -107,6 +107,44 @@ describe('WindowComparisonComponent selection', () => {
   });
 });
 
+describe('WindowComparisonComponent keyboard navigation', () => {
+  const threeWindows = () => [
+    win({ playerPct: 95, topAvg: 100 }),
+    win({ playerPct: 40, topAvg: 100 }), // worst -> active by default
+    win({ playerPct: 120, topAvg: 100 }),
+  ];
+  const press = (key: string) => new KeyboardEvent('keydown', { key });
+
+  it('moves the active window one chip to the right on ArrowRight', () => {
+    const { vm } = mountVm(WindowComparisonComponent, { windows: threeWindows(), higherIsBetter: true });
+    expect((vm['activeIndex'] as () => number)()).toBe(1);
+    (vm['onKeydown'] as (e: KeyboardEvent) => void)(press('ArrowRight'));
+    expect((vm['activeIndex'] as () => number)()).toBe(2);
+  });
+
+  it('moves the active window one chip to the left on ArrowLeft', () => {
+    const { vm } = mountVm(WindowComparisonComponent, { windows: threeWindows(), higherIsBetter: true });
+    (vm['onKeydown'] as (e: KeyboardEvent) => void)(press('ArrowLeft'));
+    expect((vm['activeIndex'] as () => number)()).toBe(0);
+  });
+
+  it('clamps at the ends instead of wrapping', () => {
+    const { vm } = mountVm(WindowComparisonComponent, { windows: threeWindows(), higherIsBetter: true });
+    (vm['onKeydown'] as (e: KeyboardEvent) => void)(press('ArrowLeft'));  // to 0
+    (vm['onKeydown'] as (e: KeyboardEvent) => void)(press('ArrowLeft'));  // stays at 0
+    expect((vm['activeIndex'] as () => number)()).toBe(0);
+  });
+
+  it('exposes exactly one active chip via aria-activedescendant, tracking the active index', () => {
+    const { vm } = mountVm(WindowComparisonComponent, { windows: threeWindows(), higherIsBetter: true });
+    const activeOptionId = vm['activeOptionId'] as () => string;
+    const optionId = (vm['optionId'] as (i: number) => string).bind(vm);
+    expect(activeOptionId()).toBe(optionId(1));
+    (vm['onKeydown'] as (e: KeyboardEvent) => void)(press('ArrowRight'));
+    expect(activeOptionId()).toBe(optionId(2));
+  });
+});
+
 describe('WindowComparisonComponent selection reset on windows swap', () => {
   it('drops a stale manual pick when the windows input swaps, falling back to the worst-window auto-selection', () => {
     // List A has four windows so chip index 3 is a valid manual pick.

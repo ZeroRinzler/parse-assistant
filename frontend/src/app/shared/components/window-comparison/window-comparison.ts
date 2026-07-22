@@ -13,6 +13,9 @@ type TimelineCell =
   | { readonly kind: 'window'; readonly index: number }
   | { readonly kind: 'gap'; readonly id: string };
 
+// Distinguishes option ids when several comparison cards share a page (burst + defensive).
+let nextInstanceSeq = 0;
+
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-window-comparison',
@@ -70,6 +73,15 @@ export class WindowComparisonComponent {
 
   protected readonly activeWindow = computed(() =>
     this.windows()[this.activeIndex()] ?? null);
+
+  private readonly instanceId = `wl-window-comparison-${nextInstanceSeq++}`;
+
+  protected optionId(index: number): string {
+    return `${this.instanceId}-opt-${index}`;
+  }
+
+  // The listbox keeps focus; aria-activedescendant points screen readers at the active chip.
+  protected readonly activeOptionId = computed(() => this.optionId(this.activeIndex()));
 
   // Flat left-to-right sequence of chips interleaved with dashed pacing slots, so
   // the template renders one row without measuring time: chip size is fixed and
