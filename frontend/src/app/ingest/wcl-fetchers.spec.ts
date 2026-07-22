@@ -126,14 +126,18 @@ describe('getRankingsLite', () => {
   });
 
   it('tries partitions newest-first and falls back when one is empty', async () => {
+    const queried: (number | undefined)[] = [];
     const client = fakeClient({
       query: (_gql, vars) => {
         const partition = (vars as { partition?: number }).partition;
+        queried.push(partition);
         const rankings = partition === 3 ? [] : [{ name: 'A', amount: 10, duration: 1000, report: { code: 'r1', fightID: 1 } }];
         return { worldData: { encounter: { name: 'Boss', characterRankings: { rankings } } } };
       },
     });
     const ranked = await getRankingsLite(client, 'SubtletyRogue', 100, SPEC_WCL, 10, [3, 2]);
+    // The partition variable is sent on each attempt, newest first, stopping once one returns rankings.
+    expect(queried).toEqual([3, 2]);
     expect(ranked).toHaveLength(1);
     expect(ranked[0].player).toBe('A');
   });

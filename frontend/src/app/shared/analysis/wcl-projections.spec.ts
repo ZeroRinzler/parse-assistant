@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach, MockInstance } from 'vitest';
 import {
   abilityIcons, normalizeAbilityId, toParseRankings, unwrapRankings, windowSpells,
-  WCL_MELEE_EVENT_ABILITY_ID, WOW_AUTO_ATTACK_SPELL_ID, WCL_SYNTHETIC_SOURCE_FALLBACK_ID,
+  WCL_SYNTHETIC_SOURCE_FALLBACK_ID,
 } from './wcl-projections';
 
 // A raw ranking row as WCL surfaces it in the characterRankings blob.
@@ -123,7 +123,10 @@ describe('windowSpells', () => {
 
 describe('normalizeAbilityId', () => {
   it('maps the WCL melee event id (which gameData resolves to "Word of Recall (OLD)") to Auto Attack', () => {
-    expect(normalizeAbilityId(WCL_MELEE_EVENT_ABILITY_ID)).toBe(WOW_AUTO_ATTACK_SPELL_ID);
+    // Independent literals, not the SUT constants, so a drift in either wire value fails here.
+    const WCL_MELEE_WIRE_ID = 1;
+    const AUTO_ATTACK_GAME_SPELL_ID = 6603;
+    expect(normalizeAbilityId(WCL_MELEE_WIRE_ID)).toBe(AUTO_ATTACK_GAME_SPELL_ID);
   });
 
   it('folds every negative (synthetic, sourceless) id onto the "I Don\'t Know" catch-all', () => {

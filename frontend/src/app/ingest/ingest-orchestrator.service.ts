@@ -25,7 +25,7 @@ import { getEncounters, type CurrentContent } from './wcl-fetchers';
 import { mapClassesToSpecMeta, specWclFromMetas, type SpecWclMap } from './wcl-mappers';
 import { type WclQueryClient, BudgetExceededError } from './wcl-client';
 import { INGEST_VERSION } from './ingest-version';
-import { orderSpecsByVersion, orderEncountersByMissingFirst, SPEC_LIMIT, type SpecOrderEntry } from './ordering';
+import { specsForRun, orderEncountersByMissingFirst, type SpecOrderEntry } from './ordering';
 import {
   encounterSkipKey, signatureAfterFetch, readStoredSignature, readStoredVersion, signatureMatches,
   stampSignature, stampBurstFile, readInaccessibleParses,
@@ -204,7 +204,7 @@ export class IngestOrchestratorService {
     publishSummary({ succeeded, failed, budgetStopped });
   }
 
-  /** Rulebook-bearing specs in the orderSpecsByVersion work order, capped at SPEC_LIMIT (cheap file reads, zero WCL budget). */
+  /** Rulebook-bearing specs in the specsForRun order (version-ordered, capped at SPEC_LIMIT; cheap file reads, zero WCL budget). */
   private async orderedSpecsFromDisk(): Promise<string[]> {
     const onDisk = await this.dataFile.listSpecs();
     const withRulebook: string[] = [];
@@ -236,7 +236,7 @@ export class IngestOrchestratorService {
       const displayVersion = storedVersions.length ? Math.min(...storedVersions) : null;
       return { spec, entry, displayVersion };
     }));
-    const specs = orderSpecsByVersion(orderInputs.map(input => input.entry)).slice(0, SPEC_LIMIT);
+    const specs = specsForRun(orderInputs.map(input => input.entry));
     const displayBySpec = new Map(orderInputs.map(input => [input.spec, input] as const));
     const versionLines = specs.map(spec => {
       const info = displayBySpec.get(spec);

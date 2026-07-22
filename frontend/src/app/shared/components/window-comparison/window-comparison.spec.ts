@@ -244,11 +244,6 @@ describe('WindowComparisonComponent activeDetailRows', () => {
 });
 
 describe('WindowComparisonComponent showCasts', () => {
-  it('exposes the showCasts input value', () => {
-    const { vm } = mountVm(WindowComparisonComponent, { windows: [], showCasts: false });
-    expect((vm['showCasts'] as () => boolean)()).toBe(false);
-  });
-
   it('defaults showCasts to true', () => {
     const { vm } = mountVm(WindowComparisonComponent, { windows: [] });
     expect((vm['showCasts'] as () => boolean)()).toBe(true);

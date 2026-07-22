@@ -99,7 +99,9 @@ describe('event factories', () => {
     });
 
     it('forwards the target to both edge events', () => {
-      for (const edge of buffWindow(FEINT, FROM_S, TO_S, { target: PLAYER_ID })) {
+      const edges = buffWindow(FEINT, FROM_S, TO_S, { target: PLAYER_ID });
+      expect(edges).toHaveLength(2);
+      for (const edge of edges) {
         expect(edge).toMatchObject({ sourceID: PLAYER_ID, targetID: PLAYER_ID });
       }
     });

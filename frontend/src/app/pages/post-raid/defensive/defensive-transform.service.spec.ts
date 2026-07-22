@@ -79,19 +79,22 @@ describe('summarizeDefensiveCasts', () => {
 });
 
 describe('findParseDefensiveWindows', () => {
-  it('slices damage taken by the buff span and picks the dominant enemy', () => {
+  it('slices damage taken by the buff span (inclusive end, amount + absorbed) and picks the dominant enemy', () => {
     const windows = buildBuffWindows([applyBuff(CLOAK_OF_SHADOWS, 10), removeBuff(CLOAK_OF_SHADOWS, 15)], 0);
+    const BOSS_ABSORB = 250;
     const result = findParseDefensiveWindows(
       [
-        damageTaken(BOSS_HIT, 12, 500, { source: BOSS_ACTOR }),
-        damageTaken(ADD_HIT, 13, 200, { source: ADD_ACTOR }),
+        damageTaken(BOSS_HIT, 12, 500, { source: BOSS_ACTOR, absorbed: BOSS_ABSORB }),
+        damageTaken(ADD_HIT, 15, 200, { source: ADD_ACTOR }), // at the exact remove second: the inclusive end must count it
         damageTaken(BOSS_HIT, 100, 999, { source: BOSS_ACTOR }),
       ],
       0, 300, windows, [CLOAK], new Map([[BOSS_ACTOR, BOSS_GAME_ID], [ADD_ACTOR, ADD_GAME_ID]]),
     );
     expect(result).toHaveLength(1);
-    expect(result[0]).toMatchObject({ defensive_name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS, window_damage: 700, ref_game_id: BOSS_GAME_ID });
-    expect(result[0].ability_breakdown[0]).toMatchObject({ spell_id: BOSS_HIT, damage: 500 });
+    // window damage = (500 + 250 absorbed) + 200 at the inclusive end = 950; parse total = 950 + 999 = 1949.
+    expect(result[0]).toMatchObject({ defensive_name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS, window_damage: 950, ref_game_id: BOSS_GAME_ID });
+    expect(result[0].pct_of_total).toBeCloseTo(950 / 1949);
+    expect(result[0].ability_breakdown[0]).toMatchObject({ spell_id: BOSS_HIT, damage: 750 });
   });
 
   it('runs an open buff to fight end (no rulebook duration)', () => {
@@ -232,7 +235,8 @@ describe('buildHoldTargets', () => {
   it('surfaces a cast index a majority held, with the prior-relative band', () => {
     const TOTAL_PARSES = 2;
     const ACTUAL_A_S = 100, DELAY_A_S = 40;
-    const ACTUAL_B_S = 110, DELAY_B_S = 50;
+    // actuals spread (stddev ~21) differs from the delays spread (stddev ~7.1) so band_s pins the delay stddev.
+    const ACTUAL_B_S = 130, DELAY_B_S = 50;
     const EXPECTED_TARGET_S = (ACTUAL_A_S + ACTUAL_B_S) / 2;  // median absolute clock
     const EXPECTED_DELAY_S = (DELAY_A_S + DELAY_B_S) / 2;     // median prior-relative delay
     const summaries: ParseDefensiveSummary[] = [
@@ -245,7 +249,18 @@ describe('buildHoldTargets', () => {
       target_s: EXPECTED_TARGET_S, delay_s: EXPECTED_DELAY_S, effective_cd_s: EFFECTIVE_CD_S,
       count: TOTAL_PARSES, total_samples: TOTAL_PARSES,
     });
-    expect(targets[String(HELD_INDEX)].band_s).toBeGreaterThanOrEqual(HOLD_BAND_MIN_S);
+    // delays [40, 50]: sample stddev sqrt(50) = 7.07 -> round 7.1, above the 5s floor.
+    expect(targets[String(HELD_INDEX)].band_s).toBe(7.1);
+  });
+
+  it('floors the band at HOLD_BAND_MIN_S when the delay spread is tiny', () => {
+    const TOTAL_PARSES = 2;
+    const summaries: ParseDefensiveSummary[] = [
+      { name: 'C', cast_times_s: [], first_cast_s: 0, uses: 2, fight_duration_s: FIGHT_DUR_S, hold_windows: [{ cast_index: HELD_INDEX, actual_s: 100, delay_s: 40 }], cast_pattern: 'hold' },
+      { name: 'C', cast_times_s: [], first_cast_s: 0, uses: 2, fight_duration_s: FIGHT_DUR_S, hold_windows: [{ cast_index: HELD_INDEX, actual_s: 102, delay_s: 41 }], cast_pattern: 'hold' },
+    ];
+    // delays [40, 41]: sample stddev sqrt(0.5) = 0.71 < 5, so the band floors at HOLD_BAND_MIN_S.
+    expect(buildHoldTargets(summaries, EFFECTIVE_CD_S, TOTAL_PARSES)[String(HELD_INDEX)].band_s).toBe(HOLD_BAND_MIN_S);
   });
 
   it('keys consensus on TOTAL parses, not users-only (1 of 3 does not surface)', () => {
@@ -265,17 +280,20 @@ describe('buildDefensiveBenchmark', () => {
     const EXPECTED_AVG_FIRST_CAST_S = (FIRST_A_S + FIRST_B_S) / 2;                 // 15
     const EXPECTED_AVG_GAP_S = ((SECOND_A_S - FIRST_A_S) + (SECOND_B_S - FIRST_B_S)) / 2; // 135
     const USERS = 2;
+    const USES_A = 2, USES_B = 3;                 // distinct so avg_uses (2.5) differs from the user count (2)
+    const EXPECTED_AVG_USES = (USES_A + USES_B) / 2;
     const summaries: ParseDefensiveSummary[] = [
-      { name: 'C', cast_times_s: [FIRST_A_S, SECOND_A_S], first_cast_s: FIRST_A_S, uses: 2, fight_duration_s: FIGHT_DUR_S, hold_windows: [], cast_pattern: 'on_cooldown' },
-      { name: 'C', cast_times_s: [FIRST_B_S, SECOND_B_S], first_cast_s: FIRST_B_S, uses: 2, fight_duration_s: FIGHT_DUR_S, hold_windows: [], cast_pattern: 'on_cooldown' },
+      { name: 'C', cast_times_s: [FIRST_A_S, SECOND_A_S], first_cast_s: FIRST_A_S, uses: USES_A, fight_duration_s: FIGHT_DUR_S, hold_windows: [], cast_pattern: 'on_cooldown' },
+      { name: 'C', cast_times_s: [FIRST_B_S, SECOND_B_S], first_cast_s: FIRST_B_S, uses: USES_B, fight_duration_s: FIGHT_DUR_S, hold_windows: [], cast_pattern: 'on_cooldown' },
     ];
     const benchmark = buildDefensiveBenchmark(summaries, CLOAK.cooldown, TOTAL_PARSES);
     expect(benchmark.sample_count).toBe(TOTAL_PARSES);   // total parses
     expect(benchmark.used_sample_count).toBe(USERS);     // users-only
     expect(benchmark.avg_first_cast_s).toBe(EXPECTED_AVG_FIRST_CAST_S);
     expect(benchmark.avg_gap_s).toBe(EXPECTED_AVG_GAP_S);
-    expect(benchmark.avg_uses).toBe(USERS);
-    expect(benchmark.uses_per_min.avg).toBeGreaterThan(0);
+    expect(benchmark.avg_uses).toBe(EXPECTED_AVG_USES);
+    // uses/min per parse: 2/300*60 = 0.4 and 3/300*60 = 0.6 -> mean 0.5, min 0.4, max 0.6.
+    expect(benchmark.uses_per_min).toMatchObject({ avg: 0.5, min: 0.4, max: 0.6 });
   });
 });
 

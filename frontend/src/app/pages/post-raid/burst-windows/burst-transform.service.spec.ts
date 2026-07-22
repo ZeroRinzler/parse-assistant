@@ -144,17 +144,21 @@ describe('windowAbilityBreakdown', () => {
   const nameOf = (spellId: number): string => new Map([[EVISCERATE, 'Eviscerate'], [BLACK_POWDER, 'Black Powder']]).get(spellId) ?? `Spell ${spellId}`;
 
   it('ranks abilities by window damage, counts casts by name, and flags passive abilities', () => {
-    const EVIS_DMG = 600;
+    const SB_DMG = 600;
     const BP_DMG = 400;
+    // The cast id (SHADOW_BLADES) and the damage id (SHADOW_BLADES_DAMAGE) share one name, so cast
+    // counting must key by NAME: a by-id count would miss the cast and report 0.
+    const bridgeNameOf = (spellId: number): string =>
+      new Map([[SHADOW_BLADES, 'Shadow Blades'], [SHADOW_BLADES_DAMAGE, 'Shadow Blades'], [BLACK_POWDER, 'Black Powder']]).get(spellId) ?? `Spell ${spellId}`;
     // DamageHit = [ts, dmg, abilityId]; window is [1000ms, 3000ms).
-    const windowHits: [number, number, number][] = [[1000, EVIS_DMG, EVISCERATE], [1500, BP_DMG, BLACK_POWDER]];
-    // CastRow = [ts, abilityId]; one Eviscerate cast in-window, one Black Powder cast out-of-window.
-    const castRows: [number, number][] = [[1200, EVISCERATE], [9000, BLACK_POWDER]];
-    const castNamesInParse = new Set(['Eviscerate']);
-    const breakdown = windowAbilityBreakdown(windowHits, castRows, 1000, 3000, nameOf, castNamesInParse);
+    const windowHits: [number, number, number][] = [[1000, SB_DMG, SHADOW_BLADES_DAMAGE], [1500, BP_DMG, BLACK_POWDER]];
+    // CastRow = [ts, abilityId]; the Shadow Blades cast carries the CAST id, distinct from the damage id.
+    const castRows: [number, number][] = [[1200, SHADOW_BLADES], [9000, BLACK_POWDER]];
+    const castNamesInParse = new Set(['Shadow Blades']);
+    const breakdown = windowAbilityBreakdown(windowHits, castRows, 1000, 3000, bridgeNameOf, castNamesInParse);
     expect(breakdown).toEqual([
-      { spell_id: EVISCERATE, damage: EVIS_DMG, casts: 1, is_passive: false },
-      // Black Powder was cast somewhere in the parse? No -> passive, and 0 in-window casts.
+      { spell_id: SHADOW_BLADES_DAMAGE, damage: SB_DMG, casts: 1, is_passive: false },
+      // Black Powder was never cast in the parse -> passive, and 0 in-window casts.
       { spell_id: BLACK_POWDER, damage: BP_DMG, casts: 0, is_passive: true },
     ]);
   });
@@ -192,8 +196,14 @@ describe('windowAbilityBreakdown', () => {
 describe('findParseWindows', () => {
   // A contiguous burst (damage at 10,11,12,13) on a long fight forms one dense run,
   // trimmed to the bins that actually carry damage, so it measures [10s, 14s).
-  it('detects and measures a damage-density burst as a single window', () => {
-    const windows = scanWindows(burstAt(10), LONG_FIGHT_MS);
+  it('detects and measures a damage-density burst as a single window (amount + absorbed)', () => {
+    const ABSORBED = 400;
+    // The first bin's hit is shielded (amount + absorbed), so the window-damage sum must count absorbed.
+    const burst = [
+      damage(SHADOW_BLADES_DAMAGE, 10, BIN_DAMAGE - ABSORBED, { absorbed: ABSORBED }),
+      ...[1, 2, 3].map(offset => damage(SHADOW_BLADES_DAMAGE, 10 + offset, BIN_DAMAGE)),
+    ];
+    const windows = scanWindows(burst, LONG_FIGHT_MS);
     expect(windows).toHaveLength(1);
     expect(windows[0]).toMatchObject({ time_s: 10, window_length_s: 4, window_damage: 4 * BIN_DAMAGE });
     expect(windows[0].ability_breakdown[0]).toMatchObject({ spell_id: SHADOW_BLADES_DAMAGE, damage: 4 * BIN_DAMAGE });
@@ -246,11 +256,13 @@ describe('findParseWindows', () => {
     expect(windows.some(window => window.time_s === 10)).toBe(false);
   });
 
-  it('keeps a dense window at or above the significance share of fight damage', () => {
-    // 600 of 10600 total = 5.66% >= SIGNIFICANCE_PCT -> kept.
-    const significantDamage = 600;
-    const windows = scanWindows([damage(EVISCERATE, 10, significantDamage), damage(BLACK_POWDER, 50, 10_000)], HUNDRED_S_FIGHT_MS);
-    expect(windows.some(window => window.time_s === 10 && window.window_damage === significantDamage)).toBe(true);
+  it('keeps a dense window exactly at the significance share (strict), dropping one just below', () => {
+    // Spike beside a 9850 anchor on a 1000-bin fight. 150 / 10000 = 1.5% = SIGNIFICANCE_PCT exactly -> kept (strict <).
+    const atBoundary = scanWindows([damage(EVISCERATE, 10, 150), damage(BLACK_POWDER, 500, 9850)], 1_000_000);
+    expect(atBoundary.some(window => window.time_s === 10 && window.window_damage === 150)).toBe(true);
+    // 149 / 9999 = 1.49% < 1.5% -> dropped, so the strict boundary is pinned on both sides.
+    const belowBoundary = scanWindows([damage(EVISCERATE, 10, 149), damage(BLACK_POWDER, 500, 9850)], 1_000_000);
+    expect(belowBoundary.some(window => window.time_s === 10)).toBe(false);
   });
 
   it('excludes a hit exactly on the window end (half-open)', () => {
@@ -326,10 +338,20 @@ describe('clusterParseWindows', () => {
   });
 
   it('emits a cluster present in enough parses, with common cds + ability stats', () => {
-    const out = clusterParseWindows([window(10), window(11)], 2);
+    // Distinct lengths [4,5,9] (mean 6 only), skewed times [10,11,14] (median 11, not mean 11.7), damages [500,900,700].
+    const members: ParseWindow[] = [
+      { ...window(10), window_length_s: 4, window_damage: 500 },
+      { ...window(11), window_length_s: 5, window_damage: 900 },
+      { ...window(14), window_length_s: 9, window_damage: 700 },
+    ];
+    const out = clusterParseWindows(members, 3);
     expect(out).toHaveLength(1);
-    expect(out[0]).toMatchObject({ time_s: 10.5, common_cds: ['Shadow Blades'], dmg_avg: BIN_DAMAGE, window_length_s: 6 });
-    expect(out[0].ability_breakdown[0]).toMatchObject({ spell_id: SHADOW_BLADES_DAMAGE, avg_damage: ABILITY_DAMAGE, count: 2 });
+    // time_s = median(10,11,14) = 11; window_length_s = mean(4,5,9) = 6; damages: mean 700, min 500, max 900, sample stddev 200.
+    expect(out[0]).toMatchObject({
+      time_s: 11, common_cds: ['Shadow Blades'], window_length_s: 6,
+      dmg_avg: 700, dmg_min: 500, dmg_max: 900, dmg_stddev: 200,
+    });
+    expect(out[0].ability_breakdown[0]).toMatchObject({ spell_id: SHADOW_BLADES_DAMAGE, avg_damage: ABILITY_DAMAGE, count: 3 });
   });
 
   it('does not emit avg_targets', () => {
@@ -346,6 +368,11 @@ describe('clusterParseWindows', () => {
   it('drops a cluster present in fewer parses than the consensus floor', () => {
     const three = [window(10), window(11), window(12)];
     expect(clusterParseWindows(three, 10)).toHaveLength(0);
+  });
+
+  it('drops a single-parse cluster even when the sample fraction alone would keep it', () => {
+    // sampleCount 2 -> the frac arm is 0.4*2 = 0.8, which 1 member would clear; the absolute max(2, ...) floor drops it.
+    expect(clusterParseWindows([window(10)], 2)).toHaveLength(0);
   });
 
   it('marks a clustered ability passive only when every member never cast it', () => {
@@ -384,20 +411,28 @@ describe('clusterParseWindows', () => {
     expect(out[0].dmg_avg).toBe(EXPECTED_AVG);
   });
 
-  it('gates and counts clustered abilities by distinct parses (1 of 4 does not surface)', () => {
+  it('gates clustered abilities and cds by a distinct-parse majority (exactly half surfaces, 1 of 4 does not)', () => {
     const SAMPLE_COUNT = 4;
-    const MAIN_DMG = 500, RARE_DMG = 100;
-    const withAbilities = (parseIndex: number, abilities: ParseWindow['ability_breakdown']): ParseWindow =>
-      ({ ...window(10 + parseIndex, false, parseIndex), ability_breakdown: abilities });
-    const main = { spell_id: SHADOW_BLADES_DAMAGE, damage: MAIN_DMG, casts: 1, is_passive: false };
-    const rare = { spell_id: EVISCERATE, damage: RARE_DMG, casts: 1, is_passive: false };
-    // 4 distinct parses share MAIN; only parse 0 carries RARE -> 0.25 < 0.5 majority -> dropped.
+    const main = { spell_id: SHADOW_BLADES_DAMAGE, damage: 500, casts: 1, is_passive: false };
+    const half = { spell_id: BLACK_POWDER, damage: 300, casts: 1, is_passive: false };
+    const rare = { spell_id: EVISCERATE, damage: 100, casts: 1, is_passive: false };
+    const member = (parseIndex: number, abilities: ParseWindow['ability_breakdown'], cds: string[]): ParseWindow =>
+      ({ ...window(10 + parseIndex, false, parseIndex), ability_breakdown: abilities, active_cds: cds });
+    // MAIN + 'Shadow Blades' in all 4; HALF + 'Vanish' in exactly 2 (2 >= 0.5*4 -> kept); RARE in 1 (0.25 < 0.5 -> dropped).
     const out = clusterParseWindows([
-      withAbilities(0, [main, rare]), withAbilities(1, [main]), withAbilities(2, [main]), withAbilities(3, [main]),
+      member(0, [main, half, rare], ['Shadow Blades', 'Vanish']),
+      member(1, [main, half], ['Shadow Blades', 'Vanish']),
+      member(2, [main], ['Shadow Blades']),
+      member(3, [main], ['Shadow Blades']),
     ], SAMPLE_COUNT);
     expect(out).toHaveLength(1);
-    expect(out[0].ability_breakdown).toHaveLength(1);
-    expect(out[0].ability_breakdown[0]).toMatchObject({ spell_id: SHADOW_BLADES_DAMAGE, count: 4 });  // count = distinct parses
+    const abilities = out[0].ability_breakdown.map(entry => entry.spell_id);
+    expect(abilities).toContain(SHADOW_BLADES_DAMAGE);  // 4 of 4
+    expect(abilities).toContain(BLACK_POWDER);          // exactly 2 of 4 -> the >= majority boundary
+    expect(abilities).not.toContain(EVISCERATE);        // 1 of 4 -> below majority
+    expect(out[0].ability_breakdown.find(entry => entry.spell_id === BLACK_POWDER)?.count).toBe(2);  // count = distinct parses
+    // common_cds share the same majority filter: 'Vanish' at exactly 2 of 4 must also surface.
+    expect(out[0].common_cds).toEqual(expect.arrayContaining(['Shadow Blades', 'Vanish']));
   });
 });
 

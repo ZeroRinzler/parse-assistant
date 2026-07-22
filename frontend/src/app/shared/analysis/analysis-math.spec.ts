@@ -121,10 +121,14 @@ describe('fmtClock', () => {
 
 describe('sortBySeverity', () => {
   it('orders critical first and success last, stable for equal ranks', () => {
+    // info and hold_suggestion share rank 2, so their input order must survive the sort.
     const findings = [
-      { severity: 'success' }, { severity: 'info' }, { severity: 'critical' },
+      { severity: 'success', message: 's' },
+      { severity: 'info', message: 'i' },
+      { severity: 'hold_suggestion', message: 'h' },
+      { severity: 'critical', message: 'c' },
     ] as AnalysisFinding[];
     sortBySeverity(findings);
-    expect(findings.map(finding => finding.severity)).toEqual(['critical', 'info', 'success']);
+    expect(findings.map(finding => finding.message)).toEqual(['c', 'i', 'h', 's']);
   });
 });

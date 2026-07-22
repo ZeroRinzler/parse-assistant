@@ -346,14 +346,10 @@ describe('checkHoldSuggestions', () => {
 
 describe('checkCastEfficiency', () => {
   const FIGHT_DUR_S = 120;
-  // bench(): top_avg_efficiency 90%, top_efficiency_stddev 3% -> the warn threshold is 1 sigma
-  // under, i.e. below 87%. efficiency% = (1 - idleS / FIGHT_DUR_S) * 100.
-  const TOP_AVG_PCT = 90;
-  const WARN_THRESHOLD_PCT = TOP_AVG_PCT - 3;  // top avg minus 1 sigma
-  // Idle spans chosen relative to the threshold. Each is a single gap > the 1.5s downtime floor.
-  const IDLE_BELOW_BAND_S = 20;   // -> 83.3%, below WARN_THRESHOLD_PCT
+  // bench(): top_avg_efficiency 90%, top_efficiency_stddev 3% -> warn strictly below 87% (top - 1 sigma).
+  // efficiency% = (1 - idleS / FIGHT_DUR_S) * 100. Each idle span is a single gap > the 1.5s downtime floor.
+  const IDLE_BELOW_BAND_S = 20;   // -> 83.3%, below the 87% warn threshold
   const IDLE_FAR_BELOW_S = 60;    // -> 50%, far below the band
-  const IDLE_AT_TOP_AVG_S = 12;   // -> 90% == top avg, inside the band
   const IDLE_ABOVE_AVG_MS = 1600; // just over the 1.5s downtime floor -> 98.7%, above top avg
 
   it('flags low cast efficiency more than 1 sigma below the top parses', () => {
@@ -367,10 +363,14 @@ describe('checkCastEfficiency', () => {
     expect(checkCastEfficiency([0, IDLE_FAR_BELOW_S * ONE_SEC_MS], FIGHT_DUR_S, bench())?.severity).toBe('warning');
   });
 
-  it('does not flag efficiency within 1 sigma of the top average', () => {
-    // At the top average, inside the band -> no finding (no fixed idle floor anymore).
-    expect(WARN_THRESHOLD_PCT).toBeLessThan(TOP_AVG_PCT); // the band has width, so the top avg is inside it
-    expect(checkCastEfficiency([0, IDLE_AT_TOP_AVG_S * ONE_SEC_MS], FIGHT_DUR_S, bench())).toBeNull();
+  it('does not flag efficiency exactly at the 1-sigma boundary (strict), but flags one bin below', () => {
+    // Binary-exact bench: top avg 80%, stddev 5% -> warn strictly below 75%.
+    const boundaryBench = bench({ top_avg_efficiency: 80, top_efficiency_stddev: 5 });
+    const BOUNDARY_FIGHT_S = 128;
+    // 32s idle -> exactly 75% = top - 1 sigma: strict boundary, no finding.
+    expect(checkCastEfficiency([0, 32 * ONE_SEC_MS], BOUNDARY_FIGHT_S, boundaryBench)).toBeNull();
+    // 33s idle -> 74.21875% < 75%: one bin below the boundary, warns.
+    expect(checkCastEfficiency([0, 33 * ONE_SEC_MS], BOUNDARY_FIGHT_S, boundaryBench)?.severity).toBe('warning');
   });
 
   it('does not flag when the player beats the top parses', () => {

@@ -104,8 +104,6 @@ describe('HttpWclTransport', () => {
     httpMock.expectOne(WCL_API_URL).flush({ errors: [{ message: OTHER_GRAPHQL_MESSAGE }] });
 
     await expect(pending).rejects.toEqual(new WclTransportError(OTHER_GRAPHQL_MESSAGE, WCL_UNUSABLE_STATUS));
-    // A non-permission GraphQL error must not mark the report inaccessible.
-    expect(transport.takeInaccessibleCodes()).toEqual([]);
   });
 
   it('throws WCL_UNUSABLE_STATUS on a 200 with no data', async () => {

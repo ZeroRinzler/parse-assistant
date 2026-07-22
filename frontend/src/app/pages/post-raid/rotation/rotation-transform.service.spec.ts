@@ -118,7 +118,11 @@ describe('buildCdBenchmark', () => {
     expect(bench.avg_bl_offset_s).toBe(3);
     expect(bench.bl_pct).toBe(100);
     expect(bench.avg_uses).toBe(2);
-    expect(bench.uses_per_min.avg).toBeGreaterThan(0);
+    // 2 casts over a 120s fight -> 1.0 uses/min for both parses.
+    expect(bench.uses_per_min.avg).toBe(1);
+    // inter-cast gaps [95-5, 97-7] = [90, 90] -> mean 90, stddev 0.
+    expect(bench.avg_gap_s).toBe(90);
+    expect(bench.stddev_gap_s).toBe(0);
   });
 
   it('counts used_sample_count as the parses with at least one use (use-share gate)', () => {
@@ -189,9 +193,10 @@ describe('buildHoldTargets', () => {
 describe('computeEfficiencyThresholds', () => {
   it('derives a p90 downtime floor and per-parse efficiency mean', () => {
     const result = computeEfficiencyThresholds([[500, 600, 700, 5000]], [100]);
-    expect(result.downtimeThresholdMs).toBeGreaterThan(0);
-    expect(result.topAvgEfficiency).toBeGreaterThan(0);
-    expect(result.topAvgEfficiency).toBeLessThanOrEqual(100);
+    // d3 p90 quantile of [500,600,700,5000]: 700 + 0.7*(5000-700) = 3710 ms.
+    expect(result.downtimeThresholdMs).toBe(3710);
+    // only the 5000ms gap clears the floor -> 5s downtime over 100s -> (1 - 5/100)*100 = 95%.
+    expect(result.topAvgEfficiency).toBe(95);
   });
 
   it('falls back to the default floor with no gaps', () => {

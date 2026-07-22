@@ -116,7 +116,10 @@ describe('topParsePoints / topParseTrails', () => {
   it('builds a trail per parse across the window', () => {
     const trails = topParseTrails(positions, { kind: 'boss' }, 3, 1.5, 1.5, 0.5);
     expect(trails).toHaveLength(2);
-    expect(trails[0].length).toBeGreaterThan(1);
+    // window [t-pre, t+post] stepped by 0.5: (1.5 + 1.5) / 0.5 + 1 = 7 points.
+    const EXPECTED_TRAIL_POINTS = 7;
+    expect(trails[0]).toHaveLength(EXPECTED_TRAIL_POINTS);
+    expect(trails[0].map(p => p.t)).toEqual([1.5, 2, 2.5, 3, 3.5, 4, 4.5]);
   });
 
   it('selects an enemy reference by gameId', () => {
@@ -149,14 +152,20 @@ describe('buildParseTimelines / parsePointsAt / parseTrailsOf', () => {
     expect(buildParseTimelines(positions, { kind: 'enemy', gameId: 999 })).toHaveLength(0);
   });
 
-  it('parsePointsAt on prebuilt timelines matches the all-in-one topParsePoints', () => {
+  it('resolves each prebuilt parse timeline to its relative point at the anchor time', () => {
     const timelines = buildParseTimelines(positions, { kind: 'boss' });
-    expect(parsePointsAt(timelines, 3)).toEqual(topParsePoints(positions, { kind: 'boss' }, 3));
+    const points = parsePointsAt(timelines, 3);
+    expect(points).toHaveLength(2);
+    // player at 500 raw = 5 yd directly ahead of the facing-less boss at the origin.
+    expect(points[0]).toMatchObject({ t: 3, fwd: 5, right: 0, dist: 5, angleDeg: 0 });
   });
 
-  it('parseTrailsOf on prebuilt timelines matches the all-in-one topParseTrails', () => {
+  it('builds each prebuilt parse timeline into a relative trail across the window', () => {
     const timelines = buildParseTimelines(positions, { kind: 'boss' });
-    expect(parseTrailsOf(timelines, 3, 1.5, 1.5, 0.5))
-      .toEqual(topParseTrails(positions, { kind: 'boss' }, 3, 1.5, 1.5, 0.5));
+    const trails = parseTrailsOf(timelines, 3, 1.5, 1.5, 0.5);
+    expect(trails).toHaveLength(2);
+    expect(trails[0].map(p => p.t)).toEqual([1.5, 2, 2.5, 3, 3.5, 4, 4.5]);
+    // player holds 5 yd ahead of the origin boss across the whole window.
+    expect(trails[0].every(p => p.dist === 5 && p.fwd === 5)).toBe(true);
   });
 });

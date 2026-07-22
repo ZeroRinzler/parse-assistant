@@ -162,7 +162,7 @@ Encounters loaded from `/data/specs/{spec}/encounters.json` (static file). Filte
 1. Bucket DamageDone into `BIN_MS` bins over the fight; take a `ROLL_BINS`-bin forward rolling damage.
 2. Mark bins dense when the rolling damage clears `max(THRESHOLD_MULT × mean rolling damage, RATE_QUANTILE-quantile of the rolling-damage distribution)`.
 3. Contiguous dense bins (bridging up to `MERGE_GAP_BINS` sub-threshold bins) form a run; trim each run to the bins that actually carry damage so the window snaps to the real burst.
-4. Compute `window_damage` over the measured half-open `[start, end)`; discard windows below the `SIGNIFICANCE_PCT` significance threshold.
+4. Compute `window_damage` over the measured half-open `[start, end)`. The one exception is the fight-closing window (the run whose end bin is the fight's last bin): its end is inclusive, so a killing blow at exactly fight end (already clamped into the last bin by the density binning) is counted. Discard windows below the `SIGNIFICANCE_PCT` significance threshold.
 5. Each window: `time_s`, `window_length_s` (measured extent), `window_damage`, `active_cds` (cooldowns cast *inside* the window - attribution only, never a boundary), ability breakdown (top 6, each with absolute `damage`).
 
 **Across parses** (`clusterParseWindows`):

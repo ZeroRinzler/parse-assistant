@@ -54,9 +54,10 @@ describe('listReferenceEnemies', () => {
     spec: 'X', encounter_id: 1, encounter_name: 'E', interval_s: 1.5, sample_count: 2,
     parses: [
       { report_code: 'a', fight_id: 1, player_name: 'P', duration_s: 10, interval_s: 1.5, player: [],
+        // Add listed before Boss so insertion order is not already boss-first: the sort must do real work.
         enemies: [
-          { game_id: 100, name: 'Boss', is_boss: true, samples: [] },
           { game_id: 200, name: 'Add', is_boss: false, samples: [] },
+          { game_id: 100, name: 'Boss', is_boss: true, samples: [] },
         ] },
       { report_code: 'b', fight_id: 2, player_name: 'Q', duration_s: 10, interval_s: 1.5, player: [],
         enemies: [{ game_id: 200, name: 'Add', is_boss: false, samples: [] }] },

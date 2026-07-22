@@ -117,9 +117,10 @@ describe('lethalHitAmount', () => {
     const deathTs = FIGHT_START_MS + DEATH_1_AT_S * MS_PER_S;
     const dt = [
       dtEvent(OVERWHELMING_BLAST, DEATH_1_AT_S - 20, 10),
-      dtEvent(OVERWHELMING_BLAST, DEATH_1_AT_S, BLAST_AMOUNT, BLAST_UNMITIGATED),
+      dtEvent(OVERWHELMING_BLAST, DEATH_1_AT_S - 1, BLAST_AMOUNT, BLAST_UNMITIGATED),
+      // Other ability, and the latest hit at or before the death: dropping the ability filter would wrongly pick this.
+      dtEvent(FROST_BOMB, DEATH_1_AT_S, 42),
       dtEvent(OVERWHELMING_BLAST, DEATH_1_AT_S + 5, 99), // after the death - ignored
-      dtEvent(FROST_BOMB, DEATH_1_AT_S, 42), // other ability - ignored
     ];
     expect(lethalHitAmount(dt, OVERWHELMING_BLAST, deathTs)).toBe(BLAST_UNMITIGATED);
   });

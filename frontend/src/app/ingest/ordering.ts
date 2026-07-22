@@ -53,6 +53,14 @@ export function orderSpecsByVersion(
     .map(entry => entry.spec);
 }
 
+/** Specs for one run: version-ordered, then capped to SPEC_LIMIT so a single run stays within the WCL point budget. */
+export function specsForRun(
+  entries: readonly SpecOrderEntry[],
+  random: () => number = Math.random,
+): string[] {
+  return orderSpecsByVersion(entries, random).slice(0, SPEC_LIMIT);
+}
+
 /**
  * Encounters ordered so the ones missing an on-disk slice come first (never-ingested before
  * already-present), keeping the original relative order within each group. So a partially

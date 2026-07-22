@@ -30,6 +30,8 @@ describe('burstWindowStatus', () => {
     { name: 'far below min -> bad', player: 650, notReached: false, status: 'bad', icon: 'error' },
     { name: 'below avg band -> warn', player: 850, notReached: false, status: 'warn', icon: 'warning_amber' },
     { name: 'within range -> good', player: 1000, notReached: false, status: 'good', icon: 'check_circle' },
+    { name: 'at min band edge (700) -> warn, not bad (strict)', player: 700, notReached: false, status: 'warn', icon: 'warning_amber' },
+    { name: 'at avg band edge (900) -> good, not warn (strict)', player: 900, notReached: false, status: 'good', icon: 'check_circle' },
   ])('$name', ({ player, notReached, status, icon }) => {
     expect(burstWindowStatus(player, 1000, 800, 100, notReached)).toEqual({ status, icon });
   });
@@ -163,16 +165,18 @@ describe('findPlayerBurstWindows', () => {
     time_s: 10, window_length_s: 20, dmg_avg: 0, dmg_min: 0, dmg_max: 0, dmg_stddev: 0, common_cds: [], ability_breakdown: [],
   };
 
-  it('sums player damage inside the window and counts casts by ability name', () => {
+  it('sums player damage inside the window (amount + absorbed) and counts casts by ability name', () => {
     const out = findPlayerBurstWindows(
       [window],
-      [damage(SHADOW_BLADES_DAMAGE, 12, 600), damage(SHADOW_BLADES_DAMAGE, 15, 400), damage(1, 999, 5000)],
+      [damage(SHADOW_BLADES_DAMAGE, 12, 500, { absorbed: 100 }), damage(SHADOW_BLADES_DAMAGE, 15, 400), damage(1, 999, 5000)],
       [cast(SHADOW_BLADES, 11), cast(SHADOW_BLADES, 13)],
       0,
-      new Map([[SHADOW_BLADES_DAMAGE, 'Eviscerate'], [SHADOW_BLADES, 'Shadow Blades']]),
+      // Bridge the damage id and the cast id to one name so the damage row counts the casts by NAME, not id.
+      new Map([[SHADOW_BLADES_DAMAGE, 'Shadow Blades'], [SHADOW_BLADES, 'Shadow Blades']]),
     );
+    // (500 + 100 absorbed) + 400 = 1000; the id-1 hit at 999s is outside the [10, 30) window.
     expect(out[0].window_damage).toBe(1000);
-    expect(out[0].ability_breakdown![0]).toMatchObject({ spell_id: SHADOW_BLADES_DAMAGE, damage: 1000 });
+    expect(out[0].ability_breakdown![0]).toMatchObject({ spell_id: SHADOW_BLADES_DAMAGE, damage: 1000, casts: 2 });
   });
 
   it('folds synthetic damage ids onto their normalized spells, summing raw ids that collapse together', () => {

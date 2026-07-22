@@ -227,13 +227,14 @@ describe('analyzeDefensiveFindings', () => {
 });
 
 describe('computePlayerDefensiveWindows', () => {
-  it('sums player damage taken inside each top defensive window (half-open)', () => {
+  it('sums player damage taken inside each top defensive window (half-open, amount + absorbed)', () => {
     const top: BurstWindow[] = [
       { time_s: 10, window_length_s: 5, dmg_avg: 0, dmg_min: 0, dmg_max: 0, dmg_stddev: 0, common_cds: [], ability_breakdown: [] },
     ];
-    const out = computePlayerDefensiveWindows(top, [damageTaken(700, 12, 400), damageTaken(701, 14, 100), damageTaken(700, 15, 999)], 0);
-    expect(out[0].window_damage).toBe(500); // event at exactly 15 (== end) excluded
-    expect(out[0].ability_breakdown![0]).toMatchObject({ spell_id: 700, damage: 400 });
+    const out = computePlayerDefensiveWindows(top, [damageTaken(700, 12, 400, { absorbed: 150 }), damageTaken(701, 14, 100), damageTaken(700, 15, 999)], 0);
+    // (400 + 150 absorbed) + 100 = 650; the event at exactly 15 (== end) is excluded (half-open).
+    expect(out[0].window_damage).toBe(650);
+    expect(out[0].ability_breakdown![0]).toMatchObject({ spell_id: 700, damage: 550 });
   });
 
   it('folds melee and synthetic-negative ability ids to normalized spell ids so the bench detail join resolves', () => {

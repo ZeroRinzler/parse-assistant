@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  orderSpecsByVersion, orderEncountersByMissingFirst, PRIORITY_SPEC, SPEC_LIMIT,
+  orderSpecsByVersion, specsForRun, orderEncountersByMissingFirst, PRIORITY_SPEC, SPEC_LIMIT,
   type SpecOrderEntry,
 } from './ordering';
 
@@ -72,8 +72,10 @@ describe('orderSpecsByVersion', () => {
     expect(orderSpecsByVersion([])).toEqual([]);
   });
 
-  it('caps a run at ten specs', () => {
-    expect(SPEC_LIMIT).toBe(10);
+  it('caps a run at SPEC_LIMIT specs, dropping the overflow', () => {
+    // One more spec than the cap: specsForRun orders then slices, so the run never exceeds SPEC_LIMIT.
+    const entries = Array.from({ length: SPEC_LIMIT + 1 }, (_, i) => entry({ spec: `Spec${i}` }));
+    expect(specsForRun(entries, () => 0.5)).toHaveLength(SPEC_LIMIT);
   });
 });
 

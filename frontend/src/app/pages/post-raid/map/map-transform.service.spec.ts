@@ -8,7 +8,7 @@ import { missing, transient } from '../../../core/result';
 import {
   MapTransformService,
   posActorId, collectPositionSamples, resampleTimeline, resamplePlayerTimeline, buildParsePositions, selectBossAndEnemies,
-  RawPosSample, EnemyMeta, POSITIONS_INTERVAL_S,
+  RawPosSample, EnemyMeta,
 } from './map-transform.service';
 
 function resEvent(
@@ -190,19 +190,21 @@ describe('selectBossAndEnemies', () => {
 
   it('caps the kept set at MAX_TRACKED_ENEMIES, keeping the most-sampled', () => {
     const BASE_HP = 1000;
-    // One more enemy than the cap; the boss (id 20) has the fewest samples but max HP.
+    // Two past the cap so it truncates a NON-boss (id 16) here, not just the boss (id 20, fewest samples, max HP).
     const BOSS_OF_MANY = 20;
+    const CAPPED_OUT_ADD = 16;
     const entries: [number, number, number][] = [
       [11, 60, BASE_HP], [12, 50, BASE_HP], [13, 40, BASE_HP],
-      [14, 30, BASE_HP], [15, 20, BASE_HP], [BOSS_OF_MANY, 10, BASE_HP + 1],
+      [14, 30, BASE_HP], [15, 20, BASE_HP], [CAPPED_OUT_ADD, 15, BASE_HP], [BOSS_OF_MANY, 10, BASE_HP + 1],
     ];
     const enemyIds = entries.map(([actorId]) => actorId);
     const { bossId, kept } = selectBossAndEnemies(actorMap(entries), PLAYER_ID, meta(enemyIds));
     expect(bossId).toBe(BOSS_OF_MANY);
-    // The cap takes the 5 most-sampled (11..15); the boss is appended past the cap.
+    // The cap takes the 5 most-sampled (11..15); the boss is appended past the cap; the extra add is dropped.
     expect(kept).toHaveLength(MAX_TRACKED_ENEMIES + 1);
     expect(kept.some(enemy => enemy.actorId === BOSS_OF_MANY)).toBe(true);
     expect(kept.some(enemy => enemy.actorId === 15)).toBe(true);
+    expect(kept.some(enemy => enemy.actorId === CAPPED_OUT_ADD)).toBe(false);
   });
 
   it('drops the lowest-sampled enemy when over the cap and it is not the boss', () => {
@@ -256,8 +258,10 @@ describe('buildParsePositions', () => {
     });
     expect(parse.report_code).toBe('rep');
     expect(parse.player_name).toBe('Me');
-    expect(parse.interval_s).toBe(POSITIONS_INTERVAL_S);
-    expect(parse.player.length).toBeGreaterThan(0);
+    const RESAMPLE_CADENCE_S = 1.5; // the ingest position cadence, pinned independently of the SUT constant
+    expect(parse.interval_s).toBe(RESAMPLE_CADENCE_S);
+    // player samples span 0..6s, so they resample onto the 1.5s grid: 0, 1.5, 3, 4.5, 6.
+    expect(parse.player.map(row => row[0])).toEqual([0, 1.5, 3, 4.5, 6]);
     // player rows are [t, x, y, mapID]; enemy rows keep facing at index 3
     expect(parse.player.every(row => row.length === 4)).toBe(true);
     expect(parse.enemies.every(enemy => enemy.samples.every(row => row.length === 5))).toBe(true);

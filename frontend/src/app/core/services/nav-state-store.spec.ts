@@ -34,8 +34,11 @@ describe('NavStateStore', () => {
   });
 
   it('round-trips the expanded preference', () => {
+    // Seed collapsed=true first so the expanded (false) save is distinguishable from the absent-key default.
+    new NavStateStore().saveCollapsed(true);
     new NavStateStore().saveCollapsed(false);
 
+    expect(localStorage.getItem(NAV_COLLAPSED_STORAGE_KEY)).toBe(JSON.stringify(false));
     expect(new NavStateStore().loadCollapsed()).toBe(false);
   });
 

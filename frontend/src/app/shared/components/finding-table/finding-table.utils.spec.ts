@@ -56,7 +56,8 @@ describe('bucketFindings', () => {
   });
 
   it('routes rule_violation to ruleFindings when collectRules is true', () => {
-    const finding = f('warning', 'rule_violation');
+    // cd_name present, so routing must be driven by the category, not the !cd_name fallback.
+    const finding = f('warning', 'rule_violation', 'Shadow Blades');
     const { entries, ruleFindings } = bucketFindings([finding], { spellId, icon, collectRules: true });
 
     expect(entries).toHaveLength(0);

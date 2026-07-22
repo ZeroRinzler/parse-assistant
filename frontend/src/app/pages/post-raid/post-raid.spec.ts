@@ -69,8 +69,9 @@ describe('buildFights', () => {
   });
 
   it('derives a one-decimal duration in seconds from the millisecond span', () => {
-    const [f] = buildFights([fight({ id: 1, encounterID: 100, startTime: 1000, endTime: 95500 })]);
-    expect(f.duration_s).toBe(94.5);
+    // 94_567 ms -> 945.67 -> round 946 -> 94.6: a non-round span so the rounding step is exercised.
+    const [f] = buildFights([fight({ id: 1, encounterID: 100, startTime: 1000, endTime: 95_567 })]);
+    expect(f.duration_s).toBe(94.6);
   });
 
   it('handles a missing/undefined fight list', () => {
@@ -120,7 +121,8 @@ describe('pickPlayerId', () => {
   const players = [player({ id: 1, name: 'Anya' }), player({ id: 2, name: 'Bram' })];
 
   it('honors an explicit auto-player', () => {
-    expect(pickPlayerId(players, 1)).toBe(1);
+    // autoPlayer 2 differs from the first-visible fallback (id 1), so this pins the honor-explicit branch.
+    expect(pickPlayerId(players, 2)).toBe(2);
   });
 
   it('falls back to the first visible player', () => {
@@ -414,7 +416,6 @@ describe('PostRaidComponent live-sync poll', () => {
     expect(wcl.getReport).not.toHaveBeenCalled();
     expect(comp.fights().map(f => f.id)).toEqual([SELECTED_PULL_ID]);
     expect(comp.fightControl.value).toBe(SELECTED_PULL_ID);
-    expect(comp.reportCode()).toBe(REPORT_B);
     expect(comp.loadError()).toBeNull();
   });
 

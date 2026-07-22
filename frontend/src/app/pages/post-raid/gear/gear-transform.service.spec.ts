@@ -22,7 +22,8 @@ const EXAMPLE_SOURCE_ID = 537;
 
 describe('talentKeyFromTree', () => {
   it('builds a v2: key from string-sorted nodeIDs', () => {
-    expect(talentKeyFromTree([{ nodeID: 90640 }, { nodeID: 90638 }])).toBe('v2:90638,90640');
+    // Mixed-width ids: string order puts '100001' before '90638' ('1' < '9'); a numeric sort would reverse them.
+    expect(talentKeyFromTree([{ nodeID: 90638 }, { nodeID: 100001 }])).toBe('v2:100001,90638');
     expect(talentKeyFromTree(undefined)).toBe('');
   });
 });
@@ -174,12 +175,11 @@ function reportFor(playerId: number, playerName: string, fightId: number) {
   };
 }
 
-// Raw CombatantInfo: trinket (slot 12) + enchanted weapon (slot 15), both named so
-// no gameData name resolution is needed. talentTree node 65 -> key 'v2:65'.
+// Raw CombatantInfo: trinket (slot 12, named inline); slot-15 enchant is a string id resolved via getGameNames. Node 65 -> 'v2:65'.
 const combatantInfo = (playerId: number): WclCombatantInfo => {
   const gear: WclGearItem[] = Array(16).fill({});
   gear[12] = { id: 100, name: 'A', icon: 't.jpg' };
-  gear[15] = { id: 1, name: 'Wep', permanentEnchant: 8041, permanentEnchantName: 'Soph' };
+  gear[15] = { id: 1, name: 'Wep', permanentEnchant: '8041' };
   return { sourceID: playerId, gear, talentTree: [{ nodeID: 65 }] };
 };
 
@@ -194,7 +194,7 @@ const wclFake = {
   getReport: async (code: string) => (code === 'r1' ? reportFor(10, 'P1', 1) : reportFor(20, 'P2', 2)),
   // getCombatantInfo returns the raw events array; the transform selects the player's event.
   getCombatantInfo: async (code: string) => [combatantInfo(code === 'r1' ? 10 : 20)],
-  getGameNames: async () => ({}),
+  getGameNames: async () => ({ e8041: { id: 8041, name: 'Soph' } }),
 };
 
 describe('GearTransformService (live, in-browser)', () => {
