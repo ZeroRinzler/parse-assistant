@@ -195,7 +195,6 @@ export class LiveCaptureFeatureService {
   readonly recordToggleOn = computed(() => this.isCapturing() || this.isStarting());
 
   private stream: MediaStream | null = null;
-  private recording = false;
   private readonly segments = signal<Segment[]>([]);
   private segIdx = 0;
   private mimeType = 'video/webm';
@@ -222,7 +221,7 @@ export class LiveCaptureFeatureService {
 
   /** Opt in to recording: prompt for a window, then run the rolling-buffer loop. */
   async startRecording(profile: CaptureProfile = DEFAULT_CAPTURE_PROFILE): Promise<void> {
-    if (this.recording || this.isStarting()) return;
+    if (this.isCapturing() || this.isStarting()) return;
     // Insecure context or an unsupported browser leaves `getDisplayMedia` absent; say so rather than fail silently.
     if (!navigator.mediaDevices?.getDisplayMedia) {
       this.captureError.set('screen recording is not available in this browser');
@@ -241,14 +240,12 @@ export class LiveCaptureFeatureService {
       this.sourceLabel.set(track.label || 'your screen');
       // Sharing stopped from the browser UI (or the window closed) ends capture cleanly.
       track.addEventListener('ended', () => this.stopRecording());
-      this.recording = true;
       this.isCapturing.set(true);
       this.cycleSegment();
     } catch (err) {
       // Tear down any half-started capture (an unsupported recorder throws after the stream opens) so the toggle never sticks on "Recording".
       stream?.getTracks().forEach(track => track.stop());
       this.stream = null;
-      this.recording = false;
       this.isCapturing.set(false);
       this.sourceLabel.set('');
       // A dismissed picker is benign; a real failure (unsupported codec, denied by policy) surfaces so the user learns why nothing records.
@@ -261,10 +258,9 @@ export class LiveCaptureFeatureService {
 
   /** Stop recording and release the display stream; the buffer is kept so covered fights stay clip-able. */
   stopRecording(): void {
-    this.recording = false;
+    this.isCapturing.set(false);
     this.stream?.getTracks().forEach(track => track.stop());
     this.stream = null;
-    this.isCapturing.set(false);
     this.sourceLabel.set('');
   }
 
@@ -273,7 +269,7 @@ export class LiveCaptureFeatureService {
    * WebM (own header + keyframe) so it appends cleanly during MSE assembly.
    */
   private cycleSegment(): void {
-    if (!this.recording || !this.stream) return;
+    if (!this.isCapturing() || !this.stream) return;
     const chunks: Blob[] = [];
     const recorder = new MediaRecorder(this.stream, { mimeType: this.mimeType, videoBitsPerSecond: this.captureProfile().bitrateBps });
     const start = Date.now();
@@ -292,7 +288,7 @@ export class LiveCaptureFeatureService {
         const segment: Segment = { idx: this.segIdx++, start, end: Date.now(), blob };
         this.segments.update(buffer => [...buffer.filter(existing => existing.end >= cutoff), segment]);
       }
-      if (this.recording) this.cycleSegment();
+      if (this.isCapturing()) this.cycleSegment();
     };
     recorder.start();
     setTimeout(() => { if (recorder.state === 'recording') recorder.stop(); }, SEG_MS);

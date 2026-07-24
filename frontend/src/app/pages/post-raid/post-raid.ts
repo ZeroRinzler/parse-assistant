@@ -303,7 +303,7 @@ export class PostRaidComponent {
     !!this.spec() && !!this.reportCode() && !!this.selectedFightId() && !!this.selectedPlayerId() && !!this.selectedEncounterId());
 
   /** Map is available once the map feature has loaded top-parse positions for this fight. */
-  protected mapReady(): boolean { return this.mapFeature.ready(); }
+  protected readonly mapReady = this.mapFeature.ready;
 
   /** A feature card asked to open the map; the page forwards it to the map feature. */
   protected onOpenMap(anchor: MapAnchor): void {
@@ -320,7 +320,7 @@ export class PostRaidComponent {
   }
 
   /** Clip is offered once the rolling buffer covers this fight (recording on or already stopped). */
-  protected clipReady(): boolean { return this.liveCapture.clipReady(); }
+  protected readonly clipReady = this.liveCapture.clipReady;
 
   /** A feature card asked to open a clip; the page forwards it to the live feature. */
   protected onOpenClip(anchor: ClipAnchor): void {

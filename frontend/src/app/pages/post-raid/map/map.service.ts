@@ -3,7 +3,7 @@
  * plus the pure positioning functions it uses. The positioning math is owned here as pure fns
  * rather than shared, so the slice stays self-contained.
  */
-import { Injectable, Injector, inject, signal } from '@angular/core';
+import { Injectable, Injector, computed, inject, signal } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { WclEvent, WclFight } from '../../../core/models/wcl.models';
 import { EncounterPositions, ReferenceSelector } from '../../../core/models/positioning.models';
@@ -171,7 +171,7 @@ export class MapFeatureService {
   readonly preS = signal(MAP_POINT_PAD_S);
   readonly postS = signal(MAP_POINT_PAD_S);
 
-  ready(): boolean { return !!this.positions(); }
+  readonly ready = computed(() => !!this.positions());
 
   /** Load the top-parse bench (the /pre and initial post-raid path). Clears any stale live overlay. */
   async loadBench(spec: string, encounterId: number): Promise<Result<MapData, LoadError>> {

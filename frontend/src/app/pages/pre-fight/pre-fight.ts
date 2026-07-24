@@ -83,7 +83,7 @@ export class PreFightComponent implements OnInit {
     this.gearAvailable() || this.cdPlanAvailable() || this.defensivePlanAvailable() || this.burstAvailable());
 
   // The burst-window positioning button lights up once the top-parse trails load.
-  protected readonly mapReady = computed(() => this.mapFeature.ready());
+  protected readonly mapReady = this.mapFeature.ready;
 
   protected onOpenMap(anchor: MapAnchor): void {
     this.mapFeature.openAt(anchor);
