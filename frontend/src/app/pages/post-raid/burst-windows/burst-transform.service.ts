@@ -178,14 +178,12 @@ export interface ParseWindowScan {
   timings: CdTiming[];
   casts: WclEvent[];
   abilityNames: Map<number, string>;
-  minPct?: number;
 }
 
 // Windows are the parse's damage-density bursts (where the damage lands), not cooldown-duration
 // spans: bucket DamageDone into 1s bins, take a rolling rate, and cluster the bins that run dense.
 export function findParseWindows(scan: ParseWindowScan): ParseWindow[] {
   const { damage, fightStartMs, fightEndMs, timings, casts, abilityNames } = scan;
-  const minPct = scan.minPct ?? SIGNIFICANCE_PCT;
   const fightLenMs = fightEndMs - fightStartMs;
   const hits = damage
     .filter(event => event.type === 'damage' && (event.amount ?? 0) + (event.absorbed ?? 0) > 0)
@@ -228,7 +226,7 @@ export function findParseWindows(scan: ParseWindowScan): ParseWindow[] {
     const closesFight = trimmed.endBin === binCount - 1;
     const windowHits = hits.filter(hit => hit[0] >= startMs && (closesFight ? hit[0] <= endMs : hit[0] < endMs));
     const windowDmg = windowHits.reduce((sum, hit) => sum + hit[1], 0);
-    if (!windowDmg || windowDmg / total < minPct) continue;
+    if (!windowDmg || windowDmg / total < SIGNIFICANCE_PCT) continue;
 
     const ability_breakdown = windowAbilityBreakdown(windowHits, castRows, startMs, endMs, nameOf, castNamesInParse);
 
