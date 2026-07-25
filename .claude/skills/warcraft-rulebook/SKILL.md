@@ -166,6 +166,15 @@ flattens it is a failed run. Reject and respawn a subagent whose output misses t
 - Prefer machine-checkable `condition`s (`cast_without_prior`, `hold_cooldown_for_anchor` - see the
   schema's `$defs`); use `condition: null` only when the advice is worth showing but not checkable from
   cast timing.
+- **`cast_without_prior` operands are ordered, and getting them backwards inverts the check.**
+  `spell_id` is the ability being judged; `required_spell_id` is its companion, which under the default
+  `position: "before"` must already have been cast. For "Secret Technique always inside Shadow Dance",
+  Secret Technique is `spell_id` and Shadow Dance is `required_spell_id`. Set `position: "either"` only
+  when the rule text genuinely says pair or sync rather than naming an order, and `"after"` when the
+  companion must follow. Read the rule's own `action` back against the condition before writing it.
+- **A `condition: null` rule reaches the player only if it names a cooldown.** Display-only rules surface
+  on the post-raid page against a cooldown the pull flagged, matched by name in `description`/`action`.
+  Write the cooldown's exact name into one of those fields, or the rule renders nowhere.
 
 ## Step 4 - validate and write (main agent)
 

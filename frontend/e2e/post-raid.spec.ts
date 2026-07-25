@@ -59,7 +59,8 @@ test('pull overview reports the DPS, the death, and the kill', async () => {
 test('rotation flags the broken rule and the lost cooldown casts', async () => {
   const rotation = page.locator('wl-rotation');
   await shows(rotation, 'Rotation Rules');
-  await shows(rotation, 'Secret Technique without Shadow Dance');
+  // A violated rule renders its authored description, the same name rulesFollowed uses.
+  await shows(rotation, 'Secret Technique always inside Shadow Dance');
   await shows(rotation, '1 / 20');
   await shows(rotation, 'Offensive cooldowns vs top parses.');
   await shows(rotation, 'Shadow Blades');

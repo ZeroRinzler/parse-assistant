@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal } from '@angular/core';
-import { FindingTableComponent, OnPlanChip } from '../../../shared/components/finding-table/finding-table';
+import { FindingHint, FindingTableComponent, OnPlanChip } from '../../../shared/components/finding-table/finding-table';
 import { LoadStateComponent, RenderableLoadError } from '../../../shared/components/load-state/load-state';
 import { LatestLoad } from '../../../shared/latest-load';
 import { logWarn } from '../../../core/log';
@@ -31,6 +31,7 @@ export class RotationComponent {
   protected readonly error = signal<RenderableLoadError | null>(null);
   protected readonly ruleRows = signal<RotationFindingRow[]>([]);
   protected readonly ruleOnPlan = signal<string[]>([]);
+  protected readonly ruleHints = signal<FindingHint[]>([]);
   protected readonly offensiveRows = signal<RotationFindingRow[]>([]);
   protected readonly onPlan = signal<RotationOnPlanChip[]>([]);
 
@@ -55,6 +56,7 @@ export class RotationComponent {
             this.availableChange.emit(true);
             this.ruleRows.set(result.value.ruleRows);
             this.ruleOnPlan.set(result.value.ruleOnPlan);
+            this.ruleHints.set(result.value.ruleHints);
             this.offensiveRows.set(result.value.offensiveRows);
             this.onPlan.set(result.value.onPlan);
           } else {
@@ -64,6 +66,7 @@ export class RotationComponent {
             this.availableChange.emit(false);
             this.ruleRows.set([]);
             this.ruleOnPlan.set([]);
+            this.ruleHints.set([]);
             this.offensiveRows.set([]);
             this.onPlan.set([]);
           }

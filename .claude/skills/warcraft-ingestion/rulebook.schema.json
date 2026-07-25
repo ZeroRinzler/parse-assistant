@@ -166,15 +166,16 @@
     "castWithoutPrior": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Flag each cast of spell_id that is not paired with required_spell_id within window_s seconds.",
+      "description": "Flag each cast of spell_id that is not accompanied by required_spell_id within window_s seconds, on the side given by position.",
       "required": ["kind", "spell_id", "spell_name", "required_spell_id", "required_spell_name", "window_s"],
       "properties": {
         "kind": { "const": "cast_without_prior" },
-        "spell_id": { "type": "integer", "description": "The spell whose casts are checked." },
+        "spell_id": { "type": "integer", "description": "The spell being judged. Every cast of it is either a pass or a violation." },
         "spell_name": { "type": "string" },
-        "required_spell_id": { "type": "integer", "description": "The companion spell that must precede/accompany spell_id." },
+        "required_spell_id": { "type": "integer", "description": "The companion spell that must accompany spell_id. Under the default position 'before' it must already have been cast, so the ability that comes FIRST goes here and the ability being judged goes in spell_id." },
         "required_spell_name": { "type": "string" },
-        "window_s": { "type": "number", "description": "Seconds within which the required spell must appear.", "exclusiveMinimum": 0 },
+        "window_s": { "type": "number", "description": "Seconds within which the required spell must appear, measured from the judged cast.", "exclusiveMinimum": 0 },
+        "position": { "type": "string", "enum": ["before", "after", "either"], "default": "before", "description": "Where required_spell_id must sit relative to the judged cast. 'before' (the default) requires it to come first, which is what most rules mean. 'after' requires it to follow. 'either' accepts both sides - use it only when the rule text genuinely says pair or sync rather than naming an order." },
         "exception": {
           "type": "object",
           "additionalProperties": false,
@@ -190,11 +191,12 @@
       "examples": [
         {
           "kind": "cast_without_prior",
-          "spell_id": 185313,
-          "spell_name": "Shadow Dance",
-          "required_spell_id": 280719,
-          "required_spell_name": "Secret Technique",
-          "window_s": 5,
+          "spell_id": 280719,
+          "spell_name": "Secret Technique",
+          "required_spell_id": 185313,
+          "required_spell_name": "Shadow Dance",
+          "window_s": 8,
+          "position": "before",
           "exception": { "context_spell_id": 121471, "context_window_s": 20, "position": "before" }
         }
       ]

@@ -25,6 +25,8 @@ export interface CastWithoutPriorCondition {
   required_spell_id: number;
   required_spell_name: string;
   window_s?: number;
+  /** Where the required cast must sit relative to the judged one; defaults to `before`. */
+  position?: 'before' | 'after' | 'either';
   exception?: {
     context_spell_id: number;
     context_window_s?: number;

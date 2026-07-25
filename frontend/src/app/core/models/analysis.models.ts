@@ -12,6 +12,8 @@ export interface AnalysisFinding {
   measured?: { value: string; unit?: string };
   /** Short display label for the "What" column (rule violations only). */
   label?: string;
+  /** Rulebook `type` of the rule that produced this finding (rule violations only). */
+  rule_type?: string;
   timestamp_ms?: number;
   details?: {
     cd_name?: string;

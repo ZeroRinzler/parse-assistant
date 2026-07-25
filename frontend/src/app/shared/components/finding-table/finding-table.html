@@ -25,8 +25,8 @@
       </div>
 
       <div class="min-w-0">
-        @if (row.name; as name) {
-          <div class="flex items-center gap-[7px] flex-wrap">
+        <div class="flex items-center gap-[7px] flex-wrap">
+          @if (row.name; as name) {
             @if (row.spellId; as spellId) {
               <!-- wl-game-icon renders icon + name; no extra label needed -->
               <wl-game-icon [id]="spellId" [icon]="row.icon" [name]="name"></wl-game-icon>
@@ -47,23 +47,23 @@
                 </button>
               }
             }
-            @if (row.chip) {
-              @switch (row.severity) {
-                @case ('critical') {
-                  <span class="text-[10px] rounded-sm px-[5px] tabular-nums text-[var(--critical)] bg-[var(--critical)]/10 border border-[var(--critical)]/25">{{ row.chip }}</span>
-                }
-                @case ('info') {
-                  <span class="text-[10px] rounded-sm px-[5px] tabular-nums text-[var(--info)] bg-[var(--info)]/10 border border-[var(--info)]/25">{{ row.chip }}</span>
-                }
-                @default {
-                  <span class="text-[10px] rounded-sm px-[5px] tabular-nums text-[var(--warning)] bg-[var(--warning)]/10 border border-[var(--warning)]/25">{{ row.chip }}</span>
-                }
+          } @else {
+            <span class="text-sm text-[var(--text)] leading-[1.35]">{{ row.what }}</span>
+          }
+          @if (row.chip) {
+            @switch (row.severity) {
+              @case ('critical') {
+                <span class="text-[10px] rounded-sm px-[5px] tabular-nums text-[var(--critical)] bg-[var(--critical)]/10 border border-[var(--critical)]/25">{{ row.chip }}</span>
+              }
+              @case ('info') {
+                <span class="text-[10px] rounded-sm px-[5px] tabular-nums text-[var(--info)] bg-[var(--info)]/10 border border-[var(--info)]/25">{{ row.chip }}</span>
+              }
+              @default {
+                <span class="text-[10px] rounded-sm px-[5px] tabular-nums text-[var(--warning)] bg-[var(--warning)]/10 border border-[var(--warning)]/25">{{ row.chip }}</span>
               }
             }
-          </div>
-        } @else {
-          <span class="text-sm text-[var(--text)] leading-[1.35]">{{ row.what }}</span>
-        }
+          }
+        </div>
       </div>
 
       <div class="col-start-2 md:col-auto flex items-baseline gap-2 md:block text-left md:text-right leading-[1.1]"
@@ -85,7 +85,26 @@
     </div>
   }
 
-  @if (!rows().length && !onPlan().length) {
+  @if (hints().length) {
+    <div class="border-t border-[var(--border)] px-4 py-[10px] flex flex-col gap-[10px]">
+      <span class="text-[10px] uppercase tracking-widest text-[var(--muted)]">Worth checking</span>
+      @for (hint of hints(); track $index) {
+        <div>
+          <div class="flex items-center gap-[7px] flex-wrap">
+            <span class="text-sm text-[var(--text)] leading-[1.35]">{{ hint.title }}</span>
+            @if (hint.chip) {
+              <span class="text-[10px] rounded-sm px-[5px] tabular-nums text-[var(--muted)] border border-[var(--border)]">{{ hint.chip }}</span>
+            }
+          </div>
+          <div class="text-[13px] text-[var(--muted)] leading-[1.45] mt-0.5">
+            <wl-collapsible-text>{{ hint.action }}</wl-collapsible-text>
+          </div>
+        </div>
+      }
+    </div>
+  }
+
+  @if (!rows().length && !hints().length && !onPlan().length) {
     <div class="border-t border-[var(--border)] px-4 py-3 text-[13px] text-[var(--muted)]">Nothing flagged.</div>
   }
 

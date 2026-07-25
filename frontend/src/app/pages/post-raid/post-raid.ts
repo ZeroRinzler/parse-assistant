@@ -224,7 +224,7 @@ export class PostRaidComponent {
     this.pullOverviewBusy() || this.rotationBusy() || this.burstBusy() || this.defensiveBusy() || this.gearBusy());
 
   // Per-card bench availability (from each card's `availableChange`); the banner shows when
-  // none have a bench. Rotation counts via its offensives; its rulebook rules render regardless.
+  // none have a bench. Rotation counts via its offensives, which is also what gates its rules card.
   protected readonly rotationAvailable = signal(false);
   protected readonly burstAvailable = signal(false);
   protected readonly defensiveAvailable = signal(false);
