@@ -9,7 +9,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { ReferenceSelector } from '../../../core/models/positioning.models';
 import { FormatDurationPipe } from '../../../shared/pipes/format-duration-pipe';
 import { LoadStateComponent, RenderableLoadError } from '../../../shared/components/load-state/load-state';
-import { MapFeatureService } from './map.service';
+import { MapFeatureService, listReferenceEnemies } from './map.service';
 import {
   RelPos, ParseTimelines, buildParseTimelines, buildTrail, positionAt, toReferenceLocal,
   parsePointsAt, parseTrailsOf,
@@ -53,17 +53,7 @@ export class MapCanvasComponent {
 
   protected readonly refEnemies = computed(() => {
     const positions = this.positions();
-    if (!positions) return [];
-    const seen = new Map<number, { gameId: number; name: string; isBoss: boolean }>();
-    for (const parse of positions.parses) {
-      for (const enemy of parse.enemies) {
-        if (enemy.game_id == null) continue;
-        const current = seen.get(enemy.game_id);
-        if (!current) seen.set(enemy.game_id, { gameId: enemy.game_id, name: enemy.name, isBoss: enemy.is_boss });
-        else if (enemy.is_boss) current.isBoss = true;
-      }
-    }
-    return [...seen.values()].sort((a, b) => (b.isBoss ? 1 : 0) - (a.isBoss ? 1 : 0));
+    return positions ? listReferenceEnemies(positions) : [];
   });
 
   protected readonly refValue = computed(() => {
