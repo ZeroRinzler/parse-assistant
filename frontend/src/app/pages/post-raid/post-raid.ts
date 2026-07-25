@@ -93,18 +93,6 @@ export function visiblePlayersOf(
   return fp?.length ? players.filter(p => fp.includes(p.id)) : players;
 }
 
-/**
- * Choose which player to auto-select: honor an explicit (URL) choice, otherwise
- * fall back to the first visible player. Returns null when there is nobody to pick.
- */
-export function pickPlayerId(
-  visiblePlayers: WclPlayer[],
-  autoPlayer: number | null,
-): number | null {
-  if (autoPlayer) return autoPlayer;
-  return visiblePlayers[0]?.id ?? null;
-}
-
 export type LivePollAction = 'none' | 'skip' | 'analyze';
 
 /** 'analyze' also covers an unfinished selection, so a failed resolve retries on the next tick. */
@@ -136,7 +124,7 @@ export function pickLivePlayerId(
     );
     if (sticky) return sticky.id;
   }
-  return pickPlayerId(visiblePlayers, null);
+  return visiblePlayers[0]?.id ?? null;
 }
 
 /**

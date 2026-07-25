@@ -11,7 +11,7 @@ import { MapFeatureService } from './map/map.service';
 import { LiveCaptureFeatureService } from './live/live-capture.service';
 import {
   PostRaidComponent,
-  specOf, extractCode, isValidReportCode, buildFights, buildPlayers, visiblePlayersOf, pickPlayerId, pickLivePlayerId,
+  specOf, extractCode, isValidReportCode, buildFights, buildPlayers, visiblePlayersOf, pickLivePlayerId,
   livePollActionOf,
 } from './post-raid';
 
@@ -117,23 +117,6 @@ describe('visiblePlayersOf', () => {
   });
 });
 
-describe('pickPlayerId', () => {
-  const players = [player({ id: 1, name: 'Anya' }), player({ id: 2, name: 'Bram' })];
-
-  it('honors an explicit auto-player', () => {
-    // autoPlayer 2 differs from the first-visible fallback (id 1), so this pins the honor-explicit branch.
-    expect(pickPlayerId(players, 2)).toBe(2);
-  });
-
-  it('falls back to the first visible player', () => {
-    expect(pickPlayerId(players, null)).toBe(1);
-  });
-
-  it('returns null when there is nobody to pick', () => {
-    expect(pickPlayerId([], null)).toBeNull();
-  });
-});
-
 describe('livePollActionOf', () => {
   const pulls = [fight({ id: 1, encounterID: 100 }), fight({ id: 2, encounterID: 100 })];
   const LATEST_PULL_ID = 2;
@@ -178,6 +161,10 @@ describe('pickLivePlayerId', () => {
 
   it('falls back to the first visible player when currentPlayerName is null', () => {
     expect(pickLivePlayerId(players, null)).toBe(1);
+  });
+
+  it('returns null when there is nobody to pick', () => {
+    expect(pickLivePlayerId([], 'Anya')).toBeNull();
   });
 });
 
