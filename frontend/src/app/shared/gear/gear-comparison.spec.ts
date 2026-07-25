@@ -36,17 +36,17 @@ describe('buildBenchEnchantRows', () => {
     expect(rows[0].name).toBe('Enchant #8041');
   });
 
-  it('skips slots where fewer than 40% of top parsers enchant', () => {
+  it('skips slots below the consensus share of top parsers', () => {
     const rows = buildBenchEnchantRows(stats({
-      enchants: { 15: [{ id: 8041, name: 'Rune', pct: 30 }] },
+      enchants: { 15: [{ id: 8041, name: 'Rune', pct: 49 }] },
     }));
     expect(rows).toHaveLength(0);
   });
 
-  it('includes slots where at least 40% of top parsers enchant', () => {
+  it('includes slots at or above the consensus share of top parsers', () => {
     const rows = buildBenchEnchantRows(stats({
       enchants: {
-        15: [{ id: 8041, name: 'Rune A', pct: 40 }],
+        15: [{ id: 8041, name: 'Rune A', pct: 50 }],
         16: [{ id: 8039, name: 'Rune B', pct: 60 }],
       },
     }));
@@ -278,6 +278,14 @@ describe('buildEnchantRows (comparison, real player gear)', () => {
     );
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ status: 'warn', name: 'Not enchanted' });
+  });
+
+  it('stays silent on an un-enchanted slot below the consensus share', () => {
+    const rows = buildEnchantRows(
+      gear({ enchants: [] }),
+      stats({ enchants: { 15: [{ id: 8041, name: 'Sophic Devotion', pct: 49 }] } }),
+    );
+    expect(rows).toEqual([]);
   });
 
   it('marks a slot on-plan when the player runs the consensus enchant', () => {

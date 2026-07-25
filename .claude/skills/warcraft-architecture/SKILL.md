@@ -121,9 +121,9 @@ Entirely client-side and **bench-only** - no character input, no per-player WCL 
 3. The gear card (shared `wl-gear-section` in bench-only mode) shows the top-parse consensus with no player overlay:
    - **Talents** - the top-parse `v2:` talent-build distribution.
    - **Trinkets** - the two distinct most-used trinkets (merged across slots 12/13).
-   - **Enchants** - the consensus enchant per slot (slots where >= 40% of top parsers enchant).
+   - **Enchants** - the consensus enchant per slot (slots at or above `ENCHANT_CONSENSUS_PCT` of top parsers).
 
-(The post-raid gear card is the one that compares a specific player's combatant-info gear against this bench; the missing-enchant warning at >= 70% consensus lives there.)
+(The post-raid gear card is the one that compares a specific player's combatant-info gear against this bench; the missing-enchant warning at `ENCHANT_CONSENSUS_PCT` lives there.)
 
 ### Encounter selection
 Encounters loaded from `/data/specs/{spec}/encounters.json` (static file). Filtered client-side to:

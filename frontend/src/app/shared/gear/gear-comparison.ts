@@ -4,6 +4,9 @@ import { EncounterGearStats } from '../../core/models/encounter.models';
 
 export type GearStatus = 'ok' | 'warn' | 'info' | 'unknown';
 
+/** A slot counts as consensus-enchanted, and an un-enchanted one warns, at this top-parse share. */
+const ENCHANT_CONSENSUS_PCT = 50;
+
 const SLOT_NAMES: Record<number, string> = {
   0:'Head', 1:'Neck', 2:'Shoulder', 3:'Shirt', 4:'Chest', 5:'Waist', 6:'Legs',
   7:'Feet', 8:'Wrists', 9:'Hands', 10:'Ring 1', 11:'Ring 2',
@@ -69,12 +72,9 @@ export function buildEnchantRows(gear: CharacterGear, stats: EncounterGearStats 
     const topName = top ? (top.name || `Enchant #${top.id}`) : '';
     const player = playerEnch.find(e => e.slot === slot);
     if (!player) {
-      if (top && top.pct >= 70) {
+      if (top && top.pct >= ENCHANT_CONSENSUS_PCT) {
         rows.push({ slotName: name, status: 'warn', name: 'Not enchanted', topPct: top.pct,
           note: `Apply ${topName}` });
-      } else if (top && top.pct >= 40) {
-        rows.push({ slotName: name, status: 'info', name: 'Not enchanted', topPct: top.pct,
-          note: `${top.pct}% run ${topName}` });
       }
       continue;
     }
@@ -281,7 +281,7 @@ export function topTrinketPair(stats: EncounterGearStats | null): RecommendedTri
 
 /**
  * Shows the consensus enchant per slot for the boss-study view.
- * Omits slots where fewer than 40% of top parsers enchant.
+ * Omits slots below the top-parse consensus share.
  */
 export function buildBenchEnchantRows(stats: EncounterGearStats | null): BenchEnchantRow[] {
   const topEnch = stats?.enchants ?? {};
@@ -290,7 +290,7 @@ export function buildBenchEnchantRows(stats: EncounterGearStats | null): BenchEn
     .sort((a, b) => a - b)
     .reduce<BenchEnchantRow[]>((acc, slot) => {
       const top = topEnch[slot]?.[0];
-      if (top && top.pct >= 40) {
+      if (top && top.pct >= ENCHANT_CONSENSUS_PCT) {
         acc.push({ slotName: slotName(slot), name: top.name || `Enchant #${top.id}`, pct: top.pct });
       }
       return acc;
