@@ -36,7 +36,7 @@
             <div class="min-w-0">
               <div class="text-[13px] text-[var(--text)]">Death {{ d.index }}</div>
               @if (d.ability) {
-                <div class="text-xs text-[var(--muted)] truncate">{{ d.ability }}@if (d.amount) { - {{ d.amount | formatDamage }} }</div>
+                <div class="text-xs text-[var(--muted)] truncate">{{ d.ability }}</div>
               }
             </div>
             <span class="font-mono text-[13px] text-[var(--accent)] tabular-nums">{{ d.timeS | formatDuration }}</span>

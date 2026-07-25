@@ -51,7 +51,7 @@ test('pull overview reports the DPS, the death, and the kill', async () => {
   await shows(pullOverview, '65K');
   await shows(pullOverview, '7:34');
   await shows(pullOverview, 'Death 1');
-  await shows(pullOverview, 'Bursting Emptiness - 356K');
+  await shows(pullOverview, 'Bursting Emptiness');
   await shows(pullOverview, '7:33');
   await shows(pullOverview, 'Boss defeated');
 });

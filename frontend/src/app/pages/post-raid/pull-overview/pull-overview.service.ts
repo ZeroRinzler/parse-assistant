@@ -22,8 +22,6 @@ export interface PullDeathRow {
   timeS: number;
   /** Killing-blow ability name (empty when the death carried no ability). */
   ability: string;
-  /** Magnitude of the lethal hit (the full incoming amount); 0 when it could not be resolved. */
-  amount: number;
 }
 
 export interface PullOverviewView {
@@ -112,27 +110,13 @@ export function abilityNameMap(report: WclReport): Map<number, string> {
   return map;
 }
 
-/**
- * The lethal hit's magnitude for a death: the matching-ability DamageTaken event landing
- * at or just before the death. Uses the full incoming (`unmitigatedAmount`) hit, falling
- * back to the recorded `amount`. Returns 0 when no matching hit is found.
- */
-export function lethalHitAmount(damageTaken: WclEvent[], abilityId: number, deathTs: number): number {
-  let lethal: WclEvent | null = null;
-  for (const event of damageTaken) {
-    if (event.abilityGameID !== abilityId || event.timestamp > deathTs) continue;
-    if (!lethal || event.timestamp > lethal.timestamp) lethal = event;
-  }
-  return lethal ? (lethal.unmitigatedAmount ?? lethal.amount ?? 0) : 0;
-}
 
 /**
  * The player's deaths in a pull, oldest first: for each `death` event targeting the player,
- * resolve the killing-blow ability name and the lethal hit's magnitude.
+ * resolve the killing-blow ability name.
  */
 export function buildDeathRows(
   deathEvents: WclEvent[],
-  damageTaken: WclEvent[],
   playerId: number,
   fightStartMs: number,
   names: Map<number, string>,
@@ -146,7 +130,6 @@ export function buildDeathRows(
         index: i + 1,
         timeS: (event.timestamp - fightStartMs) / MS_PER_S,
         ability: abilityId ? (names.get(abilityId) ?? '') : '',
-        amount: abilityId ? lethalHitAmount(damageTaken, abilityId, event.timestamp) : 0,
       };
     });
 }
@@ -155,11 +138,7 @@ export function buildDeathRows(
 export class PullOverviewFeatureService {
   private readonly wclApi = inject(WclApiService);
 
-  /**
-   * Build the pull overview for one player + pull. Fetches the report (cached, for
-   * killing-blow names), the damage-done table (for DPS) and the pull's deaths; the
-   * player's DamageTaken (for lethal-hit magnitudes) is fetched only when they died.
-   */
+  /** Build the pull overview for one player + pull, from the report, damage table and deaths. */
   async loadView(
     reportCode: string, playerId: number, fight: WclFight,
   ): Promise<Result<PullOverviewView, LoadError>> {
@@ -178,10 +157,7 @@ export class PullOverviewFeatureService {
       if (!dps.ok) return dps;
 
       const myDeaths = deathEvents.filter(event => event.targetID === playerId);
-      const damageTaken = myDeaths.length
-        ? await this.wclApi.getAllEvents(reportCode, fight.id, 'DamageTaken', fight.startTime, fight.endTime, playerId)
-        : [];
-      const deaths = buildDeathRows(myDeaths, damageTaken, playerId, fight.startTime, names);
+      const deaths = buildDeathRows(myDeaths, playerId, fight.startTime, names);
       let outcomeTimeS = fight.duration_s;
       if (result === 'wipe') {
         const resurrects = await this.wclApi.getResurrects(reportCode, fight.id, fight.startTime, fight.endTime);
