@@ -16,7 +16,7 @@ import {
   analyzeRotationFindings, RotationScanInput, bucketRotationFindings, buildCdPlan,
   ruleLabel, rulesFollowed,
   checkLostUses, checkFirstCastDelay, checkBloodlustAlignment, checkGaps,
-  checkHoldSuggestions, checkCastEfficiency, analyzeOneCooldown,
+  checkCastEfficiency, analyzeOneCooldown,
   partitionRotationFindings, buildRuleRows, buildOffensiveRows, buildOnPlanChips,
 } from './rotation.service';
 
@@ -325,22 +325,6 @@ describe('checkGaps', () => {
 
   it('returns nothing when the bench has no gap stats', () => {
     expect(checkGaps('Shadow Blades', [0, 200 * ONE_SEC_MS], cdBench({ avg_gap_s: null, stddev_gap_s: null }))).toEqual([]);
-  });
-});
-
-describe('checkHoldSuggestions', () => {
-  const holdCd = cdBench({
-    hold_targets: { '2': { target_s: 130, stddev_s: 5, delay_s: 30, delay_stddev_s: 3, band_s: 5, effective_cd_s: 90, count: 4, total_samples: 5 } },
-  });
-
-  it('flags an under-hold below the consensus band', () => {
-    // gap 100, effective_cd 90 -> playerDelay 10 < (delay 30 - band 5 = 25).
-    expect(checkHoldSuggestions('Shadow Blades', [0, 100 * ONE_SEC_MS], holdCd)).toHaveLength(1);
-  });
-
-  it('does not flag a player exactly at the band edge (strict)', () => {
-    // gap 115 -> playerDelay 25 == delay - band; strict < so not flagged.
-    expect(checkHoldSuggestions('Shadow Blades', [0, 115 * ONE_SEC_MS], holdCd)).toEqual([]);
   });
 });
 

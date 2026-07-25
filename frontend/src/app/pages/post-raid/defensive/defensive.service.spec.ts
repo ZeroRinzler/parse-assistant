@@ -11,7 +11,7 @@ import {
   defensiveWindowStatus, defensiveMapAnchor, defensiveClipAnchor, defensiveFindingClipAnchor, buildDefensiveWindows, buildDefensivePlanRows,
   defensiveDetailRows,
   playerCoveredWindow,
-  buildDefensiveUsageWindows, analyzeOneDefensive, gapDelayFindings, holdSuggestionFindings,
+  buildDefensiveUsageWindows, analyzeOneDefensive, gapDelayFindings,
 } from './defensive.service';
 import { applyBuff, removeBuff, damageTaken, cast } from '../../../../testing/builders/events';
 import { CLOAK_OF_SHADOWS } from '../../../../testing/spell-ids';
@@ -100,65 +100,6 @@ describe('gapDelayFindings', () => {
 
   it('emits nothing when the bench has no gap statistic', () => {
     expect(gapDelayFindings('Cloak of Shadows', [0, 999], benchWithGap({ avg_gap_s: null, stddev_gap_s: null }))).toEqual([]);
-  });
-});
-
-describe('holdSuggestionFindings', () => {
-  const NAME = 'Cloak of Shadows';
-  // Prior-relative band (mirrors rotation): the top parses hold this cast HOLD_DELAY_S past the
-  // reset, and the runtime flags an under-hold only when the player's own gap from their prior
-  // cast is more than HOLD_BAND_S below that. Over-holding is tolerated.
-  const HELD_CAST_INDEX = 2;      // the second use (1-based key)
-  const EFFECTIVE_CD_S = 60;      // the defensive's cooldown (cadence zero-point)
-  const HOLD_DELAY_S = 40;        // top parses hold ~40s past the reset
-  const HOLD_BAND_S = 5;          // tolerance half-width -> flag below HOLD_DELAY_S - HOLD_BAND_S
-  const TARGET_CLOCK_S = 130;     // display-only median clock target ("hold to 2:10")
-  const HELD_COUNT = 6;           // "6 of 10 top parses hold" copy
-  const TOTAL_SAMPLED = 10;
-  const PRIOR_CAST_S = 10;
-  // A gap of exactly EFFECTIVE_CD_S + HOLD_DELAY_S - HOLD_BAND_S past the prior cast sits on the
-  // band edge; below it flags, at/above it does not.
-  const BAND_EDGE_S = PRIOR_CAST_S + EFFECTIVE_CD_S + (HOLD_DELAY_S - HOLD_BAND_S);
-  const UNDER_HELD_S = BAND_EDGE_S - 5;  // clearly below the band edge
-  const OVER_HELD_S = PRIOR_CAST_S + EFFECTIVE_CD_S + HOLD_DELAY_S + 20; // past the band (tolerated)
-
-  const holdTargets: PerDefensiveBenchmark['hold_targets'] = {
-    [HELD_CAST_INDEX]: {
-      target_s: TARGET_CLOCK_S, stddev_s: HOLD_BAND_S,
-      delay_s: HOLD_DELAY_S, delay_stddev_s: 3, band_s: HOLD_BAND_S, effective_cd_s: EFFECTIVE_CD_S,
-      count: HELD_COUNT, total_samples: TOTAL_SAMPLED,
-    },
-  };
-
-  it('suggests a hold when the player under-held vs the prior-relative band', () => {
-    const out = holdSuggestionFindings(NAME, [PRIOR_CAST_S, UNDER_HELD_S], holdTargets);
-    expect(out).toHaveLength(1);
-    expect(out[0]).toMatchObject({ severity: 'info', category: 'hold_suggestion' });
-  });
-
-  it('does not suggest at the band edge (strict boundary)', () => {
-    expect(holdSuggestionFindings(NAME, [PRIOR_CAST_S, BAND_EDGE_S], holdTargets)).toEqual([]);
-  });
-
-  it('tolerates over-holding (a later-than-band press is fine)', () => {
-    expect(holdSuggestionFindings(NAME, [PRIOR_CAST_S, OVER_HELD_S], holdTargets)).toEqual([]);
-  });
-
-  it('skips index 0 - no prior cast to measure a gap against', () => {
-    const FIRST_CAST_INDEX = 1;
-    const PLAYER_FIRST_S = 80;
-    const firstOnly: PerDefensiveBenchmark['hold_targets'] = {
-      [FIRST_CAST_INDEX]: {
-        target_s: TARGET_CLOCK_S, stddev_s: HOLD_BAND_S,
-        delay_s: HOLD_DELAY_S, delay_stddev_s: 3, band_s: HOLD_BAND_S, effective_cd_s: EFFECTIVE_CD_S,
-        count: HELD_COUNT, total_samples: TOTAL_SAMPLED,
-      },
-    };
-    expect(holdSuggestionFindings(NAME, [PLAYER_FIRST_S], firstOnly)).toEqual([]);
-  });
-
-  it('skips a cast index the player never reached', () => {
-    expect(holdSuggestionFindings(NAME, [PRIOR_CAST_S], holdTargets)).toEqual([]);
   });
 });
 

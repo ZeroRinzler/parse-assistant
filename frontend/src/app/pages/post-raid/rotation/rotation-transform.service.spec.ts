@@ -4,8 +4,8 @@ import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
 import {
   RotationTransformService,
-  detectBloodlust, summarizeCooldownCasts, detectHoldWindows, castGapListMs,
-  buildCdBenchmark, buildHoldTargets, computeEfficiencyThresholds, aggregateCdBenchmarks, rotationCdSpellIds,
+  detectBloodlust, summarizeCooldownCasts, castGapListMs,
+  buildCdBenchmark, computeEfficiencyThresholds, aggregateCdBenchmarks, rotationCdSpellIds,
   CdSummary,
 } from './rotation-transform.service';
 import { SHADOW_BLADES, BLOODLUST, CLOAK_OF_SHADOWS } from '../../../../testing/spell-ids';
@@ -60,34 +60,6 @@ describe('summarizeCooldownCasts', () => {
     expect(atBoundary[0].hold_windows).toHaveLength(0);
     const past = summarizeCooldownCasts([cast(SHADOW_BLADES, 0), cast(SHADOW_BLADES, 98.1)], cooldowns, 0, 200, null);
     expect(past[0].hold_windows).toHaveLength(1);
-  });
-});
-
-describe('detectHoldWindows', () => {
-  const EFFECTIVE_CD_S = 90;
-
-  it('flags a cast more than 8s past the prior cast + cooldown', () => {
-    // prior 0 + cd 90 = expected 90; actual 110 -> 20s hold.
-    const holds = detectHoldWindows([0, 110], EFFECTIVE_CD_S);
-    expect(holds).toHaveLength(1);
-    expect(holds[0]).toMatchObject({ cast_index: 2, actual_s: 110, delay_s: 20 });
-  });
-
-  it('does not flag a cast exactly at the threshold (strict)', () => {
-    // prior 0 + cd 90 + 8s threshold = 98; delay exactly 8 -> not a hold.
-    expect(detectHoldWindows([0, 98], EFFECTIVE_CD_S)).toHaveLength(0);
-    expect(detectHoldWindows([0, 98.1], EFFECTIVE_CD_S)).toHaveLength(1);
-  });
-
-  it('measures each hold from the prior cast, so one hold does not cascade', () => {
-    // cast 2 held (0 -> 200); cast 3 on cooldown after it (200 -> 290).
-    const holds = detectHoldWindows([0, 200, 290], EFFECTIVE_CD_S);
-    expect(holds).toHaveLength(1);
-    expect(holds[0].cast_index).toBe(2);
-  });
-
-  it('returns nothing with a single cast', () => {
-    expect(detectHoldWindows([5], EFFECTIVE_CD_S)).toEqual([]);
   });
 });
 
@@ -155,38 +127,6 @@ describe('buildCdBenchmark', () => {
     const TOTAL_PARSES = 10;
     const HOLDERS_BELOW = 4;  // below HOLD_CONSENSUS_FRAC of 10
     expect(buildCdBenchmark(withHolders(HOLDERS_BELOW, TOTAL_PARSES), 90).majority_hold).toBe(false);
-  });
-});
-
-describe('buildHoldTargets', () => {
-  const emptyHolds = (count: number): CdSummary[] =>
-    Array.from({ length: count }, () => ({
-      name: 'Shadow Blades', total_uses: 1, first_cast_s: 0, bl_aligned: false, bl_offset_s: null,
-      cast_times_s: [], hold_windows: [], cast_pattern: 'on_cooldown' as const, fight_duration_s: 200,
-    }));
-  const heldAt = (castIndex: number, actualS: number, delayS: number, holds: number): CdSummary[] =>
-    Array.from({ length: holds }, () => ({
-      name: 'Shadow Blades', total_uses: 2, first_cast_s: 0, bl_aligned: false, bl_offset_s: null,
-      cast_times_s: [], hold_windows: [{ cast_index: castIndex, actual_s: actualS, delay_s: delayS }],
-      cast_pattern: 'hold' as const, fight_duration_s: 200,
-    }));
-
-  it('surfaces a target when a majority of parses hold at that index', () => {
-    // 5 of 10 hold index 2 -> meets max(2, 0.5*10=5).
-    const targets = buildHoldTargets([...heldAt(2, 110, 20, 5), ...emptyHolds(5)], 90);
-    expect(targets['2']).toBeDefined();
-    expect(targets['2'].count).toBe(5);
-  });
-
-  it('drops a target below the majority (strict boundary)', () => {
-    // 4 of 10 hold -> below max(2, 5).
-    expect(buildHoldTargets([...heldAt(2, 110, 20, 4), ...emptyHolds(6)], 90)['2']).toBeUndefined();
-  });
-
-  it('records prior-relative delay, absolute target, and a band floored at 5s', () => {
-    // identical delays -> stddev 0 -> band floored at HOLD_BAND_MIN_S.
-    const targets = buildHoldTargets(heldAt(2, 110, 20, 3), 90);
-    expect(targets['2']).toMatchObject({ target_s: 110, delay_s: 20, band_s: 5, effective_cd_s: 90 });
   });
 });
 

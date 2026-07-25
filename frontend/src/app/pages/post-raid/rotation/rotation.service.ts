@@ -10,6 +10,7 @@ import { WclEvent } from '../../../core/models/wcl.models';
 import { logWarn } from '../../../core/log';
 import { Result, LoadError, ok, permanent } from '../../../core/result';
 import { toLoadError } from '../../../core/http-load-error';
+import { holdSuggestionFindings } from '../../../shared/analysis/hold-targets';
 import {
   isOutlierAbove, isOutlierBeyond, isOutlierBelow, castEfficiencyPct,
   closestToZero, benchExpectedUses, fmtClock, sortBySeverity,
@@ -283,25 +284,6 @@ export function checkGaps(cdName: string, castTimesMs: number[], cdBench: PerCdB
   return findings;
 }
 
-export function checkHoldSuggestions(cdName: string, castTimesMs: number[], cdBench: PerCdBenchmark): AnalysisFinding[] {
-  const findings: AnalysisFinding[] = [];
-  if (!castTimesMs.length) return findings;
-  const times = castTimesMs.map(timeMs => timeMs / 1000);
-  for (const [idxStr, target] of Object.entries(cdBench.hold_targets)) {
-    const index = parseInt(idxStr, 10) - 1;
-    // Need a prior cast to measure a gap; index 0 has none.
-    if (index < 1 || index >= times.length) continue;
-    // Compare the player's OWN gap from their prior cast (cascade-free). Flag only an
-    // under-hold clearly below the consensus band; over-holding is tolerated.
-    const playerDelay = times[index] - times[index - 1] - target.effective_cd_s;
-    if (playerDelay < target.delay_s - target.band_s) findings.push({ severity: 'info', category: 'hold_suggestion',
-      timestamp_ms: castTimesMs[index],
-      measured: { value: fmtClock(times[index]), unit: `top ${fmtClock(target.target_s)}` },
-      message: `${cdName} cast ${idxStr} at ${fmtClock(times[index])}. ${target.count}/${target.total_samples} top parses hold to ${fmtClock(target.target_s)}.`,
-      details: { remedy: `Hold ${cdName} to ${fmtClock(target.target_s)}.`, cd_name: cdName } });
-  }
-  return findings;
-}
 
 export function checkCastEfficiency(
   castTimesMs: number[], fightDurS: number, bench: RotationBench,
@@ -361,7 +343,7 @@ export function analyzeOneCooldown(
   const bl = checkBloodlustAlignment(cdName, castTimesMs, cdBench, blTimeS, wantsBL);
   issues.push(...bl.findings);
   issues.push(...checkGaps(cdName, castTimesMs, cdBench));
-  const holds = checkHoldSuggestions(cdName, castTimesMs, cdBench);
+  const holds = holdSuggestionFindings(cdName, castTimesMs.map(timeMs => timeMs / 1000), cdBench.hold_targets);
 
   const success: AnalysisFinding | null = issues.length || actual === 0
     ? null

@@ -10,12 +10,13 @@ import { DataFileApiService } from '../../../core/services/data-file-api';
 import { WclEvent, ParseRanking, WclReport } from '../../../core/models/wcl.models';
 import { RulebookDefensive } from '../../../core/models/rulebook.models';
 import { BurstWindow, TopDefensiveSummary } from '../../../core/models/analysis.models';
-import { PerDefensiveBenchmark, CdHoldTargets } from '../../../core/models/encounter.models';
+import { PerDefensiveBenchmark } from '../../../core/models/encounter.models';
 import { logWarn } from '../../../core/log';
 import { Result, LoadError, ok, missing } from '../../../core/result';
 import { toLoadError } from '../../../core/http-load-error';
 import { mean, median, deviation } from 'd3-array';
 import { round, groupByTime, getOrInsert } from '../../../shared/analysis/analysis-math';
+import { HoldWindow, buildHoldTargets, detectHoldWindows } from '../../../shared/analysis/hold-targets';
 import { abilityIcons, normalizeAbilityId, toParseRankings, unwrapRankings } from '../../../shared/analysis/wcl-projections';
 import { DataSource } from '../../../core/data-source/data-source';
 import { DefensiveBench, DefensivePlanMeta } from './defensive-data-source';
@@ -34,12 +35,6 @@ const CONSENSUS_FRAC = 0.5;
 const MEMBER_MAJORITY_FRAC = 0.5;
 /** Defensive windows within this many seconds cluster together. */
 const CLUSTER_MERGE_S = 20;
-/** Fraction of samples that must have held at a cast index to surface a hold target. */
-const HOLD_TRIGGER_FRAC = 0.4;
-/** A gap beyond this past the expected on-cooldown time counts as a deliberate hold. */
-const HOLD_THRESHOLD_S = 8;
-/** Floor on the runtime hold tolerance band half-width, so a tight cluster still tolerates jitter. */
-const HOLD_BAND_MIN_S = 5.0;
 /** Keep only the top-N damage sources in a window's ability breakdown (UI row cap). */
 const ABILITY_BREAKDOWN_TOP_N = 6;
 /** No ingestable bench (empty rulebook, no top parses, or no fetchable sample); reported as `missing`. */
@@ -90,7 +85,7 @@ export interface ParseDefensiveSummary {
   first_cast_s: number | null;
   uses: number;
   fight_duration_s: number;
-  hold_windows: { cast_index: number; actual_s: number; delay_s: number }[];
+  hold_windows: HoldWindow[];
   cast_pattern: 'hold' | 'on_cooldown';
 }
 
@@ -137,15 +132,7 @@ export function summarizeDefensiveCasts(
     }
 
     castTimes.sort((a, b) => a - b);
-    // cast_index is 1-based, matching the runtime's `parseInt(idx) - 1` decode. delay_s is the
-    // prior-relative hold past the natural reset, so the runtime compares the player's own gap.
-    const holdWindows: { cast_index: number; actual_s: number; delay_s: number }[] = [];
-    for (let castIndex = 1; castIndex < castTimes.length; castIndex++) {
-      const expectedS = castTimes[castIndex - 1] + cooldownS;
-      const actualS = castTimes[castIndex];
-      const delayS = actualS - expectedS;
-      if (delayS > HOLD_THRESHOLD_S) holdWindows.push({ cast_index: castIndex + 1, actual_s: round(actualS), delay_s: round(delayS) });
-    }
+    const holdWindows = detectHoldWindows(castTimes, cooldownS);
 
     if (castTimes.length) {
       summaries.push({
@@ -319,35 +306,6 @@ export function clusterDefensiveWindows(windows: ParseDefWindow[], sampleCount: 
  * compares the player's own gap against. `effectiveCd` is the cooldown (cadence zero-point);
  * `totalParses` is every sampled parse (not users-only), so the consensus denominator matches.
  */
-export function buildHoldTargets(
-  summaries: ParseDefensiveSummary[], effectiveCd: number, totalParses: number,
-): CdHoldTargets {
-  const byIndex = new Map<number, { actuals: number[]; delays: number[] }>();
-  for (const summary of summaries) {
-    for (const hold of summary.hold_windows) {
-      const bucket = getOrInsert(byIndex, hold.cast_index, () => ({ actuals: [] as number[], delays: [] as number[] }));
-      bucket.actuals.push(hold.actual_s);
-      bucket.delays.push(hold.delay_s);
-    }
-  }
-  const holdTargets: CdHoldTargets = {};
-  for (const [castIndex, { actuals, delays }] of byIndex.entries()) {
-    if (actuals.length >= Math.max(2, totalParses * HOLD_TRIGGER_FRAC)) {
-      const delayStddev = round(deviation(delays) ?? 0);
-      holdTargets[String(castIndex)] = {
-        target_s: round((median(actuals) ?? 0)),
-        stddev_s: round((deviation(actuals) ?? 0)),
-        delay_s: round((median(delays) ?? 0)),
-        delay_stddev_s: delayStddev,
-        band_s: round(Math.max(delayStddev, HOLD_BAND_MIN_S)),
-        effective_cd_s: round(effectiveCd),
-        count: actuals.length,
-        total_samples: totalParses,
-      };
-    }
-  }
-  return holdTargets;
-}
 
 /**
  * Per-defensive benchmark. `summaries` is users-only; `totalParses` is every sampled parse,

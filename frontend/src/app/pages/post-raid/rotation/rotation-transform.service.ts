@@ -3,10 +3,13 @@ import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
 import { WclEvent, ParseRanking } from '../../../core/models/wcl.models';
 import { RulebookCooldown, RulebookDefensive } from '../../../core/models/rulebook.models';
-import { PerCdBenchmark, UsesPerMin, CdHoldTargets } from '../../../core/models/encounter.models';
+import { PerCdBenchmark, UsesPerMin } from '../../../core/models/encounter.models';
 import { logWarn } from '../../../core/log';
-import { mean, median, deviation, quantile } from 'd3-array';
+import { mean, deviation, quantile } from 'd3-array';
 import { round, getOrInsert } from '../../../shared/analysis/analysis-math';
+import {
+  HoldWindow, HOLD_CONSENSUS_FRAC, buildHoldTargets, detectHoldWindows,
+} from '../../../shared/analysis/hold-targets';
 import { abilityIcons, toParseRankings, unwrapRankings } from '../../../shared/analysis/wcl-projections';
 import { DataSource } from '../../../core/data-source/data-source';
 import { Result, LoadError, ok, missing } from '../../../core/result';
@@ -25,15 +28,9 @@ const BLOODLUST_IDS = new Set([2825, 32182, 80353, 90355, 264667, 390386]);
 /** BL window: a CD counts as aligned if cast 30s before to 55s after BL start. */
 const BL_WINDOW_BEFORE_S = 30;
 const BL_WINDOW_AFTER_S = 55;
-/** A gap beyond this past the expected on-cooldown time counts as a deliberate hold. */
-const HOLD_THRESHOLD_S = 8.0;
 /** p90 of pooled cast gaps is the downtime floor. */
 const DOWNTIME_PERCENTILE = 0.9;
 const DEFAULT_DOWNTIME_THRESHOLD_MS = 1500;
-/** A hold target surfaces only when a MAJORITY of sampled parses hold at that index. */
-const HOLD_CONSENSUS_FRAC = 0.5;
-/** Floor on the runtime tolerance band half-width, so a tight cluster still tolerates jitter. */
-const HOLD_BAND_MIN_S = 5.0;
 
 export function rotationCdSpellIds(cooldowns: RulebookCooldown[], defensives: RulebookDefensive[]): Record<string, number> {
   const map: Record<string, number> = {};
@@ -49,27 +46,6 @@ export function detectBloodlust(buffEvents: WclEvent[], fightStartMs: number): n
     }
   }
   return null;
-}
-
-export interface HoldWindow {
-  cast_index: number;
-  actual_s: number;
-  delay_s: number;
-}
-
-// Prior-relative: each cast is measured against the prior ACTUAL cast + the cooldown, not a
-// cumulative ideal schedule, so a single hold does not cascade into every later cast looking held.
-export function detectHoldWindows(castTimesS: number[], effectiveCd: number): HoldWindow[] {
-  const holdWindows: HoldWindow[] = [];
-  for (let castIndex = 1; castIndex < castTimesS.length; castIndex++) {
-    const expected = castTimesS[castIndex - 1] + effectiveCd;
-    const actual = castTimesS[castIndex];
-    const delay = actual - expected;
-    if (delay > HOLD_THRESHOLD_S) {
-      holdWindows.push({ cast_index: castIndex + 1, actual_s: round(actual), delay_s: round(delay) });
-    }
-  }
-  return holdWindows;
 }
 
 export interface CdSummary {
@@ -145,36 +121,6 @@ function benchUsesPerMin(entries: CdSummary[]): UsesPerMin {
   };
 }
 
-// `target_s` is the absolute clock median (display); `delay_s`/`band_s`/`effective_cd_s` are the
-// prior-relative band the runtime compares the player's own gap against.
-export function buildHoldTargets(entries: CdSummary[], effectiveCd: number): CdHoldTargets {
-  const byIdx = new Map<number, { actuals: number[]; delays: number[] }>();
-  for (const entry of entries) {
-    for (const hold of entry.hold_windows) {
-      const bucket = byIdx.get(hold.cast_index) ?? { actuals: [], delays: [] };
-      bucket.actuals.push(hold.actual_s);
-      bucket.delays.push(hold.delay_s);
-      byIdx.set(hold.cast_index, bucket);
-    }
-  }
-  const targets: CdHoldTargets = {};
-  for (const [castIndex, { actuals, delays }] of byIdx.entries()) {
-    if (actuals.length >= Math.max(2, entries.length * HOLD_CONSENSUS_FRAC)) {
-      const delayStddev = round(deviation(delays) ?? 0);
-      targets[String(castIndex)] = {
-        target_s: round((median(actuals) ?? 0)),
-        stddev_s: round((deviation(actuals) ?? 0)),
-        delay_s: round((median(delays) ?? 0)),
-        delay_stddev_s: delayStddev,
-        band_s: round(Math.max(delayStddev, HOLD_BAND_MIN_S)),
-        effective_cd_s: round(effectiveCd),
-        count: actuals.length,
-        total_samples: entries.length,
-      };
-    }
-  }
-  return targets;
-}
 
 export function buildCdBenchmark(entries: CdSummary[], effectiveCd: number): PerCdBenchmark {
   const firstCasts = entries.map(entry => entry.first_cast_s).filter((value): value is number => value != null);

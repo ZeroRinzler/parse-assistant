@@ -5,7 +5,7 @@ import { DataFileApiService } from '../../../core/services/data-file-api';
 import {
   DefensiveTransformService,
   defensiveSpellIds, defensivePlanMeta, buildBuffWindows, summarizeDefensiveCasts,
-  findParseDefensiveWindows, clusterDefensiveWindows, buildHoldTargets, buildDefensiveBenchmark,
+  findParseDefensiveWindows, clusterDefensiveWindows, buildDefensiveBenchmark,
   aggregateDefensiveBenchmarks,
   windowDamageBreakdown, clusterDamageStats, clusterAbilityBreakdown,
   ParseDefWindow, ParseDefensiveSummary,
@@ -224,51 +224,6 @@ describe('clusterDefensiveWindows', () => {
   it('surfaces a consensus window regardless of how little damage was taken', () => {
     const low = [window(10, 0, 0.01), window(11, 1, 0.01)];
     expect(clusterDefensiveWindows(low, 2)).toHaveLength(1);
-  });
-});
-
-describe('buildHoldTargets', () => {
-  const EFFECTIVE_CD_S = CLOAK.cooldown;  // the cadence zero-point passed to buildHoldTargets
-  const HELD_INDEX = 2;                   // 1-based: the second use held
-  const HOLD_BAND_MIN_S = 5;              // the floor band_s can never fall below
-
-  it('surfaces a cast index a majority held, with the prior-relative band', () => {
-    const TOTAL_PARSES = 2;
-    const ACTUAL_A_S = 100, DELAY_A_S = 40;
-    // actuals spread (stddev ~21) differs from the delays spread (stddev ~7.1) so band_s pins the delay stddev.
-    const ACTUAL_B_S = 130, DELAY_B_S = 50;
-    const EXPECTED_TARGET_S = (ACTUAL_A_S + ACTUAL_B_S) / 2;  // median absolute clock
-    const EXPECTED_DELAY_S = (DELAY_A_S + DELAY_B_S) / 2;     // median prior-relative delay
-    const summaries: ParseDefensiveSummary[] = [
-      { name: 'C', cast_times_s: [], first_cast_s: 0, uses: 2, fight_duration_s: FIGHT_DUR_S, hold_windows: [{ cast_index: HELD_INDEX, actual_s: ACTUAL_A_S, delay_s: DELAY_A_S }], cast_pattern: 'hold' },
-      { name: 'C', cast_times_s: [], first_cast_s: 0, uses: 2, fight_duration_s: FIGHT_DUR_S, hold_windows: [{ cast_index: HELD_INDEX, actual_s: ACTUAL_B_S, delay_s: DELAY_B_S }], cast_pattern: 'hold' },
-    ];
-    // Both parses held at the index -> TOTAL_PARSES >= max(2, HOLD_TRIGGER_FRAC * TOTAL_PARSES).
-    const targets = buildHoldTargets(summaries, EFFECTIVE_CD_S, TOTAL_PARSES);
-    expect(targets[String(HELD_INDEX)]).toMatchObject({
-      target_s: EXPECTED_TARGET_S, delay_s: EXPECTED_DELAY_S, effective_cd_s: EFFECTIVE_CD_S,
-      count: TOTAL_PARSES, total_samples: TOTAL_PARSES,
-    });
-    // delays [40, 50]: sample stddev sqrt(50) = 7.07 -> round 7.1, above the 5s floor.
-    expect(targets[String(HELD_INDEX)].band_s).toBe(7.1);
-  });
-
-  it('floors the band at HOLD_BAND_MIN_S when the delay spread is tiny', () => {
-    const TOTAL_PARSES = 2;
-    const summaries: ParseDefensiveSummary[] = [
-      { name: 'C', cast_times_s: [], first_cast_s: 0, uses: 2, fight_duration_s: FIGHT_DUR_S, hold_windows: [{ cast_index: HELD_INDEX, actual_s: 100, delay_s: 40 }], cast_pattern: 'hold' },
-      { name: 'C', cast_times_s: [], first_cast_s: 0, uses: 2, fight_duration_s: FIGHT_DUR_S, hold_windows: [{ cast_index: HELD_INDEX, actual_s: 102, delay_s: 41 }], cast_pattern: 'hold' },
-    ];
-    // delays [40, 41]: sample stddev sqrt(0.5) = 0.71 < 5, so the band floors at HOLD_BAND_MIN_S.
-    expect(buildHoldTargets(summaries, EFFECTIVE_CD_S, TOTAL_PARSES)[String(HELD_INDEX)].band_s).toBe(HOLD_BAND_MIN_S);
-  });
-
-  it('keys consensus on TOTAL parses, not users-only (1 of 3 does not surface)', () => {
-    const TOTAL_PARSES = 3;  // one held of three sampled -> below max(2, HOLD_TRIGGER_FRAC * 3)
-    const summaries: ParseDefensiveSummary[] = [
-      { name: 'C', cast_times_s: [], first_cast_s: 0, uses: 2, fight_duration_s: FIGHT_DUR_S, hold_windows: [{ cast_index: HELD_INDEX, actual_s: 100, delay_s: 40 }], cast_pattern: 'hold' },
-    ];
-    expect(buildHoldTargets(summaries, EFFECTIVE_CD_S, TOTAL_PARSES)).toEqual({});
   });
 });
 

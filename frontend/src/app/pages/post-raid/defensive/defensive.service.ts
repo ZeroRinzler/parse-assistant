@@ -10,6 +10,7 @@ import { ClipAnchor } from '../../../core/models/capture.models';
 import { logWarn } from '../../../core/log';
 import { Result, LoadError, ok } from '../../../core/result';
 import { toLoadError } from '../../../core/http-load-error';
+import { holdSuggestionFindings } from '../../../shared/analysis/hold-targets';
 import {
   benchExpectedUses, fmtClock, isOutlierAbove, sortBySeverity,
 } from '../../../shared/analysis/analysis-math';
@@ -152,30 +153,6 @@ export function gapDelayFindings(
   return findings;
 }
 
-/**
- * Prior-relative (cascade-free): compares the player's own gap from their previous cast
- * against the band. Flags only an under-hold clearly below it; over-holding is tolerated.
- */
-export function holdSuggestionFindings(
-  name: string, castTimesS: number[], holdTargets: PerDefensiveBenchmark['hold_targets'],
-): AnalysisFinding[] {
-  const findings: AnalysisFinding[] = [];
-  if (!castTimesS.length) return findings;
-  for (const [idxStr, target] of Object.entries(holdTargets)) {
-    const index = parseInt(idxStr, 10) - 1;
-    // Need a prior cast to measure a prior-relative gap; index 0 has none.
-    if (index < 1 || index >= castTimesS.length) continue;
-    const playerDelay = castTimesS[index] - castTimesS[index - 1] - target.effective_cd_s;
-    if (playerDelay < target.delay_s - target.band_s) {
-      findings.push({ severity: 'info', category: 'hold_suggestion',
-        timestamp_ms: Math.round(castTimesS[index] * 1000),
-        measured: { value: fmtClock(castTimesS[index]), unit: `top ~${fmtClock(target.target_s)}` },
-        message: `${name} use ${idxStr} at ${fmtClock(castTimesS[index])}. ${target.count}/${target.total_samples} top parses hold to ${fmtClock(target.target_s)}.`,
-        details: { remedy: `Hold ${name} to ${fmtClock(target.target_s)}.`, cd_name: name } });
-    }
-  }
-  return findings;
-}
 
 /** Lost / delayed / hold-suggestion findings for ONE defensive vs its top-parse benchmark. */
 export function analyzeOneDefensive(
