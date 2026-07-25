@@ -30,7 +30,6 @@ export const environment = {
    * see `environment.ts` for the shared-copy override used by preview builds. */
   dataBaseHref: '',
   ingest: false,
-  ingestSpec: null as string | null,
   /** WCL client-credentials pair (intentionally public - see wcl-public-client.ts). */
   wclClientId: WCL_PUBLIC_CLIENT_ID,
   wclClientSecret: WCL_PUBLIC_CLIENT_SECRET,

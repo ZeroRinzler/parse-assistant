@@ -37,7 +37,6 @@ export const environment = {
   /** True only in the ingest environment: boots the ingest orchestrator on startup. */
   ingest: false,
   /** Ingest environment only: target a single spec folder (e.g. 'SubtletyRogue') instead of all. */
-  ingestSpec: null as string | null,
   /** WCL client-credentials pair (intentionally public - see wcl-public-client.ts). */
   wclClientId: WCL_PUBLIC_CLIENT_ID,
   wclClientSecret: WCL_PUBLIC_CLIENT_SECRET,

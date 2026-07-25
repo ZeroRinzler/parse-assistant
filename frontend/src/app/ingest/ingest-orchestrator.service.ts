@@ -20,7 +20,6 @@ import { RotationTransformService } from '../pages/post-raid/rotation/rotation-t
 import { DefensiveTransformService } from '../pages/post-raid/defensive/defensive-transform.service';
 import { GearTransformService } from '../pages/post-raid/gear/gear-transform.service';
 import { MapTransformService } from '../pages/post-raid/map/map-transform.service';
-import { environment } from '../../environments/environment';
 import { getEncounters, type CurrentContent } from './wcl-fetchers';
 import { mapClassesToSpecMeta, specWclFromMetas, type SpecWclMap } from './wcl-mappers';
 import { type WclQueryClient, BudgetExceededError } from './wcl-client';
@@ -154,20 +153,11 @@ export class IngestOrchestratorService {
     const { encounters, protectedIds } = discovery;
     console.log(`${encounters.length} live encounters`);
 
-    let specs: string[];
-    if (environment.ingestSpec) {
-      if (!specWcl[environment.ingestSpec]) {
-        throw new Error(`Unknown spec "${environment.ingestSpec}". Known specs: ${Object.keys(specWcl).sort().join(', ')}`);
-      }
-      specs = [environment.ingestSpec];
-      console.log(`Targeting spec: ${environment.ingestSpec}`);
-    } else {
-      specs = await this.orderedSpecsFromDisk();
-      if (!specs.length) {
-        console.log('No known specs (no rulebook.json found). Nothing to do.');
-        publishSummary({ succeeded: [], failed: [], budgetStopped: false });
-        return;
-      }
+    const specs = await this.orderedSpecsFromDisk();
+    if (!specs.length) {
+      console.log('No known specs (no rulebook.json found). Nothing to do.');
+      publishSummary({ succeeded: [], failed: [], budgetStopped: false });
+      return;
     }
 
     // Isolate each spec so one throw drops only that spec, not the whole run. Publishing partial

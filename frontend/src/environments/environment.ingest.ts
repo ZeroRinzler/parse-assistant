@@ -34,7 +34,6 @@ export const environment = {
   dataBaseHref: '',
   ingest: true,
   /** Set locally to target a single spec folder (e.g. 'SubtletyRogue') instead of all. */
-  ingestSpec: null as string | null,
   wclClientId: WCL_PUBLIC_CLIENT_ID,
   wclClientSecret: WCL_PUBLIC_CLIENT_SECRET,
 };
