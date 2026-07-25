@@ -26,7 +26,7 @@ export interface BurstBench {
 /**
  * The burst slice's data-source token. `provideDataSource` binds it to a
  * `FileDataSource<BurstBench>` (production: reads the tailored file) or
- * `BurstTransformService` (the dev `useLiveTransform` flag / ingestion: computes it live)
+ * `BurstTransformService` (the development and ingest environments: computes it live)
  * - both `DataSource<BurstBench>`.
  */
 export const BURST_DATA_SOURCE = new InjectionToken<DataSource<BurstBench>>('BURST_DATA_SOURCE');

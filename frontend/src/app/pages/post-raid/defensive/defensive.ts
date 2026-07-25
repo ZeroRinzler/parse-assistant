@@ -94,7 +94,7 @@ export class DefensiveComponent {
     return bucketFindings(this._findings(), {
       spellId: name => spellIds[name] ?? null,
       icon: name => icons[name],
-    }).entries;
+    });
   });
 
   protected readonly findingRows = computed<FindingRow[]>(() => rowsFromEntries(this.entries(), CAT_LABEL));

@@ -93,36 +93,25 @@ export interface BucketOptions {
   spellId: (name: string) => number | null;
   /** Resolves a cooldown/defensive name to its baked icon filename (empty when none). */
   icon: (name: string) => string;
-  /**
-   * When set, findings with category `rule_violation` or no `cd_name` are peeled
-   * off into the returned `ruleFindings` instead of being bucketed (offensive view).
-   */
-  collectRules?: boolean;
 }
 
-/**
- * Group findings by cooldown/defensive name into `FindingEntry[]`. Optionally
- * collects rotation-rule findings separately (offensive analysis only).
- */
+/** Group findings by cooldown/defensive name into `FindingEntry[]`. */
 export function bucketFindings(
   findings: AnalysisFinding[],
   options: BucketOptions,
-): { entries: FindingEntry[]; ruleFindings: AnalysisFinding[] } {
+): FindingEntry[] {
   const byName: Record<string, FindingBucket> = {};
-  const ruleFindings: AnalysisFinding[] = [];
 
   for (const finding of findings) {
     if (finding.severity === 'success') continue;
     if (finding.category === 'hold_suggestion' && finding.details?.cd_name) {
       const name = finding.details.cd_name;
       (byName[name] ??= { issues: [], holds: [] }).holds.push(finding);
-    } else if (options.collectRules && (finding.category === 'rule_violation' || !finding.cd_name)) {
-      ruleFindings.push(finding);
     } else if (finding.cd_name) {
       (byName[finding.cd_name] ??= { issues: [], holds: [] }).issues.push(finding);
     } else {
-      // No cd_name and not collected as a rule: surface it under an explicit label so the
-      // coaching feedback is never dropped, and log the finding so a report can reproduce it.
+      // Surface a nameless finding under an explicit label so the coaching feedback is never
+      // dropped, and log it so a report can reproduce it.
       logWarn(UNKNOWN_COOLDOWN_CONTEXT, finding);
       (byName[UNKNOWN_COOLDOWN_LABEL] ??= { issues: [], holds: [] }).issues.push(finding);
     }
@@ -133,7 +122,7 @@ export function bucketFindings(
     if (name) (byName[name] ??= { issues: [], holds: [] }).success = finding;
   }
 
-  const entries = Object.entries(byName).map(([name, bucket]) => {
+  return Object.entries(byName).map(([name, bucket]) => {
     const hasCritical = bucket.issues.some(f => f.severity === 'critical');
     const hasIssue = bucket.issues.length > 0 || bucket.holds.length > 0;
     const metaItems: string[] = [];
@@ -152,6 +141,4 @@ export function bucketFindings(
       findings: [...bucket.issues, ...bucket.holds],
     };
   });
-
-  return { entries, ruleFindings };
 }

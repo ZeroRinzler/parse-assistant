@@ -1,11 +1,11 @@
 /**
  * Development environment (swapped in by the `development` build configuration).
  *
- * `useLiveTransform: true` binds every `*_DATA_SOURCE` token (see `environmentProviders`
- * below) to its `*TransformService`, so each slice computes its prepared data live from WCL
- * in the browser - `npm start` runs with zero ingested files. Slower (a burst render
- * fetches the top parses + their Casts/DamageDone), dev only. Production stays on the file
- * source (`environment.ts`).
+ * The `environmentProviders` list below binds every `*_DATA_SOURCE` token to its
+ * `*TransformService`, so each slice computes its prepared data live from WCL in the browser
+ * - `npm start` runs with zero ingested files. Slower (a burst render fetches the top parses
+ * + their Casts/DamageDone), dev only. Production stays on the file source
+ * (`environment.ts`).
  *
  * The `*TransformService` imports live HERE and nowhere in the eager production graph,
  * which is what lets a production build tree-shake the transforms out of the bundle
@@ -26,7 +26,6 @@ import { MAP_DATA_SOURCE } from '../app/pages/post-raid/map/map-data-source';
 import { MapTransformService } from '../app/pages/post-raid/map/map-transform.service';
 
 export const environment = {
-  useLiveTransform: true,
   /** Empty resolves `data/specs/` relative to `document.baseURI` (per-folder copy);
    * see `environment.ts` for the shared-copy override used by preview builds. */
   dataBaseHref: '',

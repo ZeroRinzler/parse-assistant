@@ -24,7 +24,7 @@ export interface GearBench {
 /**
  * The gear slice's data-source token. `provideDataSource` binds it to a
  * `FileDataSource<GearBench>` (production: reads the tailored file) or
- * `GearTransformService` (the dev `useLiveTransform` flag / ingestion: computes it live)
+ * `GearTransformService` (the development and ingest environments: computes it live)
  * - both `DataSource<GearBench>`.
  */
 export const GEAR_DATA_SOURCE = new InjectionToken<DataSource<GearBench>>('GEAR_DATA_SOURCE');

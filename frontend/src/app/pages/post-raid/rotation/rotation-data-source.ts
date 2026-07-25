@@ -38,7 +38,7 @@ export interface RotationBench {
 /**
  * The rotation slice's data-source token. `provideDataSource` binds it to a
  * `FileDataSource<RotationBench>` (production: reads the tailored file) or
- * `RotationTransformService` (the dev `useLiveTransform` flag / ingestion: computes it
- * live) - both `DataSource<RotationBench>`.
+ * `RotationTransformService` (the development and ingest environments: computes it live)
+ * - both `DataSource<RotationBench>`.
  */
 export const ROTATION_DATA_SOURCE = new InjectionToken<DataSource<RotationBench>>('ROTATION_DATA_SOURCE');

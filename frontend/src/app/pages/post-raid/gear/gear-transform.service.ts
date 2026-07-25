@@ -17,10 +17,6 @@ import { getOrInsert } from '../../../shared/analysis/analysis-math';
 import { DataSource } from '../../../core/data-source/data-source';
 import { GearBench } from './gear-data-source';
 
-// Re-exported so call sites / specs importing these from the transform service keep working.
-export { iconFile, decodeHtmlEntities, extractGear, talentKeyFromTree } from './gear-extract';
-export { toParseRankings } from '../../../shared/analysis/wcl-projections';
-
 /** How many top parses to sample (matches the ingest bench). */
 const TOP_PARSE_COUNT = 10;
 // Over-fetch so a private/unfetchable top parse can be backfilled by the

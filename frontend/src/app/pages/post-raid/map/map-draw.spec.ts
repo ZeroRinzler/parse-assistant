@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { EncounterPositions } from '../../../core/models/positioning.models';
 import { ActorTimeline } from './map.service';
 import {
-  positionAt, toReferenceLocal, rowsToTimeline, playerRowsToTimeline, topParsePoints, topParseTrails,
+  positionAt, toReferenceLocal, rowsToTimeline, playerRowsToTimeline,
   buildParseTimelines, parsePointsAt, parseTrailsOf,
 } from './map-draw';
 
@@ -93,41 +93,6 @@ describe('playerRowsToTimeline', () => {
   });
 });
 
-describe('topParsePoints / topParseTrails', () => {
-  const positions: EncounterPositions = {
-    spec: 'X', encounter_id: 1, encounter_name: 'E', interval_s: 1.5, sample_count: 2,
-    parses: [
-      { report_code: 'a', fight_id: 1, player_name: 'P', duration_s: 6, interval_s: 1.5,
-        player: [[0, 500, 0, null], [6, 500, 0, null]],
-        enemies: [{ game_id: 100, name: 'Boss', is_boss: true, samples: [[0, 0, 0, null, null], [6, 0, 0, null, null]] }] },
-      { report_code: 'b', fight_id: 2, player_name: 'Q', duration_s: 6, interval_s: 1.5,
-        player: [[0, 500, 0, null], [6, 500, 0, null]],
-        enemies: [{ game_id: 100, name: 'Boss', is_boss: true, samples: [[0, 0, 0, null, null], [6, 0, 0, null, null]] }] },
-    ],
-  };
-
-  it('returns one relative point per parse at the anchor time', () => {
-    const points = topParsePoints(positions, { kind: 'boss' }, 3);
-    expect(points).toHaveLength(2);
-    // 500 raw -> 5 yards forward of the boss
-    expect(points[0].dist).toBeCloseTo(5, 6);
-  });
-
-  it('builds a trail per parse across the window', () => {
-    const trails = topParseTrails(positions, { kind: 'boss' }, 3, 1.5, 1.5, 0.5);
-    expect(trails).toHaveLength(2);
-    // window [t-pre, t+post] stepped by 0.5: (1.5 + 1.5) / 0.5 + 1 = 7 points.
-    const EXPECTED_TRAIL_POINTS = 7;
-    expect(trails[0]).toHaveLength(EXPECTED_TRAIL_POINTS);
-    expect(trails[0].map(p => p.t)).toEqual([1.5, 2, 2.5, 3, 3.5, 4, 4.5]);
-  });
-
-  it('selects an enemy reference by gameId', () => {
-    const points = topParsePoints(positions, { kind: 'enemy', gameId: 100 }, 0);
-    expect(points).toHaveLength(2);
-  });
-});
-
 describe('buildParseTimelines / parsePointsAt / parseTrailsOf', () => {
   const positions: EncounterPositions = {
     spec: 'X', encounter_id: 1, encounter_name: 'E', interval_s: 1.5, sample_count: 2,
@@ -150,6 +115,11 @@ describe('buildParseTimelines / parsePointsAt / parseTrailsOf', () => {
 
   it('skips a parse whose selected reference is absent', () => {
     expect(buildParseTimelines(positions, { kind: 'enemy', gameId: 999 })).toHaveLength(0);
+  });
+
+  it('selects an enemy reference by gameId', () => {
+    const timelines = buildParseTimelines(positions, { kind: 'enemy', gameId: 100 });
+    expect(parsePointsAt(timelines, 0)).toHaveLength(2);
   });
 
   it('resolves each prebuilt parse timeline to its relative point at the anchor time', () => {

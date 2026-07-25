@@ -17,7 +17,7 @@ export type MapData = EncounterPositions;
 /**
  * The map slice's data-source token. `provideDataSource` binds it to a
  * `FileDataSource<MapData>` for the `positions` file (production) or `MapTransformService`
- * (the dev `useLiveTransform` flag / ingestion: computes it live) - both
+ * (the development and ingest environments: computes it live) - both
  * `DataSource<MapData>`.
  */
 export const MAP_DATA_SOURCE = new InjectionToken<DataSource<MapData>>('MAP_DATA_SOURCE');

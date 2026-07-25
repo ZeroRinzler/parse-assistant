@@ -130,9 +130,8 @@ function refRows(parse: ParsePositions, selector: ReferenceSelector): PosRow[] |
  * One top parse's player + chosen-reference timelines, already scaled to yards/radians.
  * Building these is the expensive part (it maps every stored row into a sample object), and
  * it depends only on the bench + selector, never on the scrubbed time - so the map canvas
- * builds them once per positions/selector and reuses them across every playback frame
- * (`buildParseTimelines`), instead of rebuilding them per frame as the old
- * `topParsePoints` / `topParseTrails` did.
+ * builds them once per positions/selector (`buildParseTimelines`) and reuses them across every
+ * playback frame.
  */
 export interface ParseTimelines { player: ActorTimeline; ref: ActorTimeline; }
 
@@ -173,19 +172,6 @@ export function parseTrailsOf(
     if (trail.length) trails.push(trail);
   }
   return trails;
-}
-
-/** Each top parse's player position relative to the chosen reference at time `t`. */
-export function topParsePoints(positions: EncounterPositions, selector: ReferenceSelector, t: number): RelPos[] {
-  return parsePointsAt(buildParseTimelines(positions, selector), t);
-}
-
-/** Each top parse's player trail relative to the chosen reference across the window. */
-export function topParseTrails(
-  positions: EncounterPositions, selector: ReferenceSelector,
-  t: number, pre: number, post: number, step: number,
-): RelPos[][] {
-  return parseTrailsOf(buildParseTimelines(positions, selector), t, pre, post, step);
 }
 
 /**

@@ -30,7 +30,6 @@ import { MapTransformService } from '../app/pages/post-raid/map/map-transform.se
 const INGEST_RETRY_MAX_ATTEMPTS = 3;
 
 export const environment = {
-  useLiveTransform: true,
   /** Unused in ingest mode: every data-file read goes through the file server. */
   dataBaseHref: '',
   ingest: true,

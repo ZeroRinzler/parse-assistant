@@ -1,10 +1,10 @@
 /**
  * Production environment (default).
  *
- * `useLiveTransform: false` binds every `*_DATA_SOURCE` token (see `environmentProviders`
- * below) to a generic `FileDataSource` that reads the ingested, tailored static file. The
- * dev override lives in `environment.development.ts` and is swapped in by the `development`
- * build configuration's `fileReplacements` (see angular.json).
+ * The `environmentProviders` list below binds every `*_DATA_SOURCE` token to a generic
+ * `FileDataSource` that reads the ingested, tailored static file. The dev override lives in
+ * `environment.development.ts` and is swapped in by the `development` build configuration's
+ * `fileReplacements` (see angular.json).
  *
  * `dataBaseHref` is the absolute base every deployed build fetches `data/specs/` from. On
  * gh-pages the data is a single shared copy at the site root (`/data/specs/`), a sibling of
@@ -24,9 +24,6 @@ import { GEAR_DATA_SOURCE } from '../app/pages/post-raid/gear/gear-data-source';
 import { MAP_DATA_SOURCE } from '../app/pages/post-raid/map/map-data-source';
 
 export const environment = {
-  /** When true, slices compute their prepared data live in the browser instead of
-   * reading ingested files - lets the whole app run with no ingestion. */
-  useLiveTransform: false,
   /**
    * Absolute base for the static data files. Empty (development) resolves
    * `data/specs/` relative to `document.baseURI`.

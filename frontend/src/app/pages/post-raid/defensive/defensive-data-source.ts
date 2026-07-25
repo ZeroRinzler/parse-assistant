@@ -47,7 +47,7 @@ export interface DefensiveBench {
 /**
  * The defensive slice's data-source token. `provideDataSource` binds it to a
  * `FileDataSource<DefensiveBench>` (production: reads the tailored file) or
- * `DefensiveTransformService` (the dev `useLiveTransform` flag / ingestion: computes it
- * live) - both `DataSource<DefensiveBench>`.
+ * `DefensiveTransformService` (the development and ingest environments: computes it live)
+ * - both `DataSource<DefensiveBench>`.
  */
 export const DEFENSIVE_DATA_SOURCE = new InjectionToken<DataSource<DefensiveBench>>('DEFENSIVE_DATA_SOURCE');

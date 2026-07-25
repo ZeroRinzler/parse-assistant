@@ -6,8 +6,9 @@ import { CharacterGear, WclCombatantInfo, WclGearItem } from '../../../core/mode
 import { missing } from '../../../core/result';
 import {
   GearTransformService, toParseGear, aggregateParseGear, ParseGear,
-  aggregateTalents, aggregateTrinkets, aggregateEnchants, talentKeyFromTree,
+  aggregateTalents, aggregateTrinkets, aggregateEnchants,
 } from './gear-transform.service';
+import { talentKeyFromTree } from './gear-extract';
 
 // Per-slot caps mirrored from the transform service (MAX_TALENT_BUILDS = 5,
 // MAX_TRINKETS_PER_SLOT = 5, MAX_ENCHANTS_PER_SLOT = 3). The aggregator boundary

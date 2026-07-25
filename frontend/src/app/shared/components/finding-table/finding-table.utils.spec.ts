@@ -30,7 +30,7 @@ describe('bucketFindings', () => {
 
   it('groups critical issue under its cooldown name', () => {
     const finding = f('critical', 'lost_cooldown', 'Shadow Blades');
-    const { entries } = bucketFindings([finding], { spellId, icon });
+    const entries = bucketFindings([finding], { spellId, icon });
 
     expect(entries).toHaveLength(1);
     expect(entries[0].name).toBe('Shadow Blades');
@@ -46,7 +46,7 @@ describe('bucketFindings', () => {
       message: 'hold tip',
       details: { cd_name: 'Feint' },
     };
-    const { entries } = bucketFindings([finding], { spellId, icon });
+    const entries = bucketFindings([finding], { spellId, icon });
 
     expect(entries).toHaveLength(1);
     expect(entries[0].name).toBe('Feint');
@@ -55,34 +55,17 @@ describe('bucketFindings', () => {
     expect(entries[0].metaItems).toContain('1 hold');
   });
 
-  it('routes rule_violation to ruleFindings when collectRules is true', () => {
-    // cd_name present, so routing must be driven by the category, not the !cd_name fallback.
-    const finding = f('warning', 'rule_violation', 'Shadow Blades');
-    const { entries, ruleFindings } = bucketFindings([finding], { spellId, icon, collectRules: true });
-
-    expect(entries).toHaveLength(0);
-    expect(ruleFindings).toHaveLength(1);
-  });
-
-  it('keeps rule_violation in entries when collectRules is false', () => {
+  it('buckets a rule_violation under its cooldown name', () => {
     const finding: AnalysisFinding = f('warning', 'rule_violation', 'Shadow Blades');
-    const { entries } = bucketFindings([finding], { spellId, icon, collectRules: false });
+    const entries = bucketFindings([finding], { spellId, icon });
 
     expect(entries).toHaveLength(1);
     expect(entries[0].name).toBe('Shadow Blades');
   });
 
-  it('finding without cd_name goes to ruleFindings when collectRules is true', () => {
-    const finding = f('critical', 'cast_efficiency');
-    const { entries, ruleFindings } = bucketFindings([finding], { spellId, icon, collectRules: true });
-
-    expect(ruleFindings).toHaveLength(1);
-    expect(entries).toHaveLength(0);
-  });
-
   it('success finding with cd_name creates an entry with hasIssue=false', () => {
     const finding = f('success', 'cooldown_usage', 'Shadow Blades');
-    const { entries } = bucketFindings([finding], { spellId, icon });
+    const entries = bucketFindings([finding], { spellId, icon });
 
     expect(entries).toHaveLength(1);
     expect(entries[0].name).toBe('Shadow Blades');
@@ -95,7 +78,7 @@ describe('bucketFindings', () => {
       f('warning', 'cooldown_delay', 'Shadow Blades'),
       f('warning', 'cooldown_delay', 'Shadow Blades'),
     ];
-    const { entries } = bucketFindings(findings, { spellId, icon });
+    const entries = bucketFindings(findings, { spellId, icon });
 
     expect(entries[0].metaItems).toHaveLength(1);
     expect(entries[0].metaItems[0]).toBe('held');
@@ -106,21 +89,18 @@ describe('bucketFindings', () => {
       { severity: 'info', category: 'hold_suggestion', message: 'tip 1', details: { cd_name: 'Feint' } },
       { severity: 'info', category: 'hold_suggestion', message: 'tip 2', details: { cd_name: 'Feint' } },
     ];
-    const { entries } = bucketFindings(findings, { spellId, icon });
+    const entries = bucketFindings(findings, { spellId, icon });
 
     expect(entries[0].metaItems).toContain('2 holds');
   });
 
-  it('returns empty entries and ruleFindings for empty input', () => {
-    const { entries, ruleFindings } = bucketFindings([], { spellId, icon });
-    expect(entries).toHaveLength(0);
-    expect(ruleFindings).toHaveLength(0);
+  it('returns no entries for empty input', () => {
+    expect(bucketFindings([], { spellId, icon })).toHaveLength(0);
   });
 
-  it('surfaces a finding with no cd_name as an Unknown cooldown entry when collectRules is false', () => {
+  it('surfaces a finding with no cd_name as an Unknown cooldown entry', () => {
     const finding = f('warning', 'cast_efficiency'); // no cd_name
-    const { entries, ruleFindings } = bucketFindings([finding], { spellId, icon, collectRules: false });
-    expect(ruleFindings).toHaveLength(0);
+    const entries = bucketFindings([finding], { spellId, icon });
     expect(entries).toHaveLength(1);
     expect(entries[0].name).toBe(UNKNOWN_COOLDOWN_LABEL);
     expect(entries[0].hasIssue).toBe(true);
@@ -129,7 +109,7 @@ describe('bucketFindings', () => {
 
   it('logs a warning carrying the finding so an unidentified cooldown can be reproduced', () => {
     const finding = f('warning', 'cast_efficiency'); // no cd_name
-    bucketFindings([finding], { spellId, icon, collectRules: false });
+    bucketFindings([finding], { spellId, icon });
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('unknown-cooldown'), finding);
   });
 });

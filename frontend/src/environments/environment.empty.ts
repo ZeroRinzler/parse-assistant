@@ -19,7 +19,6 @@ import { GEAR_DATA_SOURCE } from '../app/pages/post-raid/gear/gear-data-source';
 import { MAP_DATA_SOURCE } from '../app/pages/post-raid/map/map-data-source';
 
 export const environment = {
-  useLiveTransform: false,
   /** Empty resolves `data/specs/` relative to `document.baseURI` (the `data:pull`ed
    * `public/data/specs/`), so manifests + rulebooks load while the benches stay empty. */
   dataBaseHref: '',

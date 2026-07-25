@@ -9,7 +9,7 @@ The e2e suite drives the built app in a real Chromium against live WCL and the p
 
 **Framework and layout.** [Playwright Test](https://playwright.dev) (`@playwright/test`, pinned to the `playwright` version the ingest harness uses). Config in `frontend/playwright.config.ts`; specs in `frontend/e2e/` - one per page (`post-raid.spec.ts`, `pre-fight.spec.ts`), shared assertion helpers in `support.ts`, `tsconfig.json` for types. `npm run e2e` runs it, `npm run lint` covers it. Playwright's `webServer` starts `npm start -- --configuration production` on :4200 itself; locally an already-running server there is reused.
 
-**Production configuration (hard rule).** The suite serves the `production` build so every slice reads its ingested file. Never point it at `development`: `useLiveTransform` recomputes every bench from the top parses in the browser and drains the shared budget.
+**Production configuration (hard rule).** The suite serves the `production` build so every slice reads its ingested file. Never point it at `development`: it binds each slice to its `*TransformService`, which recomputes every bench from the top parses in the browser and drains the shared budget.
 
 **Dataset prerequisite.** Run `npm run data:pull` first. The config refuses to start without `public/data/specs/index.json`, so a missing dataset fails with that hint rather than as empty-bench cards.
 

@@ -38,19 +38,3 @@ export function transient(message: string): Result<never, LoadError> {
 export function permanent(message: string, id: string, context?: unknown): Result<never, LoadError> {
   return err({ kind: 'permanent', message, id, context });
 }
-
-export function isOk<T, E>(result: Result<T, E>): result is { ok: true; value: T } {
-  return result.ok;
-}
-
-/** The one combinator worth keeping: folds both arms to a single render value. */
-export function match<T, E, R>(
-  result: Result<T, E>,
-  arms: { ok: (value: T) => R; err: (error: E) => R },
-): R {
-  return result.ok ? arms.ok(result.value) : arms.err(result.error);
-}
-
-export function mapErr<T, E, F>(result: Result<T, E>, fn: (error: E) => F): Result<T, F> {
-  return result.ok ? result : err(fn(result.error));
-}

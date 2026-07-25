@@ -1,7 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  Result, ok, missing, transient, permanent, isOk, match, mapErr,
-} from './result';
+import { ok, missing, transient, permanent } from './result';
 
 const VALUE = 42;
 const PERMANENT_ID = 'gear.combatant-info';
@@ -35,34 +33,3 @@ describe('LoadError builders', () => {
   });
 });
 
-describe('isOk', () => {
-  it('is true for a success', () => {
-    const result: Result<number> = ok(VALUE);
-    expect(isOk(result)).toBe(true);
-  });
-
-  it('is false for a failure', () => {
-    expect(isOk(missing('gone'))).toBe(false);
-  });
-});
-
-describe('match', () => {
-  it('folds a success through the ok arm', () => {
-    expect(match(ok(VALUE), { ok: (v) => v + 1, err: () => -1 })).toBe(VALUE + 1);
-  });
-
-  it('folds a failure through the err arm', () => {
-    expect(match(transient('down'), { ok: () => 'ok', err: (e) => e.kind })).toBe('transient');
-  });
-});
-
-describe('mapErr', () => {
-  it('re-tags the error channel of a failure', () => {
-    expect(mapErr(missing('gone'), (e) => e.kind)).toEqual({ ok: false, error: 'missing' });
-  });
-
-  it('leaves a success untouched', () => {
-    const result: Result<number> = ok(VALUE);
-    expect(mapErr(result, () => 'unused')).toEqual({ ok: true, value: VALUE });
-  });
-});
