@@ -31,14 +31,4 @@ export class FindingTableComponent {
   readonly openMap = output<FindingRow>();
   /** Emitted when a timed finding's clip button is clicked; the page forwards it. */
   readonly openClip = output<FindingRow>();
-
-  protected onOpenMap(row: FindingRow): void {
-    if (row.timestampMs == null || !row.name) return;
-    this.openMap.emit(row);
-  }
-
-  protected onOpenClip(row: FindingRow): void {
-    if (row.timestampMs == null || !row.name) return;
-    this.openClip.emit(row);
-  }
 }
