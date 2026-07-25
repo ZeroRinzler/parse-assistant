@@ -34,6 +34,7 @@ frontend/        # the entire Angular 22 app
   src/app/core/  # the two API services, data-source token, models
   src/app/ingest # ingest orchestrator + discovery helpers (bundled only by the ingest configuration)
   scripts/       # ingest-server.js (file store) + ingest-headless.mjs (CI harness) - plain Node, zero ingestion logic
+  e2e/           # Playwright happy-path suite for both pages (one WCL analysis per run - see warcraft-e2e)
   public/data/specs/  # static ingested data (slices, encounters, positions, rulebooks) - NOT tracked on main; see below
 .github/workflows/  # deploy-pages (shell + PR previews), ingest-parses (hourly), test
 .claude/skills/   # on-demand skills (rulebook schema in warcraft-ingestion/, generation in warcraft-rulebook/)
@@ -47,8 +48,9 @@ The ~100 MB of minified bench data under `frontend/public/data/specs/**` is **no
 |---|---|
 | `npm start` | Angular dev server on http://localhost:4200 |
 | `npm run build` | Production build to `../static/angular/` |
-| `npm test` | `ng test` (Vitest, the one test suite) |
-| `npm run lint` | `ng lint` over `src/**` then `eslint scripts` over `scripts/**` |
+| `npm test` | `ng test` (Vitest, the one unit-test suite) |
+| `npm run e2e` | Playwright e2e suite over both pages (`npm run data:pull` first; a run spends one WCL analysis - see the warcraft-e2e skill) |
+| `npm run lint` | `ng lint` over `src/**` then `eslint` over `scripts/**`, `e2e/**`, and the Playwright config |
 | `npm run start:ingest` | Interactive ingestion: the file server + `ng serve --configuration ingest` (open :4200, watch the console) |
 | `npm run ingest` | Headless ingestion (CI entry): drives the ingest app in headless Chromium, exits on completion |
 
@@ -66,7 +68,8 @@ Load the matching skill(s) **before** you start that step. The `warcraft-*` skil
 | Working on the live slice (live-sync, screen recording, the clip replay flyover) | **warcraft-frontend** + **warcraft-architecture** |
 | Generating or refreshing a spec's `rulebook.json` (one, some, or all specs) | **warcraft-rulebook** |
 | Ingestion (`src/app/ingest/**`, the `scripts/` file server + harness), `data/specs` file shapes, rulebook consumption/schema, or `INGEST_VERSION` | **warcraft-ingestion** |
-| Writing or changing tests | **warcraft-testing** |
+| Writing or changing unit tests (`src/**/*.spec.ts`) or the test setup | **warcraft-testing** |
+| Writing or changing e2e tests (`frontend/e2e/**`, `playwright.config.ts`, the e2e workflow) | **warcraft-e2e** |
 | General refactor / code-quality cleanup | **solid** + `/simplify` (project rules win on conflict) |
 | Reviewing code, a diff, or a PR | `/code-review` + **solid** + the domain skill(s) for the changed area |
 | Verifying a change runs / manual end-to-end check | `/verify` or `/run` |

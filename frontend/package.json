@@ -12,7 +12,8 @@
     "test:ci": "ng test --configuration ci",
     "test:watch": "ng test --watch",
     "ingest": "node scripts/ingest-headless.mjs",
-    "lint": "ng lint && eslint scripts",
+    "e2e": "playwright test",
+    "lint": "ng lint && eslint scripts e2e playwright.config.ts",
     "data:pull": "git -C .. fetch origin gh-pages && rm -rf public/data/specs && git -C .. archive origin/gh-pages data/specs | tar -x -C public"
   },
   "private": true,
@@ -43,6 +44,7 @@
     "@angular/cli": "^22.0.1",
     "@angular/compiler-cli": "^22.0.0",
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.61.1",
     "@types/d3-array": "^3.2.2",
     "angular-eslint": "22.0.0",
     "concurrently": "^10.0.3",
