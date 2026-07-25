@@ -127,31 +127,6 @@ export function talentStatusOf(topStats: EncounterGearStats | null, playerKey: s
   return { status: 'warn', note: `Off-meta build. ${topPct}% run the standard one.` };
 }
 
-/**
- * Trinket slot order is irrelevant in WoW: true when the player's worn trinket id set for
- * slots {12, 13} equals the bench's top-pick set, compared unordered. False unless both sides
- * have two distinct ids.
- */
-function trinketSetMatches(
-  playerTrinkets: NonNullable<CharacterGear['trinkets']>,
-  benchTop12Id: number | undefined,
-  benchTop13Id: number | undefined,
-): boolean {
-  const playerTrinketIds = new Set(
-    [12, 13]
-      .map(slot => playerTrinkets.find(trinket => trinket.slot === slot)?.id)
-      .filter((id): id is number => id !== undefined),
-  );
-  const benchTopIds = new Set(
-    [benchTop12Id, benchTop13Id].filter((id): id is number => id !== undefined),
-  );
-  if (playerTrinketIds.size !== 2 || benchTopIds.size !== 2) return false;
-  for (const id of playerTrinketIds) {
-    if (!benchTopIds.has(id)) return false;
-  }
-  return true;
-}
-
 /** Overall usage of a trinket id among top parsers (summed across slots 12/13). */
 function trinketUsagePct(stats: EncounterGearStats | null, id: number): number | null {
   const topTrinkets = stats?.trinkets ?? {};
@@ -177,20 +152,9 @@ export function buildTrinketRows(gear: CharacterGear, stats: EncounterGearStats 
   const pair = topTrinketPair(stats);
   const rows: TrinketRow[] = [];
 
-  // If the player wears both recommended trinkets (either slot order), accept both as optimal.
-  if (trinketSetMatches(playerTrinkets, pair[0]?.id, pair[1]?.id)) {
-    for (const slot of [12, 13]) {
-      const label = slotName(slot);
-      const player = playerTrinkets.find(trinket => trinket.slot === slot)!;
-      const matchingPct = pair.find(rec => rec.id === player.id)?.pct ?? null;
-      rows.push({ slotLabel: label, id: player.id, name: player.name, icon: player.icon ?? '',
-        status: 'ok', topPct: matchingPct, note: null });
-    }
-    return rows;
-  }
-
   // Hand each remaining (distinct) recommendation to a slot that needs one, consuming it once,
-  // so the two suggestions never collide.
+  // so the two suggestions never collide. Slot order is irrelevant in WoW, and claiming handles
+  // that for free: each worn trinket matches its own recommendation whichever slot holds it.
   const wornIds = new Set(playerTrinkets.map(trinket => trinket.id));
   const remainingRecs = pair.filter(rec => !wornIds.has(rec.id));
   let recIndex = 0;

@@ -156,6 +156,10 @@ describe('buildTrinketRows', () => {
     );
     expect(rows).toHaveLength(2);
     expect(rows.every(row => row.status === 'ok' && row.note === null)).toBe(true);
+    // Each worn trinket reports its own consensus share, the same figures the swapped
+    // slot order produces - slot position carries no meaning either way.
+    expect(rows[0]).toMatchObject({ slotLabel: 'Trinket 1', id: 193701, topPct: 50 });
+    expect(rows[1]).toMatchObject({ slotLabel: 'Trinket 2', id: 249343, topPct: 80 });
   });
 
   it('still flags per slot when only one of the two top trinkets is worn', () => {
