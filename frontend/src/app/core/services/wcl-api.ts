@@ -94,7 +94,8 @@ export class WclApiService {
         EVENTS_Q, vars,
       );
       const page = result.reportData.report.events;
-      events.push(...(page.data ?? []));
+      // Element by element: WCL overshoots the requested limit (22k rows in one page on a 34-minute pull), and spreading that many arguments into push overflows the call stack.
+      for (const event of page.data ?? []) events.push(event);
       if (!page.nextPageTimestamp) break;
       currentStart = page.nextPageTimestamp;
     }
@@ -145,7 +146,7 @@ export class WclApiService {
         RESURRECTS_Q, vars,
       );
       const page = result.reportData.report.events;
-      events.push(...(page.data ?? []));
+      for (const event of page.data ?? []) events.push(event);
       if (!page.nextPageTimestamp) break;
       currentStart = page.nextPageTimestamp;
     }

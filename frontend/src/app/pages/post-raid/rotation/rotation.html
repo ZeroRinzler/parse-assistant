@@ -3,12 +3,11 @@
     <!-- Offensive cooldowns are bench-driven; the load-state stands in until a bench exists, or shows the error. -->
     <wl-load-state heading="Offensives" subtitle="Offensive cooldowns vs top parses." [error]="error()"></wl-load-state>
   } @else {
-    @if (ruleRows().length || ruleOnPlanChips().length || ruleHints().length) {
+    @if (ruleRows().length || ruleOnPlanChips().length) {
       <wl-finding-table
         heading="Rotation Rules"
         subtitle="Rotation rules vs top parses."
         [rows]="ruleRows()"
-        [hints]="ruleHints()"
         [onPlan]="ruleOnPlanChips()">
       </wl-finding-table>
     }

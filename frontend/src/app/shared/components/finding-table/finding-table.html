@@ -85,26 +85,7 @@
     </div>
   }
 
-  @if (hints().length) {
-    <div class="border-t border-[var(--border)] px-4 py-[10px] flex flex-col gap-[10px]">
-      <span class="text-[10px] uppercase tracking-widest text-[var(--muted)]">Worth checking</span>
-      @for (hint of hints(); track $index) {
-        <div>
-          <div class="flex items-center gap-[7px] flex-wrap">
-            <span class="text-sm text-[var(--text)] leading-[1.35]">{{ hint.title }}</span>
-            @if (hint.chip) {
-              <span class="text-[10px] rounded-sm px-[5px] tabular-nums text-[var(--muted)] border border-[var(--border)]">{{ hint.chip }}</span>
-            }
-          </div>
-          <div class="text-[13px] text-[var(--muted)] leading-[1.45] mt-0.5">
-            <wl-collapsible-text>{{ hint.action }}</wl-collapsible-text>
-          </div>
-        </div>
-      }
-    </div>
-  }
-
-  @if (!rows().length && !hints().length && !onPlan().length) {
+  @if (!rows().length && !onPlan().length) {
     <div class="border-t border-[var(--border)] px-4 py-3 text-[13px] text-[var(--muted)]">Nothing flagged.</div>
   }
 

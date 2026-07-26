@@ -39,14 +39,6 @@ export interface FindingRow {
   fix?: string;
 }
 
-/** An advisory note attached to a card: guidance text, never a measurement. */
-export interface FindingHint {
-  title: string;
-  /** Short category label; empty when the hint has no category. */
-  chip: string;
-  action: string;
-}
-
 /** A cooldown used on plan, shown as a compact success chip rather than a row. */
 export interface OnPlanChip {
   name: string;

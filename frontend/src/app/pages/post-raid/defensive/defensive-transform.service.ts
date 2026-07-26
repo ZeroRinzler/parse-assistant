@@ -17,6 +17,7 @@ import { toLoadError } from '../../../core/http-load-error';
 import { mean, median, deviation } from 'd3-array';
 import { round, groupByTime, getOrInsert } from '../../../shared/analysis/analysis-math';
 import { HoldWindow, buildHoldTargets, detectHoldWindows } from '../../../shared/analysis/hold-targets';
+import { buildAuraWindows } from '../../../shared/analysis/aura-windows';
 import { abilityIcons, normalizeAbilityId, toParseRankings, unwrapRankings } from '../../../shared/analysis/wcl-projections';
 import { DataSource } from '../../../core/data-source/data-source';
 import { DefensiveBench, DefensivePlanMeta } from './defensive-data-source';
@@ -57,25 +58,6 @@ export function defensivePlanMeta(defensives: RulebookDefensive[]): DefensivePla
     usage_rule: defensive.usage_rule ?? null,
     talent_gated: !!defensive.talent_gated,
   }));
-}
-
-/** Map<spell_id, [[startMs, endMs | null], ...]> in fight-relative milliseconds from the buff apply/remove stream. */
-export function buildBuffWindows(buffEvents: WclEvent[], fightStartMs: number): Map<number, [number, number | null][]> {
-  const buffWindows = new Map<number, [number, number | null][]>();
-  for (const event of buffEvents) {
-    const spellId = event.abilityGameID;
-    if (spellId == null) continue;
-    const timeMs = event.timestamp - fightStartMs;
-    if (event.type === 'applybuff') {
-      getOrInsert(buffWindows, spellId, () => []).push([timeMs, null]);
-    } else if (event.type === 'removebuff') {
-      const windows = buffWindows.get(spellId) ?? [];
-      for (let i = windows.length - 1; i >= 0; i--) {
-        if (windows[i][1] == null) { windows[i][1] = timeMs; break; }
-      }
-    }
-  }
-  return buffWindows;
 }
 
 /** One parse's defensive usage summary (buff-window-centric, cast fallback). */
@@ -463,7 +445,7 @@ export class DefensiveTransformService implements DataSource<DefensiveBench> {
       ]);
 
       const fightDurationS = (fight.endTime - fight.startTime) / 1000;
-      const buffWindows = buildBuffWindows(buffs, fight.startTime);
+      const buffWindows = buildAuraWindows(buffs, fight.startTime);
       const windows = findParseDefensiveWindows(dmgTaken, fight.startTime, fightDurationS, buffWindows, defensives, gameIdByActorId);
       const summaries = summarizeDefensiveCasts(defensives, buffWindows, casts, fight.startTime, fightDurationS);
       return { windows, summaries, encounterName: fight.name ?? '' };

@@ -18,6 +18,8 @@ The `src/**` specs cannot run under a bare `npx vitest` - they need the `@angula
 | `*-transform.service.spec.ts` | the slice's bench math (clustering / aggregation) as pure fns, **plus** an end-to-end pass through the `*TransformService` with a fake `WclApiService` |
 | `*.service.spec.ts` | the `*FeatureService`'s pure view-model fns (table-driven), **plus** an end-to-end pass with a fake `*_DATA_SOURCE` (and a fake `WclApiService` where the slice fetches the player log) |
 
+A slice whose transform and feature service need the same pure code keeps it in one slice-local module instead of either service (`gear-extract.ts`, `map-draw.ts`, `rotation-rules.ts`), and that module carries its own colocated spec - so its behavior is pinned once, at the altitude that owns it, rather than from whichever service happens to import it.
+
 Ingestion runs these very `*TransformService`s, so the specs under `src/app/ingest/` cover only the orchestration helpers: discovery (`wcl-fetchers` with a fake `WclQueryClient`, `wcl-mappers`), `signature`, `ordering`, and `ingest-data-file-transport` (HttpTestingController against the file-server endpoints).
 
 **Conventions: tests as documentation.** Colocate specs next to the unit (`burst.service.spec.ts` beside `burst.service.ts`). For rule/threshold tests, pair every "triggers" case with a "does not trigger at the boundary" case - boundary comparisons are strict (a value exactly at `mean + 2*stddev` is **not** an outlier).

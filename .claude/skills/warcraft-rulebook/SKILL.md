@@ -6,7 +6,7 @@ description: Generate or refresh warcraft-learner spec rulebooks on demand (no s
 # warcraft-learner rulebook generation
 
 A rulebook (`rulebook.json`) is the per-spec contract the ingestion transforms consume: the spec's
-major offensive cooldowns, personal defensives, a handful of machine-checkable usage rules - each with a
+major offensive cooldowns, personal defensives, its checkable usage rules - each with a
 **real WoW spell id** - and the spec's icon stem. One file per spec under
 `frontend/public/data/specs/{spec}/rulebook.json`. Every run is a **clean-slate regeneration**: build each
 rulebook fresh from the sources below and overwrite the existing file - never read, copy, or patch the old
@@ -141,8 +141,9 @@ Warrior rulebook contains only Fury Warrior abilities, never Arms). Batch the su
 Each subagent (starting from a clean slate - it does not read or reuse the existing `rulebook.json`):
 
 1. Reads the schema, then its `.simc.txt` (if present), `.guide.txt`, and `.abilities.tsv`.
-2. Extracts the rulebook JSON to the schema: all `major_cooldowns`, all `defensives`, 5-10 high-signal
-   `rules`, `source_summary`, `spec_icon`. Spec-only abilities - never another spec of the same class.
+2. Extracts the rulebook JSON to the schema: all `major_cooldowns`, all `defensives`, the spec's
+   checkable `rules`, `source_summary`, `spec_icon`. Spec-only abilities - never another spec of the
+   same class.
 3. Takes every `spell_id` from the ability table. An ability the sources name but the table lacks goes
    into the report **by name** - the subagent never guesses an id and never writes an unverified one.
 4. Writes the file (Step 4 shape) and returns a one-line report: spec, cooldown/defensive/rule counts,
@@ -158,23 +159,47 @@ flattens it is a failed run. Reject and respawn a subagent whose output misses t
   entry conditions per hero tree), macro and timing notes, why-it-works mechanics named in the sources.
   "Use on cooldown" with no condition fails the bar whenever the source states one.
 - **`defensives` >= 15s is inclusive** - an ability with exactly a 15s cooldown belongs in the list.
-- **Numbers come from the sources, not from vibes**: windows, thresholds, and target counts in rule
-  conditions must trace to an APL line or a guide sentence, and comparators are copied exactly (an APL
-  `combo_points<=2` means 2, not 1). `cooldown` values come from a source sentence or the table's
+- **Numbers come from the sources, not from vibes**: thresholds and target counts quoted in
+  `usage_rule` and rule `action` must trace to an APL line or a guide sentence, and comparators are
+  copied exactly (an APL `combo_points<=2` means 2, not 1). `cooldown` values come from a source sentence or the table's
   `base_cd_s`; when the sources state an effective (talented) cooldown that differs from the base value,
   the source wins and the base goes in `id_note`.
-- Prefer machine-checkable `condition`s (`cast_without_prior`, `hold_cooldown_for_anchor` - see the
-  schema's `$defs`); use `condition: null` only when the advice is worth showing but not checkable from
-  cast timing.
+- **Every rule needs a `condition`**, and the engine renders nothing else, so advice it cannot check is
+  not a rule: leave it out rather than writing a rule around it. Quality over count - two real rules
+  beat eight, and an empty `rules` list is valid. Nine kinds are available (see the schema's `$defs`):
+
+  | The rule says | Kind |
+  |---|---|
+  | cast A near cast B | `cast_without_prior` |
+  | do not spend A shortly before B | `hold_cooldown_for_anchor` |
+  | only / never cast A while buff B is up | `cast_outside_buff` |
+  | keep buff or dot B up | `aura_uptime_below` |
+  | open with A then B then C | `opening_sequence` |
+  | use A at N+ targets, stop using A above N | `cast_at_target_count` |
+  | spend A only at N resource, do not overcap | `resource_at_cast` |
+  | consume proc B on sight | `proc_wasted` |
+
+- **Never author a magnitude.** A condition names identity and direction only - which spell, which
+  aura, which resource, and which way the rule runs (`position`, `require`, `on`, `bound`). Every
+  number it is judged against (pairing window, hold gap, uptime bar, opener time, target count,
+  resource level) is measured from the encounter's own top parses, so the same rule adapts to a fight
+  the field plays differently instead of failing the player against a guess. Put the source's concrete
+  numbers in the rule's `action` as coaching copy, where they inform without being enforced.
+- **Pick the kind the rule actually means.** A rule about a buff being up wants `cast_outside_buff`,
+  not a `cast_without_prior` proximity window that only approximates it. A rule about combo points
+  wants `resource_at_cast`, not a cast pairing. `aura_uptime_below` needs `on: "target"` for a dot the
+  player maintains on the boss and `on: "self"` for a personal buff.
+- **Never write a "keep X on cooldown" rule.** The rotation card already flags lost casts for every
+  `major_cooldowns` entry, benched against the top parses, so such a rule would duplicate a row the
+  player already sees and can contradict it. Put the timing detail in the cooldown's `usage_rule`.
+- **`on: "target"` costs a raid-wide fetch** (WCL cannot narrow enemy auras to one caster), so it is
+  worth it for a spec whose dots are the rotation and wasteful for an incidental debuff.
 - **`cast_without_prior` operands are ordered, and getting them backwards inverts the check.**
   `spell_id` is the ability being judged; `required_spell_id` is its companion, which under the default
   `position: "before"` must already have been cast. For "Secret Technique always inside Shadow Dance",
   Secret Technique is `spell_id` and Shadow Dance is `required_spell_id`. Set `position: "either"` only
   when the rule text genuinely says pair or sync rather than naming an order, and `"after"` when the
   companion must follow. Read the rule's own `action` back against the condition before writing it.
-- **A `condition: null` rule reaches the player only if it names a cooldown.** Display-only rules surface
-  on the post-raid page against a cooldown the pull flagged, matched by name in `description`/`action`.
-  Write the cooldown's exact name into one of those fields, or the rule renders nowhere.
 
 ## Step 4 - validate and write (main agent)
 

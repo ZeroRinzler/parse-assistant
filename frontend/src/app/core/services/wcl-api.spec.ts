@@ -67,6 +67,44 @@ describe('WclApiService', () => {
     expect(transport.tokens).toEqual(['token-1']);
   });
 
+  describe('getAllEvents', () => {
+    // Well past the ~22k rows a 34-minute pull returned in one page, and past the argument count push tolerates when a page is spread into it.
+    const OVERSIZED_PAGE = 200_000;
+
+    function servePage(transport: RecordingTransport, count: number, nextPageTimestamp?: number) {
+      transport.response = {
+        reportData: {
+          report: {
+            events: {
+              data: Array.from({ length: count }, (_, i) => ({ type: 'damage', timestamp: i, abilityGameID: 1 })),
+              nextPageTimestamp,
+            },
+          },
+        },
+      };
+    }
+
+    it('accumulates a page far larger than the requested limit', async () => {
+      const { api, transport } = setup();
+      servePage(transport, OVERSIZED_PAGE);
+      const events = await api.getAllEvents('code', 1, 'DamageDone', 0, 1000, 5);
+      expect(events).toHaveLength(OVERSIZED_PAGE);
+    });
+
+    it('follows nextPageTimestamp and returns every page in order', async () => {
+      const { api, transport } = setup();
+      const FIRST_PAGE = 3, NEXT_START = 500;
+      let call = 0;
+      transport.query = async <TData>(): Promise<TData> => {
+        call++;
+        servePage(transport, FIRST_PAGE, call === 1 ? NEXT_START : undefined);
+        return (transport.response as TData);
+      };
+      const events = await api.getAllEvents('code', 1, 'Casts', 0, 1000, 5);
+      expect(events).toHaveLength(FIRST_PAGE * 2);
+    });
+  });
+
   describe('getCombatantInfo', () => {
     const FIGHT_ID = 5;
     const PLAYER_ID = 10;

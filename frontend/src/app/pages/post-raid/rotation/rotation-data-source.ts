@@ -1,7 +1,8 @@
 import { InjectionToken } from '@angular/core';
 import { DataSource } from '../../../core/data-source/data-source';
 import { PerCdBenchmark } from '../../../core/models/encounter.models';
-import { RulebookCooldown, RulebookRule } from '../../../core/models/rulebook.models';
+import { RulebookCooldown } from '../../../core/models/rulebook.models';
+import { BenchedRule } from './rotation-rules';
 
 /**
  * The tailored, ready-to-render rotation bench for one encounter, read from
@@ -27,8 +28,8 @@ export interface RotationBench {
   per_cd_benchmarks: Record<string, PerCdBenchmark>;
   /** Rulebook major cooldown metadata needed to drive the findings + plan. */
   major_cooldowns: RulebookCooldown[];
-  /** Rulebook rotation rules with machine-readable conditions. */
-  rules: RulebookRule[];
+  /** Rulebook rules with the magnitude this encounter measured, so the runtime never re-measures the field. */
+  rules: BenchedRule[];
   /** Cooldown name -> spell id, for header / row icons. */
   cd_spell_ids: Record<string, number>;
   /** Baked spell-id -> display icon + name (from ingest ability metadata). */

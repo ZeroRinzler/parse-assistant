@@ -2,10 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { AnalysisFinding } from '../../../core/models/analysis.models';
 import { PerCdBenchmark } from '../../../core/models/encounter.models';
-import {
-  RulebookCooldown, RulebookRule, RuleCondition,
-  CastWithoutPriorCondition, HoldCooldownForAnchorCondition,
-} from '../../../core/models/rulebook.models';
+import { RulebookCooldown } from '../../../core/models/rulebook.models';
 import { WclEvent } from '../../../core/models/wcl.models';
 import { logWarn } from '../../../core/log';
 import { Result, LoadError, ok, permanent } from '../../../core/result';
@@ -15,9 +12,10 @@ import {
   isOutlierAbove, isOutlierBeyond, isOutlierBelow, castEfficiencyPct,
   closestToZero, benchExpectedUses, fmtClock, sortBySeverity,
 } from '../../../shared/analysis/analysis-math';
+import {
+  buildRuleContext, evaluateRules, rulesFollowed, rulesNeed, benchedRules, RULE_TYPE_LABEL,
+} from './rotation-rules';
 import { ROTATION_DATA_SOURCE, RotationBench } from './rotation-data-source';
-
-export type Severity = AnalysisFinding['severity'];
 
 export type AbilityIcons = Record<number, { icon: string; name: string }>;
 
@@ -57,7 +55,6 @@ export interface CdPlanRow {
 export interface RotationPlayerView {
   ruleRows: RotationFindingRow[];
   ruleOnPlan: string[];
-  ruleHints: RuleHint[];
   offensiveRows: RotationFindingRow[];
   onPlan: RotationOnPlanChip[];
 }
@@ -75,175 +72,6 @@ const BL_WINDOW_TRAIL_S = 15;
 /** A cooldown counts as Bloodlust-aligned when at least this share (%) of top parses align it. */
 const BL_CONSENSUS_PCT = 50;
 
-export type CastTimes = Record<number, number[]>;
-
-export function buildCastTimes(casts: WclEvent[], fStart: number): CastTimes {
-  const castTimes: CastTimes = {};
-  for (const cast of casts) {
-    if (cast.type === 'cast' && cast.abilityGameID) {
-      (castTimes[cast.abilityGameID] ??= []).push((cast.timestamp - fStart) / 1000);
-    }
-  }
-  return castTimes;
-}
-
-/** `lead` is the judged cast minus the required one: positive when the required cast came first. */
-function withinWindow(lead: number, win: number, position: 'before' | 'after' | 'either'): boolean {
-  if (position === 'either') return Math.abs(lead) <= win;
-  return position === 'before' ? lead >= 0 && lead <= win : lead <= 0 && -lead <= win;
-}
-
-export function evaluateCastWithoutPrior(
-  cond: CastWithoutPriorCondition, castTimes: CastTimes, severity: Severity, remedy?: string,
-): AnalysisFinding | null {
-  const win = cond.window_s ?? 5;
-  const exception = cond.exception;
-  const position = cond.position ?? 'before';
-  const primary = [...(castTimes[cond.spell_id] ?? [])].sort((a, b) => a - b);
-  const required = castTimes[cond.required_spell_id] ?? [];
-  const violations: number[] = [];
-  for (const time of primary) {
-    if (required.some(rt => withinWindow(time - rt, win, position))) continue;
-    if (exception) {
-      const context = castTimes[exception.context_spell_id] ?? [];
-      const contextWindow = exception.context_window_s ?? 20;
-      const covered = exception.position === 'before'
-        ? context.some(ct => time - ct >= 0 && time - ct <= contextWindow)
-        : context.some(ct => ct - time >= 0 && ct - time <= contextWindow);
-      if (covered) continue;
-    }
-    violations.push(time);
-  }
-  if (!violations.length) return null;
-  return {
-    severity, category: 'rule_violation',
-    timestamp_ms: Math.round(violations[0] * 1000),
-    label: `${cond.spell_name} without ${cond.required_spell_name}`,
-    message: `${cond.spell_name} without ${cond.required_spell_name}: ${violations.length} of ${primary.length} cast(s).`,
-    measured: { value: `${violations.length} / ${primary.length}`, unit: 'cast(s)' },
-    details: remedy ? { remedy } : undefined,
-  };
-}
-
-export function evaluateHoldForAnchor(
-  cond: HoldCooldownForAnchorCondition, castTimes: CastTimes, severity: Severity, remedy?: string,
-): AnalysisFinding | null {
-  const holdWindowS = cond.hold_window_s ?? 15;
-  const anchorTimes = [...(castTimes[cond.anchor_spell_id] ?? [])].sort((a, b) => a - b).slice(1);
-  const violations = cond.spell_ids.flatMap((spellId, i) => {
-    const spellName = cond.spell_names?.[i] ?? String(spellId);
-    return anchorTimes.flatMap(anchorTime =>
-      (castTimes[spellId] ?? [])
-        .filter(castTime => castTime >= anchorTime - holdWindowS && castTime < anchorTime)
-        .map(castTime => ({ spellName, castTime })),
-    );
-  });
-  if (!violations.length) return null;
-  const firstCastS = violations.reduce((min, violation) => Math.min(min, violation.castTime), Infinity);
-  const spellNames = [...new Set(violations.map(violation => violation.spellName))].join('/');
-  return {
-    severity, category: 'rule_violation',
-    timestamp_ms: Math.round(firstCastS * 1000),
-    label: `${spellNames} held before ${cond.anchor_spell_name}`,
-    message: `${spellNames} used in the ${holdWindowS}s hold window before ${cond.anchor_spell_name}: ${violations.length} charge(s).`,
-    measured: { value: `${violations.length}`, unit: 'charge(s)' },
-    details: remedy ? { remedy } : undefined,
-  };
-}
-
-/** Short chip label for a rulebook rule `type`, matching the tone of `CAT_LABEL`. */
-export const RULE_TYPE_LABEL: Record<string, string> = {
-  cooldown_pairing: 'pairing',
-  cd_hold: 'cd hold',
-  opener: 'opener',
-  rotation: 'rotation',
-  positioning: 'position',
-  aoe_switch: 'aoe',
-};
-
-// `low` shares the `info` tier: the finding table renders three, and no deployed rule is `low`.
-const RULE_SEVERITY: Record<string, Severity> = {
-  critical: 'critical', high: 'warning', medium: 'info', low: 'info',
-};
-
-export function ruleSeverity(priority?: string): Severity {
-  return RULE_SEVERITY[priority ?? ''] ?? 'warning';
-}
-
-export function evaluateRules(rules: RulebookRule[], casts: WclEvent[], fStart: number): AnalysisFinding[] {
-  const findings: AnalysisFinding[] = [];
-  const castTimes = buildCastTimes(casts, fStart);
-  for (const rule of rules) {
-    const cond = rule.condition;
-    if (!cond) continue;
-    const severity = ruleSeverity(rule.priority);
-    const finding = cond.kind === 'cast_without_prior'
-      ? evaluateCastWithoutPrior(cond, castTimes, severity, rule.action)
-      : cond.kind === 'hold_cooldown_for_anchor'
-        ? evaluateHoldForAnchor(cond, castTimes, severity, rule.action)
-        : null;
-    // One authored name in both states, so a rule does not read as two different rules.
-    if (finding) findings.push({ ...finding, rule_type: rule.type, label: rule.description ?? finding.label });
-  }
-  return findings;
-}
-
-/** A display-only rule surfaced because this pull flagged a cooldown the rule names. */
-export interface RuleHint {
-  title: string;
-  chip: string;
-  action: string;
-}
-
-export function buildRuleHints(rules: RulebookRule[], findings: AnalysisFinding[]): RuleHint[] {
-  const flagged = new Set<string>();
-  for (const finding of findings) {
-    if (finding.severity === 'success') continue;
-    const name = finding.cd_name ?? finding.details?.cd_name;
-    if (name) flagged.add(name);
-  }
-  const hints: RuleHint[] = [];
-  for (const rule of rules) {
-    if (rule.condition || !rule.action) continue;
-    const text = `${rule.description ?? ''} ${rule.action}`;
-    // A display-only rule earns a row only by naming a cooldown this pull already flagged.
-    if (![...flagged].some(name => text.includes(name))) continue;
-    hints.push({
-      title: rule.description ?? rule.action,
-      chip: RULE_TYPE_LABEL[rule.type ?? ''] ?? '',
-      action: rule.action,
-    });
-  }
-  return hints;
-}
-
-export function ruleLabel(cond: RuleCondition, description?: string): string {
-  if (description) return description;
-  return cond.kind === 'cast_without_prior'
-    ? `${cond.spell_name} with ${cond.required_spell_name}`
-    : `${cond.spell_names.join('/')} held for ${cond.anchor_spell_name}`;
-}
-
-export function rulesFollowed(rules: RulebookRule[], casts: WclEvent[], fStart: number): string[] {
-  const castTimes = buildCastTimes(casts, fStart);
-  const followed: string[] = [];
-  for (const rule of rules) {
-    const cond = rule.condition;
-    if (!cond) continue;
-    const severity = ruleSeverity(rule.priority);
-    if (cond.kind === 'cast_without_prior') {
-      const applicable = (castTimes[cond.spell_id]?.length ?? 0) > 0;
-      if (applicable && !evaluateCastWithoutPrior(cond, castTimes, severity)) followed.push(ruleLabel(cond, rule.description));
-    } else if (cond.kind === 'hold_cooldown_for_anchor') {
-      const applicable = (castTimes[cond.anchor_spell_id]?.length ?? 0) > 1
-        && cond.spell_ids.some(spellId => (castTimes[spellId]?.length ?? 0) > 0);
-      if (applicable && !evaluateHoldForAnchor(cond, castTimes, severity)) followed.push(ruleLabel(cond, rule.description));
-    }
-  }
-  return followed;
-}
-
-/** A cooldown's lost/unused + first-cast checks run only when at least this share of top parses used it. */
 const MIN_USE_SHARE_FRAC = 0.5;
 
 function usedShare(bench: PerCdBenchmark): number {
@@ -597,23 +425,40 @@ export class RotationFeatureService {
       const fight = report.fights.find(entry => entry.id === fightId);
       if (!fight) return permanent('Fight not found in this report.', 'rotation.player-view');
 
-      const [casts, buffs] = await Promise.all([
-        this.wclApi.getAllEvents(reportCode, fightId, 'Casts', fight.startTime, fight.endTime, playerId),
+      const rules = benchedRules(bench.value.rules);
+      const conditions = rules.map(entry => entry.rule);
+      const [casts, buffs, enemyAuras, damage, raidDeaths] = await Promise.all([
+        this.wclApi.getAllEvents(reportCode, fightId, 'Casts', fight.startTime, fight.endTime, playerId, true),
         this.wclApi.getAllEvents(reportCode, fightId, 'Buffs', fight.startTime, fight.endTime, playerId),
+        // Unnarrowable, so it costs several raid-wide pages: `Enemies` plus a sourceID returns nothing, and WCL offers no other source filter here.
+        rulesNeed(conditions, 'enemyAuras')
+          ? this.wclApi.getAllEvents(reportCode, fightId, 'Debuffs', fight.startTime, fight.endTime, undefined, false, 'Enemies')
+          : Promise.resolve([]),
+        rulesNeed(conditions, 'damage')
+          ? this.wclApi.getAllEvents(reportCode, fightId, 'DamageDone', fight.startTime, fight.endTime, playerId)
+          : Promise.resolve([]),
+        // Deaths target the player rather than come from them, so a sourceID filter would drop every one.
+        rulesNeed(conditions, 'deaths')
+          ? this.wclApi.getAllEvents(reportCode, fightId, 'Deaths', fight.startTime, fight.endTime)
+          : Promise.resolve([]),
       ]);
+      const debuffs = enemyAuras.filter(event => event.sourceID === playerId);
+      const deaths = raidDeaths.filter(event => event.targetID === playerId);
 
-      const rules = bench.value.rules;
       const offensiveFindings = analyzeRotationFindings({
         fStart: fight.startTime, fEnd: fight.endTime, castEvents: casts, buffEvents: buffs,
         cooldowns: bench.value.major_cooldowns, bench: bench.value,
       });
-      const ruleFindings = evaluateRules(rules, casts, fight.startTime);
+      const ruleCtx = buildRuleContext({
+        casts, buffs, debuffs, damage, deaths, fStart: fight.startTime, fEnd: fight.endTime,
+      });
+      const ruleFindings = evaluateRules(rules, ruleCtx);
       const findings = [...offensiveFindings, ...ruleFindings];
       sortBySeverity(findings);
       const { ruleRows, offensiveRows, onPlan } =
         bucketRotationFindings(findings, bench.value.cd_spell_ids, bench.value.ability_icons);
-      const ruleOnPlan = rulesFollowed(rules, casts, fight.startTime);
-      return ok({ ruleRows, ruleOnPlan, ruleHints: buildRuleHints(rules, findings), offensiveRows, onPlan });
+      const ruleOnPlan = rulesFollowed(rules, ruleCtx);
+      return ok({ ruleRows, ruleOnPlan, offensiveRows, onPlan });
     } catch (cause) {
       logWarn(`RotationFeatureService.loadPlayerView ${reportCode}:${fightId}`, cause);
       return toLoadError(cause, 'rotation.player-view');

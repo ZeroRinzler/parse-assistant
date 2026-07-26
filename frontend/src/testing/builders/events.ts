@@ -17,14 +17,18 @@ import { WclEvent } from '../../app/core/models/wcl.models';
 /** WCL timestamps are milliseconds; factory times are fight-relative seconds. */
 const MS_PER_SECOND = 1000;
 
-/** A player ability cast (`type: 'cast'`). */
-export function cast(spellId: number, atS: number, opts?: { source?: number; target?: number }): WclEvent {
+/** A player ability cast (`type: 'cast'`). `resources` mirrors what `includeResources: true` flattens onto the event. */
+export function cast(
+  spellId: number, atS: number,
+  opts?: { source?: number; target?: number; resources?: { amount: number; max?: number; type: number }[] },
+): WclEvent {
   return {
     type: 'cast',
     timestamp: atS * MS_PER_SECOND,
     abilityGameID: spellId,
     ...(opts?.source !== undefined && { sourceID: opts.source }),
     ...(opts?.target !== undefined && { targetID: opts.target }),
+    ...(opts?.resources !== undefined && { resourceActor: 1, classResources: opts.resources }),
   };
 }
 
@@ -48,9 +52,40 @@ export function removeBuff(spellId: number, atS: number, opts?: { target?: numbe
   };
 }
 
+/** A debuff applied to an enemy (`type: 'applydebuff'`). */
+export function applyDebuff(spellId: number, atS: number, opts?: { target?: number }): WclEvent {
+  return {
+    type: 'applydebuff',
+    timestamp: atS * MS_PER_SECOND,
+    abilityGameID: spellId,
+    ...(opts?.target !== undefined && { targetID: opts.target }),
+  };
+}
+
+/** A debuff dropping off an enemy (`type: 'removedebuff'`). */
+export function removeDebuff(spellId: number, atS: number, opts?: { target?: number }): WclEvent {
+  return {
+    type: 'removedebuff',
+    timestamp: atS * MS_PER_SECOND,
+    abilityGameID: spellId,
+    ...(opts?.target !== undefined && { targetID: opts.target }),
+  };
+}
+
 /** A buff active from `fromS` until `toS`: the applybuff / removebuff pair. */
 export function buffWindow(spellId: number, fromS: number, toS: number, opts?: { target?: number }): WclEvent[] {
   return [applyBuff(spellId, fromS, opts), removeBuff(spellId, toS, opts)];
+}
+
+/** A player dying (`type: 'death'`): `target` is who died, so a spec filters these by target and not by source. */
+export function death(atS: number, opts?: { target?: number; killingAbility?: number }): WclEvent {
+  return {
+    type: 'death',
+    timestamp: atS * MS_PER_SECOND,
+    abilityGameID: 0,
+    ...(opts?.target !== undefined && { targetID: opts.target }),
+    ...(opts?.killingAbility !== undefined && { killingAbilityGameID: opts.killingAbility }),
+  };
 }
 
 /** Damage the player deals (`type: 'damage'`). */

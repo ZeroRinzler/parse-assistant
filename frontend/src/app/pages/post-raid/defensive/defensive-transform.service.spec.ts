@@ -4,7 +4,7 @@ import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
 import {
   DefensiveTransformService,
-  defensiveSpellIds, defensivePlanMeta, buildBuffWindows, summarizeDefensiveCasts,
+  defensiveSpellIds, defensivePlanMeta, summarizeDefensiveCasts,
   findParseDefensiveWindows, clusterDefensiveWindows, buildDefensiveBenchmark,
   aggregateDefensiveBenchmarks,
   windowDamageBreakdown, clusterDamageStats, clusterAbilityBreakdown,
@@ -15,6 +15,7 @@ import { rulebook } from '../../../../testing/builders/rulebook';
 import { CLOAK_OF_SHADOWS, EVASION } from '../../../../testing/spell-ids';
 import { WCL_SYNTHETIC_SOURCE_FALLBACK_ID } from '../../../shared/analysis/wcl-projections';
 import { ok } from '../../../core/result';
+import { buildAuraWindows } from '../../../shared/analysis/aura-windows';
 
 // Enemy-side identifiers for the damage-taken fixtures (not player abilities, so local).
 const BOSS_HIT = 700;       // an enemy ability id the player takes damage from
@@ -41,19 +42,6 @@ describe('defensivePlanMeta', () => {
   });
 });
 
-describe('buildBuffWindows', () => {
-  // Spans are carried in raw fight-relative milliseconds; the fixtures take fight-relative seconds.
-  const APPLY_S = 10, REMOVE_S = 15, MS_PER_S = 1000;
-  it('pairs apply with the latest open remove, in raw milliseconds', () => {
-    const windows = buildBuffWindows([applyBuff(CLOAK_OF_SHADOWS, APPLY_S), removeBuff(CLOAK_OF_SHADOWS, REMOVE_S)], 0);
-    expect(windows.get(CLOAK_OF_SHADOWS)).toEqual([[APPLY_S * MS_PER_S, REMOVE_S * MS_PER_S]]);
-  });
-  it('leaves an unmatched apply open (null end)', () => {
-    const windows = buildBuffWindows([applyBuff(CLOAK_OF_SHADOWS, APPLY_S)], 0);
-    expect(windows.get(CLOAK_OF_SHADOWS)).toEqual([[APPLY_S * MS_PER_S, null]]);
-  });
-});
-
 describe('summarizeDefensiveCasts', () => {
   it('builds one use per buff window and detects holds > 8s past cooldown', () => {
     const FIRST_USE_S = 10, FIRST_REMOVE_S = 15;
@@ -61,7 +49,7 @@ describe('summarizeDefensiveCasts', () => {
     const HELD_INDEX = 2;  // 1-based ordinal of the held (second) use
     // The second use lands SECOND_USE_S - (FIRST_USE_S + cooldown) past its reset, well over 8s.
     const EXPECTED_DELAY_S = SECOND_USE_S - (FIRST_USE_S + CLOAK.cooldown);
-    const windows = buildBuffWindows([
+    const windows = buildAuraWindows([
       applyBuff(CLOAK_OF_SHADOWS, FIRST_USE_S), removeBuff(CLOAK_OF_SHADOWS, FIRST_REMOVE_S),
       applyBuff(CLOAK_OF_SHADOWS, SECOND_USE_S), removeBuff(CLOAK_OF_SHADOWS, SECOND_REMOVE_S),
     ], 0);
@@ -80,7 +68,7 @@ describe('summarizeDefensiveCasts', () => {
 
 describe('findParseDefensiveWindows', () => {
   it('slices damage taken by the buff span (inclusive end, amount + absorbed) and picks the dominant enemy', () => {
-    const windows = buildBuffWindows([applyBuff(CLOAK_OF_SHADOWS, 10), removeBuff(CLOAK_OF_SHADOWS, 15)], 0);
+    const windows = buildAuraWindows([applyBuff(CLOAK_OF_SHADOWS, 10), removeBuff(CLOAK_OF_SHADOWS, 15)], 0);
     const BOSS_ABSORB = 250;
     const result = findParseDefensiveWindows(
       [
@@ -98,7 +86,7 @@ describe('findParseDefensiveWindows', () => {
   });
 
   it('runs an open buff to fight end (no rulebook duration)', () => {
-    const windows = buildBuffWindows([applyBuff(CLOAK_OF_SHADOWS, 10)], 0); // no remove
+    const windows = buildAuraWindows([applyBuff(CLOAK_OF_SHADOWS, 10)], 0); // no remove
     const result = findParseDefensiveWindows(
       [damageTaken(BOSS_HIT, 50, 400, { source: BOSS_ACTOR })], 0, 300, windows, [CLOAK], new Map([[BOSS_ACTOR, BOSS_GAME_ID]]),
     );
@@ -112,7 +100,7 @@ describe('findParseDefensiveWindows', () => {
     const HIT_DAMAGE = 500;
     const buffApply = { ...applyBuff(CLOAK_OF_SHADOWS, 0), timestamp: APPLY_MS };
     const hit = { ...damageTaken(BOSS_HIT, 0, HIT_DAMAGE, { source: BOSS_ACTOR }), timestamp: APPLY_MS };
-    const windows = buildBuffWindows([buffApply], 0);
+    const windows = buildAuraWindows([buffApply], 0);
     const result = findParseDefensiveWindows([hit], 0, FIGHT_DUR_S, windows, [CLOAK], new Map([[BOSS_ACTOR, BOSS_GAME_ID]]));
     expect(result).toHaveLength(1);
     expect(result[0].window_damage).toBe(HIT_DAMAGE);

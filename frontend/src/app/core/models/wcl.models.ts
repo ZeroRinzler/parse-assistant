@@ -34,6 +34,8 @@ export interface WclEvent {
   absorbed?: number;
   sourceID?: number;
   targetID?: number;
+  // Copies of one NPC share a targetID and differ only here, so enemy counts must key on both.
+  targetInstance?: number;
   // Present on `death` events: the ability that dealt the killing blow (its `amount` is
   // absent, so the lethal hit's magnitude is read from the matching DamageTaken event).
   killingAbilityGameID?: number;
@@ -51,6 +53,8 @@ export interface WclEvent {
   // Also flattened onto the event by `includeResources: true`; used to pick the
   // boss (highest observed maxHitPoints) when building position benches.
   maxHitPoints?: number;
+  // Flattened onto the event by `includeResources: true`; `type` is WCL's power-type id (4 = combo points).
+  classResources?: { amount: number; max?: number; type: number }[];
 }
 
 export interface WclReport {

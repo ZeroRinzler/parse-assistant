@@ -4,10 +4,10 @@ import { MatButtonModule } from '@angular/material/button';
 import { GameIconComponent } from '../game-icon/game-icon';
 import { CollapsibleTextComponent } from '../collapsible-text/collapsible-text';
 import { FormatDurationPipe } from '../../pipes/format-duration-pipe';
-import type { FindingHint, FindingRow, OnPlanChip } from './finding-table.utils';
+import type { FindingRow, OnPlanChip } from './finding-table.utils';
 
 // Re-export so callers can import types + helpers from either this file or the utils module.
-export type { FindingMeasure, FindingRow, FindingHint, OnPlanChip, FindingEntry, BucketOptions } from './finding-table.utils';
+export type { FindingMeasure, FindingRow, OnPlanChip, FindingEntry, BucketOptions } from './finding-table.utils';
 export { rowsFromEntries, onPlanFromEntries, bucketFindings, CAT_LABEL } from './finding-table.utils';
 
 @Component({
@@ -22,7 +22,6 @@ export class FindingTableComponent {
   readonly heading = input.required<string>();
   readonly subtitle = input<string>('');
   readonly rows = input.required<FindingRow[]>();
-  readonly hints = input<FindingHint[]>([]);
   readonly onPlan = input<OnPlanChip[]>([]);
   /** Whether timed cooldown rows show an "open map" button (the page owns the map). */
   readonly showMap = input<boolean>(false);

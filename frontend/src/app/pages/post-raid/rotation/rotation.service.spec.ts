@@ -5,16 +5,18 @@ import { WclTransportError } from '../../../core/services/wcl-transport';
 import { Result, LoadError, ok, missing, transient } from '../../../core/result';
 import { AnalysisFinding } from '../../../core/models/analysis.models';
 import { PerCdBenchmark } from '../../../core/models/encounter.models';
-import { RulebookRule, CastWithoutPriorCondition, HoldCooldownForAnchorCondition } from '../../../core/models/rulebook.models';
-import { SHADOW_BLADES, SHADOW_DANCE, SECRET_TECHNIQUE, VANISH, BLOODLUST } from '../../../../testing/spell-ids';
-import { cast, applyBuff } from '../../../../testing/builders/events';
+import { RulebookRule, CastWithoutPriorCondition } from '../../../core/models/rulebook.models';
+import {
+  SHADOW_BLADES, SHADOW_DANCE, SECRET_TECHNIQUE, VANISH, BLOODLUST, RUPTURE, BLACK_POWDER,
+} from '../../../../testing/spell-ids';
+import { cast, applyBuff, applyDebuff, removeDebuff, death } from '../../../../testing/builders/events';
+import { WclEvent } from '../../../core/models/wcl.models';
 import { ROTATION_DATA_SOURCE, RotationBench } from './rotation-data-source';
 import { DataSource } from '../../../core/data-source/data-source';
+import { BenchedRule, RuleThreshold } from './rotation-rules';
 import {
   RotationFeatureService,
-  evaluateCastWithoutPrior, evaluateHoldForAnchor, evaluateRules, buildCastTimes,
   analyzeRotationFindings, RotationScanInput, bucketRotationFindings, buildCdPlan,
-  ruleLabel, rulesFollowed, ruleSeverity, buildRuleHints,
   checkLostUses, checkFirstCastDelay, checkBloodlustAlignment, checkGaps,
   checkCastEfficiency, analyzeOneCooldown,
   partitionRotationFindings, buildRuleRows, buildOffensiveRows, buildOnPlanChips,
@@ -23,6 +25,16 @@ import {
 // The check* and analyzeOneCooldown functions take cast times in ms.
 const ONE_SEC_MS = 1000;
 
+// A zero band keeps the fixture arithmetic exact.
+const PAIR_WINDOW_S = 5;
+function thr(value: number, band = 0): RuleThreshold {
+  return { value, band };
+}
+
+// A rule whose magnitude this encounter measured, so fixtures about something else are not gated on it.
+function benched(rule: RulebookRule, threshold: RuleThreshold | null = thr(PAIR_WINDOW_S)): BenchedRule {
+  return { rule, threshold, sample_count: threshold == null ? 0 : 10 };
+}
 // Build a RotationScanInput for a 0..120s fight - keeps the call sites terse.
 function scan(over: Partial<RotationScanInput> & { bench: RotationBench }): RotationScanInput {
   return {
@@ -57,268 +69,12 @@ function bench(over: Partial<RotationBench> = {}): RotationBench {
   };
 }
 
-// Two real Subtlety rules reused across the rule-engine and rules-followed specs.
+// A real Subtlety rule, so the feature-service fixtures exercise a shape the rulebooks actually carry.
 const SECRET_TECH_NEEDS_DANCE: CastWithoutPriorCondition = {
   kind: 'cast_without_prior',
   spell_id: SECRET_TECHNIQUE, spell_name: 'Secret Technique',
-  required_spell_id: SHADOW_DANCE, required_spell_name: 'Shadow Dance', window_s: 5,
+  required_spell_id: SHADOW_DANCE, required_spell_name: 'Shadow Dance',
 };
-const HOLD_DANCE_FOR_BLADES: HoldCooldownForAnchorCondition = {
-  kind: 'hold_cooldown_for_anchor',
-  spell_ids: [SHADOW_DANCE], spell_names: ['Shadow Dance'],
-  anchor_spell_id: SHADOW_BLADES, anchor_spell_name: 'Shadow Blades', hold_window_s: 15,
-};
-
-describe('rule engine', () => {
-  it('flags Secret Technique cast with no Shadow Dance in window', () => {
-    const castTimes = buildCastTimes([cast(SHADOW_DANCE, 10), cast(SECRET_TECHNIQUE, 30)], 0);
-    const finding = evaluateCastWithoutPrior(SECRET_TECH_NEEDS_DANCE, castTimes, 'warning', 'do x');
-    expect(finding).not.toBeNull();
-    expect(finding!.measured).toEqual({ value: '1 / 1', unit: 'cast(s)' });
-    expect(finding!.details?.remedy).toBe('do x');
-  });
-
-  it('passes when Shadow Dance precedes Secret Technique inside the window', () => {
-    const castTimes = buildCastTimes([cast(SHADOW_DANCE, 10), cast(SECRET_TECHNIQUE, 12)], 0);
-    expect(evaluateCastWithoutPrior(SECRET_TECH_NEEDS_DANCE, castTimes, 'warning')).toBeNull();
-  });
-
-  it('flags Shadow Dance spent in the hold window before Shadow Blades', () => {
-    // Shadow Blades at 10 and 120; the second (120) is the one evaluated; Shadow Dance at 110 is within 15s.
-    const castTimes = buildCastTimes([cast(SHADOW_BLADES, 10), cast(SHADOW_BLADES, 120), cast(SHADOW_DANCE, 110)], 0);
-    const finding = evaluateHoldForAnchor(HOLD_DANCE_FOR_BLADES, castTimes, 'critical');
-    expect(finding).not.toBeNull();
-    expect(finding!.measured).toEqual({ value: '1', unit: 'charge(s)' });
-  });
-
-  it('flags a required cast that only follows the judged one, because position defaults to before', () => {
-    const castTimes = buildCastTimes([cast(SECRET_TECHNIQUE, 10), cast(SHADOW_DANCE, 12)], 0);
-    expect(evaluateCastWithoutPrior(SECRET_TECH_NEEDS_DANCE, castTimes, 'warning')).not.toBeNull();
-  });
-
-  it('accepts a required cast on either side when position is either', () => {
-    const paired: CastWithoutPriorCondition = { ...SECRET_TECH_NEEDS_DANCE, position: 'either' };
-    const danceAfter = buildCastTimes([cast(SECRET_TECHNIQUE, 10), cast(SHADOW_DANCE, 12)], 0);
-    const danceBefore = buildCastTimes([cast(SHADOW_DANCE, 8), cast(SECRET_TECHNIQUE, 10)], 0);
-    expect(evaluateCastWithoutPrior(paired, danceAfter, 'warning')).toBeNull();
-    expect(evaluateCastWithoutPrior(paired, danceBefore, 'warning')).toBeNull();
-  });
-
-  it('requires the companion to follow when position is after', () => {
-    const followUp: CastWithoutPriorCondition = { ...SECRET_TECH_NEEDS_DANCE, position: 'after' };
-    const danceAfter = buildCastTimes([cast(SECRET_TECHNIQUE, 10), cast(SHADOW_DANCE, 12)], 0);
-    const danceBefore = buildCastTimes([cast(SHADOW_DANCE, 8), cast(SECRET_TECHNIQUE, 10)], 0);
-    expect(evaluateCastWithoutPrior(followUp, danceAfter, 'warning')).toBeNull();
-    expect(evaluateCastWithoutPrior(followUp, danceBefore, 'warning')).not.toBeNull();
-  });
-
-  it('accepts a companion exactly on the window edge but not past it', () => {
-    // window_s is 5, so a Shadow Dance at 5 covers a Secret Technique at 10 and one at 4.9 does not.
-    const onEdge = buildCastTimes([cast(SHADOW_DANCE, 5), cast(SECRET_TECHNIQUE, 10)], 0);
-    const pastEdge = buildCastTimes([cast(SHADOW_DANCE, 4.9), cast(SECRET_TECHNIQUE, 10)], 0);
-    expect(evaluateCastWithoutPrior(SECRET_TECH_NEEDS_DANCE, onEdge, 'warning')).toBeNull();
-    expect(evaluateCastWithoutPrior(SECRET_TECH_NEEDS_DANCE, pastEdge, 'warning')).not.toBeNull();
-  });
-
-  it('exempts a violation inside a preceding context window', () => {
-    // Vanish at 20 opens a 20s context, so the uncovered Secret Technique at 30 is forgiven.
-    const exempted: CastWithoutPriorCondition = {
-      ...SECRET_TECH_NEEDS_DANCE,
-      exception: { context_spell_id: VANISH, context_window_s: 20, position: 'before' },
-    };
-    const inContext = buildCastTimes([cast(VANISH, 20), cast(SECRET_TECHNIQUE, 30)], 0);
-    const outOfContext = buildCastTimes([cast(VANISH, 5), cast(SECRET_TECHNIQUE, 30)], 0);
-    expect(evaluateCastWithoutPrior(exempted, inContext, 'warning')).toBeNull();
-    expect(evaluateCastWithoutPrior(exempted, outOfContext, 'warning')).not.toBeNull();
-  });
-
-  it('exempts a violation inside a following context window', () => {
-    const exempted: CastWithoutPriorCondition = {
-      ...SECRET_TECH_NEEDS_DANCE,
-      exception: { context_spell_id: VANISH, context_window_s: 20, position: 'after' },
-    };
-    const inContext = buildCastTimes([cast(SECRET_TECHNIQUE, 30), cast(VANISH, 40)], 0);
-    const outOfContext = buildCastTimes([cast(SECRET_TECHNIQUE, 30), cast(VANISH, 55)], 0);
-    expect(evaluateCastWithoutPrior(exempted, inContext, 'warning')).toBeNull();
-    expect(evaluateCastWithoutPrior(exempted, outOfContext, 'warning')).not.toBeNull();
-  });
-
-  it('never reaches the exception when the required cast already satisfies the rule', () => {
-    const exempted: CastWithoutPriorCondition = {
-      ...SECRET_TECH_NEEDS_DANCE,
-      exception: { context_spell_id: VANISH, context_window_s: 20, position: 'before' },
-    };
-    const satisfied = buildCastTimes([cast(SHADOW_DANCE, 28), cast(SECRET_TECHNIQUE, 30)], 0);
-    expect(evaluateCastWithoutPrior(exempted, satisfied, 'warning')).toBeNull();
-  });
-
-  it('evaluateRules skips rules without a condition', () => {
-    const findings = evaluateRules([{ description: 'r', condition: null }], [cast(SHADOW_DANCE, 1)], 0);
-    expect(findings).toEqual([]);
-  });
-
-  it('evaluateRules names a violated rule by its description, matching how rulesFollowed names it', () => {
-    const description = 'Secret Technique always inside Shadow Dance';
-    const rule: RulebookRule = { description, condition: SECRET_TECH_NEEDS_DANCE };
-    const violated = evaluateRules([rule], [cast(SECRET_TECHNIQUE, 10)], 0);
-    expect(violated[0].label).toBe(description);
-    expect(rulesFollowed([rule], [cast(SHADOW_DANCE, 8), cast(SECRET_TECHNIQUE, 10)], 0)).toEqual([description]);
-  });
-
-  it('evaluateRules falls back to the synthesized label when a rule has no description', () => {
-    const rule: RulebookRule = { condition: SECRET_TECH_NEEDS_DANCE };
-    expect(evaluateRules([rule], [cast(SECRET_TECHNIQUE, 10)], 0)[0].label)
-      .toBe('Secret Technique without Shadow Dance');
-  });
-
-  it('evaluateRules carries the rule type onto the finding', () => {
-    const rule: RulebookRule = { type: 'cooldown_pairing', priority: 'high', condition: SECRET_TECH_NEEDS_DANCE };
-    const findings = evaluateRules([rule], [cast(SECRET_TECHNIQUE, 10)], 0);
-    expect(findings[0].rule_type).toBe('cooldown_pairing');
-  });
-});
-
-describe('ruleSeverity', () => {
-  it('maps critical to the critical tier', () => {
-    expect(ruleSeverity('critical')).toBe('critical');
-  });
-
-  it('maps high to the warning tier', () => {
-    expect(ruleSeverity('high')).toBe('warning');
-  });
-
-  it('maps medium and low to the info tier', () => {
-    expect(ruleSeverity('medium')).toBe('info');
-    expect(ruleSeverity('low')).toBe('info');
-  });
-
-  it('falls back to warning for a missing or unknown priority', () => {
-    expect(ruleSeverity(undefined)).toBe('warning');
-    expect(ruleSeverity('urgent')).toBe('warning');
-  });
-
-  it('drives the severity of an evaluated rule finding', () => {
-    const rule: RulebookRule = { priority: 'medium', condition: SECRET_TECH_NEEDS_DANCE };
-    expect(evaluateRules([rule], [cast(SECRET_TECHNIQUE, 10)], 0)[0].severity).toBe('info');
-  });
-});
-
-describe('ruleLabel', () => {
-  it('prefers the rule description when present', () => {
-    expect(ruleLabel(SECRET_TECH_NEEDS_DANCE, 'Pair Shadow Dance with Secret Technique'))
-      .toBe('Pair Shadow Dance with Secret Technique');
-  });
-
-  it('describes a paired-cast rule as "<spell> with <required>"', () => {
-    expect(ruleLabel(SECRET_TECH_NEEDS_DANCE)).toBe('Secret Technique with Shadow Dance');
-  });
-
-  it('describes a hold rule as "<spells> held for <anchor>"', () => {
-    expect(ruleLabel(HOLD_DANCE_FOR_BLADES)).toBe('Shadow Dance held for Shadow Blades');
-  });
-});
-
-describe('rulesFollowed', () => {
-  const pairDanceWithSecretTech: RulebookRule = {
-    priority: 'warning', description: 'Pair Shadow Dance with Secret Technique', condition: SECRET_TECH_NEEDS_DANCE,
-  };
-  const holdDanceForBlades: RulebookRule = {
-    priority: 'critical', description: 'Hold Shadow Dance for Shadow Blades', condition: HOLD_DANCE_FOR_BLADES,
-  };
-
-  it('lists the rule when Shadow Dance is paired with Secret Technique', () => {
-    expect(rulesFollowed([pairDanceWithSecretTech], [cast(SHADOW_DANCE, 10), cast(SECRET_TECHNIQUE, 12)], 0))
-      .toEqual(['Pair Shadow Dance with Secret Technique']);
-  });
-
-  it('omits the rule when Shadow Dance is cast without Secret Technique', () => {
-    expect(rulesFollowed([pairDanceWithSecretTech], [cast(SHADOW_DANCE, 10), cast(SECRET_TECHNIQUE, 30)], 0)).toEqual([]);
-  });
-
-  it('omits the rule when Secret Technique was never cast', () => {
-    expect(rulesFollowed([pairDanceWithSecretTech], [cast(SHADOW_DANCE, 12)], 0)).toEqual([]);
-  });
-
-  it('lists the rule when Shadow Dance is held clear of Shadow Blades', () => {
-    // Shadow Blades at 10 and 120; the held Shadow Dance at 50 is outside [105,120).
-    expect(rulesFollowed([holdDanceForBlades], [cast(SHADOW_BLADES, 10), cast(SHADOW_BLADES, 120), cast(SHADOW_DANCE, 50)], 0))
-      .toEqual(['Hold Shadow Dance for Shadow Blades']);
-  });
-
-  it('omits the rule when Shadow Dance is spent in the hold window before Shadow Blades', () => {
-    expect(rulesFollowed([holdDanceForBlades], [cast(SHADOW_BLADES, 10), cast(SHADOW_BLADES, 120), cast(SHADOW_DANCE, 110)], 0)).toEqual([]);
-  });
-
-  it('omits the rule when the held cooldown was never cast', () => {
-    expect(rulesFollowed([holdDanceForBlades], [cast(SHADOW_BLADES, 10), cast(SHADOW_BLADES, 120)], 0)).toEqual([]);
-  });
-
-  it('omits the rule with only a single Shadow Blades cast', () => {
-    expect(rulesFollowed([holdDanceForBlades], [cast(SHADOW_BLADES, 10), cast(SHADOW_DANCE, 5)], 0)).toEqual([]);
-  });
-
-  it('skips rules without a condition', () => {
-    expect(rulesFollowed([{ description: 'r', condition: null }], [cast(SHADOW_DANCE, 1)], 0)).toEqual([]);
-  });
-});
-
-describe('buildRuleHints', () => {
-  const dropDanceOnCooldown: RulebookRule = {
-    type: 'cd_hold', priority: 'high', condition: null,
-    description: 'Never sit on Shadow Dance',
-    action: 'Spend Shadow Dance as it comes up outside the Shadow Blades window.',
-  };
-  const bladesFinding: AnalysisFinding = {
-    severity: 'warning', category: 'cooldown_delay', cd_name: 'Shadow Blades', message: '',
-  };
-  const danceHoldFinding: AnalysisFinding = {
-    severity: 'info', category: 'hold_suggestion', message: '', details: { cd_name: 'Shadow Dance' },
-  };
-  const cleanFinding: AnalysisFinding = {
-    severity: 'success', category: 'cooldown_usage', cd_name: 'Shadow Blades', message: '',
-  };
-
-  it('surfaces a rule naming a cooldown this pull flagged', () => {
-    expect(buildRuleHints([dropDanceOnCooldown], [bladesFinding]))
-      .toEqual([{
-        title: 'Never sit on Shadow Dance',
-        chip: 'cd hold',
-        action: 'Spend Shadow Dance as it comes up outside the Shadow Blades window.',
-      }]);
-  });
-
-  it('reads the cooldown name off a hold suggestion, which carries it in details', () => {
-    expect(buildRuleHints([dropDanceOnCooldown], [danceHoldFinding])).toHaveLength(1);
-  });
-
-  it('omits a rule when the only finding is a success', () => {
-    expect(buildRuleHints([dropDanceOnCooldown], [cleanFinding])).toEqual([]);
-  });
-
-  it('omits a rule naming no flagged cooldown', () => {
-    const vanishFlagged: AnalysisFinding = { ...bladesFinding, cd_name: 'Vanish' };
-    expect(buildRuleHints([dropDanceOnCooldown], [vanishFlagged])).toEqual([]);
-  });
-
-  it('omits an evaluable rule, which is already judged as a row', () => {
-    const evaluable: RulebookRule = { ...dropDanceOnCooldown, condition: SECRET_TECH_NEEDS_DANCE };
-    expect(buildRuleHints([evaluable], [bladesFinding])).toEqual([]);
-  });
-
-  it('omits a rule with no action text to show', () => {
-    expect(buildRuleHints([{ ...dropDanceOnCooldown, action: undefined }], [bladesFinding])).toEqual([]);
-  });
-
-  it('falls back to the action as the title when the rule has no description', () => {
-    const untitled: RulebookRule = { ...dropDanceOnCooldown, description: undefined };
-    expect(buildRuleHints([untitled], [bladesFinding])[0].title).toBe(untitled.action);
-  });
-
-  it('leaves the chip empty for an unknown rule type', () => {
-    const untyped: RulebookRule = { ...dropDanceOnCooldown, type: undefined };
-    expect(buildRuleHints([untyped], [bladesFinding])[0].chip).toBe('');
-  });
-});
 
 describe('analyzeRotationFindings', () => {
   it('emits a lost-cooldown critical when never used and expected', () => {
@@ -750,8 +506,8 @@ describe('RotationFeatureService', () => {
       getAllEvents: async (_c: string, _f: number, dataType: string) =>
         dataType === 'Casts' ? [cast(SHADOW_DANCE, 10), cast(SECRET_TECHNIQUE, 30)] : [],
     };
-    const rule: RulebookRule = { priority: 'critical', condition: SECRET_TECH_NEEDS_DANCE };
-    const service = withSource(ok(bench({ rules: [rule] })), wcl);
+    const rule: RulebookRule = { severity: 'critical', condition: SECRET_TECH_NEEDS_DANCE };
+    const service = withSource(ok(bench({ rules: [benched(rule)] })), wcl);
     const result = await service.loadPlayerView('SubtletyRogue', 1, 'rX', 1, 10);
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -801,3 +557,113 @@ describe('RotationFeatureService', () => {
     expect(await service.loadPlanView('SubtletyRogue', 1)).toEqual(transient('WCL is unreachable right now.'));
   });
 });
+
+describe('RotationFeatureService fetch shape', () => {
+  const REPORT = { title: 't', fights: [{ id: 1, name: 'Boss', startTime: 0, endTime: 120_000 }], masterData: { actors: [], abilities: [] } };
+  const PLAYER_ID = 10;
+  const dotUptime: RulebookRule = {
+    severity: 'warning',
+    condition: { kind: 'aura_uptime_below', aura_spell_id: RUPTURE, aura_spell_name: 'Rupture', on: 'target' },
+  };
+  const aoeSwitch: RulebookRule = {
+    severity: 'warning',
+    condition: { kind: 'cast_at_target_count', spell_id: BLACK_POWDER, spell_name: 'Black Powder', bound: 'min' },
+  };
+
+  function recording(events: WclEvent[] = []) {
+    const calls: { dataType: string; sourceId?: number; includeResources: boolean; hostilityType?: string }[] = [];
+    return {
+      calls,
+      api: {
+        getReport: async () => REPORT,
+        getAllEvents: async (
+          _c: string, _f: number, dataType: string, _s: number, _e: number,
+          sourceId?: number, includeResources = false, hostilityType?: string,
+        ) => {
+          calls.push({ dataType, sourceId, includeResources, hostilityType });
+          return events;
+        },
+      },
+    };
+  }
+
+  const UPTIME_BAR_PCT = 90;
+  const DOT_END_S = 60;
+
+  /** Rupture held over the first half of the pull, plus whatever deaths the raid took. */
+  function dotThenDeath(deaths: WclEvent[]) {
+    return {
+      getReport: async () => REPORT,
+      getAllEvents: async (_c: string, _f: number, dataType: string) => {
+        if (dataType === 'Debuffs') return [
+          { ...applyDebuff(RUPTURE, 0), sourceID: PLAYER_ID },
+          { ...removeDebuff(RUPTURE, DOT_END_S), sourceID: PLAYER_ID },
+        ];
+        return dataType === 'Deaths' ? deaths : [];
+      },
+    };
+  }
+
+  it('requests player casts with resources on, which resource_at_cast depends on', async () => {
+    const { calls, api } = recording();
+    await withSource(ok(bench()), api).loadPlayerView('SubtletyRogue', 1, 'rX', 1, PLAYER_ID);
+    expect(calls).toContainEqual({ dataType: 'Casts', sourceId: PLAYER_ID, includeResources: true, hostilityType: undefined });
+  });
+
+  it('skips the enemy-aura, damage and death fetches when no rule reads them', async () => {
+    const { calls, api } = recording();
+    await withSource(ok(bench()), api).loadPlayerView('SubtletyRogue', 1, 'rX', 1, PLAYER_ID);
+    expect(calls.some(call => call.dataType === 'Debuffs')).toBe(false);
+    expect(calls.some(call => call.dataType === 'DamageDone')).toBe(false);
+    expect(calls.some(call => call.dataType === 'Deaths')).toBe(false);
+  });
+
+  it('fetches enemy auras with Enemies hostility and no source, the only shape WCL answers', async () => {
+    const { calls, api } = recording();
+    await withSource(ok(bench({ rules: [benched(dotUptime)] })), api).loadPlayerView('SubtletyRogue', 1, 'rX', 1, PLAYER_ID);
+    expect(calls).toContainEqual({ dataType: 'Debuffs', sourceId: undefined, includeResources: false, hostilityType: 'Enemies' });
+  });
+
+  it('keeps only the auras the player applied out of the raid-wide enemy stream', async () => {
+    const OTHER_RAIDER = 99;
+    // A third of the pull against a 90% bar, so leaving these in would produce a violation row rather than silence.
+    const raidWide = [
+      { ...applyDebuff(RUPTURE, 0), sourceID: OTHER_RAIDER },
+      { ...removeDebuff(RUPTURE, 40), sourceID: OTHER_RAIDER },
+    ];
+    const { api } = recording(raidWide);
+    const result = await withSource(ok(bench({ rules: [benched(dotUptime, thr(UPTIME_BAR_PCT))] })), api)
+      .loadPlayerView('SubtletyRogue', 1, 'rX', 1, PLAYER_ID);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.ruleRows.some(row => row.what?.includes('Rupture'))).toBe(false);
+  });
+
+  it('fetches deaths without a source filter, since a death targets the player rather than coming from them', async () => {
+    const { calls, api } = recording();
+    await withSource(ok(bench({ rules: [benched(dotUptime)] })), api).loadPlayerView('SubtletyRogue', 1, 'rX', 1, PLAYER_ID);
+    expect(calls).toContainEqual({ dataType: 'Deaths', sourceId: undefined, includeResources: false, hostilityType: undefined });
+  });
+
+  it('judges dot uptime against the time the player was alive', async () => {
+    const DEATH_S = 60;
+    const result = await withSource(ok(bench({ rules: [benched(dotUptime, thr(UPTIME_BAR_PCT))] })),
+      dotThenDeath([death(DEATH_S, { target: PLAYER_ID })])).loadPlayerView('SubtletyRogue', 1, 'rX', 1, PLAYER_ID);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.ruleRows.some(row => row.what?.includes('Rupture'))).toBe(false);
+  });
+
+  it('keeps another raider death out of the alive window, so the same dot still reads as dropped', async () => {
+    const OTHER_RAIDER = 99;
+    const result = await withSource(ok(bench({ rules: [benched(dotUptime, thr(UPTIME_BAR_PCT))] })),
+      dotThenDeath([death(10, { target: OTHER_RAIDER })])).loadPlayerView('SubtletyRogue', 1, 'rX', 1, PLAYER_ID);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.ruleRows.some(row => row.what?.includes('Rupture'))).toBe(true);
+  });
+
+  it('fetches the player damage only when a target-count rule needs it', async () => {
+    const { calls, api } = recording();
+    await withSource(ok(bench({ rules: [benched(aoeSwitch)] })), api).loadPlayerView('SubtletyRogue', 1, 'rX', 1, PLAYER_ID);
+    expect(calls).toContainEqual({ dataType: 'DamageDone', sourceId: PLAYER_ID, includeResources: false, hostilityType: undefined });
+  });
+});
+
