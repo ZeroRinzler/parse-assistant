@@ -46,3 +46,5 @@ Thumbs.db
 # Playwright e2e artifacts
 /test-results
 /playwright-report
+# A machine's own launch tweaks (proxy, CA, Chromium path) extend the committed config from here.
+/playwright.local.ts

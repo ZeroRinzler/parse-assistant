@@ -30,7 +30,7 @@ test('selecting class, spec, and encounter loads that spec\'s plan', async () =>
   await expect(page.getByRole('combobox', { name: 'Encounter' })).toContainText('Crown of the Cosmos');
   const cooldownPlan = page.locator('wl-rotation-cd-plan');
   await shows(cooldownPlan, 'Shadow Blades');
-  await shows(cooldownPlan, '0:06');
+  await shows(cooldownPlan, '0:04');
 });
 
 test('gear shows the top-parse talent, trinket, and enchant consensus', async () => {
@@ -38,7 +38,7 @@ test('gear shows the top-parse talent, trinket, and enchant consensus', async ()
   await shows(gear, 'Top-parse gear consensus.');
   await shows(gear, 'Talents');
   await shows(gear, 'Most common build');
-  await shows(gear, '60%');
+  await shows(gear, '40%');
   await shows(gear, 'of top parsers');
   await shows(gear, 'Trinkets');
   await shows(gear, 'Light Company Guidon');
@@ -54,9 +54,9 @@ test('the cooldown plan lists first use, average uses, and the holds', async () 
   await shows(cooldownPlan, 'Shadow Blades');
   await shows(cooldownPlan, 'First use');
   await shows(cooldownPlan, 'Avg uses');
-  await shows(cooldownPlan, '4.3');
+  await shows(cooldownPlan, '4.2');
   await shows(cooldownPlan, 'Holds');
-  await shows(cooldownPlan, '6:09');
+  await shows(cooldownPlan, '5:50');
 });
 
 test('the defensive plan lists the consensus defensives', async () => {
@@ -64,19 +64,19 @@ test('the defensive plan lists the consensus defensives', async () => {
   await shows(defensivePlan, 'Defensive plan');
   await shows(defensivePlan, 'Cloak of Shadows');
   await shows(defensivePlan, 'First use');
-  await shows(defensivePlan, '4:32');
+  await shows(defensivePlan, '4:55');
   await shows(defensivePlan, 'Avg uses');
-  await shows(defensivePlan, '1.4');
+  await shows(defensivePlan, '1.3');
 });
 
 test('burst windows show the top-parse windows with their bench damage', async () => {
   const burstWindows = page.locator('wl-burst-windows');
   await shows(burstWindows, 'Damage in each burst window vs top parses.');
   await shows(burstWindows, 'window');
-  await shows(burstWindows, '0:08 - 0:33');
+  await shows(burstWindows, '0:08 - 0:30');
   await shows(burstWindows, 'burst');
-  await shows(burstWindows, '15.6M');
-  await showsAbility(burstWindows, 'Eviscerate', '2.9M');
+  await shows(burstWindows, '13.6M');
+  await showsAbility(burstWindows, 'Eviscerate', '2.6M');
 });
 
 test('the positioning map opens anchored on the selected burst window', async () => {
