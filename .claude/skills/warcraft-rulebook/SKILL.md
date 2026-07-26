@@ -95,16 +95,46 @@ https://www.wowhead.com/guide/classes/<class-kebab>/<spec-kebab>/<subpage>-pve-<
 
 The pages are server-rendered, so a plain fetch returns the full body - but it is hundreds of KB of HTML.
 **Strip it before handing it to a subagent**: keep the `guide-body` block, drop tags, and save the
-resulting few KB of text. While stripping, also capture from the raw HTML:
+resulting few KB of text.
 
-- the spec's **icon stem** (e.g. `ability_stealth`) for the rulebook's required `spec_icon`;
-- every `wowhead.com/spell=<id>` link with its anchor text - these name-to-id pairs feed the ability table.
+That rendered pass alone is not enough. The priority lists, the openers and the AoE sequences - the
+highest-value content on the page - ship a second time as **wowhead markup inside
+`WH.markup.printHtml("...")`**, a JS string literal where every ability is a `[spell=<id>]` code rather
+than a name. Extract the longest such literal per page (walk the string from the opening quote, respecting
+`\` escapes, then `json.loads` it), resolve every `[spell=<id>]` to `Name(spell=<id>)` with one batched
+`gameData` query, and **append that resolved block to the guide file**. It hands the subagent the exact
+rotation with unambiguous ids attached, which no other source gives it.
+
+Capture from the raw HTML while you are there:
+
+- the spec's **icon stem** (e.g. `ability_stealth`) for the rulebook's required `spec_icon`: it is the
+  `[icon name=<stem>]` on the "Spec Basics" heading, repeated on the cheat-sheet and playstyle headings;
+- the `[spell=<id>]` codes from the markup, which are the page's real name-to-id pairs. Plain
+  `href="...wowhead.com/spell=<id>"` anchors are nearly absent from these pages, so do not rely on them.
 
 ### 2c. `<spec>.abilities.tsv` - the WCL-verified ability-id table
 
-Build one `name <tab> spell_id <tab> icon <tab> base_cd_s` table per spec; the subagent picks **every**
-id it writes from this table, so grounding happens here, once, at prep time - ingestion does not re-check
-ids.
+Build one `name <tab> spell_id <tab> icon <tab> base_cd_s <tab> note` table per spec; the subagent picks
+**every** id it writes from this table, so grounding happens here, once, at prep time - ingestion does not
+re-check ids.
+
+The `note` column is what makes the table usable rather than merely correct. A spec routinely has several
+live ids sharing one name, and the subagent cannot tell them apart from the name: the cast id and the aura
+id differ (Improved Garrote casts nothing and its logged buff is not its talent id), a reworked ability
+keeps its old id alive alongside the new one (both Crimson Tempest ids return "Crimson Tempest"), and a
+talent id is not what shows up in a log. Say in the note which one each row is - cast, aura, talent,
+retired - and whether it was **observed in a current top parse**. Tell the subagent which kind each field
+wants: cast ids for `major_cooldowns`, `defensives` and cast-based rules, aura ids for every
+`cast_outside_buff`, `aura_uptime_below` and `proc_wasted`.
+
+Steps 1 and 3 both need one **rankable encounter id**, so resolve it once per session. Query
+`worldData{expansions{id name zones{id name encounters{id name}}}}` and read the current expansion's
+zones; never dump `worldData{zones{...}}`, which returns every zone ever and costs far more output than it
+answers. The newest raid zone usually returns `"Fight data doesn't exist yet. Try again later."` from
+`characterRankings` because the tier has not opened, and a zone can appear two or three times (live, PTR,
+beta) with different ids. So probe a few encounter ids for a non-empty `rankings` array and take the first
+that answers, falling back to the previous tier's zone. Record which encounter you used: it is what
+"observed in a current top parse" in the notes means.
 
 1. Collect candidate ids from three places:
    - the spell links extracted from the guide HTML (2b) - exact name-to-id pairs;
@@ -123,10 +153,27 @@ ids.
    a `null` means the id does not exist - drop it. For every memory-sourced candidate, also require the
    returned name to equal the expected name - a real id attached to the wrong ability (a renamed or
    reworked spell) fails the gate and is dropped.
-3. Fill `base_cd_s` from the Wowhead tooltip endpoint - `https://nether.wowhead.com/tooltip/spell/<id>`
-   returns JSON whose `tooltip` HTML carries "`N sec/min cooldown`" (parallel `curl` across ids; blank
-   when the tooltip has none). Tooltip cooldowns are **base, pre-talent** values; they anchor the
-   subagent's `cooldown` numbers, which otherwise have no source at all.
+3. **Observe one top parse to separate casts from auras**, because step 2 cannot: the name gate passes a
+   retired id, a talent id and an aura id equally, since all three return the right name. Take one top
+   `report.code` + `fightID`, resolve the player's `sourceID` from
+   `playerDetails(fightIDs:[F])`, then pull three tables for that source and record what each row is:
+
+   ```
+   table(dataType:Casts   fightIDs:[F] sourceID:S)   # data.entries -> the cast ids actually pressed
+   table(dataType:Buffs   fightIDs:[F] sourceID:S)   # data.auras   -> self aura ids + uptime
+   table(dataType:Debuffs fightIDs:[F] sourceID:S)   # data.auras   -> ids the player puts on enemies
+   ```
+
+   An id in `Casts` is a cast id; an id in `Buffs`/`Debuffs` is an aura id; a name-verified id in neither
+   is a talent or an unplayed build, and the note must say so rather than implying it is castable. When a
+   name maps to two live ids, the one in `Casts` is the current one.
+4. Fill `base_cd_s` from the Wowhead tooltip endpoint - `https://nether.wowhead.com/tooltip/spell/<id>`
+   returns JSON whose `tooltip` HTML carries "`N sec/min cooldown`". Tooltip cooldowns are **base,
+   pre-talent** values; they anchor the subagent's `cooldown` numbers, which otherwise have no source at
+   all. The same tooltip text carries the **buff/dot duration and the effect percentages**, so parse those
+   in the same pass - they are what makes a `usage_rule` concrete. Fetch the whole id set from **one
+   script** that requests concurrently and prints one line per id; a shell loop of backgrounded `curl`
+   subshells re-prints its own body for every job it reaps and buries the results in noise.
 
 ## Step 3 - fan out one isolated authoring subagent per spec
 
@@ -166,7 +213,7 @@ flattens it is a failed run. Reject and respawn a subagent whose output misses t
   the source wins and the base goes in `id_note`.
 - **Every rule needs a `condition`**, and the engine renders nothing else, so advice it cannot check is
   not a rule: leave it out rather than writing a rule around it. Quality over count - two real rules
-  beat eight, and an empty `rules` list is valid. Nine kinds are available (see the schema's `$defs`):
+  beat eight, and an empty `rules` list is valid. Eight kinds are available (see the schema's `$defs`):
 
   | The rule says | Kind |
   |---|---|
@@ -194,6 +241,17 @@ flattens it is a failed run. Reject and respawn a subagent whose output misses t
   player already sees and can contradict it. Put the timing detail in the cooldown's `usage_rule`.
 - **`on: "target"` costs a raid-wide fetch** (WCL cannot narrow enemy auras to one caster), so it is
   worth it for a spec whose dots are the rotation and wasteful for an incidental debuff.
+- **A rule a top parse would fail is a broken rule, not a strict one.** Every finding is benched against
+  the encounter's best logs, so a rule the field already violates accuses everyone and teaches nobody.
+  Sanity-check each rule against the parse from 2c before keeping it, and drop the ones that do not
+  survive. `proc_wasted` is where this bites: compare the buff's application count in `Buffs` against the
+  cast count of its spend abilities in `Casts`, and if applications dwarf spends the pairing is wrong -
+  the buff is a lasting state (an execute-phase "usable" window, a stacking tracker) rather than a proc
+  that ability consumes. `aura_uptime_below` deserves the same look: if the top parse lets the aura drop
+  for long stretches, it is situational and not a maintenance rule.
+- **Never take a spell id from a schema `examples` block.** Those are illustrative and go stale as spells
+  churn, so an id copied out of one can be a real id for a different ability. Every id comes from the
+  prepared table, even when an example seems to hand you the exact rule you are writing.
 - **`cast_without_prior` operands are ordered, and getting them backwards inverts the check.**
   `spell_id` is the ability being judged; `required_spell_id` is its companion, which under the default
   `position: "before"` must already have been cast. For "Secret Technique always inside Shadow Dance",
@@ -207,12 +265,27 @@ The subagent writes (overwriting any existing file) to `frontend/public/data/spe
 pretty-printed, `spec` set to the folder key, the **required** `spec_icon` set to the captured stem (never
 empty), and no `guide_count`/`saved_at`.
 
-The main agent then validates every written file once, locally:
+The main agent then validates every written file once, locally. Run these as **one script over all the
+written files**, not a command per file per check:
 
 - schema check: `python3 -c "import json,jsonschema; jsonschema.validate(json.load(open('<file>')), json.load(open('.claude/skills/warcraft-ingestion/rulebook.schema.json')))"`
+  (`pip install jsonschema` first if the import fails).
 - dash scan: no U+2014 / U+2013 / U+2212 anywhere in the file.
+- **id cross-check**: walk every `spell_id` in `major_cooldowns`, `defensives` and each condition's id
+  fields (including the `spell_ids` / `spend_spell_ids` arrays) and assert the id is in that spec's table
+  **and** that the name written beside it matches the table's name for that id. This catches a
+  transposed pair that the schema cannot see, since both fields are individually well-typed.
+- **no magnitudes in conditions**: assert no numeric value in any condition outside the id and
+  `resource_type` fields, and no `rules[].description` over 60 characters.
 - unresolved-name follow-up: for any ability name a subagent reported as missing from its table, find the
   id (Wowhead spell search), verify it with a WCL `ability(id:...)` query, and patch it in.
+
+Then read the file. The mechanical checks pass on a rulebook whose coaching copy is wrong, so spot-check
+that each number in a `usage_rule` or `action` traces to an APL line or a guide sentence, and run the
+top-parse sanity check from the quality bar over the rules. When a rule fails it, send the defect back to
+that spec's subagent with `SendMessage` - it still holds its context and can fix one rule without
+re-authoring the file, which is far cheaper than a cold respawn. Reserve a fresh subagent for output that
+misses the bar broadly.
 
 Ingestion consumes the rulebook directly with no code-side check, so this validation pass is the last gate.
 
@@ -225,16 +298,41 @@ a `main`-based branch. Their source of truth is the **`gh-pages`** branch, at
 
 ```bash
 git fetch origin gh-pages
-git worktree add -b <publish-branch> <scratch>/ghpages-wt origin/gh-pages
+git worktree add -b <temp-branch> <scratch>/ghpages-wt origin/gh-pages
 cp frontend/public/data/specs/<Spec>/rulebook.json <scratch>/ghpages-wt/data/specs/<Spec>/rulebook.json   # per spec
 git -C <scratch>/ghpages-wt add data/specs
 git -C <scratch>/ghpages-wt commit -m "..."
-git -C <scratch>/ghpages-wt push -u origin <publish-branch>
+git -C <scratch>/ghpages-wt push -u origin <temp-branch>:refs/heads/<publish-branch>
 # open a PR with base gh-pages, then:
 git worktree remove <scratch>/ghpages-wt
+git branch -D <temp-branch>
 ```
 
 Open the PR with **base `gh-pages`** (push to `gh-pages` directly only when the user explicitly says so).
 Once merged, the hourly ingest overlays `data/specs` from `gh-pages` before each run and rebuilds that
 spec's benches over its next passes; the site reads the same tree directly. The gh-pages writers publish
 tree-based single commits, so the file content persists across their force-pushes.
+
+The worktree commits on a **temp branch pushed to the publish branch's remote ref** because the publish
+branch name is often already checked out on `main` history - a session handed a branch to work on cannot
+reuse that name for a `gh-pages` worktree, and `git worktree add -b` fails outright on the collision.
+Pushing a temp branch to `refs/heads/<publish-branch>` sidesteps it; the local pointer is then irrelevant,
+since the PR reads the remote. Verify with `git log origin/<publish-branch> -1` rather than the local ref,
+which still sits on `main` history and will make history-checking tooling report the repo's merge commits
+as if they were yours.
+
+**Keeping the PR current needs a cherry-pick, never a plain rebase.** Each `gh-pages` writer force-pushes a
+single **parentless** commit, so when one lands the base your PR was cut from is orphaned and the branch
+reads as both behind and ahead. A `git rebase` onto the new tip would replay that orphaned publish commit
+and revert whatever the writer just shipped (a `pr-N` preview, or the shell). Replay only your own commit:
+
+```bash
+git fetch origin gh-pages
+git worktree add -b <temp-branch> <scratch>/ghpages-wt origin/gh-pages
+git -C <scratch>/ghpages-wt cherry-pick <your-rulebook-sha>
+git -C <scratch>/ghpages-wt push --force-with-lease=refs/heads/<publish-branch>:<old-sha> \
+  origin <temp-branch>:refs/heads/<publish-branch>
+```
+
+Then confirm the branch is 0 behind / 1 ahead of `origin/gh-pages`, that the diff is only the rulebook
+files, and that the other writers' directories survived.

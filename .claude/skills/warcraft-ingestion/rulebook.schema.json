@@ -232,7 +232,7 @@
           "kind": "cast_outside_buff",
           "spell_id": 1943,
           "spell_name": "Rupture",
-          "buff_spell_id": 457052,
+          "buff_spell_id": 457058,
           "buff_spell_name": "Darkest Night",
           "require": "outside"
         }
