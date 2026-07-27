@@ -150,7 +150,7 @@
           "description": "Short rule title the player sees, <= 60 chars, naming the abilities rather than the check, e.g. 'Secret Technique always inside Shadow Dance'. It is shown both when the rule is broken and when it is followed, so write it as the rule itself, not as a complaint."
         },
         "condition": {
-          "description": "REQUIRED. How the app checks this rule against the player's log. Pick the kind that matches what the rule actually says rather than forcing it into a nearby one: a rule about a buff being up wants castOutsideBuff or auraUptimeBelow, a resource level wants resourceAtCast, a target count wants castAtTargetCount, and an opener wants openingSequence. A rule that fits none of them does not belong in the rulebook. Each kind takes ability identities and a direction only - never a number.",
+          "description": "REQUIRED. How the app checks this rule against the player's log. Pick the kind that matches what the rule actually says rather than forcing it into a nearby one: a rule about a buff being up wants castOutsideBuff or auraUptimeBelow, a resource level wants resourceAtCast, a target count wants castAtTargetCount, and an opener wants openingSequence. A rule that fits none of them does not belong in the rulebook. Each kind takes ability identities and a direction only - never a number: the app measures every threshold a rule is judged against from the encounter's best logs, so a rule that carries no numbers adapts to a fight the field plays differently instead of failing the player against a guess. The source's concrete numbers belong in the rule's action text.",
           "anyOf": [
             { "$ref": "#/$defs/castWithoutPrior" },
             { "$ref": "#/$defs/holdCooldownForAnchor" },
@@ -171,7 +171,7 @@
     "castWithoutPrior": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Use when the sources say two abilities go together: 'always X inside Y', 'send Y then X'. Supply no numbers: the app measures every threshold this rule is judged against from the encounter's best logs, so the same rule adapts to a fight the field plays differently.",
+      "description": "Use when the sources say two abilities go together: 'always X inside Y', 'send Y then X'.",
       "required": ["kind", "spell_id", "spell_name", "required_spell_id", "required_spell_name"],
       "properties": {
         "kind": { "const": "cast_without_prior" },
@@ -195,7 +195,7 @@
     "holdCooldownForAnchor": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Use when the sources say to save one ability for a bigger one: 'hold X for Y', 'do not spend X before Y'. Supply no numbers: the app measures every threshold this rule is judged against from the encounter's best logs, so the same rule adapts to a fight the field plays differently.",
+      "description": "Use when the sources say to save one ability for a bigger one: 'hold X for Y', 'do not spend X before Y'.",
       "required": ["kind", "spell_ids", "spell_names", "anchor_spell_id", "anchor_spell_name"],
       "properties": {
         "kind": { "const": "hold_cooldown_for_anchor" },
@@ -241,7 +241,7 @@
     "auraUptimeBelow": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Use for the 'keep X up' family: a buff or a damage-over-time effect the sources say should never fall off. Supply no numbers: the app measures every threshold this rule is judged against from the encounter's best logs, so the same rule adapts to a fight the field plays differently. Do not write a target percentage.",
+      "description": "Use for the 'keep X up' family: a buff or a damage-over-time effect the sources say should never fall off. Do not write a target percentage.",
       "required": ["kind", "aura_spell_id", "aura_spell_name", "on"],
       "properties": {
         "kind": { "const": "aura_uptime_below" },
@@ -261,7 +261,7 @@
     "openingSequence": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Use when the sources give a specific opening order: 'open with X, then Y, then Z'. Extra casts between the listed steps are allowed, so list only the abilities whose order actually matters. Supply no numbers: the app measures every threshold this rule is judged against from the encounter's best logs, so the same rule adapts to a fight the field plays differently. Do not write a time limit.",
+      "description": "Use when the sources give a specific opening order: 'open with X, then Y, then Z'. Extra casts between the listed steps are allowed, so list only the abilities whose order actually matters. Do not write a time limit.",
       "required": ["kind", "spell_ids", "spell_names"],
       "properties": {
         "kind": { "const": "opening_sequence" },
@@ -279,7 +279,7 @@
     "castAtTargetCount": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Use for the AoE switch: an ability the sources say to start using on several targets, or to stop using once several are up. Supply no numbers: the app measures every threshold this rule is judged against from the encounter's best logs, so the same rule adapts to a fight the field plays differently. Do not write a target count, even when the guide names one - put that number in the rule's action text instead.",
+      "description": "Use for the AoE switch: an ability the sources say to start using on several targets, or to stop using once several are up. Do not write a target count, even when the guide names one - put that number in the rule's action text instead.",
       "required": ["kind", "spell_id", "spell_name", "bound"],
       "properties": {
         "kind": { "const": "cast_at_target_count" },
@@ -299,7 +299,7 @@
     "resourceAtCast": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Use when the sources gate an ability on a resource level: 'spend at 5 combo points', 'never overcap Soul Shards'. Supply no numbers: the app measures every threshold this rule is judged against from the encounter's best logs, so the same rule adapts to a fight the field plays differently. Do not write an amount, even when the guide names one - put that number in the rule's action text instead.",
+      "description": "Use when the sources gate an ability on a resource level: 'spend at 5 combo points', 'never overcap Soul Shards'. Do not write an amount, even when the guide names one - put that number in the rule's action text instead.",
       "required": ["kind", "spell_id", "spell_name", "resource_type", "resource_name", "bound"],
       "properties": {
         "kind": { "const": "resource_at_cast" },
