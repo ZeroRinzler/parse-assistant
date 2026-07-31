@@ -73,6 +73,10 @@ flattens it is a failed run.
   | use A at N+ targets, stop using A above N | `cast_at_target_count` |
   | spend A only at N resource, do not overcap | `resource_at_cast` |
   | consume proc B on sight | `proc_wasted` |
+  | build with A while buff B is up, with something else otherwise | `filler_in_buff` |
+  | spend A only at N stacks of buff B, do not cap B | `spend_at_stacks` |
+  | refresh damage-over-time D late, do not clip it | `aura_clipped` |
+  | A replaces the filler below N% target health | `filler_below_health` |
 
 - **Never author a magnitude.** A condition names identity and direction only - which spell, which
   aura, which resource, and which way the rule runs (`position`, `require`, `on`, `bound`). Every
@@ -80,6 +84,17 @@ flattens it is a failed run.
   resource level) is measured from the encounter's own top parses, so the same rule adapts to a fight
   the field plays differently instead of failing the player against a guess. Put the source's concrete
   numbers in the rule's `action` as coaching copy, where they inform without being enforced.
+- **Cover the filler choice, which most rulebooks miss.** A spec that swaps its builder on a state -
+  Wrath in Solar Eclipse and Starfire in Lunar, one Maelstrom spender per totem, a different strike per
+  stance - presses that button more than everything else combined, so a rulebook that names every
+  cooldown and never says which filler goes where has left out the rotation. It is the terminal
+  unconditioned action at the bottom of each APL sub-list plus the gates just above it, and the guide's
+  "build resource with X when in Y" line. Write one `filler_in_buff` rule per state, and reach for it
+  rather than `cast_outside_buff`: a filler choice is a share, not a prohibition, so an absolute rule
+  accuses every top parse over the handful of correct off-state casts every log contains. Fill
+  `except_buff_spell_ids` with the states that suspend the choice - a burst window that grants both
+  states at once, a proc the sources say to press the other filler under - since those casts are correct
+  play and counting them is what turns a true rule into a false one.
 - **Pick the kind the rule actually means.** A rule about a buff being up wants `cast_outside_buff`,
   not a `cast_without_prior` proximity window that only approximates it. A rule about combo points
   wants `resource_at_cast`, not a cast pairing. `aura_uptime_below` needs `on: "target"` for a dot the

@@ -86,6 +86,62 @@ export interface ProcWastedCondition {
   spend_spell_names: string[];
 }
 
+export interface FillerInBuffCondition {
+  kind: 'filler_in_buff';
+  spell_id: number;
+  spell_name: string;
+  /** The fillers it competes with, so the check reads a share of the choice rather than a raw count. */
+  alternative_spell_ids: number[];
+  alternative_spell_names: string[];
+  buff_spell_id: number;
+  buff_spell_name: string;
+  /** States that suspend the choice, so a burst window or proc that makes the other filler correct is not counted against it. */
+  except_buff_spell_ids?: number[];
+  except_buff_spell_names?: string[];
+}
+
+export interface SpendAtStacksCondition {
+  kind: 'spend_at_stacks';
+  spell_id: number;
+  spell_name: string;
+  buff_spell_id: number;
+  buff_spell_name: string;
+  /** `min` flags spending below the field's level, `max` flags generating near the cap. */
+  bound: 'min' | 'max';
+  /** States that suspend the rule, so a proc that licenses a cheap cast is not counted against it. */
+  except_buff_spell_ids?: number[];
+  except_buff_spell_names?: string[];
+}
+
+export interface AuraClippedCondition {
+  kind: 'aura_clipped';
+  aura_spell_id: number;
+  aura_spell_name: string;
+  /** The cast that applies it, since a proc-applied refresh is not a button the player pressed. */
+  cast_spell_id: number;
+  cast_spell_name: string;
+  /** `target` reads the enemy debuff stream, which is where damage-over-time rules live. */
+  on: 'self' | 'target';
+  /** States that suspend the rule, so a cooldown the sources say to re-snapshot under is not counted against it. */
+  except_buff_spell_ids?: number[];
+  except_buff_spell_names?: string[];
+}
+
+export interface FillerBelowHealthCondition {
+  kind: 'filler_below_health';
+  spell_id: number;
+  spell_name: string;
+  /** The fillers it displaces, so the check reads a share of the choice rather than a raw count. */
+  alternative_spell_ids: number[];
+  alternative_spell_names: string[];
+  /** The ability's own execute threshold, a game constant like a cooldown rather than a field behaviour. */
+  health_pct: number;
+  /** States that suspend the choice, so a burst window that overrides the priority is not counted against it. */
+  except_buff_spell_ids?: number[];
+  except_buff_spell_names?: string[];
+}
+
+/** Spell ids drive every check; a `*_names` field the engine never renders is there for the rulebook generator's offline id/name cross-check. */
 export type RuleCondition =
   | CastWithoutPriorCondition
   | HoldCooldownForAnchorCondition
@@ -94,7 +150,11 @@ export type RuleCondition =
   | OpeningSequenceCondition
   | CastAtTargetCountCondition
   | ResourceAtCastCondition
-  | ProcWastedCondition;
+  | ProcWastedCondition
+  | FillerInBuffCondition
+  | SpendAtStacksCondition
+  | AuraClippedCondition
+  | FillerBelowHealthCondition;
 
 /** The tiers the findings table renders, authored directly so nothing translates between vocabularies. */
 export type RuleSeverity = 'critical' | 'warning' | 'info';

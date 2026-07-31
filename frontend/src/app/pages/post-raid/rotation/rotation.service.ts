@@ -322,6 +322,7 @@ export function buildRuleRows(ruleFindings: AnalysisFinding[]): RotationFindingR
     what: finding.label,
     chip: finding.rule_type ? RULE_TYPE_LABEL[finding.rule_type] : undefined,
     measured: finding.measured ?? { value: '-' },
+    timestampMs: finding.timestamp_ms ?? null,
     fix: finding.details?.remedy,
   }));
 }
@@ -434,8 +435,10 @@ export class RotationFeatureService {
         rulesNeed(conditions, 'enemyAuras')
           ? this.wclApi.getAllEvents(reportCode, fightId, 'Debuffs', fight.startTime, fight.endTime, undefined, false, 'Enemies')
           : Promise.resolve([]),
+        // Target health rides on the damage rows, and only the resource-bearing form carries it.
         rulesNeed(conditions, 'damage')
-          ? this.wclApi.getAllEvents(reportCode, fightId, 'DamageDone', fight.startTime, fight.endTime, playerId)
+          ? this.wclApi.getAllEvents(reportCode, fightId, 'DamageDone', fight.startTime, fight.endTime, playerId,
+            rulesNeed(conditions, 'targetHealth'))
           : Promise.resolve([]),
         // Deaths target the player rather than come from them, so a sourceID filter would drop every one.
         rulesNeed(conditions, 'deaths')

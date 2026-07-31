@@ -62,6 +62,27 @@ export function applyDebuff(spellId: number, atS: number, opts?: { target?: numb
   };
 }
 
+/** A debuff re-applied to an enemy before it expired (`type: 'refreshdebuff'`). */
+export function refreshDebuff(spellId: number, atS: number, opts?: { target?: number }): WclEvent {
+  return {
+    type: 'refreshdebuff',
+    timestamp: atS * MS_PER_SECOND,
+    abilityGameID: spellId,
+    ...(opts?.target !== undefined && { targetID: opts.target }),
+  };
+}
+
+/** A buff climbing to `stack` (`type: 'applybuffstack'`), which carries the new total rather than the increment. */
+export function applyBuffStack(spellId: number, atS: number, stack: number, opts?: { target?: number }): WclEvent {
+  return {
+    type: 'applybuffstack',
+    timestamp: atS * MS_PER_SECOND,
+    abilityGameID: spellId,
+    stack,
+    ...(opts?.target !== undefined && { sourceID: opts.target, targetID: opts.target }),
+  };
+}
+
 /** A debuff dropping off an enemy (`type: 'removedebuff'`). */
 export function removeDebuff(spellId: number, atS: number, opts?: { target?: number }): WclEvent {
   return {
@@ -93,8 +114,9 @@ export function damage(
   spellId: number,
   atS: number,
   amount: number,
-  opts?: { source?: number; target?: number; absorbed?: number },
+  opts?: { source?: number; target?: number; absorbed?: number; targetHealthPct?: number },
 ): WclEvent {
+  const MAX_HP = 1_000_000;
   return {
     type: 'damage',
     timestamp: atS * MS_PER_SECOND,
@@ -103,6 +125,10 @@ export function damage(
     ...(opts?.absorbed !== undefined && { absorbed: opts.absorbed }),
     ...(opts?.source !== undefined && { sourceID: opts.source }),
     ...(opts?.target !== undefined && { targetID: opts.target }),
+    // What `includeResources: true` flattens on for the struck actor, which is where target health lives.
+    ...(opts?.targetHealthPct !== undefined && {
+      resourceActor: 2, maxHitPoints: MAX_HP, hitPoints: Math.round(MAX_HP * opts.targetHealthPct / 100),
+    }),
   };
 }
 

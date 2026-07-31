@@ -4,8 +4,13 @@
  * header chips), kept here so each slice imports one implementation. No Angular / IO.
  */
 import { logWarn } from '../../core/log';
-import { ParseRanking, WclRankingsBlob, WclRawAbility, WclRawRanking } from '../../core/models/wcl.models';
+import { ParseRanking, WclEvent, WclRankingsBlob, WclRawAbility, WclRawRanking } from '../../core/models/wcl.models';
 import { WindowSpell } from '../../core/models/window-comparison.models';
+
+/** Copies of one NPC share a targetID, so identity needs the instance too; an event naming no target folds into a single bucket. */
+export function targetKey(event: WclEvent): string {
+  return `${event.targetID ?? 0}:${event.targetInstance ?? 0}`;
+}
 
 // WCL anonymizes a privacy-protected parse's player name to "Character <id>-<id>",
 // which can never match a report actor (real names are letters only), so the parse

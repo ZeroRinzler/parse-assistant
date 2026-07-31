@@ -3,14 +3,17 @@ import {
   RulebookRule, RuleSeverity,
   CastWithoutPriorCondition, HoldCooldownForAnchorCondition, CastOutsideBuffCondition,
   AuraUptimeBelowCondition, OpeningSequenceCondition,
-  CastAtTargetCountCondition, ResourceAtCastCondition, ProcWastedCondition,
+  CastAtTargetCountCondition, ResourceAtCastCondition, ProcWastedCondition, FillerInBuffCondition,
+  SpendAtStacksCondition, AuraClippedCondition, FillerBelowHealthCondition,
 } from '../../../core/models/rulebook.models';
 import { WclEvent } from '../../../core/models/wcl.models';
 import {
   SHADOW_BLADES, SHADOW_DANCE, SECRET_TECHNIQUE, RUPTURE, EVISCERATE, BLACK_POWDER,
+  WRATH, STARFIRE, ECLIPSE_SOLAR, LIGHTNING_BOLT, MAELSTROM_WEAPON, MOONFIRE, MOONFIRE_DOT, EXECUTE, SLAM,
+  SHADOW_BLADES_DAMAGE,
 } from '../../../../testing/spell-ids';
 import {
-  cast, applyBuff, removeBuff, buffWindow, applyDebuff, removeDebuff, damage, death,
+  cast, applyBuff, removeBuff, buffWindow, applyDebuff, removeDebuff, refreshDebuff, applyBuffStack, damage, death,
 } from '../../../../testing/builders/events';
 import {
   BenchedRule, RuleContext, RuleInputs, RuleStream, RuleThreshold,
@@ -18,6 +21,7 @@ import {
   rulesNeed, judgeableRules, benchedRules, measureRule, ruleThreshold,
   evaluateCastWithoutPrior, evaluateHoldForAnchor, evaluateCastOutsideBuff, evaluateAuraUptimeBelow,
   evaluateOpeningSequence, evaluateCastAtTargetCount, evaluateResourceAtCast, evaluateProcWasted,
+  evaluateFillerInBuff, evaluateSpendAtStacks, evaluateAuraClipped, evaluateFillerBelowHealth,
 } from './rotation-rules';
 
 // A zero band keeps the fixture arithmetic exact.
@@ -372,6 +376,27 @@ describe('evaluateCastAtTargetCount', () => {
     const ctx = ruleCtx([cast(BLACK_POWDER, CAST_S)], { damage: hits([1, 2]) });
     expect(evaluateCastAtTargetCount(blackPowder, ctx, thr(TARGET_FLOOR, SUB_TARGET_BAND), 'warning')?.measured?.value).toBe('1 / 1');
   });
+
+  it('counts damage landing on the cast millisecond, which an instant ability does', () => {
+    const onTheCast = [1, 2, 3].map(id => damage(BLACK_POWDER, CAST_S, 100, { target: id }));
+    const ctx = ruleCtx([cast(BLACK_POWDER, CAST_S)], { damage: onTheCast });
+    expect(evaluateCastAtTargetCount(blackPowder, ctx, thr(TARGET_FLOOR), 'warning')).toBeNull();
+  });
+
+  it('bisects a sorted index, so a row logged out of order does not shift the window', () => {
+    const EARLY_S = 1;
+    const OTHER_ENEMY = 9;
+    const rows = [...hits([1, 2]), damage(BLACK_POWDER, EARLY_S, 100, { target: OTHER_ENEMY }), ...hits([3])];
+    const ctx = ruleCtx([cast(BLACK_POWDER, CAST_S)], { damage: rows });
+    expect(evaluateCastAtTargetCount(blackPowder, ctx, thr(TARGET_FLOOR), 'warning')).toBeNull();
+  });
+
+  it('folds rows that name no target into one enemy rather than dropping them', () => {
+    const FIELD_CEILING = 0;  // any enemy at all is over this ceiling
+    const capped: CastAtTargetCountCondition = { ...blackPowder, bound: 'max' };
+    const ctx = ruleCtx([cast(BLACK_POWDER, CAST_S)], { damage: [damage(BLACK_POWDER, CAST_S + 1, 100)] });
+    expect(evaluateCastAtTargetCount(capped, ctx, thr(FIELD_CEILING), 'warning')?.measured?.value).toBe('1 / 1');
+  });
 });
 
 describe('evaluateResourceAtCast', () => {
@@ -401,6 +426,13 @@ describe('evaluateResourceAtCast', () => {
     const ctx = ruleCtx([cast(BLACK_POWDER, 10,
       { resources: [{ amount: MAX_COMBO_POINTS, max: MAX_COMBO_POINTS, type: COMBO_POINT_TYPE }] })]);
     expect(evaluateResourceAtCast(noOvercap, ctx, thr(FIELD_CEILING_FRAC), 'warning')?.measured?.value).toBe('1 / 1');
+  });
+
+  it('says the same thing in the chip and the sentence, so the two cannot drift', () => {
+    const ctx = ruleCtx([atCombo(10, 3)]);
+    const finding = evaluateResourceAtCast(finisherAtMax, ctx, thr(RESOURCE_FLOOR), 'warning');
+    expect(finding?.label).toBe('Eviscerate below 100% combo points');
+    expect(finding?.message).toContain('Eviscerate cast below 100% combo points');
   });
 
   it('is not applicable when the casts carry no resource snapshot', () => {
@@ -443,6 +475,330 @@ describe('evaluateProcWasted', () => {
     const ctx = ruleCtx([], { buffs: buffWindow(SHADOW_DANCE, 100, RULE_FIGHT_END_MS / 1000) });
     expect(evaluateProcWasted(spendDance, ctx, 'warning')).toBeNull();
     expect(ruleApplicable(spendDance, ctx)).toBe(false);
+  });
+});
+
+describe('evaluateFillerInBuff', () => {
+  // Fight-relative seconds for an Eclipse (Solar) window long enough to hold several fillers.
+  const SOLAR_START_S = 10, SOLAR_END_S = 40;
+  // What the top parses run: Wrath is nearly every filler they press inside Solar Eclipse.
+  const FIELD_WRATH_SHARE = 0.9;
+  const wrathInSolar: FillerInBuffCondition = {
+    kind: 'filler_in_buff',
+    spell_id: WRATH, spell_name: 'Wrath',
+    alternative_spell_ids: [STARFIRE], alternative_spell_names: ['Starfire'],
+    buff_spell_id: ECLIPSE_SOLAR, buff_spell_name: 'Eclipse (Solar)',
+  };
+  const solar = buffWindow(ECLIPSE_SOLAR, SOLAR_START_S, SOLAR_END_S);
+
+  it('flags a player filling with the wrong spell inside the buff', () => {
+    // One Wrath to three Starfire is a 25% share, under the field's 90%.
+    const ctx = ruleCtx([
+      cast(WRATH, 12), cast(STARFIRE, 14), cast(STARFIRE, 16), cast(STARFIRE, 18),
+    ], { buffs: solar });
+    expect(evaluateFillerInBuff(wrathInSolar, ctx, thr(FIELD_WRATH_SHARE), 'warning')?.measured)
+      .toEqual({ value: '25 / 90', unit: '% of fillers' });
+  });
+
+  it('passes a player whose share matches the field', () => {
+    const ctx = ruleCtx([cast(WRATH, 12), cast(WRATH, 14), cast(WRATH, 16)], { buffs: solar });
+    expect(evaluateFillerInBuff(wrathInSolar, ctx, thr(FIELD_WRATH_SHARE), 'warning')).toBeNull();
+  });
+
+  it('ignores fillers cast outside the buff, which the rule says nothing about', () => {
+    const ctx = ruleCtx([cast(WRATH, 12), cast(STARFIRE, SOLAR_END_S + 5)], { buffs: solar });
+    expect(evaluateFillerInBuff(wrathInSolar, ctx, thr(FIELD_WRATH_SHARE), 'warning')).toBeNull();
+  });
+
+  it('accepts a share exactly on the field bar but not one just under it', () => {
+    // Nine Wrath to one Starfire is exactly 90%; eight to two is 80%.
+    const nine = Array.from({ length: 9 }, (_, i) => cast(WRATH, 12 + i));
+    const eight = Array.from({ length: 8 }, (_, i) => cast(WRATH, 12 + i));
+    const onTheBar = ruleCtx([...nine, cast(STARFIRE, 22)], { buffs: solar });
+    const underIt = ruleCtx([...eight, cast(STARFIRE, 22), cast(STARFIRE, 24)], { buffs: solar });
+    expect(evaluateFillerInBuff(wrathInSolar, onTheBar, thr(FIELD_WRATH_SHARE), 'warning')).toBeNull();
+    expect(evaluateFillerInBuff(wrathInSolar, underIt, thr(FIELD_WRATH_SHARE), 'warning')).not.toBeNull();
+  });
+
+  it('is not applicable when the pull never filled inside the buff', () => {
+    expect(ruleApplicable(wrathInSolar, ruleCtx([cast(WRATH, 5)], { buffs: solar }))).toBe(false);
+  });
+
+  it('excludes the cast that enters the state, which shares the applybuff timestamp but was cast outside it', () => {
+    // The Starfire that grants Solar lands on the same millisecond as the buff, and it was not cast under it.
+    const entering = ruleCtx([cast(STARFIRE, SOLAR_START_S)], { buffs: solar });
+    expect(ruleApplicable(wrathInSolar, entering)).toBe(false);
+    // The removal millisecond stays inside: a cast that consumes the state was made under it.
+    const closing = ruleCtx([cast(STARFIRE, SOLAR_END_S)], { buffs: solar });
+    expect(ruleApplicable(wrathInSolar, closing)).toBe(true);
+  });
+
+  it('drops casts made in a state that suspends the choice, so a burst window is not a violation', () => {
+    const CELESTIAL_START_S = 15, CELESTIAL_END_S = 25;
+    const suspendedByCelestial: FillerInBuffCondition = {
+      ...wrathInSolar,
+      except_buff_spell_ids: [SHADOW_DANCE], except_buff_spell_names: ['Celestial Alignment'],
+    };
+    const buffs = [...solar, ...buffWindow(SHADOW_DANCE, CELESTIAL_START_S, CELESTIAL_END_S)];
+    // Three Starfire inside the suspending window, one Wrath outside it.
+    const ctx = ruleCtx([
+      cast(WRATH, 12), cast(STARFIRE, 16), cast(STARFIRE, 18), cast(STARFIRE, 20),
+    ], { buffs });
+    expect(evaluateFillerInBuff(suspendedByCelestial, ctx, thr(FIELD_WRATH_SHARE), 'warning')).toBeNull();
+    expect(evaluateFillerInBuff(wrathInSolar, ctx, thr(FIELD_WRATH_SHARE), 'warning')).not.toBeNull();
+  });
+
+  it('is not applicable when every filler inside the buff sat in a suspending state', () => {
+    const suspendedThroughout: FillerInBuffCondition = {
+      ...wrathInSolar,
+      except_buff_spell_ids: [SHADOW_DANCE], except_buff_spell_names: ['Celestial Alignment'],
+    };
+    const buffs = [...solar, ...buffWindow(SHADOW_DANCE, SOLAR_START_S, SOLAR_END_S)];
+    const ctx = ruleCtx([cast(WRATH, 12), cast(STARFIRE, 16)], { buffs });
+    expect(ruleApplicable(suspendedThroughout, ctx)).toBe(false);
+    expect(measureRule(suspendedThroughout, ctx)).toBeNull();
+  });
+
+  it('measures the share the pull ran, and nothing when it never filled inside the buff', () => {
+    const ctx = ruleCtx([cast(WRATH, 12), cast(WRATH, 14), cast(STARFIRE, 16), cast(STARFIRE, 18)], { buffs: solar });
+    expect(measureRule(wrathInSolar, ctx)).toBe(0.5);
+    expect(measureRule(wrathInSolar, ruleCtx([], { buffs: solar }))).toBeNull();
+  });
+
+  it('forgives the band below the field share', () => {
+    const BAND = 0.2;
+    const ctx = ruleCtx([cast(WRATH, 12), cast(WRATH, 14), cast(WRATH, 16), cast(STARFIRE, 18)], { buffs: solar });
+    expect(evaluateFillerInBuff(wrathInSolar, ctx, thr(FIELD_WRATH_SHARE, BAND), 'warning')).toBeNull();
+    expect(evaluateFillerInBuff(wrathInSolar, ctx, thr(FIELD_WRATH_SHARE), 'warning')).not.toBeNull();
+  });
+
+  it('labels the rule as "<filler> in <buff>"', () => {
+    expect(ruleLabel(wrathInSolar)).toBe('Wrath in Eclipse (Solar)');
+  });
+});
+
+describe('evaluateSpendAtStacks', () => {
+  // What the top parses hold before spending, supplied as a measured threshold.
+  const FIELD_STACKS = 8;
+  const spendAtStacks: SpendAtStacksCondition = {
+    kind: 'spend_at_stacks',
+    spell_id: LIGHTNING_BOLT, spell_name: 'Lightning Bolt',
+    buff_spell_id: MAELSTROM_WEAPON, buff_spell_name: 'Maelstrom Weapon',
+    bound: 'min',
+  };
+  // One stack lands each second from t=1.
+  const climbing = [applyBuff(MAELSTROM_WEAPON, 1), ...Array.from({ length: 9 }, (_, i) => applyBuffStack(MAELSTROM_WEAPON, i + 2, i + 2))];
+  // The count read is the one in force GOING INTO the cast, so a cast one second after the Nth stack holds N.
+  const holding = (stacks: number) => stacks + 1;
+
+  it('flags a spender pressed below the count the field waits for', () => {
+    const ctx = ruleCtx([cast(LIGHTNING_BOLT, holding(3))], { buffs: climbing });
+    expect(evaluateSpendAtStacks(spendAtStacks, ctx, thr(FIELD_STACKS), 'warning')?.measured)
+      .toEqual({ value: '1 / 1', unit: 'cast(s)' });
+  });
+
+  it('passes a spender pressed at the field count, and flags one a stack below it', () => {
+    const onCount = ruleCtx([cast(LIGHTNING_BOLT, holding(FIELD_STACKS))], { buffs: climbing });
+    const underIt = ruleCtx([cast(LIGHTNING_BOLT, holding(FIELD_STACKS - 1))], { buffs: climbing });
+    expect(evaluateSpendAtStacks(spendAtStacks, onCount, thr(FIELD_STACKS), 'warning')).toBeNull();
+    expect(evaluateSpendAtStacks(spendAtStacks, underIt, thr(FIELD_STACKS), 'warning')).not.toBeNull();
+  });
+
+  it('reads the count going into the cast, since a spend and the cast that spends it share one timestamp', () => {
+    const SPEND_AT_S = 6, STACKS_HELD = SPEND_AT_S - 1;
+    const buffs = [
+      applyBuff(MAELSTROM_WEAPON, 1),
+      ...Array.from({ length: STACKS_HELD - 1 }, (_, i) => applyBuffStack(MAELSTROM_WEAPON, i + 2, i + 2)),
+      removeBuff(MAELSTROM_WEAPON, SPEND_AT_S),
+    ];
+    const ctx = ruleCtx([cast(LIGHTNING_BOLT, SPEND_AT_S)], { buffs });
+    // Reading the post-consumption value would see 0 here and flag every spend in the log.
+    expect(measureRule(spendAtStacks, ctx)).toBe(STACKS_HELD);
+  });
+
+  it('inverts for bound "max", flagging a generator pressed while the buff is nearly capped', () => {
+    const generateAtCap: SpendAtStacksCondition = { ...spendAtStacks, bound: 'max' };
+    // The field generates at 3; this cast holds 9.
+    const FIELD_GENERATES_AT = 3;
+    const ctx = ruleCtx([cast(LIGHTNING_BOLT, holding(9))], { buffs: climbing });
+    expect(evaluateSpendAtStacks(generateAtCap, ctx, thr(FIELD_GENERATES_AT), 'warning')?.message)
+      .toContain('overcapping');
+    expect(evaluateSpendAtStacks(spendAtStacks, ctx, thr(FIELD_GENERATES_AT), 'warning')).toBeNull();
+  });
+
+  it('drops casts made in a state that suspends the rule', () => {
+    const suspended: SpendAtStacksCondition = {
+      ...spendAtStacks, except_buff_spell_ids: [SHADOW_DANCE], except_buff_spell_names: ['Ascendance'],
+    };
+    const buffs = [...climbing, ...buffWindow(SHADOW_DANCE, 3, 6)];
+    const ctx = ruleCtx([cast(LIGHTNING_BOLT, holding(3))], { buffs });
+    expect(evaluateSpendAtStacks(suspended, ctx, thr(FIELD_STACKS), 'warning')).toBeNull();
+    expect(evaluateSpendAtStacks(spendAtStacks, ctx, thr(FIELD_STACKS), 'warning')).not.toBeNull();
+  });
+
+  it('is not applicable on a build where the buff never appeared', () => {
+    expect(ruleApplicable(spendAtStacks, ruleCtx([cast(LIGHTNING_BOLT, 4)]))).toBe(false);
+  });
+
+  it('benches the cheapest spend the pull allowed, not its typical one', () => {
+    const ctx = ruleCtx([cast(LIGHTNING_BOLT, holding(3)), cast(LIGHTNING_BOLT, holding(9))], { buffs: climbing });
+    // A median would bench 6 here and put the parse's own 3-stack cast on the wrong side of the bar.
+    expect(measureRule(spendAtStacks, ctx)).toBe(3);
+    expect(measureRule({ ...spendAtStacks, bound: 'max' }, ctx)).toBe(9);
+    expect(measureRule(spendAtStacks, ruleCtx([], { buffs: climbing }))).toBeNull();
+  });
+
+  it('labels the rule as "<spender> at <buff>"', () => {
+    expect(ruleLabel(spendAtStacks)).toBe('Lightning Bolt at Maelstrom Weapon');
+  });
+});
+
+describe('evaluateAuraClipped', () => {
+  // Where the field refreshes: it lets the dot run this long before re-applying.
+  const FIELD_ELAPSED_S = 12;
+  const moonfireClipped: AuraClippedCondition = {
+    kind: 'aura_clipped',
+    aura_spell_id: MOONFIRE_DOT, aura_spell_name: 'Moonfire',
+    cast_spell_id: MOONFIRE, cast_spell_name: 'Moonfire', on: 'target',
+  };
+  const APPLY_AT_S = 20, CLIPPED_ELAPSED_S = 4;
+  // The dot goes up, then is re-applied `elapsed` seconds later.
+  const reapplied = (elapsed: number) => [applyDebuff(MOONFIRE_DOT, APPLY_AT_S), refreshDebuff(MOONFIRE_DOT, APPLY_AT_S + elapsed)];
+
+  it('flags a refresh the player cast well before the field would have', () => {
+    const ctx = ruleCtx([cast(MOONFIRE, APPLY_AT_S + CLIPPED_ELAPSED_S)], { debuffs: reapplied(CLIPPED_ELAPSED_S) });
+    expect(evaluateAuraClipped(moonfireClipped, ctx, thr(FIELD_ELAPSED_S), 'warning')?.measured)
+      .toEqual({ value: '1 / 1', unit: 'refresh(es)' });
+  });
+
+  it('accepts a refresh exactly at the field bar but not one a second inside it', () => {
+    const at = (elapsed: number) =>
+      ruleCtx([cast(MOONFIRE, APPLY_AT_S + elapsed)], { debuffs: reapplied(elapsed) });
+    expect(evaluateAuraClipped(moonfireClipped, at(FIELD_ELAPSED_S), thr(FIELD_ELAPSED_S), 'warning')).toBeNull();
+    expect(evaluateAuraClipped(moonfireClipped, at(FIELD_ELAPSED_S - 1), thr(FIELD_ELAPSED_S), 'warning')).not.toBeNull();
+  });
+
+  it('ignores a refresh no cast produced, since most refreshes in a log are procs', () => {
+    const ctx = ruleCtx([], { debuffs: reapplied(CLIPPED_ELAPSED_S) });
+    expect(evaluateAuraClipped(moonfireClipped, ctx, thr(FIELD_ELAPSED_S), 'warning')).toBeNull();
+    expect(ruleApplicable(moonfireClipped, ctx)).toBe(false);
+  });
+
+  it('ignores a cast that came after the refresh, which cannot have caused it', () => {
+    const LATER_S = 0.1;
+    const ctx = ruleCtx([cast(MOONFIRE, APPLY_AT_S + CLIPPED_ELAPSED_S + LATER_S)], { debuffs: reapplied(CLIPPED_ELAPSED_S) });
+    expect(ruleApplicable(moonfireClipped, ctx)).toBe(false);
+  });
+
+  it('drops a refresh made in a state that suspends the rule', () => {
+    const suspended: AuraClippedCondition = {
+      ...moonfireClipped, except_buff_spell_ids: [SHADOW_DANCE], except_buff_spell_names: ['Celestial Alignment'],
+    };
+    const ctx = ruleCtx([cast(MOONFIRE, APPLY_AT_S + CLIPPED_ELAPSED_S)], {
+      debuffs: reapplied(CLIPPED_ELAPSED_S),
+      buffs: buffWindow(SHADOW_DANCE, APPLY_AT_S, APPLY_AT_S + 10),
+    });
+    expect(ruleApplicable(suspended, ctx)).toBe(false);
+    expect(ruleApplicable(moonfireClipped, ctx)).toBe(true);
+  });
+
+  it('keeps each enemy on its own clock, so a second target is not measured against the first', () => {
+    const OTHER_ENEMY = 77, SECOND_APPLY_S = 30;
+    const debuffs = [
+      applyDebuff(MOONFIRE_DOT, APPLY_AT_S),
+      applyDebuff(MOONFIRE_DOT, SECOND_APPLY_S, { target: OTHER_ENEMY }),
+      refreshDebuff(MOONFIRE_DOT, SECOND_APPLY_S + CLIPPED_ELAPSED_S, { target: OTHER_ENEMY }),
+    ];
+    const ctx = ruleCtx([cast(MOONFIRE, SECOND_APPLY_S + CLIPPED_ELAPSED_S)], { debuffs });
+    // Its own clock reads 4s; measured against the first enemy's application it would read 14s.
+    expect(measureRule(moonfireClipped, ctx)).toBe(CLIPPED_ELAPSED_S);
+  });
+
+  it('benches the earliest the pull re-applied, and nothing when it never did', () => {
+    const LATE_ELAPSED_S = 10;
+    const debuffs = [
+      ...reapplied(CLIPPED_ELAPSED_S),
+      refreshDebuff(MOONFIRE_DOT, APPLY_AT_S + CLIPPED_ELAPSED_S + LATE_ELAPSED_S),
+    ];
+    const ctx = ruleCtx([
+      cast(MOONFIRE, APPLY_AT_S + CLIPPED_ELAPSED_S), cast(MOONFIRE, APPLY_AT_S + CLIPPED_ELAPSED_S + LATE_ELAPSED_S),
+    ], { debuffs });
+    expect(measureRule(moonfireClipped, ctx)).toBe(CLIPPED_ELAPSED_S);
+    expect(measureRule(moonfireClipped, ruleCtx([]))).toBeNull();
+  });
+
+  it('labels the rule as "<aura> clipped"', () => {
+    expect(ruleLabel(moonfireClipped)).toBe('Moonfire clipped');
+  });
+});
+
+describe('evaluateFillerBelowHealth', () => {
+  const EXECUTE_PCT = 20;
+  // What the top parses run: nearly every filler below the threshold is the execute ability.
+  const FIELD_EXECUTE_SHARE = 0.95;
+  const executeBelow: FillerBelowHealthCondition = {
+    kind: 'filler_below_health',
+    spell_id: EXECUTE, spell_name: 'Execute',
+    alternative_spell_ids: [SLAM], alternative_spell_names: ['Slam'],
+    health_pct: EXECUTE_PCT,
+  };
+  // Health rides on damage rows, so each cast reads the last hit on the enemy it named.
+  const hitAt = (atS: number, healthPct: number, target?: number) =>
+    damage(SHADOW_BLADES_DAMAGE, atS, 1, { targetHealthPct: healthPct, ...(target !== undefined && { target }) });
+  const EXECUTE_RANGE_PCT = 15, HEALTHY_PCT = 80;
+  const HIT_S = 100;
+
+  it('flags a player still pressing the wrong filler under the threshold', () => {
+    const ctx = ruleCtx([cast(EXECUTE, HIT_S + 0.5), cast(SLAM, HIT_S + 1), cast(SLAM, HIT_S + 1.5)],
+      { damage: [hitAt(HIT_S, EXECUTE_RANGE_PCT)] });
+    expect(evaluateFillerBelowHealth(executeBelow, ctx, thr(FIELD_EXECUTE_SHARE), 'warning')?.measured)
+      .toEqual({ value: '33 / 95', unit: '% of fillers' });
+  });
+
+  it('passes a player converting every filler under the threshold', () => {
+    const ctx = ruleCtx([cast(EXECUTE, HIT_S + 0.5), cast(EXECUTE, HIT_S + 1)], { damage: [hitAt(HIT_S, EXECUTE_RANGE_PCT)] });
+    expect(evaluateFillerBelowHealth(executeBelow, ctx, thr(FIELD_EXECUTE_SHARE), 'warning')).toBeNull();
+  });
+
+  it('ignores fillers cast above the threshold, which the rule says nothing about', () => {
+    const ctx = ruleCtx([cast(SLAM, HIT_S + 0.5)], { damage: [hitAt(HIT_S, HEALTHY_PCT)] });
+    expect(evaluateFillerBelowHealth(executeBelow, ctx, thr(FIELD_EXECUTE_SHARE), 'warning')).toBeNull();
+    expect(ruleApplicable(executeBelow, ctx)).toBe(false);
+  });
+
+  it('reads the health of the enemy the cast named, not whichever enemy was hit last', () => {
+    const BOSS = 1, DYING_ADD = 2;
+    // The add is at 15% and the boss at 80%; a Slam into the boss must not count as an execute-range filler.
+    const ctx = ruleCtx([cast(SLAM, HIT_S + 1, { target: BOSS })], {
+      damage: [hitAt(HIT_S, HEALTHY_PCT, BOSS), hitAt(HIT_S + 0.5, EXECUTE_RANGE_PCT, DYING_ADD)],
+    });
+    expect(ruleApplicable(executeBelow, ctx)).toBe(false);
+  });
+
+  it('is not applicable on a pull with no health reading to place the casts', () => {
+    expect(ruleApplicable(executeBelow, ruleCtx([cast(SLAM, HIT_S)]))).toBe(false);
+  });
+
+  it('reads the newest snapshot at or before the cast, so a stale row does not outrank a fresh one', () => {
+    const ctx = ruleCtx([cast(SLAM, HIT_S + 1)],
+      { damage: [hitAt(HIT_S + 0.5, EXECUTE_RANGE_PCT), hitAt(HIT_S, HEALTHY_PCT)] });
+    expect(ruleApplicable(executeBelow, ctx)).toBe(true);
+  });
+
+  it('ignores a snapshot older than the sample window, since health falls fast in execute range', () => {
+    const STALE_S = 3;
+    const ctx = ruleCtx([cast(SLAM, HIT_S + STALE_S)], { damage: [hitAt(HIT_S, EXECUTE_RANGE_PCT)] });
+    expect(ruleApplicable(executeBelow, ctx)).toBe(false);
+  });
+
+  it('measures the share the pull converted, and nothing when it never reached the threshold', () => {
+    const ctx = ruleCtx([cast(EXECUTE, HIT_S + 0.5), cast(SLAM, HIT_S + 1)], { damage: [hitAt(HIT_S, EXECUTE_RANGE_PCT)] });
+    expect(measureRule(executeBelow, ctx)).toBe(0.5);
+    expect(measureRule(executeBelow, ruleCtx([cast(SLAM, HIT_S + 0.5)], { damage: [hitAt(HIT_S, HEALTHY_PCT)] }))).toBeNull();
+  });
+
+  it('labels the rule as "<spell> under <pct>% health"', () => {
+    expect(ruleLabel(executeBelow)).toBe('Execute under 20% health');
   });
 });
 

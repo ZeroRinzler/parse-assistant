@@ -78,6 +78,16 @@ The APL is already plain text; save it as-is. Its conditions (e.g.
 charge gates) are the raw material for `major_cooldowns`, `align_with_bloodlust`, `opener_priority`, and
 the rule conditions - the subagent needs them verbatim.
 
+**The bottom of each action list is the filler, and it is the spec's most-pressed decision.** SimC splits
+the rotation into sub-lists per hero tree and target count (`actions.ec_st`, `actions.kotg_st`,
+`actions.aoe`), and each one ends in a **terminal unconditioned action** - the button pressed whenever
+nothing above it is available. The lines just above it are the gates that swap in a different filler
+(`starfire,if=action.starfire.execute_time<buff.eclipse.remains` then a bare `wrath`). Together they are
+the `filler_in_buff` rules, and the states in those gates - the buff that decides the choice, and the
+burst window or proc that suspends it - are ability ids the table must carry, so add every buff named in
+a filler gate to the 2d candidate list. Never trim these lines when saving the file: a rulebook that
+describes a spec's cooldowns but not which button fills between them has missed the rotation.
+
 ### 2b. `<spec>.guide.txt` - the rotation guide, stripped to text
 
 What the file must contain is a current-patch rotation page reduced to a few KB of text with **every
@@ -144,7 +154,14 @@ keeps its old id alive alongside the new one (both Crimson Tempest ids return "C
 talent id is not what shows up in a log. Say in the note which one each row is - cast, aura, talent,
 retired - and **in how many of the sampled top parses it appeared**. Tell the subagent which kind each
 field wants: cast ids for `major_cooldowns`, `defensives` and cast-based rules, aura ids for every
-`cast_outside_buff`, `aura_uptime_below` and `proc_wasted`.
+`cast_outside_buff`, `aura_uptime_below`, `proc_wasted` and `filler_in_buff`.
+
+**A guide's inline id for a state buff is frequently not the id the logs carry**, and the name gate cannot
+tell: Balance Druid's guide writes `Eclipse (Solar)(spell=326053)`, `ability(id:326053)` answers
+"Eclipse (Solar)", and every log in the tier records the buff as **48517**. A rule built on the advertised
+id matches nothing and silently reads as followed on every pull. So an aura id only earns its row by
+appearing in a parse's `Buffs` or `Debuffs` table; when a guide names one the tables do not, keep the
+observed id and record the guide's in the note.
 
 Steps 1 and 3 both need one **rankable encounter id**, so resolve it once per session. Query
 `worldData{expansions{id name zones{id name encounters{id name}}}}` and read the current expansion's
@@ -254,19 +271,32 @@ all the files**, not a command per file per check:
   (`pip install jsonschema` first if the import fails).
 - dash scan: no U+2014 / U+2013 / U+2212 anywhere in the file.
 - **id cross-check**: walk every `spell_id` in `major_cooldowns`, `defensives` and each condition's id
-  fields (including the `spell_ids` / `spend_spell_ids` arrays) and assert the id is in that spec's table
+  fields (including the `spell_ids` / `spend_spell_ids` / `alternative_spell_ids` / `except_buff_spell_ids`
+  arrays) and assert the id is in that spec's table
   **and** that the name written beside it matches the table's name for that id. This catches a
   transposed pair that the schema cannot see, since both fields are individually well-typed. Compare with
   any trailing parenthetical stripped: WCL suffixes multi-part spells (`Stasis (Store)`) where the
   in-game name, which is what the player is shown, has no suffix.
-- **no magnitudes in conditions**: assert no numeric value in any condition outside the id and
-  `resource_type` fields, and no `rules[].description` over 60 characters.
+- **no magnitudes in conditions**: assert no numeric value in any condition outside the id fields,
+  `resource_type` and `health_pct`, and no `rules[].description` over 60 characters. Those two are
+  game constants read from a tooltip, not field behaviour the encounter has to measure.
 - unresolved-name follow-up: for any ability name a subagent reported as missing from its table, find the
   id (Wowhead spell search), verify it with a WCL `ability(id:...)` query, and patch it in.
 
 Then read the file. The mechanical checks pass on a rulebook whose coaching copy is wrong, so spot-check
 that each number in a `usage_rule` or `action` traces to an APL line or a guide sentence, and run the
-top-parse sanity check from the brief over the rules. When a rule fails it, send the defect back to
+top-parse sanity check from the brief over the rules.
+
+**Replay every `filler_in_buff` rule against the sampled parses before keeping it**, since it is the one
+kind whose defects are invisible on the page: for each parse count the coached filler and its
+alternatives cast inside the state and outside every `except_buff_spell_ids` window, take the share, then
+bench it the way the engine does (median, band `max(stddev, 0.1 * median)`) and check no parse falls under
+`median - band`. A parse that fails is telling you a state is missing from the exclusions - read that
+parse's violating casts, find the buff they all sit under, and add it. A rule measurable on under half the
+parses is not a defect: the encounter declines to bench it and the runtime drops it, which is the right
+outcome for a hero-talent build this field does not play.
+
+When a rule fails these, send the defect back to
 that spec's subagent with `SendMessage` - it still holds its context and can fix one rule without
 re-authoring the file, which is far cheaper than a cold respawn. Reserve a fresh subagent for output that
 misses the bar broadly.

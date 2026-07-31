@@ -291,8 +291,10 @@ export class RotationTransformService implements DataSource<RotationBench> {
         rulesNeed(rules, 'enemyAuras')
           ? this.wclApi.getAllEvents(ranking.report_code, fight.id, 'Debuffs', fight.startTime, fight.endTime, undefined, false, 'Enemies')
           : Promise.resolve([]),
+        // Target health rides on the damage rows, and only the resource-bearing form carries it.
         rulesNeed(rules, 'damage')
-          ? this.wclApi.getAllEvents(ranking.report_code, fight.id, 'DamageDone', fight.startTime, fight.endTime, player.id)
+          ? this.wclApi.getAllEvents(ranking.report_code, fight.id, 'DamageDone', fight.startTime, fight.endTime, player.id,
+            rulesNeed(rules, 'targetHealth'))
           : Promise.resolve([]),
         rulesNeed(rules, 'deaths')
           ? this.wclApi.getAllEvents(ranking.report_code, fight.id, 'Deaths', fight.startTime, fight.endTime)

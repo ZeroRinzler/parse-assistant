@@ -40,6 +40,23 @@ export const BLACK_POWDER = 319175;
 // A bleed the rogue maintains on the target, for enemy-debuff fixtures.
 export const RUPTURE = 1943;
 
+// Balance Druid, whose two fillers swap on an Eclipse state - the filler-choice fixtures.
+export const WRATH = 190984;
+export const STARFIRE = 194153;
+export const ECLIPSE_SOLAR = 48517;
+
+// Enhancement Shaman, whose spender waits on stacks of a buff that acts as a resource.
+export const LIGHTNING_BOLT = 188196;
+export const MAELSTROM_WEAPON = 344179;
+
+// Moonfire, the clip fixture: the cast id and the debuff it applies are different ids sharing one name.
+export const MOONFIRE = 8921;
+export const MOONFIRE_DOT = 164812;
+
+// Arms Warrior, whose filler is replaced below the execute threshold.
+export const EXECUTE = 5308;
+export const SLAM = 1464;
+
 // Real WCL quirk: an ability's damage event carries a different id than its cast
 // event, but both share the same name. Shadow Blades is cast as 121471 yet its
 // damage rows show up as 279043 - the name is the only bridge between the two.
