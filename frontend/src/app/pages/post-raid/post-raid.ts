@@ -374,7 +374,7 @@ export class PostRaidComponent {
     this.liveCapture.clear();
 
     try {
-      this.loadingMsg.set('Fetching report from WCL…');
+      this.loadingMsg.set('Fetching report from Warcraft Logs…');
       const report = await this.wclApi.getReport(code);
       if (seq !== this._loadSeq) return;
       this._applyReport(report);
@@ -477,7 +477,7 @@ export class PostRaidComponent {
     if (!fightId || !playerId) return;
 
     this.loadingAnalysis.set(true);
-    this.loadingMsg.set('Resolving spec…');
+    this.loadingMsg.set('Fetching player data from Warcraft Logs…');
     try {
       const groups = await this.wclApi.getPlayerDetails(this.reportCode(), fightId);
       this.playerDetailGroups.set(groups);
@@ -493,7 +493,7 @@ export class PostRaidComponent {
       this.burstBusy.set(true);
       this.defensiveBusy.set(true);
       this.gearBusy.set(true);
-      this.loadingMsg.set('Analyzing your log…');
+      this.loadingMsg.set('Fetching analysis data from Warcraft Logs…');
 
       const fight = this.fights().find(f => f.id === fightId);
       if (fight) {
