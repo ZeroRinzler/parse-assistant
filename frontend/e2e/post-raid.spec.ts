@@ -66,10 +66,8 @@ test('rotation rules count the casts that broke each rulebook rule', async () =>
   await shows(rotationRules, 'Eviscerate at 6 or more combo points');
   await shows(rotationRules, 'rotation');
   await shows(rotationRules, '7 / 87');
-  await shows(rotationRules, 'Black Powder from 2 targets up');
-  await shows(rotationRules, 'aoe');
-  await shows(rotationRules, '1 / 10');
   await shows(rotationRules, 'Backstab only below 2 targets');
+  await shows(rotationRules, 'aoe');
   await shows(rotationRules, '25 / 55');
   await shows(rotationRules, 'Hold Shadow Dance and Secret Technique for Blades');
   await shows(rotationRules, 'cd hold');
@@ -79,7 +77,7 @@ test('rotation rules count the casts that broke each rulebook rule', async () =>
 test('a broken rule renders the rulebook remedy, and a followed one only its name', async () => {
   const rotationRules = page.locator('wl-finding-table').filter({ hasText: 'Rotation rules vs top parses.' });
   // The Fix column is the rule's authored action, carried through the bench file untouched.
-  await shows(rotationRules, 'Swap your finisher to Black Powder from 2 targets up. At exactly 2 targets Eviscerate is equally valid, and Black Powder clearly wins from 3 targets.');
+  await shows(rotationRules, 'Backstab is your filler on a single target only. From 2 targets up, build with Shuriken Storm instead, and with Shadowstrike while Shadow Dance is up.');
   // A rule the pull kept is a chip under On plan, named exactly as the violated rows name theirs.
   await shows(rotationRules, 'On plan');
   await shows(rotationRules, 'Secret Technique inside Shadow Dance');
@@ -94,8 +92,8 @@ test('offensives flag the lost cooldown casts and the holds', async () => {
   await shows(offensives, '4 / 5');
   await shows(offensives, 'Vanish');
   await shows(offensives, '3:19');
-  await shows(offensives, '+158s');
-  await shows(offensives, 'top 00:41');
+  await shows(offensives, '+167s');
+  await shows(offensives, 'top 00:32');
 });
 
 test('burst windows compare the player damage against the top-parse windows', async () => {
@@ -103,27 +101,26 @@ test('burst windows compare the player damage against the top-parse windows', as
   await shows(burstWindows, 'Damage in each burst window vs top parses.');
   // The card opens on the player's worst window.
   await shows(burstWindows, 'window');
-  await shows(burstWindows, '6:38 - 6:43');
+  await shows(burstWindows, '3:22 - 3:26');
   await shows(burstWindows, 'burst');
-  await shows(burstWindows, '7K');
+  await shows(burstWindows, '2K');
   await shows(burstWindows, '-100%');
-  await showsAbility(burstWindows, 'Secret Technique', '462K');
+  await showsAbility(burstWindows, 'Secret Technique', '494K');
   await shows(burstWindows, 'missed');
   await shows(burstWindows, '0 / 1');
 });
 
-test('defensives flag the held cooldown and benchmark the damage taken', async () => {
+test('defensives stay on plan and benchmark the damage taken', async () => {
   const defensives = page.locator('wl-defensive');
   await shows(defensives, 'Defensive cooldowns vs top parses.');
+  await shows(defensives, 'On plan');
   await shows(defensives, 'Feint');
-  await shows(defensives, '3:37');
-  await shows(defensives, '121s');
-  await shows(defensives, 'avg 33s');
+  await shows(defensives, 'Crimson Vial');
   await shows(defensives, 'Cloak of Shadows');
   await shows(defensives, 'Damage taken in top-parse defensive windows vs top parses.');
   await shows(defensives, '0:58 - 1:04');
   await shows(defensives, '552K');
-  await shows(defensives, '+133%');
+  await shows(defensives, '+175%');
 });
 
 test('gear compares the talents, trinkets, and enchants against the consensus', async () => {
