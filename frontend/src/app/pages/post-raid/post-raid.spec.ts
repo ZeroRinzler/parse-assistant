@@ -11,7 +11,7 @@ import { MapFeatureService } from './map/map.service';
 import { LiveCaptureFeatureService } from './live/live-capture.service';
 import {
   PostRaidComponent,
-  specOf, extractCode, isValidReportCode, buildFights, buildPlayers, visiblePlayersOf, pickLivePlayerId,
+  specOf, extractCode, extractFightId, isValidReportCode, buildFights, buildPlayers, visiblePlayersOf, pickLivePlayerId,
   livePollActionOf,
 } from './post-raid';
 
@@ -29,6 +29,25 @@ describe('extractCode', () => {
 
   it('passes a bare code through, trimmed', () => {
     expect(extractCode('  grBQ3vTHXAtPa4JK  ')).toBe('grBQ3vTHXAtPa4JK');
+  });
+});
+
+describe('extractFightId', () => {
+  it('pulls the fight id out of a WCL report URL fragment', () => {
+    expect(extractFightId('https://www.warcraftlogs.com/reports/grBQ3vTHXAtPa4JK#fight=42')).toBe(42);
+  });
+
+  it('reads the fight id when other parameters follow it', () => {
+    expect(extractFightId('https://www.warcraftlogs.com/reports/grBQ3vTHXAtPa4JK#fight=42&type=damage-done')).toBe(42);
+  });
+
+  it('returns null for the `last` keyword so the caller falls back to the latest pull', () => {
+    expect(extractFightId('https://www.warcraftlogs.com/reports/grBQ3vTHXAtPa4JK#fight=last')).toBeNull();
+  });
+
+  it('returns null when the URL names no fight', () => {
+    expect(extractFightId('https://www.warcraftlogs.com/reports/grBQ3vTHXAtPa4JK')).toBeNull();
+    expect(extractFightId('grBQ3vTHXAtPa4JK')).toBeNull();
   });
 });
 
@@ -290,6 +309,77 @@ describe('PostRaidComponent sticky player name', () => {
     await (component['onPlayerChange'] as () => Promise<void>)();
 
     expect(store.loadPostRaid()?.playerName).toBe(PICKED_PLAYER.name);
+  });
+});
+
+describe('PostRaidComponent fight selection from URL', () => {
+  const REPORT_CODE = 'grBQ3vTHXAtPa4JK';
+  const EARLIER_FIGHT_ID = 10;
+  const LATEST_FIGHT_ID = 12;
+  const PLAYER = { id: 1, name: 'Anya', spec: 'SubtletyRogue' };
+
+  const groups: PlayerDetailGroups = {
+    dps: [{ id: PLAYER.id, type: 'Rogue', name: PLAYER.name, specs: [{ spec: 'Subtlety' }] }],
+  };
+
+  function report(): WclReport {
+    return {
+      title: 'Test', startTime: 0,
+      fights: [
+        fight({ id: EARLIER_FIGHT_ID, name: 'Boss', encounterID: 100, startTime: 0, endTime: 10_000, friendlyPlayers: [PLAYER.id] }),
+        fight({ id: LATEST_FIGHT_ID, name: 'Boss', encounterID: 100, startTime: 20_000, endTime: 30_000, friendlyPlayers: [PLAYER.id] }),
+      ],
+      masterData: { actors: [{ id: PLAYER.id, name: PLAYER.name, subType: PLAYER.spec, server: '' }], enemies: [], abilities: [] },
+    };
+  }
+
+  const noop = (): void => undefined;
+
+  function mount(): PostRaidComponent & Record<string, unknown> {
+    const wclApi = {
+      getReport: () => Promise.resolve(report()),
+      getReportFights: () => Promise.resolve(report().fights),
+      getPlayerDetails: () => Promise.resolve(groups),
+    } as unknown as WclApiService;
+    const mapFeature = { clear: noop, prepare: () => Promise.resolve() } as unknown as MapFeatureService;
+    const liveCapture = { liveEnabled: signal(false), clear: noop, prepare: noop, setStatus: noop } as unknown as LiveCaptureFeatureService;
+    const liveSync = { pollTriggers: () => EMPTY } as unknown as LiveReportSyncService;
+    TestBed.configureTestingModule({
+      providers: [
+        provideZonelessChangeDetection(),
+        PostRaidComponent,
+        { provide: WclApiService, useValue: wclApi },
+        { provide: MapFeatureService, useValue: mapFeature },
+        { provide: LiveCaptureFeatureService, useValue: liveCapture },
+        { provide: LiveReportSyncService, useValue: liveSync },
+      ],
+    });
+    return TestBed.inject(PostRaidComponent) as PostRaidComponent & Record<string, unknown>;
+  }
+
+  async function loadReport(component: Record<string, unknown>, input: string): Promise<void> {
+    (component['reportControl'] as FormControl<string>).setValue(input);
+    await (component['loadReport'] as () => Promise<void>)();
+  }
+
+  beforeEach(() => localStorage.clear());
+
+  it('selects the fight named in the pasted URL instead of the latest pull', async () => {
+    const component = mount();
+    await loadReport(component, `https://www.warcraftlogs.com/reports/${REPORT_CODE}#fight=${EARLIER_FIGHT_ID}`);
+    expect((component['selectedFightId'] as () => number | null)()).toBe(EARLIER_FIGHT_ID);
+  });
+
+  it('falls back to the latest pull when the URL names no fight', async () => {
+    const component = mount();
+    await loadReport(component, `https://www.warcraftlogs.com/reports/${REPORT_CODE}`);
+    expect((component['selectedFightId'] as () => number | null)()).toBe(LATEST_FIGHT_ID);
+  });
+
+  it('falls back to the latest pull when the URL names a fight not in the report', async () => {
+    const component = mount();
+    await loadReport(component, `https://www.warcraftlogs.com/reports/${REPORT_CODE}#fight=999`);
+    expect((component['selectedFightId'] as () => number | null)()).toBe(LATEST_FIGHT_ID);
   });
 });
 

@@ -46,6 +46,13 @@ export function extractCode(url: string): string {
   return m ? m[1] : url.trim();
 }
 
+/** Pull a specific fight id out of a WCL report URL's `fight=` parameter; null for `last` or non-numeric. */
+export function extractFightId(url: string): number | null {
+  const m = url.match(/[#?&]fight=(\d+)/);
+  const id = m ? Number(m[1]) : NaN;
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
 /**
  * A WCL report code is exactly 16 alphanumeric characters. Validating the extracted
  * code before any network call keeps junk input (or a crawled `?report=garbage` link)
@@ -354,7 +361,8 @@ export class PostRaidComponent {
   protected async loadReport(): Promise<void> {
     this.loadError.set(null);
     this.notice.set('');
-    const code = extractCode(this.reportControl.value.trim());
+    const rawInput = this.reportControl.value;
+    const code = extractCode(rawInput.trim());
     // Guard before any network call: an invalid code never reaches WCL. The Analyze button
     // is already disabled while invalid; this also covers the Enter-key path.
     if (!isValidReportCode(code)) {
@@ -379,8 +387,10 @@ export class PostRaidComponent {
       if (seq !== this._loadSeq) return;
       this._applyReport(report);
 
-      const lastFight = this.fights()[this.fights().length - 1];
-      this.fightControl.setValue(lastFight?.id ?? null);
+      const requestedId = extractFightId(rawInput);
+      const requestedFight = requestedId != null ? this.fights().find(f => f.id === requestedId) : undefined;
+      const targetFight = requestedFight ?? this.fights()[this.fights().length - 1];
+      this.fightControl.setValue(targetFight?.id ?? null);
       // Without this a zero-pull log is a successful load that looks like nothing happened.
       if (!this.fights().length) this.notice.set('No boss pulls found in this report.');
       this._applyAutoPlayer();
