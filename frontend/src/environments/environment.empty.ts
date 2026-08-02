@@ -17,6 +17,7 @@ import { ROTATION_DATA_SOURCE } from '../app/pages/post-raid/rotation/rotation-d
 import { DEFENSIVE_DATA_SOURCE } from '../app/pages/post-raid/defensive/defensive-data-source';
 import { GEAR_DATA_SOURCE } from '../app/pages/post-raid/gear/gear-data-source';
 import { MAP_DATA_SOURCE } from '../app/pages/post-raid/map/map-data-source';
+import { NORTHERN_SKY_DATA_SOURCE } from '../app/pages/post-raid/northern-sky/northern-sky-data-source';
 
 export const environment = {
   /** Empty resolves `data/specs/` relative to `document.baseURI` (the `data:pull`ed
@@ -35,4 +36,5 @@ export const environmentProviders: Provider[] = [
   provideEmptyDataSource(DEFENSIVE_DATA_SOURCE),
   provideEmptyDataSource(GEAR_DATA_SOURCE),
   provideEmptyDataSource(MAP_DATA_SOURCE),
+  provideEmptyDataSource(NORTHERN_SKY_DATA_SOURCE),
 ];

@@ -25,6 +25,8 @@ import { GEAR_DATA_SOURCE } from '../app/pages/post-raid/gear/gear-data-source';
 import { GearTransformService } from '../app/pages/post-raid/gear/gear-transform.service';
 import { MAP_DATA_SOURCE } from '../app/pages/post-raid/map/map-data-source';
 import { MapTransformService } from '../app/pages/post-raid/map/map-transform.service';
+import { NORTHERN_SKY_DATA_SOURCE } from '../app/pages/post-raid/northern-sky/northern-sky-data-source';
+import { NorthernSkyTransformService } from '../app/pages/post-raid/northern-sky/northern-sky-transform.service';
 
 // Why 3: see RETRY_MAX_ATTEMPTS - unattended runs must ride out longer blips.
 const INGEST_RETRY_MAX_ATTEMPTS = 3;
@@ -44,6 +46,7 @@ export const environmentProviders: (Provider | EnvironmentProviders)[] = [
   provideLiveDataSource(DEFENSIVE_DATA_SOURCE, DefensiveTransformService),
   provideLiveDataSource(GEAR_DATA_SOURCE, GearTransformService),
   provideLiveDataSource(MAP_DATA_SOURCE, MapTransformService),
+  provideLiveDataSource(NORTHERN_SKY_DATA_SOURCE, NorthernSkyTransformService),
   { provide: DATA_FILE_TRANSPORT, useExisting: IngestHttpDataFileTransport },
   { provide: RETRY_MAX_ATTEMPTS, useValue: INGEST_RETRY_MAX_ATTEMPTS },
   provideAppInitializer(() => {

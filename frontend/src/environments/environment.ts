@@ -22,6 +22,7 @@ import { ROTATION_DATA_SOURCE } from '../app/pages/post-raid/rotation/rotation-d
 import { DEFENSIVE_DATA_SOURCE } from '../app/pages/post-raid/defensive/defensive-data-source';
 import { GEAR_DATA_SOURCE } from '../app/pages/post-raid/gear/gear-data-source';
 import { MAP_DATA_SOURCE } from '../app/pages/post-raid/map/map-data-source';
+import { NORTHERN_SKY_DATA_SOURCE } from '../app/pages/post-raid/northern-sky/northern-sky-data-source';
 
 export const environment = {
   /**
@@ -56,4 +57,5 @@ export const environmentProviders: Provider[] = [
   provideFileDataSource(DEFENSIVE_DATA_SOURCE, 'defensive'),
   provideFileDataSource(GEAR_DATA_SOURCE, 'gear'),
   provideFileDataSource(MAP_DATA_SOURCE, 'positions'),
+  provideFileDataSource(NORTHERN_SKY_DATA_SOURCE, 'northern-sky'),
 ];

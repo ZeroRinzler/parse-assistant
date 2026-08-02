@@ -11,7 +11,7 @@ import { EmptyDataSource } from './empty-data-source';
  * (which would 404 to a `missing` result and render the waiting state, masking the
  * misconfiguration as un-ingested data).
  */
-export type SliceDir = 'burst' | 'rotation' | 'defensive' | 'gear' | 'positions';
+export type SliceDir = 'burst' | 'rotation' | 'defensive' | 'gear' | 'positions' | 'northern-sky';
 
 /**
  * Production binding for a per-use-case `*_DATA_SOURCE` token: a `FileDataSource<T>` that

@@ -24,6 +24,7 @@ import { BurstWindowsComponent } from '../post-raid/burst-windows/burst-windows'
 import { GearComponent } from '../post-raid/gear/gear';
 import { MapPanelComponent } from '../post-raid/map/map-panel';
 import { MapFeatureService, MapAnchor } from '../post-raid/map/map.service';
+import { NorthernSkyExportComponent } from '../post-raid/northern-sky/northern-sky-export';
 
 /**
  * Pre-fight page shell. Owns only spec + encounter selection; each feature card reads its own
@@ -38,7 +39,7 @@ import { MapFeatureService, MapAnchor } from '../post-raid/map/map.service';
     LoadingSpinnerComponent, BenchEmptyBannerComponent, LoadStateComponent, ArtIconComponent,
     FormatSpecPipe, ClassIconPipe, SpecIconPipe, BossIconPipe,
     RotationCdPlanComponent, DefensivePlanComponent, BurstWindowsComponent,
-    GearComponent, MapPanelComponent,
+    GearComponent, MapPanelComponent, NorthernSkyExportComponent,
   ],
   // Provided per lazy page so form-field stays out of the initial bundle.
   providers: [{ provide: MAT_FORM_FIELD_DEFAULT_OPTIONS, useValue: { subscriptSizing: 'dynamic' } }],
@@ -79,8 +80,10 @@ export class PreFightComponent implements OnInit {
   protected readonly cdPlanAvailable = signal(true);
   protected readonly defensivePlanAvailable = signal(true);
   protected readonly burstAvailable = signal(true);
+  protected readonly northernSkyAvailable = signal(true);
   protected readonly benchAvailable = computed(() =>
-    this.gearAvailable() || this.cdPlanAvailable() || this.defensivePlanAvailable() || this.burstAvailable());
+    this.gearAvailable() || this.cdPlanAvailable() || this.defensivePlanAvailable()
+    || this.burstAvailable() || this.northernSkyAvailable());
 
   // The burst-window positioning button lights up once the top-parse trails load.
   protected readonly mapReady = this.mapFeature.ready;

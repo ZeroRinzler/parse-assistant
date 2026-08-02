@@ -15,8 +15,17 @@ export interface PreFightSelection {
   spec: string | null;
 }
 
+/**
+ * Persisted Northern Sky export selection. Stored as the set of cooldown spell ids the user has
+ * DESELECTED, so a cooldown that first appears for a new spec/encounter defaults to checked.
+ */
+export interface NorthernSkyExportSelection {
+  excludedSpellIds: number[];
+}
+
 const POST_RAID_KEY = 'wl.sel.postRaid';
 const PRE_FIGHT_KEY = 'wl.sel.preFight';
+const NORTHERN_SKY_KEY = 'wl.sel.northernSky';
 
 /**
  * Sticky selection persistence. There are no URL query params by design (a deliberate
@@ -41,6 +50,14 @@ export class SelectionStore {
 
   loadPreFight(): PreFightSelection | null {
     return this._load<PreFightSelection>(PRE_FIGHT_KEY, 'SelectionStore.loadPreFight');
+  }
+
+  saveNorthernSky(value: NorthernSkyExportSelection): void {
+    this._save(NORTHERN_SKY_KEY, value, 'SelectionStore.saveNorthernSky');
+  }
+
+  loadNorthernSky(): NorthernSkyExportSelection | null {
+    return this._load<NorthernSkyExportSelection>(NORTHERN_SKY_KEY, 'SelectionStore.loadNorthernSky');
   }
 
   private _save(key: string, value: unknown, context: string): void {

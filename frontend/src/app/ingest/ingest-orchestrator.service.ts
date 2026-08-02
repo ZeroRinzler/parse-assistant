@@ -20,6 +20,7 @@ import { RotationTransformService } from '../pages/post-raid/rotation/rotation-t
 import { DefensiveTransformService } from '../pages/post-raid/defensive/defensive-transform.service';
 import { GearTransformService } from '../pages/post-raid/gear/gear-transform.service';
 import { MapTransformService } from '../pages/post-raid/map/map-transform.service';
+import { NorthernSkyTransformService } from '../pages/post-raid/northern-sky/northern-sky-transform.service';
 import { getEncounters, type CurrentContent } from './wcl-fetchers';
 import { mapClassesToSpecMeta, specWclFromMetas, type SpecWclMap } from './wcl-mappers';
 import { type WclQueryClient, BudgetExceededError } from './wcl-client';
@@ -40,7 +41,7 @@ const POINTS_MARGIN = 500;     // stop cleanly when fewer than this many WCL poi
 const SLICE_CONCURRENCY = 3;
 
 // The skip check reads only `burst`'s source_signature, stamped only when every slice of the encounter produced data.
-const SLICES = ['burst', 'rotation', 'defensive', 'gear'] as const;
+const SLICES = ['burst', 'rotation', 'defensive', 'gear', 'northern-sky'] as const;
 
 /** Published on `globalThis.__INGEST_DONE__` - the headless harness's exit signal. */
 export interface IngestRunSummary {
@@ -99,6 +100,7 @@ export class IngestOrchestratorService {
     defensive: inject(DefensiveTransformService),
     gear: inject(GearTransformService),
     map: inject(MapTransformService),
+    northernSky: inject(NorthernSkyTransformService),
   };
 
   /** Never rejects: the fire-and-forget app initializer must not see an unhandled rejection. */
@@ -313,12 +315,13 @@ export class IngestOrchestratorService {
     const encId = encounter.id;
     const limit = pLimit(SLICE_CONCURRENCY);
 
-    const [burst, rotation, defensive, gear, map] = await Promise.all([
+    const [burst, rotation, defensive, gear, map, northernSky] = await Promise.all([
       limit(() => this.transforms.burst.getBench(spec, encId)),
       limit(() => this.transforms.rotation.getBench(spec, encId)),
       limit(() => this.transforms.defensive.getBench(spec, encId)),
       limit(() => this.transforms.gear.getBench(spec, encId)),
       limit(() => this.transforms.map.getBench(spec, encId)),
+      limit(() => this.transforms.northernSky.getBench(spec, encId)),
     ]);
 
     const inaccessibleCodes = new Set(this.wclTransport.takeInaccessibleCodes());
@@ -335,7 +338,7 @@ export class IngestOrchestratorService {
     const writes: Promise<unknown>[] = [];
     if (burst.ok) {
       const stamped = stampBurstFile(
-        burst.value, signature, INGEST_VERSION, inaccessibleParses, [burst, rotation, defensive, gear, map],
+        burst.value, signature, INGEST_VERSION, inaccessibleParses, [burst, rotation, defensive, gear, map, northernSky],
       );
       writes.push(this.dataFile.writeSlice(spec, encId, 'burst', stamped));
       wroteAny = true;
@@ -355,6 +358,10 @@ export class IngestOrchestratorService {
     if (map.ok) {
       writes.push(this.dataFile.writePositions(spec, encId, stampSignature(map.value, signature, INGEST_VERSION)));
     } else { console.log(skipNote('positions', map.error)); }
+    if (northernSky.ok) {
+      writes.push(this.dataFile.writeSlice(spec, encId, 'northern-sky', stampSignature(northernSky.value, signature, INGEST_VERSION)));
+      wroteAny = true;
+    } else { console.log(skipNote('northern-sky', northernSky.error)); }
 
     await Promise.all(writes);
     return wroteAny;

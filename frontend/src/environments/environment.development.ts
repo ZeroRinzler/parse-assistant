@@ -24,6 +24,8 @@ import { GEAR_DATA_SOURCE } from '../app/pages/post-raid/gear/gear-data-source';
 import { GearTransformService } from '../app/pages/post-raid/gear/gear-transform.service';
 import { MAP_DATA_SOURCE } from '../app/pages/post-raid/map/map-data-source';
 import { MapTransformService } from '../app/pages/post-raid/map/map-transform.service';
+import { NORTHERN_SKY_DATA_SOURCE } from '../app/pages/post-raid/northern-sky/northern-sky-data-source';
+import { NorthernSkyTransformService } from '../app/pages/post-raid/northern-sky/northern-sky-transform.service';
 
 export const environment = {
   /** Empty resolves `data/specs/` relative to `document.baseURI` (per-folder copy);
@@ -42,4 +44,5 @@ export const environmentProviders: Provider[] = [
   provideLiveDataSource(DEFENSIVE_DATA_SOURCE, DefensiveTransformService),
   provideLiveDataSource(GEAR_DATA_SOURCE, GearTransformService),
   provideLiveDataSource(MAP_DATA_SOURCE, MapTransformService),
+  provideLiveDataSource(NORTHERN_SKY_DATA_SOURCE, NorthernSkyTransformService),
 ];
