@@ -61,7 +61,7 @@ test('rotation rules count the casts that broke each rulebook rule', async () =>
   await shows(rotationRules, 'Rotation Rules');
   await shows(rotationRules, 'Low cast efficiency');
   await shows(rotationRules, '60.0%');
-  await shows(rotationRules, 'top 64%');
+  await shows(rotationRules, 'top 65%');
   // A violated rule renders its authored description and type, and counts the casts that broke it.
   await shows(rotationRules, 'Eviscerate at 6 or more combo points');
   await shows(rotationRules, 'rotation');
@@ -92,8 +92,8 @@ test('offensives flag the lost cooldown casts and the holds', async () => {
   await shows(offensives, '4 / 5');
   await shows(offensives, 'Vanish');
   await shows(offensives, '3:19');
-  await shows(offensives, '+167s');
-  await shows(offensives, 'top 00:32');
+  await shows(offensives, '+151s');
+  await shows(offensives, 'top 00:47');
 });
 
 test('burst windows compare the player damage against the top-parse windows', async () => {
@@ -105,7 +105,7 @@ test('burst windows compare the player damage against the top-parse windows', as
   await shows(burstWindows, 'burst');
   await shows(burstWindows, '2K');
   await shows(burstWindows, '-100%');
-  await showsAbility(burstWindows, 'Secret Technique', '494K');
+  await showsAbility(burstWindows, 'Secret Technique', '525K');
   await shows(burstWindows, 'missed');
   await shows(burstWindows, '0 / 1');
 });
@@ -123,15 +123,19 @@ test('defensives stay on plan and benchmark the damage taken', async () => {
   await shows(defensives, '+175%');
 });
 
-test('gear lists the top-parse talent builds, trinkets, and enchants', async () => {
+test('gear lists the top-parse talent builds and how the alt build differs, plus trinkets and enchants', async () => {
   const gear = page.locator('wl-gear');
   await shows(gear, 'Gear vs top parses.');
   await shows(gear, 'Talents');
   await shows(gear, 'Your build');
-  // The talent builds are listed in the post-raid card, most common first: 40% / 30% / 30%.
+  // The talent builds are listed in the post-raid card, most common first: 50% / 20% / 10%.
   await shows(gear, 'Most common build');
-  await shows(gear, '40%');
+  await shows(gear, '50%');
   await shows(gear, 'Alt build 1');
+  await shows(gear, 'Added');
+  await shows(gear, 'Ethereal Cloak');
+  await shows(gear, 'Dropped');
+  await shows(gear, 'Flawless Form');
   await shows(gear, 'Alt build 2');
   await shows(gear, 'of top parsers');
   await shows(gear, 'Trinkets');
