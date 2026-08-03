@@ -7,7 +7,8 @@ import { WclApiService } from '../../../core/services/wcl-api';
 import { logWarn } from '../../../core/log';
 import { Result, LoadError, ok, permanent } from '../../../core/result';
 import { toLoadError } from '../../../core/http-load-error';
-import { decodeHtmlEntities, extractGear, selectCombatantInfo, talentKeyFromTree } from './gear-extract';
+import { decodeHtmlEntities, extractGear, selectCombatantInfo } from './gear-extract';
+import { talentKeyFromTree } from '../../../shared/gear/talent-key';
 import {
   GearStatus,
   buildEnchantRows, enchantStatusOf, EnchantRow,

@@ -2,18 +2,20 @@ import { describe, it, expect } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
+import { TalentDataService } from '../../../core/services/talent-data';
+import { SpecTalents } from '../../../core/models/talent.models';
 import { CharacterGear, WclCombatantInfo, WclGearItem } from '../../../core/models/wcl.models';
 import { missing } from '../../../core/result';
 import {
-  GearTransformService, toParseGear, aggregateParseGear, ParseGear,
+  GearTransformService, toParseGear, aggregateParseGear, ParseGear, withTalentDiffs,
   aggregateTalents, aggregateTrinkets, aggregateEnchants,
 } from './gear-transform.service';
-import { talentKeyFromTree } from './gear-extract';
+import { talentKeyFromTree, parseTalentKey } from '../../../shared/gear/talent-key';
 
-// Per-slot caps mirrored from the transform service (MAX_TALENT_BUILDS = 5,
+// Per-slot caps mirrored from the transform service (MAX_TALENT_BUILDS = 3,
 // MAX_TRINKETS_PER_SLOT = 5, MAX_ENCHANTS_PER_SLOT = 3). The aggregator boundary
 // tests build one more than the cap to assert the slice keeps exactly the cap.
-const MAX_TALENT_BUILDS = 5;
+const MAX_TALENT_BUILDS = 3;
 const MAX_TRINKETS_PER_SLOT = 5;
 const MAX_ENCHANTS_PER_SLOT = 3;
 const TRINKET_1_SLOT = 12;
@@ -22,10 +24,31 @@ const ENCHANT_SLOT = 15;
 const EXAMPLE_SOURCE_ID = 537;
 
 describe('talentKeyFromTree', () => {
-  it('builds a v2: key from string-sorted nodeIDs', () => {
-    // Mixed-width ids: string order puts '100001' before '90638' ('1' < '9'); a numeric sort would reverse them.
-    expect(talentKeyFromTree([{ nodeID: 90638 }, { nodeID: 100001 }])).toBe('v2:100001,90638');
+  it('builds a v3: key of entry.rank pairs ordered by entry, ignoring the node', () => {
+    // Two parses of one build can report a talent under different nodeIDs, so the node is left out.
+    expect(talentKeyFromTree([{ nodeID: 100001, id: 22, rank: 2 }, { nodeID: 90638, id: 11, rank: 1 }]))
+      .toBe('v3:11.1,22.2');
     expect(talentKeyFromTree(undefined)).toBe('');
+  });
+
+  it('defaults an absent rank to one point and drops nodes with no entry', () => {
+    expect(talentKeyFromTree([{ nodeID: 5, id: 50 }, { nodeID: 6 }])).toBe('v3:50.1');
+  });
+
+  it('round-trips through parseTalentKey', () => {
+    const key = talentKeyFromTree([{ nodeID: 5, id: 50, rank: 2 }]);
+    expect(parseTalentKey(key)).toEqual([{ entryId: 50, rank: 2 }]);
+  });
+
+  it('reads no picks from a key in any other format', () => {
+    expect(parseTalentKey('v2:90638,100001')).toEqual([]);
+    expect(parseTalentKey('')).toEqual([]);
+  });
+
+  it('gives one key when two parses report the same talents under different node ids', () => {
+    const a = talentKeyFromTree([{ nodeID: 10, id: 50, rank: 1 }, { nodeID: 20, id: 60, rank: 1 }]);
+    const b = talentKeyFromTree([{ nodeID: 99, id: 50, rank: 1 }, { nodeID: 88, id: 60, rank: 1 }]);
+    expect(a).toBe(b);
   });
 });
 
@@ -34,12 +57,12 @@ describe('toParseGear', () => {
 
   it('reduces a found CharacterGear to its fingerprint tagged with the parse identity', () => {
     const gear: CharacterGear = {
-      found: true, talent_key: 'v2:1,2',
+      found: true, talent_key: 'v3:10.1,20.1',
       trinkets: [{ slot: 12, id: 100, name: 'A', icon: 'inv_a' }],
       enchants: [{ slot: 15, id: 8041, name: 'Sophic' }],
     };
     expect(toParseGear(gear, ranking, 537)).toEqual({
-      talent_key: 'v2:1,2',
+      talent_key: 'v3:10.1,20.1',
       trinkets: [{ slot: 12, id: 100, name: 'A', icon: 'inv_a' }],
       enchants: [{ slot: 15, id: 8041, name: 'Sophic' }],
       report_code: 'rep1', fight_id: 3, player_name: 'Ann', source_id: 537,
@@ -54,7 +77,7 @@ describe('toParseGear', () => {
 
 function gearParse(overrides: Partial<ParseGear>): ParseGear {
   return {
-    talent_key: 'v2:1,2', trinkets: [], enchants: [],
+    talent_key: 'v3:10.1,20.1', trinkets: [], enchants: [],
     report_code: 'rep', fight_id: 1, player_name: 'P', source_id: 1, ...overrides,
   };
 }
@@ -64,12 +87,20 @@ describe('aggregateTalents', () => {
     expect(aggregateTalents([])).toEqual([]);
 
     const builds = aggregateTalents([
-      gearParse({ talent_key: 'v2:A', report_code: 'rep1', fight_id: 3, player_name: 'Ann', source_id: EXAMPLE_SOURCE_ID }),
-      gearParse({ talent_key: 'v2:A', report_code: 'rep2', fight_id: 7, player_name: 'Bob', source_id: 99 }),
-      gearParse({ talent_key: 'v2:B' }),
+      gearParse({ talent_key: 'v3:10.1', report_code: 'rep1', fight_id: 3, player_name: 'Ann', source_id: EXAMPLE_SOURCE_ID }),
+      gearParse({ talent_key: 'v3:10.1', report_code: 'rep2', fight_id: 7, player_name: 'Bob', source_id: 99 }),
+      gearParse({ talent_key: 'v3:11.1' }),
     ]);
-    expect(builds[0]).toMatchObject({ key: 'v2:A', pct: 67, report_code: 'rep1', source_id: EXAMPLE_SOURCE_ID });
-    expect(builds[1]).toMatchObject({ key: 'v2:B', pct: 33 });
+    expect(builds[0]).toMatchObject({ key: 'v3:10.1', pct: 67, report_code: 'rep1', source_id: EXAMPLE_SOURCE_ID });
+    expect(builds[1]).toMatchObject({ key: 'v3:11.1', pct: 33 });
+  });
+
+  it('keeps builds that fill the same slot with a different talent apart', () => {
+    const builds = aggregateTalents([
+      gearParse({ talent_key: 'v3:10.1' }),
+      gearParse({ talent_key: 'v3:11.1' }),
+    ]);
+    expect(builds).toHaveLength(2);
   });
 
   it('ignores parses with no talent key', () => {
@@ -77,7 +108,7 @@ describe('aggregateTalents', () => {
   });
 
   it('keeps at most MAX_TALENT_BUILDS distinct builds', () => {
-    const parses = Array.from({ length: MAX_TALENT_BUILDS + 1 }, (_, i) => gearParse({ talent_key: `v2:${i}` }));
+    const parses = Array.from({ length: MAX_TALENT_BUILDS + 1 }, (_, i) => gearParse({ talent_key: `v3:${i}.1` }));
     expect(aggregateTalents(parses)).toHaveLength(MAX_TALENT_BUILDS);
   });
 });
@@ -158,13 +189,34 @@ describe('aggregateEnchants', () => {
 describe('aggregateParseGear', () => {
   it('composes the three per-facet aggregators', () => {
     const parses = [
-      gearParse({ talent_key: 'v2:A', trinkets: [{ slot: TRINKET_1_SLOT, id: 100, name: 'A', icon: 'inv_a' }], enchants: [{ slot: ENCHANT_SLOT, id: 8041, name: 'Soph' }] }),
+      gearParse({ talent_key: 'v3:10.1', trinkets: [{ slot: TRINKET_1_SLOT, id: 100, name: 'A', icon: 'inv_a' }], enchants: [{ slot: ENCHANT_SLOT, id: 8041, name: 'Soph' }] }),
     ];
     expect(aggregateParseGear(parses)).toEqual({
       talent_builds: aggregateTalents(parses),
       trinkets: aggregateTrinkets(parses),
       enchants: aggregateEnchants(parses),
     });
+  });
+});
+
+describe('withTalentDiffs', () => {
+  const talents: SpecTalents = { 10: { name: 'A', icon: 'a' }, 11: { name: 'B', icon: 'b' } };
+  const builds = () => [
+    { key: 'v3:10.1', pct: 60, report_code: 'r1', fight_id: 1, player_name: 'P1', source_id: 1, diff: [] },
+    { key: 'v3:11.1', pct: 40, report_code: 'r2', fight_id: 2, player_name: 'P2', source_id: 2, diff: [] },
+  ];
+
+  it('bakes each alt build\'s diff against the most common build, leaving the most common one empty', () => {
+    const out = withTalentDiffs(builds(), talents);
+    expect(out[0].diff).toEqual([]);
+    expect(out[1].diff).toEqual([
+      { kind: 'added', talent: talents[11] },
+      { kind: 'dropped', talent: talents[10] },
+    ]);
+  });
+
+  it('leaves builds untouched when the talent names are unavailable', () => {
+    expect(withTalentDiffs(builds(), null)).toEqual(builds());
   });
 });
 
@@ -176,12 +228,11 @@ function reportFor(playerId: number, playerName: string, fightId: number) {
   };
 }
 
-// Raw CombatantInfo: trinket (slot 12, named inline); slot-15 enchant is a string id resolved via getGameNames. Node 65 -> 'v2:65'.
 const combatantInfo = (playerId: number): WclCombatantInfo => {
   const gear: WclGearItem[] = Array(16).fill({});
   gear[12] = { id: 100, name: 'A', icon: 't.jpg' };
   gear[15] = { id: 1, name: 'Wep', permanentEnchant: '8041' };
-  return { sourceID: playerId, gear, talentTree: [{ nodeID: 65 }] };
+  return { sourceID: playerId, gear, talentTree: [{ nodeID: 65, id: 650, rank: 1 }] };
 };
 
 const wclFake = {
@@ -204,6 +255,7 @@ describe('GearTransformService (live, in-browser)', () => {
       providers: [
         { provide: WclApiService, useValue: wclFake as unknown as WclApiService },
         { provide: DataFileApiService, useValue: {} as unknown as DataFileApiService },
+        { provide: TalentDataService, useValue: { getTalents: async () => null } as unknown as TalentDataService },
       ],
     });
     const bench = await TestBed.inject(GearTransformService).getBench('SubtletyRogue', 1);
@@ -212,7 +264,7 @@ describe('GearTransformService (live, in-browser)', () => {
     expect(bench.value.sample_count).toBe(2);
     expect(bench.value.encounter_name).toBe('Boss');
     expect(bench.value.talent_builds[0]).toMatchObject({
-      key: 'v2:65', pct: 100, report_code: 'r1', fight_id: 1, player_name: 'P1', source_id: 10,
+      key: 'v3:650.1', pct: 100, report_code: 'r1', fight_id: 1, player_name: 'P1', source_id: 10,
     });
     expect(bench.value.trinkets[12]).toEqual([{ id: 100, name: 'A', icon: 't', pct: 100 }]);
     expect(bench.value.enchants[15]).toEqual([{ id: 8041, name: 'Soph', pct: 100 }]);
@@ -234,6 +286,7 @@ describe('GearTransformService (live, in-browser)', () => {
       providers: [
         { provide: WclApiService, useValue: backfillWcl as unknown as WclApiService },
         { provide: DataFileApiService, useValue: {} as unknown as DataFileApiService },
+        { provide: TalentDataService, useValue: { getTalents: async () => null } as unknown as TalentDataService },
       ],
     });
     const bench = await TestBed.inject(GearTransformService).getBench('SubtletyRogue', 1);
@@ -247,6 +300,7 @@ describe('GearTransformService (live, in-browser)', () => {
       providers: [
         { provide: WclApiService, useValue: { getRankings: async () => ({ rankings: [] }) } as unknown as WclApiService },
         { provide: DataFileApiService, useValue: {} as unknown as DataFileApiService },
+        { provide: TalentDataService, useValue: { getTalents: async () => null } as unknown as TalentDataService },
       ],
     });
     expect(await TestBed.inject(GearTransformService).getBench('SubtletyRogue', 1))

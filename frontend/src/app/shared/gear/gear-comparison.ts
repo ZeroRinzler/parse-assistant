@@ -1,6 +1,8 @@
 /** Pure gear-comparison helpers shared between the pre-fight boss-study page and the gear section. */
 import { CharacterGear } from '../../core/models/wcl.models';
 import { EncounterGearStats } from '../../core/models/encounter.models';
+import { SpecTalents, TalentEntry, TalentDiff } from '../../core/models/talent.models';
+import { parseTalentKey } from './talent-key';
 
 export type GearStatus = 'ok' | 'warn' | 'info' | 'unknown';
 
@@ -35,6 +37,9 @@ export interface TalentBuildRow {
   link: string;
   playerName: string;
   label: string;
+  added: TalentEntry[];
+  dropped: TalentEntry[];
+  ranks: TalentDiff[];
 }
 
 export interface TrinketRow {
@@ -109,7 +114,39 @@ export function buildTalentBuilds(stats: EncounterGearStats | null, playerKey: s
     link: `https://www.warcraftlogs.com/reports/${b.report_code}?fight=${b.fight_id}&type=summary&source=${b.source_id}`,
     playerName: b.player_name,
     label: i === 0 ? 'Most common build' : `Alt build ${i}`,
+    // Benches from the prior ingest have no diff field on disk.
+    added: (b.diff ?? []).filter(d => d.kind === 'added').map(d => d.talent),
+    dropped: (b.diff ?? []).filter(d => d.kind === 'dropped').map(d => d.talent),
+    ranks: (b.diff ?? []).filter(d => d.kind === 'rank'),
   }));
+}
+
+function talentOf(talents: SpecTalents, entryId: number): TalentEntry {
+  return talents[entryId] ?? { name: `Talent #${entryId}`, icon: '' };
+}
+
+export function buildTalentDiff(
+  buildKey: string, baselineKey: string, talents: SpecTalents | null,
+): TalentDiff[] {
+  if (!talents) return [];
+  const buildPicks = parseTalentKey(buildKey);
+  const basePicks = parseTalentKey(baselineKey);
+  if (!buildPicks.length || !basePicks.length) return [];
+
+  const baseByEntry = new Map(basePicks.map(pick => [pick.entryId, pick]));
+  const buildByEntry = new Map(buildPicks.map(pick => [pick.entryId, pick]));
+  const diffs: TalentDiff[] = [];
+  for (const pick of buildPicks) {
+    const base = baseByEntry.get(pick.entryId);
+    if (!base) diffs.push({ kind: 'added', talent: talentOf(talents, pick.entryId) });
+    else if (base.rank !== pick.rank) {
+      diffs.push({ kind: 'rank', talent: talentOf(talents, pick.entryId), rank: pick.rank, standardRank: base.rank });
+    }
+  }
+  for (const pick of basePicks) {
+    if (!buildByEntry.has(pick.entryId)) diffs.push({ kind: 'dropped', talent: talentOf(talents, pick.entryId) });
+  }
+  return diffs;
 }
 
 export function talentStatusOf(topStats: EncounterGearStats | null, playerKey: string): { status: GearStatus; note: string } {

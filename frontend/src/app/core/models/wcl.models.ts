@@ -92,11 +92,18 @@ export interface WclGearItem {
   permanentEnchantName?: string;
 }
 
+/** `id` is the talent entry, never a spell id. */
+export interface WclTalentNode {
+  nodeID?: number;
+  id?: number;
+  rank?: number;
+}
+
 /** A raw CombatantInfo event: gear + talentTree, keyed by sourceID. */
 export interface WclCombatantInfo {
   sourceID?: number;
   gear?: WclGearItem[];
-  talentTree?: { nodeID?: number }[];
+  talentTree?: WclTalentNode[];
 }
 
 /** One `playerDetails` role entry (dps / healers / tanks / unknown). */

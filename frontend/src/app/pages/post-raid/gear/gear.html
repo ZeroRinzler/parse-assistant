@@ -25,63 +25,95 @@
       <div></div>
     </div>
 
-    @if (view().comparison) {
-      @if (view().talentStatus.status === 'warn') {
-        <div class="grid grid-cols-[20px_minmax(0,1fr)] md:grid-cols-[20px_minmax(0,1fr)_96px_200px] gap-x-[14px] gap-y-2 md:gap-y-0 px-4 py-[10px] items-start md:items-center border-t border-[var(--border)]">
-          <div class="flex items-center justify-center self-start md:self-center">
+    @if (view().talentBuilds.length) {
+      @if (view().comparison && view().talentStatus.status !== 'unknown') {
+        <div class="flex items-center gap-2 flex-wrap border-t border-[var(--border)] px-4 py-[10px]">
+          <span class="text-[10px] uppercase tracking-widest text-[var(--muted)] mr-0.5">Your build</span>
+          @if (view().talentStatus.status === 'warn') {
             <mat-icon class="icon-18 badge-warning">warning_amber</mat-icon>
-          </div>
-          <div class="min-w-0">
-            <span class="text-sm text-[var(--text)]">Off-meta build</span>
-            @if (view().talentBuilds[0]; as topBuild) {
-              <div class="text-[10px] text-[var(--muted)] mt-0.5">{{ topBuild.pct }}% run the standard build</div>
+          }
+          <span class="text-[13px] text-[var(--muted)]">{{ view().talentStatus.note }}</span>
+        </div>
+      }
+      @for (build of view().talentBuilds; track build.label) {
+        <div class="grid grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[20px_minmax(0,1fr)_96px_200px] gap-x-[14px] gap-y-1 md:gap-y-0 items-center px-4 py-[10px] border-t border-[var(--border)]">
+          <div class="hidden md:block"></div>
+          <div class="min-w-0 text-sm text-[var(--text)]">
+            {{ build.label }}
+            @if (build.isPlayer) {
+              <span class="ml-1.5 text-[10px] uppercase tracking-wider text-[var(--accent)]">your build</span>
             }
           </div>
-          <div class="hidden md:block"></div>
-          <div class="col-start-2 md:col-auto text-[13px] text-[var(--muted)] leading-[1.45] border-t md:border-t-0 md:border-l border-[var(--border)] pt-2 md:pt-0 pl-0 md:pl-[14px]">
-            <span class="md:hidden block font-mono text-[10px] uppercase tracking-wider text-[var(--muted)] mb-1">Fix</span>
-            <div class="flex flex-wrap items-center gap-2">
-              <span>Switch to the standard build.</span>
-              @if (view().talentBuilds[0]?.link; as topLink) {
-                <a class="rounded-[3px] border border-[var(--accent)]/20 bg-[var(--accent)]/[0.08] px-[7px] py-[1px] font-mono text-[10px] text-[var(--accent)] no-underline whitespace-nowrap hover:brightness-125"
-                   [href]="topLink" target="_blank" rel="noopener">View parse &#8599;</a>
+          <div class="text-right leading-[1.1] text-[var(--muted)]">
+            <div class="text-[15px] font-semibold tabular-nums">{{ build.pct }}%</div>
+            <div class="text-[10px] opacity-60 mt-px tabular-nums">of top parsers</div>
+          </div>
+          <div class="col-start-2 md:col-auto text-right md:text-left text-[13px] text-[var(--muted)] leading-[1.45] md:border-l md:border-[var(--border)] md:pl-[14px]">
+            <a class="rounded-[3px] border border-[var(--accent)]/20 bg-[var(--accent)]/[0.08] px-[7px] py-[1px] font-mono text-[10px] text-[var(--accent)] no-underline whitespace-nowrap hover:brightness-125"
+               [href]="build.link" target="_blank" rel="noopener">View parse &#8599;</a>
+          </div>
+        </div>
+        @if (build.added.length || build.dropped.length || build.ranks.length) {
+          <div class="px-4 pb-[10px] md:grid md:grid-cols-[20px_minmax(0,1fr)_96px_200px] md:gap-[14px]">
+            <div class="hidden md:block"></div>
+            <div class="md:col-span-3 flex flex-col gap-2.5">
+              @if (build.added.length) {
+                <div>
+                  <span class="block text-[10px] uppercase tracking-widest text-[var(--muted)] mb-1.5">Added</span>
+                  <div class="flex flex-wrap items-center gap-2">
+                    @for (talent of build.added; track talent.name) {
+                      <span class="chip-onplan">
+                        @if (talent.spellId; as spellId) {
+                          <wl-game-icon [id]="spellId" [icon]="talent.icon" [name]="talent.name"></wl-game-icon>
+                        } @else {
+                          <span class="text-[13px] text-[var(--muted)]">{{ talent.name }}</span>
+                        }
+                      </span>
+                    }
+                  </div>
+                </div>
+              }
+              @if (build.dropped.length) {
+                <div>
+                  <span class="block text-[10px] uppercase tracking-widest text-[var(--muted)] mb-1.5">Dropped</span>
+                  <div class="flex flex-wrap items-center gap-2">
+                    @for (talent of build.dropped; track talent.name) {
+                      <span class="chip-onplan">
+                        @if (talent.spellId; as spellId) {
+                          <wl-game-icon [id]="spellId" [icon]="talent.icon" [name]="talent.name"></wl-game-icon>
+                        } @else {
+                          <span class="text-[13px] text-[var(--muted)]">{{ talent.name }}</span>
+                        }
+                      </span>
+                    }
+                  </div>
+                </div>
+              }
+              @if (build.ranks.length) {
+                <div>
+                  <span class="block text-[10px] uppercase tracking-widest text-[var(--muted)] mb-1.5">Points</span>
+                  <div class="flex flex-wrap items-center gap-2">
+                    @for (r of build.ranks; track r.talent.name) {
+                      <span class="chip-onplan">
+                        @if (r.talent.spellId; as spellId) {
+                          <wl-game-icon [id]="spellId" [icon]="r.talent.icon" [name]="r.talent.name"></wl-game-icon>
+                        } @else {
+                          <span class="text-[13px] text-[var(--muted)]">{{ r.talent.name }}</span>
+                        }
+                        <span class="text-[13px] text-[var(--muted)] ml-1 tabular-nums">{{ r.standardRank }}&#8594;{{ r.rank }}</span>
+                      </span>
+                    }
+                  </div>
+                </div>
               }
             </div>
           </div>
-        </div>
-      } @else if (view().talentStatus.status === 'ok') {
-        <div class="flex items-center gap-2 flex-wrap border-t border-[var(--border)] px-4 py-[10px]">
-          <span class="text-[10px] uppercase tracking-widest text-[var(--muted)] mr-0.5">On plan</span>
-          <span class="chip-onplan">
-            <span class="text-[13px] text-[var(--muted)]">Most common build</span>
-          </span>
-        </div>
-      } @else {
-        <div class="flex items-center gap-2 border-t border-[var(--border)] px-4 py-3 text-[13px] text-[var(--muted)]">
-          No talent data.
-        </div>
+        }
       }
     } @else {
-      @if (view().talentBuilds.length) {
-        @for (build of view().talentBuilds; track build.label) {
-          <div class="grid grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[20px_minmax(0,1fr)_96px_200px] gap-x-[14px] gap-y-1 md:gap-y-0 items-center px-4 py-[10px] border-t border-[var(--border)]">
-            <div class="hidden md:block"></div>
-            <div class="min-w-0 text-sm text-[var(--text)]">{{ build.label }}</div>
-            <div class="text-right leading-[1.1] text-[var(--muted)]">
-              <div class="text-[15px] font-semibold tabular-nums">{{ build.pct }}%</div>
-              <div class="text-[10px] opacity-60 mt-px tabular-nums">of top parsers</div>
-            </div>
-            <div class="col-start-2 md:col-auto text-right md:text-left text-[13px] text-[var(--muted)] leading-[1.45] md:border-l md:border-[var(--border)] md:pl-[14px]">
-              <a class="rounded-[3px] border border-[var(--accent)]/20 bg-[var(--accent)]/[0.08] px-[7px] py-[1px] font-mono text-[10px] text-[var(--accent)] no-underline whitespace-nowrap hover:brightness-125"
-                 [href]="build.link" target="_blank" rel="noopener">View parse &#8599;</a>
-            </div>
-          </div>
-        }
-      } @else {
-        <div class="flex items-center gap-2 border-t border-[var(--border)] px-4 py-3 text-[13px] text-[var(--muted)]">
-          No talent data.
-        </div>
-      }
+      <div class="flex items-center gap-2 border-t border-[var(--border)] px-4 py-3 text-[13px] text-[var(--muted)]">
+        No talent data.
+      </div>
     }
   </div>
 

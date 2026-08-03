@@ -123,12 +123,17 @@ test('defensives stay on plan and benchmark the damage taken', async () => {
   await shows(defensives, '+175%');
 });
 
-test('gear compares the talents, trinkets, and enchants against the consensus', async () => {
+test('gear lists the top-parse talent builds, trinkets, and enchants', async () => {
   const gear = page.locator('wl-gear');
   await shows(gear, 'Gear vs top parses.');
   await shows(gear, 'Talents');
-  await shows(gear, 'Off-meta build');
-  await shows(gear, '40% run the standard build');
+  await shows(gear, 'Your build');
+  // The talent builds are listed in the post-raid card, most common first: 40% / 30% / 30%.
+  await shows(gear, 'Most common build');
+  await shows(gear, '40%');
+  await shows(gear, 'Alt build 1');
+  await shows(gear, 'Alt build 2');
+  await shows(gear, 'of top parsers');
   await shows(gear, 'Trinkets');
   await shows(gear, 'Light Company Guidon');
   await shows(gear, 'Gaze of the Alnseer');

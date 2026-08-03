@@ -10,10 +10,12 @@ import {
   buildCharacterGear, emptyGearView,
 } from './gear.service';
 
+const STANDARD_KEY = 'v3:11.1,22.1';
+
 function benchWith(overrides: Partial<GearBench> = {}): GearBench {
   return {
     spec: 'SubtletyRogue', encounter_id: 1, encounter_name: 'Boss', sample_count: 10,
-    talent_builds: [{ key: 'v2:A', pct: 80, report_code: 'abc', fight_id: 2, player_name: 'Top', source_id: 5 }],
+    talent_builds: [{ key: STANDARD_KEY, pct: 80, report_code: 'abc', fight_id: 2, player_name: 'Top', source_id: 5, diff: [] }],
     trinkets: { 12: [{ id: 100, name: 'A', icon: 'inv_a', pct: 70 }] },
     enchants: { 15: [{ id: 8041, name: 'Sophic', pct: 90 }] },
     ...overrides,
@@ -22,23 +24,25 @@ function benchWith(overrides: Partial<GearBench> = {}): GearBench {
 
 // Reconstruct a raw CombatantInfo event from a desired CharacterGear so the feature
 // service (which reads raw combatant info + extracts gear itself) reproduces it.
-// Names are baked onto the gear items, so getGameNames is not consulted. Talent key
-// parts ride as nodeID strings (the v2:<parts> form round-trips through extraction).
+// Names are baked onto the gear items, so getGameNames is not consulted.
 function toRawEvent(gear: CharacterGear): WclCombatantInfo {
   const items: WclGearItem[] = [];
   for (const trinket of gear.trinkets ?? []) items[trinket.slot] = { id: trinket.id, name: trinket.name };
   for (const enchant of gear.enchants ?? []) {
     items[enchant.slot] = { ...(items[enchant.slot] ?? { id: 1, name: 'x' }), permanentEnchant: enchant.id, permanentEnchantName: enchant.name };
   }
-  const parts = (gear.talent_key ?? '').replace(/^v2:/, '');
-  const talentTree = parts ? parts.split(',').map(node => ({ nodeID: node as unknown as number })) : [];
+  const body = (gear.talent_key ?? '').replace(/^v3:/, '');
+  const talentTree = body ? body.split(',').map(pick => {
+    const [id, rank] = pick.split('.').map(Number);
+    return { id, rank };
+  }) : [];
   return { sourceID: 10, gear: items, talentTree };
 }
 
 describe('benchToStats', () => {
   it('extracts the gear stats block from a bench', () => {
     expect(benchToStats(benchWith())).toEqual({
-      talent_builds: [{ key: 'v2:A', pct: 80, report_code: 'abc', fight_id: 2, player_name: 'Top', source_id: 5 }],
+      talent_builds: [{ key: STANDARD_KEY, pct: 80, report_code: 'abc', fight_id: 2, player_name: 'Top', source_id: 5, diff: [] }],
       trinkets: { 12: [{ id: 100, name: 'A', icon: 'inv_a', pct: 70 }] },
       enchants: { 15: [{ id: 8041, name: 'Sophic', pct: 90 }] },
     });
@@ -53,14 +57,14 @@ describe('buildCharacterGear', () => {
 
   it('builds the gear fingerprint when the event carries gear', () => {
     const event = toRawEvent({
-      found: true, talent_key: 'v2:A',
+      found: true, talent_key: STANDARD_KEY,
       trinkets: [{ slot: 12, id: 100, name: 'A' }],
       enchants: [{ slot: 15, id: 8041, name: 'Sophic' }],
     });
     const result = buildCharacterGear(event, {}, 'r1', 'SubtletyRogue');
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value).toMatchObject({ found: true, source_report: 'r1', talent_key: 'v2:A' });
+    expect(result.value).toMatchObject({ found: true, source_report: 'r1', talent_key: STANDARD_KEY });
   });
 });
 
@@ -84,7 +88,7 @@ describe('buildGearView', () => {
 
   it('comparison mode: player matching bench is on-plan (ok)', () => {
     const player: CharacterGear = {
-      found: true, talent_key: 'v2:A',
+      found: true, talent_key: STANDARD_KEY,
       trinkets: [{ slot: 12, id: 100, name: 'A' }],
       enchants: [{ slot: 15, id: 8041, name: 'Sophic' }],
     };
@@ -97,7 +101,7 @@ describe('buildGearView', () => {
 
   it('comparison mode: missing high-consensus enchant flags a warning', () => {
     const player: CharacterGear = {
-      found: true, talent_key: 'v2:A',
+      found: true, talent_key: STANDARD_KEY,
       trinkets: [{ slot: 12, id: 100, name: 'A' }],
       enchants: [],
     };
@@ -149,7 +153,7 @@ describe('GearFeatureService', () => {
 
   it('loadComparisonView merges fetched player gear with the bench', async () => {
     const player: CharacterGear = {
-      found: true, talent_key: 'v2:A',
+      found: true, talent_key: STANDARD_KEY,
       trinkets: [{ slot: 12, id: 100, name: 'A' }],
       enchants: [{ slot: 15, id: 8041, name: 'Sophic' }],
     };

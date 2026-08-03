@@ -11,7 +11,11 @@ import { EncounterGearStats } from '../../../core/models/encounter.models';
 import { logWarn } from '../../../core/log';
 import { Result, LoadError, ok, missing } from '../../../core/result';
 import { toLoadError } from '../../../core/http-load-error';
-import { TRINKET_SLOTS, decodeHtmlEntities, extractGear, selectCombatantInfo, talentKeyFromTree } from './gear-extract';
+import { TRINKET_SLOTS, decodeHtmlEntities, extractGear, selectCombatantInfo } from './gear-extract';
+import { talentKeyFromTree } from '../../../shared/gear/talent-key';
+import { buildTalentDiff } from '../../../shared/gear/gear-comparison';
+import { TalentDataService } from '../../../core/services/talent-data';
+import { SpecTalents } from '../../../core/models/talent.models';
 import { toParseRankings, unwrapRankings } from '../../../shared/analysis/wcl-projections';
 import { getOrInsert } from '../../../shared/analysis/analysis-math';
 import { DataSource } from '../../../core/data-source/data-source';
@@ -22,8 +26,8 @@ const TOP_PARSE_COUNT = 10;
 // Over-fetch so a private/unfetchable top parse can be backfilled by the
 // next-best one; the break in the loop caps actual fetches at TOP_PARSE_COUNT.
 const CANDIDATE_POOL_COUNT = TOP_PARSE_COUNT * 2;
-/** Keep at most this many talent builds / trinkets / enchants per slot. */
-const MAX_TALENT_BUILDS = 5;
+/** Keep at most this many talent builds, and trinkets / enchants per slot. */
+const MAX_TALENT_BUILDS = 3;
 const MAX_TRINKETS_PER_SLOT = 5;
 const MAX_ENCHANTS_PER_SLOT = 3;
 
@@ -90,7 +94,7 @@ export function aggregateTalents(parses: ParseGear[]): EncounterGearStats['talen
     .sort((a, b) => b[1].count - a[1].count)
     .slice(0, MAX_TALENT_BUILDS)
     .map(([key, { count, report_code, fight_id, player_name, source_id }]) =>
-      ({ key, pct: pct(count, total), report_code, fight_id, player_name, source_id }));
+      ({ key, pct: pct(count, total), report_code, fight_id, player_name, source_id, diff: [] }));
 }
 
 /**
@@ -169,9 +173,18 @@ export function aggregateParseGear(parses: ParseGear[]): EncounterGearStats {
   };
 }
 
+export function withTalentDiffs(
+  builds: EncounterGearStats['talent_builds'], talents: SpecTalents | null,
+): EncounterGearStats['talent_builds'] {
+  if (!talents || builds.length < 2) return builds;
+  const baselineKey = builds[0].key;
+  return builds.map((build, i) => i === 0 ? build : { ...build, diff: buildTalentDiff(build.key, baselineKey, talents) });
+}
+
 @Injectable({ providedIn: 'root' })
 export class GearTransformService implements DataSource<GearBench> {
   private readonly wclApi = inject(WclApiService);
+  private readonly talentData = inject(TalentDataService);
 
   async getBench(spec: string, encounterId: number): Promise<Result<GearBench, LoadError>> {
     try {
@@ -195,7 +208,7 @@ export class GearTransformService implements DataSource<GearBench> {
         encounter_id: encounterId,
         encounter_name: encounterName,
         sample_count: parses.length,
-        talent_builds: stats.talent_builds,
+        talent_builds: withTalentDiffs(stats.talent_builds, await this.talentData.getTalents(spec)),
         trinkets: stats.trinkets,
         enchants: stats.enchants,
       });

@@ -4,7 +4,9 @@ import {
   buildBenchTrinketRows,
   buildEnchantRows,
   buildTrinketRows,
+  buildTalentDiff,
 } from './gear-comparison';
+import { SpecTalents } from '../../core/models/talent.models';
 import { EncounterGearStats } from '../../core/models/encounter.models';
 import { CharacterGear } from '../../core/models/wcl.models';
 
@@ -310,5 +312,63 @@ describe('buildEnchantRows (comparison, real player gear)', () => {
       stats({ enchants: {} }),
     );
     expect(rows[0]).toMatchObject({ status: 'ok', name: 'Handguard', note: null });
+  });
+});
+
+const BASELINE = 'v3:11.1,22.2';
+const TALENTS: SpecTalents = {
+  11: { name: 'Alpha', icon: 'icon_a', spellId: 111 },
+  12: { name: 'Alt Alpha', icon: 'icon_alt', spellId: 112 },
+  22: { name: 'Beta', icon: 'icon_b', spellId: 222 },
+  33: { name: 'Gamma', icon: 'icon_c', spellId: 333 },
+  44: { name: 'Hero Tree', icon: '' },
+};
+
+describe('buildTalentDiff (an alt build vs the most common build)', () => {
+  it('is empty when the build matches the most common one', () => {
+    expect(buildTalentDiff(BASELINE, BASELINE, TALENTS)).toEqual([]);
+  });
+
+  it('reports a swapped slot as the added talent plus the dropped one', () => {
+    expect(buildTalentDiff('v3:12.1,22.2', BASELINE, TALENTS)).toEqual([
+      { kind: 'added', talent: TALENTS[12] },
+      { kind: 'dropped', talent: TALENTS[11] },
+    ]);
+  });
+
+  it('reports a talent the most common build fills and this one drops', () => {
+    expect(buildTalentDiff('v3:11.1', BASELINE, TALENTS)).toEqual([
+      { kind: 'dropped', talent: TALENTS[22] },
+    ]);
+  });
+
+  it('reports a talent only this build adds', () => {
+    expect(buildTalentDiff('v3:11.1,22.2,33.1', BASELINE, TALENTS)).toEqual([
+      { kind: 'added', talent: TALENTS[33] },
+    ]);
+  });
+
+  it('reports a rank difference where the talent is in both builds', () => {
+    expect(buildTalentDiff('v3:11.1,22.1', BASELINE, TALENTS)).toEqual([
+      { kind: 'rank', talent: TALENTS[22], rank: 1, standardRank: 2 },
+    ]);
+  });
+
+  it('carries a hero-tree pick, which has no spell behind it', () => {
+    expect(buildTalentDiff('v3:11.1,22.2,44.1', BASELINE, TALENTS)).toEqual([
+      { kind: 'added', talent: { name: 'Hero Tree', icon: '' } },
+    ]);
+  });
+
+  it('falls back to the entry id when the talents file does not name it', () => {
+    expect(buildTalentDiff('v3:11.1,22.2,99.1', BASELINE, TALENTS)).toEqual([
+      { kind: 'added', talent: { name: 'Talent #99', icon: '' } },
+    ]);
+  });
+
+  it('is empty without a talents file, or when either build is unreadable', () => {
+    expect(buildTalentDiff('v3:12.1', BASELINE, null)).toEqual([]);
+    expect(buildTalentDiff('', BASELINE, TALENTS)).toEqual([]);
+    expect(buildTalentDiff('v2:1,2', BASELINE, TALENTS)).toEqual([]);
   });
 });
