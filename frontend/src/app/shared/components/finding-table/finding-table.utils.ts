@@ -1,4 +1,4 @@
-import { AnalysisFinding } from '../../../core/models/analysis.models';
+import { AnalysisFinding, FindingOccurrence, FindingTimeline } from '../../../core/models/analysis.models';
 import { logWarn } from '../../../core/log';
 
 /** Displayed "What" label for a finding whose cooldown could not be identified (no cd_name). */
@@ -37,6 +37,10 @@ export interface FindingRow {
   what?: string;
   measured: FindingMeasure;
   fix?: string;
+  /** Empty renders the row with no expand chevron. */
+  occurrences: FindingOccurrence[];
+  occurrenceTarget?: string;
+  timeline?: FindingTimeline;
 }
 
 /** A cooldown used on plan, shown as a compact success chip rather than a row. */
@@ -74,6 +78,7 @@ export function rowsFromEntries(entries: FindingEntry[], catLabel: Record<string
         chip: catLabel[f.category],
         measured: f.measured ?? { value: '-' },
         fix: f.details?.remedy,
+        occurrences: f.occurrences,
       });
     }
   }

@@ -1,8 +1,9 @@
-import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, input, output, signal } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { GameIconComponent } from '../game-icon/game-icon';
 import { CollapsibleTextComponent } from '../collapsible-text/collapsible-text';
+import { FindingOccurrencesComponent } from './finding-occurrences';
 import { FormatDurationPipe } from '../../pipes/format-duration-pipe';
 import type { FindingRow, OnPlanChip } from './finding-table.utils';
 
@@ -15,7 +16,10 @@ export { rowsFromEntries, onPlanFromEntries, bucketFindings, CAT_LABEL } from '.
   selector: 'wl-finding-table',
   // Angular custom elements default to display:inline; block keeps the card full-width.
   host: { class: 'block' },
-  imports: [MatIconModule, MatButtonModule, GameIconComponent, CollapsibleTextComponent, FormatDurationPipe],
+  imports: [
+    MatIconModule, MatButtonModule, GameIconComponent, CollapsibleTextComponent, FindingOccurrencesComponent,
+    FormatDurationPipe,
+  ],
   templateUrl: './finding-table.html',
 })
 export class FindingTableComponent {
@@ -31,4 +35,11 @@ export class FindingTableComponent {
   readonly openMap = output<FindingRow>();
   /** Emitted when a timed finding's clip button is clicked; the page forwards it. */
   readonly openClip = output<FindingRow>();
+
+  /** At most one row's instances open at a time, so the table cannot bloat into every row expanded. */
+  readonly openIndex = signal<number | null>(null);
+
+  toggle(index: number): void {
+    this.openIndex.update(current => current === index ? null : index);
+  }
 }

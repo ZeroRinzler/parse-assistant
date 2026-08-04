@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
-import { AnalysisFinding } from '../../../core/models/analysis.models';
+import { AnalysisFinding, FindingOccurrence, FindingTimeline } from '../../../core/models/analysis.models';
 import { PerCdBenchmark } from '../../../core/models/encounter.models';
 import { RulebookCooldown } from '../../../core/models/rulebook.models';
 import { WclEvent } from '../../../core/models/wcl.models';
@@ -30,6 +30,9 @@ export interface RotationFindingRow {
   what?: string;
   measured: { value: string; unit?: string };
   fix?: string;
+  occurrences: FindingOccurrence[];
+  occurrenceTarget?: string;
+  timeline?: FindingTimeline;
 }
 
 export interface RotationOnPlanChip {
@@ -96,12 +99,12 @@ export function checkLostUses(
     severity: 'critical', category: 'lost_cooldown', cd_name: cdName,
     measured: { value: `0 / ${expected}`, unit: 'cast(s)' },
     message: `${cdName} unused. Expected ${expected} on a ${fmtClock(fightDurS)} fight.`,
-    details: { remedy: `Use ${cdName} ${expected}x this fight.` } };
+    details: { remedy: `Use ${cdName} ${expected}x this fight.` }, occurrences: [] };
   if (actual > 0 && actual < floor) return {
     severity: 'critical', category: 'lost_cooldown', cd_name: cdName,
     measured: { value: `${actual} / ${expected}`, unit: 'cast(s)' },
     message: `${cdName}: ${actual} casts, expected ${expected}. ${floor - actual} lost.`,
-    details: { remedy: `Press ${cdName} ${floor - actual}x more - sooner off cooldown.` } };
+    details: { remedy: `Press ${cdName} ${floor - actual}x more - sooner off cooldown.` }, occurrences: [] };
   return null;
 }
 
@@ -117,7 +120,7 @@ export function checkFirstCastDelay(
     timestamp_ms: castTimesMs[0],
     measured: { value: `+${lateS}s`, unit: `top ${fmtClock(cdBench.avg_first_cast_s)}` },
     message: `${cdName} opened at ${fmtClock(firstS)}, ${lateS}s late. Top: ${fmtClock(cdBench.avg_first_cast_s)}.`,
-    details: { remedy: `Open with ${cdName} earlier.` } };
+    details: { remedy: `Open with ${cdName} earlier.` }, occurrences: [] };
 }
 
 export function checkBloodlustAlignment(
@@ -135,7 +138,7 @@ export function checkBloodlustAlignment(
       timestamp_ms: castTimesMs[0],
       measured: { value: 'missed', unit: 'BL' },
       message: `${cdName} missed Bloodlust (BL at ${fmtClock(blTimeS)}, first cast at ${fmtClock(castTimesMs[0] / 1000)}).`,
-      details: { remedy: `Align ${cdName} with Bloodlust.` } });
+      details: { remedy: `Align ${cdName} with Bloodlust.` }, occurrences: [] });
   } else if (blAligned && cdBench.avg_bl_offset_s != null && cdBench.stddev_bl_offset_s != null) {
     const offsets = inWindow.map(timeMs => timeMs / 1000 - blTimeS);
     const playerOffset = closestToZero(offsets);
@@ -147,7 +150,7 @@ export function checkBloodlustAlignment(
         timestamp_ms: judgedCastMs,
         measured: { value: dir, unit: 'in BL' },
         message: `${cdName} ${dir} in the Bloodlust window.`,
-        details: { remedy: `Tighten ${cdName} to the Bloodlust window.` } });
+        details: { remedy: `Tighten ${cdName} to the Bloodlust window.` }, occurrences: [] });
     }
   }
   return { blAligned, findings };
@@ -163,7 +166,7 @@ export function checkGaps(cdName: string, castTimesMs: number[], cdBench: PerCdB
       timestamp_ms: castTimesMs[i],
       measured: { value: `${gap.toFixed(0)}s`, unit: `avg ${cdBench.avg_gap_s.toFixed(0)}s` },
       message: `${cdName} at ${fmtClock(castTimesMs[i] / 1000)}: ${gap.toFixed(0)}s gap, top ${cdBench.avg_gap_s.toFixed(0)}s.`,
-      details: { remedy: `Press ${cdName} sooner - top gap ${cdBench.avg_gap_s.toFixed(0)}s.` } });
+      details: { remedy: `Press ${cdName} sooner - top gap ${cdBench.avg_gap_s.toFixed(0)}s.` }, occurrences: [] });
   }
   return findings;
 }
@@ -191,7 +194,7 @@ export function checkCastEfficiency(
     label: 'Low cast efficiency',
     measured: { value: `${effPct.toFixed(1)}%`, unit: `top ${topE.toFixed(0)}%` },
     message: `${effPct.toFixed(1)}% cast efficiency, ${totalDtS.toFixed(1)}s idle. Top: ${topE.toFixed(0)}%.`,
-    details: { remedy: `Fill ${totalDtS.toFixed(1)}s of gaps. Top: ${topE.toFixed(0)}%.` } };
+    details: { remedy: `Fill ${totalDtS.toFixed(1)}s of gaps. Top: ${topE.toFixed(0)}%.` }, occurrences: [] };
 }
 
 /** `castTimesMs` are fight-relative (ms, ascending). Null when the cooldown is talent-gated and unused. */
@@ -205,7 +208,7 @@ export function analyzeOneCooldown(
 
   if (!cdBench) {
     const success: AnalysisFinding | null = actual > 0
-      ? { severity: 'success', category: 'cooldown_usage', cd_name: cdName, message: `${cdName}: ${actual} casts (no bench data).` }
+      ? { severity: 'success', category: 'cooldown_usage', cd_name: cdName, message: `${cdName}: ${actual} casts (no bench data).`, occurrences: [] }
       : null;
     return { success, scan: { issues: [], holds: [], blAligned: false } };
   }
@@ -232,7 +235,7 @@ export function analyzeOneCooldown(
   const success: AnalysisFinding | null = issues.length || actual === 0
     ? null
     : { severity: 'success', category: 'cooldown_usage', cd_name: cdName,
-        message: `${cdName} - ${actual}/${expected} casts${bl.blAligned && wantsBL ? ', BL-aligned' : ''}.` };
+        message: `${cdName} - ${actual}/${expected} casts${bl.blAligned && wantsBL ? ', BL-aligned' : ''}.`, occurrences: [] };
   return { success, scan: { issues, holds, blAligned: bl.blAligned } };
 }
 
@@ -324,6 +327,9 @@ export function buildRuleRows(ruleFindings: AnalysisFinding[]): RotationFindingR
     measured: finding.measured ?? { value: '-' },
     timestampMs: finding.timestamp_ms ?? null,
     fix: finding.details?.remedy,
+    occurrences: finding.occurrences,
+    occurrenceTarget: finding.occurrenceTarget,
+    timeline: finding.timeline,
   }));
 }
 
@@ -344,6 +350,7 @@ export function buildOffensiveRows(
         chip: CAT_LABEL[finding.category],
         measured: finding.measured ?? { value: '-' },
         fix: finding.details?.remedy,
+        occurrences: finding.occurrences,
       });
     }
   }

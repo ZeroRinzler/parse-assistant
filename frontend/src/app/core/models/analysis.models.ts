@@ -1,3 +1,19 @@
+export interface FindingOccurrence {
+  atMs?: number;
+  ok: boolean;
+  label: string;
+  /** Rendered only when `atMs` is absent - never alongside it. */
+  note?: string;
+  detail: string;
+  /** Excludes this entry from the ok/violation tone the template otherwise applies. */
+  marker?: boolean;
+}
+
+export interface FindingTimeline {
+  segmentsMs: [number, number][];
+  fightDurationMs: number;
+}
+
 export interface AnalysisFinding {
   severity: 'critical' | 'warning' | 'info' | 'hold_suggestion' | 'success';
   category: string;
@@ -19,6 +35,10 @@ export interface AnalysisFinding {
     cd_name?: string;
     remedy?: string;
   };
+  occurrences: FindingOccurrence[];
+  occurrenceTarget?: string;
+  /** Only aura_uptime_below sets this; every other kind renders occurrences with no timeline. */
+  timeline?: FindingTimeline;
 }
 
 export interface AbilityBreakdown {

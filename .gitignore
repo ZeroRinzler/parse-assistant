@@ -34,3 +34,4 @@ node_modules/
 *.swo
 .DS_Store
 Thumbs.db
+frontend/playwright.local.config.ts

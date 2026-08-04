@@ -65,7 +65,7 @@ test('rotation rules count the casts that broke each rulebook rule', async () =>
   // A violated rule renders its authored description and type, and counts the casts that broke it.
   await shows(rotationRules, 'Eviscerate at 6 or more combo points');
   await shows(rotationRules, 'rotation');
-  await shows(rotationRules, '7 / 87');
+  await shows(rotationRules, '2 / 87');
   await shows(rotationRules, 'Backstab only below 2 targets');
   await shows(rotationRules, 'aoe');
   await shows(rotationRules, '25 / 55');
@@ -85,6 +85,21 @@ test('a broken rule renders the rulebook remedy, and a followed one only its nam
   await shows(rotationRules, 'Open Shadowstrike into Shadow Dance and Shadow Blades');
 });
 
+test('a rule row expands into a chip strip of the instances behind its count', async () => {
+  const rotationRules = page.locator('wl-finding-table').filter({ hasText: 'Rotation rules vs top parses.' });
+  // Same row pinned above at "2 / 87": 87 judged casts is over MAX_OCCURRENCES (24), so the strip is sampled -
+  // proving the sampler keeps every one of the 2 failing casts rather than only the ones an even spacing would land on.
+  const evisRow = rotationRules.locator('div.border-t', { hasText: 'Eviscerate at 6 or more combo points' }).first();
+  const toggle = evisRow.getByRole('button', { name: 'Show instances' });
+  await toggle.click();
+  const strip = evisRow.locator('wl-finding-occurrences');
+  await expect(strip).toBeVisible();
+  await shows(strip, 'Target:');
+  await expect(strip.getByRole('option')).toHaveCount(24);
+  await evisRow.getByRole('button', { name: 'Hide instances' }).click();
+  await expect(strip).not.toBeVisible();
+});
+
 test('offensives flag the lost cooldown casts and the holds', async () => {
   const offensives = page.locator('wl-finding-table').filter({ hasText: 'Offensive cooldowns vs top parses.' });
   await shows(offensives, 'Shadow Blades');
@@ -92,7 +107,7 @@ test('offensives flag the lost cooldown casts and the holds', async () => {
   await shows(offensives, '4 / 5');
   await shows(offensives, 'Vanish');
   await shows(offensives, '3:19');
-  await shows(offensives, '+151s');
+  await shows(offensives, '+152s');
   await shows(offensives, 'top 00:47');
 });
 
@@ -103,24 +118,27 @@ test('burst windows compare the player damage against the top-parse windows', as
   await shows(burstWindows, 'window');
   await shows(burstWindows, '3:22 - 3:26');
   await shows(burstWindows, 'burst');
-  await shows(burstWindows, '2K');
+  await shows(burstWindows, '1K');
   await shows(burstWindows, '-100%');
   await showsAbility(burstWindows, 'Secret Technique', '525K');
   await shows(burstWindows, 'missed');
   await shows(burstWindows, '0 / 1');
 });
 
-test('defensives stay on plan and benchmark the damage taken', async () => {
+test('defensives flag a held cooldown and benchmark the damage taken', async () => {
   const defensives = page.locator('wl-defensive');
   await shows(defensives, 'Defensive cooldowns vs top parses.');
-  await shows(defensives, 'On plan');
   await shows(defensives, 'Feint');
+  await shows(defensives, 'held');
+  await shows(defensives, '121s');
+  await shows(defensives, 'avg 38s');
+  await shows(defensives, 'On plan');
   await shows(defensives, 'Crimson Vial');
   await shows(defensives, 'Cloak of Shadows');
   await shows(defensives, 'Damage taken in top-parse defensive windows vs top parses.');
-  await shows(defensives, '0:58 - 1:04');
-  await shows(defensives, '552K');
-  await shows(defensives, '+175%');
+  await shows(defensives, '0:57 - 1:03');
+  await shows(defensives, '507K');
+  await shows(defensives, '+246%');
 });
 
 test('gear lists the top-parse talent builds and how the alt build differs, plus trinkets and enchants', async () => {

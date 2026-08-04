@@ -1,7 +1,7 @@
 <div class="bg-[var(--surface)] border border-[var(--border)] rounded-[10px] overflow-hidden">
 
   <!-- Mobile drops the grid so the title sits flush-left and the column labels hide; the 4-col grid + labels restore at md. -->
-  <div class="px-4 pt-3 pb-2 md:grid md:grid-cols-[20px_minmax(0,1fr)_96px_200px] md:gap-[14px] md:items-baseline">
+  <div class="px-4 pt-3 pb-2 md:grid md:grid-cols-[20px_minmax(0,1fr)_96px_200px_28px] md:gap-[14px] md:items-baseline">
     <div class="md:col-span-2">
       <div class="text-[17px] font-semibold text-[var(--text)]">{{ heading() }}</div>
       @if (subtitle()) {
@@ -10,78 +10,102 @@
     </div>
     <div class="hidden md:block text-[10px] uppercase tracking-widest text-[var(--muted)] tabular-nums text-right">Measured</div>
     <div class="hidden md:block text-[10px] uppercase tracking-widest text-[var(--muted)] pl-[14px]">Fix</div>
+    <div class="hidden md:block"></div>
   </div>
 
   @for (row of rows(); track $index) {
-    <div [class]="'grid grid-cols-[20px_minmax(0,1fr)] md:grid-cols-[20px_minmax(0,1fr)_96px_200px] gap-x-[14px] gap-y-2 md:gap-y-0 px-4 py-[10px] items-start md:items-center border-t border-[var(--border)]' + (row.severity === 'critical' ? ' bg-[var(--critical)]/4' : '')">
+    <div [class]="'border-t border-[var(--border)]' + (row.severity === 'critical' ? ' bg-[var(--critical)]/4' : '')">
+      <div class="grid grid-cols-[20px_minmax(0,1fr)_28px] md:grid-cols-[20px_minmax(0,1fr)_96px_200px_28px] gap-x-[14px] gap-y-2 md:gap-y-0 px-4 py-[10px] items-start md:items-center">
 
-      <div class="flex items-center justify-center self-start md:self-center">
-        <mat-icon class="icon-18"
+        <div class="flex items-center justify-center self-start md:self-center">
+          <mat-icon class="icon-18"
+            [class.badge-critical]="row.severity === 'critical'"
+            [class.badge-warning]="row.severity === 'warning'"
+            [class.badge-info]="row.severity === 'info'">
+            {{ row.severity === 'critical' ? 'error' : row.severity === 'info' ? 'info' : 'warning_amber' }}
+          </mat-icon>
+        </div>
+
+        <div class="min-w-0">
+          <div class="flex items-center gap-[7px] flex-wrap">
+            @if (row.name; as name) {
+              @if (row.spellId; as spellId) {
+                <!-- wl-game-icon renders icon + name; no extra label needed -->
+                <wl-game-icon [id]="spellId" [icon]="row.icon" [name]="name"></wl-game-icon>
+              } @else {
+                <span class="inline-block bg-[var(--surface-alt)] border border-dashed border-[var(--border)] rounded w-[19px] h-[19px] shrink-0"></span>
+                <span class="text-sm text-[var(--text)]">{{ name }}</span>
+              }
+              @if (row.timestampMs != null) {
+                <span class="text-[13px] text-[var(--accent)] tabular-nums">{{ row.timestampMs / 1000 | formatDuration }}</span>
+                @if (showMap()) {
+                  <button mat-icon-button title="Open positioning map" (click)="openMap.emit(row)">
+                    <mat-icon>my_location</mat-icon>
+                  </button>
+                }
+                @if (showClip()) {
+                  <button mat-icon-button title="Watch clip" (click)="openClip.emit(row)">
+                    <mat-icon>videocam</mat-icon>
+                  </button>
+                }
+              }
+            } @else {
+              <span class="text-sm text-[var(--text)] leading-[1.35]">{{ row.what }}</span>
+            }
+            @if (row.chip) {
+              @switch (row.severity) {
+                @case ('critical') {
+                  <span class="text-[10px] rounded-sm px-[5px] tabular-nums text-[var(--critical)] bg-[var(--critical)]/10 border border-[var(--critical)]/25">{{ row.chip }}</span>
+                }
+                @case ('info') {
+                  <span class="text-[10px] rounded-sm px-[5px] tabular-nums text-[var(--info)] bg-[var(--info)]/10 border border-[var(--info)]/25">{{ row.chip }}</span>
+                }
+                @default {
+                  <span class="text-[10px] rounded-sm px-[5px] tabular-nums text-[var(--warning)] bg-[var(--warning)]/10 border border-[var(--warning)]/25">{{ row.chip }}</span>
+                }
+              }
+            }
+          </div>
+        </div>
+
+        <div class="col-start-2 md:col-auto flex items-baseline gap-2 md:block text-left md:text-right leading-[1.1]"
           [class.badge-critical]="row.severity === 'critical'"
           [class.badge-warning]="row.severity === 'warning'"
           [class.badge-info]="row.severity === 'info'">
-          {{ row.severity === 'critical' ? 'error' : row.severity === 'info' ? 'info' : 'warning_amber' }}
-        </mat-icon>
-      </div>
-
-      <div class="min-w-0">
-        <div class="flex items-center gap-[7px] flex-wrap">
-          @if (row.name; as name) {
-            @if (row.spellId; as spellId) {
-              <!-- wl-game-icon renders icon + name; no extra label needed -->
-              <wl-game-icon [id]="spellId" [icon]="row.icon" [name]="name"></wl-game-icon>
-            } @else {
-              <span class="inline-block bg-[var(--surface-alt)] border border-dashed border-[var(--border)] rounded w-[19px] h-[19px] shrink-0"></span>
-              <span class="text-sm text-[var(--text)]">{{ name }}</span>
-            }
-            @if (row.timestampMs != null) {
-              <span class="text-[13px] text-[var(--accent)] tabular-nums">{{ row.timestampMs / 1000 | formatDuration }}</span>
-              @if (showMap()) {
-                <button mat-icon-button title="Open positioning map" (click)="openMap.emit(row)">
-                  <mat-icon>my_location</mat-icon>
-                </button>
-              }
-              @if (showClip()) {
-                <button mat-icon-button title="Watch clip" (click)="openClip.emit(row)">
-                  <mat-icon>videocam</mat-icon>
-                </button>
-              }
-            }
-          } @else {
-            <span class="text-sm text-[var(--text)] leading-[1.35]">{{ row.what }}</span>
-          }
-          @if (row.chip) {
-            @switch (row.severity) {
-              @case ('critical') {
-                <span class="text-[10px] rounded-sm px-[5px] tabular-nums text-[var(--critical)] bg-[var(--critical)]/10 border border-[var(--critical)]/25">{{ row.chip }}</span>
-              }
-              @case ('info') {
-                <span class="text-[10px] rounded-sm px-[5px] tabular-nums text-[var(--info)] bg-[var(--info)]/10 border border-[var(--info)]/25">{{ row.chip }}</span>
-              }
-              @default {
-                <span class="text-[10px] rounded-sm px-[5px] tabular-nums text-[var(--warning)] bg-[var(--warning)]/10 border border-[var(--warning)]/25">{{ row.chip }}</span>
-              }
-            }
+          <span class="md:hidden font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">Measured</span>
+          <div class="text-[15px] font-semibold tabular-nums">{{ row.measured.value }}</div>
+          @if (row.measured.unit) {
+            <div class="text-[12px] text-[var(--muted)] md:text-inherit md:text-[10px] md:opacity-60 md:mt-px tabular-nums">{{ row.measured.unit }}</div>
           }
         </div>
+
+        <div class="col-start-2 md:col-auto text-[13px] text-[var(--muted)] leading-[1.45] border-t md:border-t-0 md:border-l border-[var(--border)] pt-2 md:pt-0 pl-0 md:pl-[14px]">
+          <span class="md:hidden block font-mono text-[10px] uppercase tracking-wider text-[var(--muted)] mb-1">Fix</span>
+          <wl-collapsible-text>{{ row.fix }}</wl-collapsible-text>
+        </div>
+
+        <div class="row-start-1 col-start-3 md:row-auto md:col-start-5 flex items-center justify-center self-start md:self-center">
+          @if (row.occurrences.length) {
+            <button mat-icon-button
+              [attr.aria-expanded]="openIndex() === $index"
+              [attr.aria-label]="openIndex() === $index ? 'Hide instances' : 'Show instances'"
+              (click)="toggle($index)">
+              <mat-icon class="icon-18 transition-transform" [class.rotate-180]="openIndex() === $index">expand_more</mat-icon>
+            </button>
+          }
+        </div>
+
       </div>
 
-      <div class="col-start-2 md:col-auto flex items-baseline gap-2 md:block text-left md:text-right leading-[1.1]"
-        [class.badge-critical]="row.severity === 'critical'"
-        [class.badge-warning]="row.severity === 'warning'"
-        [class.badge-info]="row.severity === 'info'">
-        <span class="md:hidden font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">Measured</span>
-        <div class="text-[15px] font-semibold tabular-nums">{{ row.measured.value }}</div>
-        @if (row.measured.unit) {
-          <div class="text-[12px] text-[var(--muted)] md:text-inherit md:text-[10px] md:opacity-60 md:mt-px tabular-nums">{{ row.measured.unit }}</div>
-        }
-      </div>
-
-      <div class="col-start-2 md:col-auto text-[13px] text-[var(--muted)] leading-[1.45] border-t md:border-t-0 md:border-l border-[var(--border)] pt-2 md:pt-0 pl-0 md:pl-[14px]">
-        <span class="md:hidden block font-mono text-[10px] uppercase tracking-wider text-[var(--muted)] mb-1">Fix</span>
-        <wl-collapsible-text>{{ row.fix }}</wl-collapsible-text>
-      </div>
-
+      @if (row.occurrences.length && openIndex() === $index) {
+        <div class="px-4 pb-4 pt-2 md:pl-[54px] border-t border-dashed border-[var(--border)]">
+          <wl-finding-occurrences
+            [occurrences]="row.occurrences"
+            [target]="row.occurrenceTarget ?? ''"
+            [timeline]="row.timeline">
+          </wl-finding-occurrences>
+        </div>
+      }
     </div>
   }
 

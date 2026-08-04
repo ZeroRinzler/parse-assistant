@@ -1,0 +1,58 @@
+@if (timeline(); as t) {
+  <div class="text-[10px] uppercase tracking-widest text-[var(--muted)] mb-1.5">Uptime across the fight</div>
+  <div class="relative h-[22px] rounded-md bg-[var(--bg)] overflow-hidden mb-3" aria-hidden="true">
+    @for (seg of segments(); track $index) {
+      <div class="absolute inset-y-0 rounded-md bg-[var(--success)]/65" [style.left.%]="seg.leftPercentage" [style.width.%]="seg.widthPercentage"></div>
+    }
+  </div>
+  @if (t.segmentsMs.length) {
+    <div class="text-[10px] uppercase tracking-widest text-[var(--muted)] mb-1.5">Largest gaps</div>
+  }
+} @else {
+  <div class="text-[10px] uppercase tracking-widest text-[var(--muted)] mb-1.5">Instances</div>
+}
+
+<div
+  role="listbox"
+  tabindex="0"
+  [attr.aria-activedescendant]="activeOptionId()"
+  (keydown)="onKeydown($event)">
+  <div class="flex flex-wrap items-start gap-1.5">
+    @for (occ of occurrences(); track $index) {
+      @let tone = occ.marker ? 'text-[var(--gold)]' : (occ.ok ? 'text-[var(--success)]' : 'text-[var(--critical)]');
+      @let barTone = occ.marker ? 'bg-[var(--gold)]' : (occ.ok ? 'bg-[var(--success)]' : 'bg-[var(--critical)]');
+      @let active = activeIndex() === $index;
+      <div class="flex flex-col items-center gap-1.5 shrink-0">
+        <button
+          type="button"
+          role="option"
+          tabindex="-1"
+          [id]="optionId($index)"
+          [class]="'relative flex items-center justify-center min-w-10 h-10 px-2 rounded-lg overflow-hidden bg-[var(--bg)] border border-[var(--border)] text-[11.5px] font-semibold whitespace-nowrap ' + tone + (active ? ' outline outline-2 outline-offset-0 outline-[var(--gold)]' : ' focus:outline-none')"
+          [attr.aria-selected]="active"
+          (click)="select($index)">
+          {{ occ.label }}
+          <span [class]="'absolute bottom-0 left-0 right-0 h-1 ' + barTone" aria-hidden="true"></span>
+        </button>
+        <span [class]="'tabular-nums text-[10px] ' + (active ? 'text-[var(--gold)]' : 'text-[var(--muted)]')">
+          {{ occ.atMs != null ? (occ.atMs / 1000 | formatDuration) : occ.note }}
+        </span>
+      </div>
+    }
+  </div>
+</div>
+
+@if (target()) {
+  <div class="text-[11px] text-[var(--muted)] mt-2 pt-2 border-t border-[var(--border)]">
+    <span class="text-[var(--text)]">Target:</span> {{ target() }}
+  </div>
+}
+
+@if (active(); as occ) {
+  <div class="mt-[11px] text-[13px] text-[var(--muted)] leading-[1.5]">
+    @if (occ.atMs != null) {
+      <span class="text-[var(--accent)] font-semibold mr-0.5">{{ occ.atMs / 1000 | formatDuration }}</span>
+    }
+    {{ occ.detail }}
+  </div>
+}

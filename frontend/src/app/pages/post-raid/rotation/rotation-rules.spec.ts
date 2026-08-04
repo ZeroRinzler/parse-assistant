@@ -431,8 +431,8 @@ describe('evaluateResourceAtCast', () => {
   it('says the same thing in the chip and the sentence, so the two cannot drift', () => {
     const ctx = ruleCtx([atCombo(10, 3)]);
     const finding = evaluateResourceAtCast(finisherAtMax, ctx, thr(RESOURCE_FLOOR), 'warning');
-    expect(finding?.label).toBe('Eviscerate below 100% combo points');
-    expect(finding?.message).toContain('Eviscerate cast below 100% combo points');
+    expect(finding?.label).toBe('Eviscerate below 5/5 combo points');
+    expect(finding?.message).toContain('Eviscerate cast below 5/5 combo points');
   });
 
   it('is not applicable when the casts carry no resource snapshot', () => {
@@ -1038,5 +1038,260 @@ describe('rulesNeed', () => {
 
   it.each(cases)('$name', ({ rules, stream, needed }) => {
     expect(rulesNeed(rules, stream)).toBe(needed);
+  });
+});
+
+describe('occurrence strips', () => {
+  it('cast_without_prior: a chip per judged cast, its lead as the label', () => {
+    const ctx = ruleCtx([cast(SHADOW_DANCE, 10), cast(SECRET_TECHNIQUE, 12), cast(SECRET_TECHNIQUE, 40)]);
+    const finding = evaluateCastWithoutPrior(SECRET_TECH_NEEDS_DANCE, ctx, thr(PAIR_WINDOW_S), 'warning');
+    expect(finding?.occurrences).toEqual([
+      { atMs: 12_000, ok: true, label: '2s', detail: 'Shadow Dance landed 2s from this cast.' },
+      { atMs: 40_000, ok: false, label: '30s', detail: 'Shadow Dance landed 30s from this cast.' },
+    ]);
+    expect(finding?.occurrenceTarget).toBe('field pairs inside 5s');
+  });
+
+  it('hold_cooldown_for_anchor: marks the anchor cast and reads each charge\'s gap to it', () => {
+    const ctx = ruleCtx([cast(SHADOW_BLADES, 10), cast(SHADOW_BLADES, 120), cast(SHADOW_DANCE, 110)]);
+    const finding = evaluateHoldForAnchor(HOLD_DANCE_FOR_BLADES, ctx, thr(HOLD_WINDOW_S), 'critical');
+    expect(finding?.occurrences).toEqual([
+      { atMs: 110_000, ok: false, label: '10s', detail: 'Shadow Dance cast 10s before Shadow Blades.' },
+      { atMs: 120_000, ok: true, label: 'Shadow Blades', marker: true, detail: 'Shadow Blades cast here.' },
+    ]);
+    expect(finding?.occurrenceTarget).toBe('gap to Shadow Blades at cast');
+  });
+
+  it('cast_outside_buff: a chip per cast, the buff state as the label', () => {
+    const outsideDance: CastOutsideBuffCondition = {
+      kind: 'cast_outside_buff', spell_id: SECRET_TECHNIQUE, spell_name: 'Secret Technique',
+      buff_spell_id: SHADOW_DANCE, buff_spell_name: 'Shadow Dance', require: 'inside',
+    };
+    const ctx = ruleCtx([cast(SECRET_TECHNIQUE, 22), cast(SECRET_TECHNIQUE, 35)], { buffs: buffWindow(SHADOW_DANCE, 20, 28) });
+    const finding = evaluateCastOutsideBuff(outsideDance, ctx, 'warning');
+    expect(finding?.occurrences).toEqual([
+      { atMs: 22_000, ok: true, label: 'up', detail: 'Shadow Dance was up at this cast.' },
+      { atMs: 35_000, ok: false, label: 'down', detail: 'Shadow Dance was down at this cast.' },
+    ]);
+    expect(finding?.occurrenceTarget).toBe('buff state at cast');
+  });
+
+  it('aura_uptime_below: a timeline of merged up-spans, plus a chip for each of the largest gaps', () => {
+    const uptime: AuraUptimeBelowCondition = {
+      kind: 'aura_uptime_below', aura_spell_id: RUPTURE, aura_spell_name: 'Rupture', on: 'target',
+    };
+    // Up 0-50s and 70-90s over a 120s fight: two gaps, 20s and 30s.
+    const debuffs = [
+      applyDebuff(RUPTURE, 0), removeDebuff(RUPTURE, 50),
+      applyDebuff(RUPTURE, 70), removeDebuff(RUPTURE, 90),
+    ];
+    const ctx = ruleCtx([], { debuffs });
+    const RUPTURE_MIN_PCT = 80;
+    const finding = evaluateAuraUptimeBelow(uptime, ctx, thr(RUPTURE_MIN_PCT), 'warning');
+    expect(finding?.measured).toEqual({ value: '58 / 80', unit: '% uptime' });
+    expect(finding?.timeline).toEqual({ segmentsMs: [[0, 50_000], [70_000, 90_000]], fightDurationMs: 120_000 });
+    expect(finding?.occurrences).toEqual([
+      { atMs: 50_000, ok: false, label: '20s', detail: 'Rupture was down here for 20s.' },
+      { atMs: 90_000, ok: false, label: '30s', detail: 'Rupture was down here for 30s.' },
+    ]);
+  });
+
+  it('aura_uptime_below: drops a sub-second gap from the chip strip, since it would render as a nonsensical "0s"', () => {
+    const uptime: AuraUptimeBelowCondition = {
+      kind: 'aura_uptime_below', aura_spell_id: RUPTURE, aura_spell_name: 'Rupture', on: 'target',
+    };
+    const FIGHT_END_MS = 20_000;
+    // Up 0.3-10s and 15-20s over a 20s fight: a 0.3s opening gap (travel-time noise, not a maintain miss) plus a real 5s gap.
+    const debuffs = [applyDebuff(RUPTURE, 0.3), removeDebuff(RUPTURE, 10), applyDebuff(RUPTURE, 15)];
+    const ctx = ruleCtx([], { debuffs, fEnd: FIGHT_END_MS });
+    const finding = evaluateAuraUptimeBelow(uptime, ctx, thr(90), 'warning');
+    expect(finding?.timeline).toEqual({ segmentsMs: [[300, 10_000], [15_000, 20_000]], fightDurationMs: FIGHT_END_MS });
+    expect(finding?.occurrences).toEqual([
+      { atMs: 10_000, ok: false, label: '5s', detail: 'Rupture was down here for 5s.' },
+    ]);
+  });
+
+  it('opening_sequence: a chip per authored step, a missed one carrying a "not reached" note instead of a time', () => {
+    const opener: OpeningSequenceCondition = {
+      kind: 'opening_sequence',
+      spell_ids: [SHADOW_BLADES, SHADOW_DANCE, SECRET_TECHNIQUE],
+      spell_names: ['Shadow Blades', 'Shadow Dance', 'Secret Technique'],
+    };
+    const ctx = ruleCtx([cast(SHADOW_BLADES, 1), cast(SECRET_TECHNIQUE, 3)]);
+    const OPENER_WINDOW_S = 12;
+    const finding = evaluateOpeningSequence(opener, ctx, thr(OPENER_WINDOW_S), 'warning');
+    expect(finding?.occurrences).toEqual([
+      { atMs: 1_000, ok: true, label: 'Shadow Blades', detail: 'Shadow Blades landed on time in its slot.' },
+      { ok: false, label: 'Shadow Dance', note: 'not reached', detail: 'Shadow Dance was never reached in the opener window.' },
+      { atMs: 3_000, ok: true, label: 'Secret Technique', detail: 'Secret Technique landed on time in its slot.' },
+    ]);
+    expect(finding?.occurrenceTarget).toBe('expected order: Shadow Blades > Shadow Dance > Secret Technique');
+  });
+
+  it('cast_at_target_count: a chip per cast, the target count as the label', () => {
+    const blackPowder: CastAtTargetCountCondition = {
+      kind: 'cast_at_target_count', spell_id: BLACK_POWDER, spell_name: 'Black Powder', bound: 'min',
+    };
+    const ctx = ruleCtx([cast(BLACK_POWDER, 10), cast(BLACK_POWDER, 30)], {
+      damage: [
+        ...[1, 2].map(id => damage(BLACK_POWDER, 11, 100, { target: id })),
+        ...[1, 2, 3].map(id => damage(BLACK_POWDER, 31, 100, { target: id })),
+      ],
+    });
+    const finding = evaluateCastAtTargetCount(blackPowder, ctx, thr(3), 'warning');
+    expect(finding?.occurrences).toEqual([
+      { atMs: 10_000, ok: false, label: '2', detail: 'Black Powder cast at 2.' },
+      { atMs: 30_000, ok: true, label: '3', detail: 'Black Powder cast at 3.' },
+    ]);
+    expect(finding?.occurrenceTarget).toBe('field waits for 3+');
+  });
+
+  it('resource_at_cast: a chip per cast, the raw amount over its own cap as the label (a small pool reads as a count, not a percent)', () => {
+    const finisher: ResourceAtCastCondition = {
+      kind: 'resource_at_cast', spell_id: EVISCERATE, spell_name: 'Eviscerate',
+      resource_type: COMBO_POINT_TYPE, resource_name: 'combo points', bound: 'min',
+    };
+    const atCombo = (atS: number, amount: number) =>
+      cast(EVISCERATE, atS, { resources: [{ amount, max: MAX_COMBO_POINTS, type: COMBO_POINT_TYPE }] });
+    const ctx = ruleCtx([atCombo(10, 3), atCombo(20, MAX_COMBO_POINTS)]);
+    const finding = evaluateResourceAtCast(finisher, ctx, thr(1), 'warning');
+    expect(finding?.occurrences).toEqual([
+      { atMs: 10_000, ok: false, label: '3/5', detail: 'Eviscerate cast at 3/5.' },
+      { atMs: 20_000, ok: true, label: '5/5', detail: 'Eviscerate cast at 5/5.' },
+    ]);
+    expect(finding?.occurrenceTarget).toBe('field waits for 5/5+');
+  });
+
+  it('resource_at_cast: a large pool (mana) still reads as a percent, since WCL reports it as a five/six-digit number', () => {
+    const innervate: ResourceAtCastCondition = {
+      kind: 'resource_at_cast', spell_id: EVISCERATE, spell_name: 'Innervate',
+      resource_type: COMBO_POINT_TYPE, resource_name: 'mana', bound: 'min',
+    };
+    const MANA_MAX = 250_000;
+    const atMana = (atS: number, amount: number) =>
+      cast(EVISCERATE, atS, { resources: [{ amount, max: MANA_MAX, type: COMBO_POINT_TYPE }] });
+    const ctx = ruleCtx([atMana(10, MANA_MAX * 0.6), atMana(20, MANA_MAX)]);
+    const finding = evaluateResourceAtCast(innervate, ctx, thr(1), 'warning');
+    expect(finding?.occurrences).toEqual([
+      { atMs: 10_000, ok: false, label: '60%', detail: 'Innervate cast at 60%.' },
+      { atMs: 20_000, ok: true, label: '100%', detail: 'Innervate cast at 100%.' },
+    ]);
+    expect(finding?.occurrenceTarget).toBe('field waits for 100%+');
+  });
+
+  it('proc_wasted: a chip per proc span, used vs wasted as the label', () => {
+    const spendDance: ProcWastedCondition = {
+      kind: 'proc_wasted', buff_spell_id: SHADOW_DANCE, buff_spell_name: 'Shadow Dance',
+      spend_spell_ids: [SECRET_TECHNIQUE], spend_spell_names: ['Secret Technique'],
+    };
+    const buffs = [...buffWindow(SHADOW_DANCE, 20, 28), ...buffWindow(SHADOW_DANCE, 40, 50)];
+    const ctx = ruleCtx([cast(SECRET_TECHNIQUE, 22)], { buffs });
+    const finding = evaluateProcWasted(spendDance, ctx, 'warning');
+    expect(finding?.occurrences).toEqual([
+      { atMs: 20_000, ok: true, label: 'used', detail: 'Shadow Dance was spent before it expired.' },
+      { atMs: 40_000, ok: false, label: 'wasted', detail: 'Shadow Dance expired unspent here.' },
+    ]);
+    expect(finding?.occurrenceTarget).toBe('window it expired in');
+  });
+
+  it('filler_in_buff: a chip per filler cast inside the buff, coached vs alternative as the label', () => {
+    const wrathInSolar: FillerInBuffCondition = {
+      kind: 'filler_in_buff',
+      spell_id: WRATH, spell_name: 'Wrath',
+      alternative_spell_ids: [STARFIRE], alternative_spell_names: ['Starfire'],
+      buff_spell_id: ECLIPSE_SOLAR, buff_spell_name: 'Eclipse (Solar)',
+    };
+    const ctx = ruleCtx([cast(WRATH, 12), cast(STARFIRE, 14), cast(STARFIRE, 20)], { buffs: buffWindow(ECLIPSE_SOLAR, 10, 40) });
+    const finding = evaluateFillerInBuff(wrathInSolar, ctx, thr(0.9), 'warning');
+    expect(finding?.occurrences).toEqual([
+      { atMs: 12_000, ok: true, label: 'Wrath', detail: 'Wrath was the coached filler here.' },
+      { atMs: 14_000, ok: false, label: 'Starfire', detail: 'Starfire was pressed instead of Wrath here.' },
+      { atMs: 20_000, ok: false, label: 'Starfire', detail: 'Starfire was pressed instead of Wrath here.' },
+    ]);
+    expect(finding?.occurrenceTarget).toBe('filler choice inside Eclipse (Solar)');
+  });
+
+  it('spend_at_stacks: a chip per cast, the stack count as the label', () => {
+    const spendAtStacks: SpendAtStacksCondition = {
+      kind: 'spend_at_stacks',
+      spell_id: LIGHTNING_BOLT, spell_name: 'Lightning Bolt',
+      buff_spell_id: MAELSTROM_WEAPON, buff_spell_name: 'Maelstrom Weapon',
+      bound: 'min',
+    };
+    const buffs = [applyBuff(MAELSTROM_WEAPON, 1), applyBuffStack(MAELSTROM_WEAPON, 5, 5), applyBuffStack(MAELSTROM_WEAPON, 9, 9)];
+    const ctx = ruleCtx([cast(LIGHTNING_BOLT, 6), cast(LIGHTNING_BOLT, 10)], { buffs });
+    const finding = evaluateSpendAtStacks(spendAtStacks, ctx, thr(8), 'warning');
+    expect(finding?.occurrences).toEqual([
+      { atMs: 6_000, ok: false, label: '5', detail: 'Lightning Bolt cast at 5.' },
+      { atMs: 10_000, ok: true, label: '9', detail: 'Lightning Bolt cast at 9.' },
+    ]);
+    expect(finding?.occurrenceTarget).toBe('field waits for 8+');
+  });
+
+  it('aura_clipped: a chip per hard-cast refresh, the elapsed time as the label', () => {
+    const moonfireClipped: AuraClippedCondition = {
+      kind: 'aura_clipped',
+      aura_spell_id: MOONFIRE_DOT, aura_spell_name: 'Moonfire',
+      cast_spell_id: MOONFIRE, cast_spell_name: 'Moonfire', on: 'target',
+    };
+    const debuffs = [applyDebuff(MOONFIRE_DOT, 20), refreshDebuff(MOONFIRE_DOT, 24), refreshDebuff(MOONFIRE_DOT, 36)];
+    const ctx = ruleCtx([cast(MOONFIRE, 24), cast(MOONFIRE, 36)], { debuffs });
+    const finding = evaluateAuraClipped(moonfireClipped, ctx, thr(12), 'warning');
+    expect(finding?.occurrences).toEqual([
+      { atMs: 24_000, ok: false, label: '4s', detail: 'Refreshed with 4s still remaining.' },
+      { atMs: 36_000, ok: true, label: '12s', detail: 'Refreshed with 12s still remaining.' },
+    ]);
+    expect(finding?.occurrenceTarget).toBe('field waits for 12s remaining');
+  });
+
+  it('filler_below_health: a chip per filler cast under the health gate, coached vs alternative as the label', () => {
+    const executeBelow: FillerBelowHealthCondition = {
+      kind: 'filler_below_health',
+      spell_id: EXECUTE, spell_name: 'Execute',
+      alternative_spell_ids: [SLAM], alternative_spell_names: ['Slam'],
+      health_pct: 20,
+    };
+    const HIT_S = 100;
+    const hitAt = (atS: number, healthPct: number) => damage(SHADOW_BLADES_DAMAGE, atS, 1, { targetHealthPct: healthPct });
+    const ctx = ruleCtx([cast(EXECUTE, HIT_S + 0.5), cast(SLAM, HIT_S + 1)], { damage: [hitAt(HIT_S, 15)] });
+    const finding = evaluateFillerBelowHealth(executeBelow, ctx, thr(0.95), 'warning');
+    expect(finding?.occurrences).toEqual([
+      { atMs: 100_500, ok: true, label: 'Execute', detail: 'Execute was the coached filler here.' },
+      { atMs: 101_000, ok: false, label: 'Slam', detail: 'Slam was pressed instead of Execute here.' },
+    ]);
+    expect(finding?.occurrenceTarget).toBe('filler choice under 20% health');
+  });
+
+  it('caps a finding at MAX_OCCURRENCES, keeping chronological order', () => {
+    const OVER_CAP_CASTS = 30;
+    const blackPowder: CastAtTargetCountCondition = {
+      kind: 'cast_at_target_count', spell_id: BLACK_POWDER, spell_name: 'Black Powder', bound: 'min',
+    };
+    const casts = Array.from({ length: OVER_CAP_CASTS }, (_, i) => cast(BLACK_POWDER, i + 1));
+    const dmg = Array.from({ length: OVER_CAP_CASTS }, (_, i) => damage(BLACK_POWDER, i + 1.5, 100, { target: 1 }));
+    const finding = evaluateCastAtTargetCount(blackPowder, ruleCtx(casts, { damage: dmg }), thr(3), 'warning');
+    const occurrences = finding!.occurrences!;
+    expect(occurrences.length).toBe(24);
+    expect(occurrences[0].atMs).toBe(1_000);
+    const timestamps = occurrences.map(o => o.atMs);
+    expect(timestamps).toEqual([...timestamps].sort((a, b) => (a ?? 0) - (b ?? 0)));
+  });
+
+  it('never drops a violation from the sampled strip, even when passing casts alone exceed the cap', () => {
+    const finisher: ResourceAtCastCondition = {
+      kind: 'resource_at_cast', spell_id: EVISCERATE, spell_name: 'Eviscerate',
+      resource_type: COMBO_POINT_TYPE, resource_name: 'combo points', bound: 'min',
+    };
+    const atCombo = (atS: number, amount: number) =>
+      cast(EVISCERATE, atS, { resources: [{ amount, max: MAX_COMBO_POINTS, type: COMBO_POINT_TYPE }] });
+    const FAIL_AT_S = [5, 15, 25];
+    const fails = FAIL_AT_S.map(atS => atCombo(atS, 1));
+    const PASSING_CASTS = 30; // clears MAX_OCCURRENCES (24) so sampling kicks in
+    const passes = Array.from({ length: PASSING_CASTS }, (_, i) => atCombo(100 + i, MAX_COMBO_POINTS));
+    const finding = evaluateResourceAtCast(finisher, ruleCtx([...fails, ...passes]), thr(1), 'warning');
+    const occurrences = finding!.occurrences!;
+    expect(occurrences.length).toBe(24);
+    const failingAtMs = occurrences.filter(occ => !occ.ok).map(occ => occ.atMs);
+    expect(failingAtMs).toEqual(FAIL_AT_S.map(atS => atS * 1000));
   });
 });

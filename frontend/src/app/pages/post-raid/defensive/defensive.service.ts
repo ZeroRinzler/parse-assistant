@@ -147,7 +147,7 @@ export function gapDelayFindings(
         timestamp_ms: Math.round(castTimesS[i] * 1000),
         measured: { value: `${gap.toFixed(0)}s`, unit: `avg ${avgGapS.toFixed(0)}s` },
         message: `${name} at ${fmtClock(castTimesS[i])}: ${gap.toFixed(0)}s gap, top ${avgGapS.toFixed(0)}s.`,
-        details: { remedy: `Use ${name} sooner after it resets.` } });
+        details: { remedy: `Use ${name} sooner after it resets.` }, occurrences: [] });
     }
   }
   return findings;
@@ -166,7 +166,7 @@ export function analyzeOneDefensive(
 
   if (!defBench) {
     return uses > 0
-      ? [{ severity: 'success', category: 'cooldown_usage', cd_name: name, message: `${name}: ${uses} uses (no bench data).` }]
+      ? [{ severity: 'success', category: 'cooldown_usage', cd_name: name, message: `${name}: ${uses} uses (no bench data).`, occurrences: [] }]
       : [];
   }
 
@@ -181,12 +181,12 @@ export function analyzeOneDefensive(
     issues.push({ severity: 'critical', category: 'lost_cooldown', cd_name: name, timestamp_ms: undefined,
       measured: { value: `0 / ${expected}`, unit: 'use(s)' },
       message: `${name} unused. Expected ${expected} on a ${fmtClock(fightDurS)} fight.`,
-      details: { remedy: `Use ${name} ${expected}x this fight.` } });
+      details: { remedy: `Use ${name} ${expected}x this fight.` }, occurrences: [] });
   } else if (majorityUse && uses > 0 && uses < floor) {
     issues.push({ severity: 'critical', category: 'lost_cooldown', cd_name: name, timestamp_ms: undefined,
       measured: { value: `${uses} / ${expected}`, unit: 'use(s)' },
       message: `${name}: ${uses} uses, expected ${expected}. ${floor - uses} lost.`,
-      details: { remedy: `Use ${name} ${floor - uses}x more.` } });
+      details: { remedy: `Use ${name} ${floor - uses}x more.` }, occurrences: [] });
   }
 
   const suggestions: AnalysisFinding[] = [];
@@ -197,7 +197,7 @@ export function analyzeOneDefensive(
         timestamp_ms: Math.round(firstS * 1000),
         measured: { value: `+${(firstS - defBench.avg_first_cast_s).toFixed(0)}s`, unit: `top ${fmtClock(defBench.avg_first_cast_s)}` },
         message: `${name} first used at ${fmtClock(firstS)}, ${(firstS - defBench.avg_first_cast_s).toFixed(0)}s late. Top: ${fmtClock(defBench.avg_first_cast_s)}.`,
-        details: { remedy: `Use ${name} earlier.` } });
+        details: { remedy: `Use ${name} earlier.` }, occurrences: [] });
     }
     issues.push(...gapDelayFindings(name, cast_times_s, defBench));
     suggestions.push(...holdSuggestionFindings(name, cast_times_s, defBench.hold_targets));
@@ -205,7 +205,7 @@ export function analyzeOneDefensive(
 
   const result = issues.length
     ? issues
-    : (uses > 0 ? [{ severity: 'success', category: 'cooldown_usage', cd_name: name, message: `${name} - ${uses}/${expected} uses.` } as AnalysisFinding] : []);
+    : (uses > 0 ? [{ severity: 'success', category: 'cooldown_usage', cd_name: name, message: `${name} - ${uses}/${expected} uses.`, occurrences: [] } as AnalysisFinding] : []);
   if (uses > 0) result.push(...suggestions);
   return result;
 }

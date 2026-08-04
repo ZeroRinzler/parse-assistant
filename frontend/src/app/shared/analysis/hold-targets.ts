@@ -91,6 +91,7 @@ export function holdSuggestionFindings(
         measured: { value: fmtClock(castTimesS[index]), unit: `top ${fmtClock(target.target_s)}` },
         message: `${name} cast ${idxStr} at ${fmtClock(castTimesS[index])}. ${target.count}/${target.total_samples} top parses hold to ${fmtClock(target.target_s)}.`,
         details: { remedy: `Hold ${name} to ${fmtClock(target.target_s)}.`, cd_name: name },
+        occurrences: [],
       });
     }
   }

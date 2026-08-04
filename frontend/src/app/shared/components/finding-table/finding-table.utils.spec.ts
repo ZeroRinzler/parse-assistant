@@ -18,6 +18,7 @@ const f = (
   category,
   cd_name: cdName,
   message: `${severity}/${category}`,
+  occurrences: [],
   ...opts,
 });
 
@@ -45,6 +46,7 @@ describe('bucketFindings', () => {
       category: 'hold_suggestion',
       message: 'hold tip',
       details: { cd_name: 'Feint' },
+      occurrences: [],
     };
     const entries = bucketFindings([finding], { spellId, icon });
 
@@ -86,8 +88,8 @@ describe('bucketFindings', () => {
 
   it('pluralizes the hold label when there are multiple hold suggestions', () => {
     const findings: AnalysisFinding[] = [
-      { severity: 'info', category: 'hold_suggestion', message: 'tip 1', details: { cd_name: 'Feint' } },
-      { severity: 'info', category: 'hold_suggestion', message: 'tip 2', details: { cd_name: 'Feint' } },
+      { severity: 'info', category: 'hold_suggestion', message: 'tip 1', details: { cd_name: 'Feint' }, occurrences: [] },
+      { severity: 'info', category: 'hold_suggestion', message: 'tip 2', details: { cd_name: 'Feint' }, occurrences: [] },
     ];
     const entries = bucketFindings(findings, { spellId, icon });
 
@@ -123,7 +125,7 @@ describe('rowsFromEntries', () => {
     hasCritical: true,
     metaItems: ['lost cast'],
     findings: [
-      { severity: 'critical', category: 'lost_cooldown', message: 'lost', measured: { value: '0 / 2', unit: 'cast(s)' } },
+      { severity: 'critical', category: 'lost_cooldown', message: 'lost', measured: { value: '0 / 2', unit: 'cast(s)' }, occurrences: [] },
     ],
   };
 
@@ -152,7 +154,7 @@ describe('rowsFromEntries', () => {
   it('uses a dash placeholder when finding.measured is absent', () => {
     const entry: FindingEntry = {
       name: 'Shadow Blades', spellId: null, icon: '', hasIssue: true, hasCritical: false,
-      metaItems: [], findings: [{ severity: 'warning', category: 'rule_violation', message: 'bad' }],
+      metaItems: [], findings: [{ severity: 'warning', category: 'rule_violation', message: 'bad', occurrences: [] }],
     };
     const rows = rowsFromEntries([entry], CAT_LABEL);
     expect(rows[0].measured).toEqual({ value: '-' });
@@ -162,9 +164,9 @@ describe('rowsFromEntries', () => {
     const mixedEntry: FindingEntry = {
       ...issueEntry,
       findings: [
-        { severity: 'critical', category: 'lost_cooldown',   message: '', measured: { value: '', unit: '' } },
-        { severity: 'info',     category: 'cast_efficiency',  message: '', measured: { value: '', unit: '' } },
-        { severity: 'warning',  category: 'cooldown_delay',   message: '', measured: { value: '', unit: '' } },
+        { severity: 'critical', category: 'lost_cooldown',   message: '', measured: { value: '', unit: '' }, occurrences: [] },
+        { severity: 'info',     category: 'cast_efficiency',  message: '', measured: { value: '', unit: '' }, occurrences: [] },
+        { severity: 'warning',  category: 'cooldown_delay',   message: '', measured: { value: '', unit: '' }, occurrences: [] },
       ],
     };
     const rows = rowsFromEntries([mixedEntry], CAT_LABEL);
