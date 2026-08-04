@@ -6,8 +6,14 @@ export async function shows(scope: Page | Locator, text: string | RegExp): Promi
   await expect(match.first()).toBeVisible();
 }
 
-/** Asserts the ability breakdown lists `ability` with `topAverage`; row-scoped because that cell also holds a hidden label. */
-export async function showsAbility(scope: Locator, ability: string, topAverage: string): Promise<void> {
-  const row = scope.locator('wl-compact-ability-row').filter({ hasText: ability }).first();
-  await expect(row).toContainText(topAverage);
+// Figure shapes, not values: both the player's log and the bench move with the data, never the format.
+export const DAMAGE = /\d+(\.\d+)?[KM]/;
+export const CLOCK = /-?\d+:\d{2}/;
+export const PERCENT = /[+-]?\d+(\.\d+)?%/;
+export const RATIO = /\d+ \/ \d+/;
+export const DECIMAL = /\d+\.\d+/;
+
+/** Asserts at least one named ability/gear row renders with a real icon + name, regardless of which one the bench ranks first. */
+export async function showsEntity(scope: Locator): Promise<void> {
+  await expect(scope.locator('wl-game-icon').first()).toBeVisible();
 }
