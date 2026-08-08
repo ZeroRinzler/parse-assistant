@@ -112,16 +112,16 @@ export class DefensiveComponent {
 
   /** A timed finding's map button: open the map at that cast time (boss reference). */
   protected onFindingMap(row: FindingRow): void {
-    if (row.timestampMs == null) return;
+    if (row.timestampS == null) return;
     this.openMap.emit({
-      timeS: row.timestampMs / 1000,
+      timeS: row.timestampS,
       refGameId: null,
     });
   }
 
   /** A timed finding's clip button: a clip centered on that cast instant (roll on each side). */
   protected onFindingClip(row: FindingRow): void {
-    if (row.timestampMs == null) return;
-    this.openClip.emit(defensiveFindingClipAnchor(row.timestampMs));
+    if (row.timestampS == null) return;
+    this.openClip.emit(defensiveFindingClipAnchor(row.timestampS));
   }
 }

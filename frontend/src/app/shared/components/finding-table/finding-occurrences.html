@@ -5,7 +5,7 @@
       <div class="absolute inset-y-0 rounded-md bg-[var(--success)]/65" [style.left.%]="seg.leftPercentage" [style.width.%]="seg.widthPercentage"></div>
     }
   </div>
-  @if (t.segmentsMs.length) {
+  @if (t.segmentsS.length) {
     <div class="text-[10px] uppercase tracking-widest text-[var(--muted)] mb-1.5">Largest gaps</div>
   }
 } @else {
@@ -35,7 +35,7 @@
           <span [class]="'absolute bottom-0 left-0 right-0 h-1 ' + barTone" aria-hidden="true"></span>
         </button>
         <span [class]="'tabular-nums text-[10px] ' + (active ? 'text-[var(--gold)]' : 'text-[var(--muted)]')">
-          {{ occ.atMs != null ? (occ.atMs / 1000 | formatDuration) : occ.note }}
+          {{ occ.atS != null ? (occ.atS | formatDuration) : occ.note }}
         </span>
       </div>
     }
@@ -50,8 +50,8 @@
 
 @if (active(); as occ) {
   <div class="mt-[11px] text-[13px] text-[var(--muted)] leading-[1.5]">
-    @if (occ.atMs != null) {
-      <span class="text-[var(--accent)] font-semibold mr-0.5">{{ occ.atMs / 1000 | formatDuration }}</span>
+    @if (occ.atS != null) {
+      <span class="text-[var(--accent)] font-semibold mr-0.5">{{ occ.atS | formatDuration }}</span>
     }
     {{ occ.detail }}
   </div>

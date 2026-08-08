@@ -16,13 +16,14 @@ import {
   cast, applyBuff, removeBuff, buffWindow, applyDebuff, removeDebuff, refreshDebuff, applyBuffStack, damage, death,
 } from '../../../../testing/builders/events';
 import {
-  BenchedRule, RuleContext, RuleInputs, RuleStream, RuleThreshold,
+  BenchedRule, RuleContext, RuleStream, RuleThreshold,
   buildRuleContext, evaluateRules, rulesFollowed, ruleLabel, ruleApplicable,
   rulesNeed, judgeableRules, benchedRules, measureRule, ruleThreshold,
   evaluateCastWithoutPrior, evaluateHoldForAnchor, evaluateCastOutsideBuff, evaluateAuraUptimeBelow,
   evaluateOpeningSequence, evaluateCastAtTargetCount, evaluateResourceAtCast, evaluateProcWasted,
   evaluateFillerInBuff, evaluateSpendAtStacks, evaluateAuraClipped, evaluateFillerBelowHealth,
 } from './rotation-rules';
+import { withRelativeS } from '../../../shared/analysis/wcl-projections';
 
 // A zero band keeps the fixture arithmetic exact.
 const PAIR_WINDOW_S = 5, HOLD_WINDOW_S = 15;
@@ -36,11 +37,16 @@ function benched(rule: RulebookRule, threshold: RuleThreshold | null = thr(PAIR_
 }
 
 // Build a RuleContext for a 0..120s fight from just the casts - keeps the rule call sites terse.
-const RULE_FIGHT_END_MS = 120_000;
-function ruleCtx(casts: WclEvent[], over: Partial<RuleInputs> = {}): RuleContext {
+const RULE_FIGHT_END_S = 120;
+interface RuleCtxOverrides { buffs: WclEvent[]; debuffs: WclEvent[]; damage: WclEvent[]; deaths: WclEvent[]; fightDurationS: number }
+function ruleCtx(casts: WclEvent[], over: Partial<RuleCtxOverrides> = {}): RuleContext {
   return buildRuleContext({
-    casts, buffs: [], debuffs: [], damage: [], deaths: [], fStart: 0, fEnd: RULE_FIGHT_END_MS,
-    ...over,
+    casts: withRelativeS(casts, 0),
+    buffs: withRelativeS(over.buffs ?? [], 0),
+    debuffs: withRelativeS(over.debuffs ?? [], 0),
+    damage: withRelativeS(over.damage ?? [], 0),
+    deaths: withRelativeS(over.deaths ?? [], 0),
+    fightDurationS: over.fightDurationS ?? RULE_FIGHT_END_S,
   });
 }
 
@@ -472,7 +478,7 @@ describe('evaluateProcWasted', () => {
   });
 
   it('ignores a span the log closes on the pull ending, which the kill took rather than the player wasting', () => {
-    const ctx = ruleCtx([], { buffs: buffWindow(SHADOW_DANCE, 100, RULE_FIGHT_END_MS / 1000) });
+    const ctx = ruleCtx([], { buffs: buffWindow(SHADOW_DANCE, 100, RULE_FIGHT_END_S) });
     expect(evaluateProcWasted(spendDance, ctx, 'warning')).toBeNull();
     expect(ruleApplicable(spendDance, ctx)).toBe(false);
   });
@@ -1046,8 +1052,8 @@ describe('occurrence strips', () => {
     const ctx = ruleCtx([cast(SHADOW_DANCE, 10), cast(SECRET_TECHNIQUE, 12), cast(SECRET_TECHNIQUE, 40)]);
     const finding = evaluateCastWithoutPrior(SECRET_TECH_NEEDS_DANCE, ctx, thr(PAIR_WINDOW_S), 'warning');
     expect(finding?.occurrences).toEqual([
-      { atMs: 12_000, ok: true, label: '2s', detail: 'Shadow Dance landed 2s from this cast.' },
-      { atMs: 40_000, ok: false, label: '30s', detail: 'Shadow Dance landed 30s from this cast.' },
+      { atS: 12, ok: true, label: '2s', detail: 'Shadow Dance landed 2s from this cast.' },
+      { atS: 40, ok: false, label: '30s', detail: 'Shadow Dance landed 30s from this cast.' },
     ]);
     expect(finding?.occurrenceTarget).toBe('field pairs inside 5s');
   });
@@ -1056,8 +1062,8 @@ describe('occurrence strips', () => {
     const ctx = ruleCtx([cast(SHADOW_BLADES, 10), cast(SHADOW_BLADES, 120), cast(SHADOW_DANCE, 110)]);
     const finding = evaluateHoldForAnchor(HOLD_DANCE_FOR_BLADES, ctx, thr(HOLD_WINDOW_S), 'critical');
     expect(finding?.occurrences).toEqual([
-      { atMs: 110_000, ok: false, label: '10s', detail: 'Shadow Dance cast 10s before Shadow Blades.' },
-      { atMs: 120_000, ok: true, label: 'Shadow Blades', marker: true, detail: 'Shadow Blades cast here.' },
+      { atS: 110, ok: false, label: '10s', detail: 'Shadow Dance cast 10s before Shadow Blades.' },
+      { atS: 120, ok: true, label: 'Shadow Blades', marker: true, detail: 'Shadow Blades cast here.' },
     ]);
     expect(finding?.occurrenceTarget).toBe('gap to Shadow Blades at cast');
   });
@@ -1070,8 +1076,8 @@ describe('occurrence strips', () => {
     const ctx = ruleCtx([cast(SECRET_TECHNIQUE, 22), cast(SECRET_TECHNIQUE, 35)], { buffs: buffWindow(SHADOW_DANCE, 20, 28) });
     const finding = evaluateCastOutsideBuff(outsideDance, ctx, 'warning');
     expect(finding?.occurrences).toEqual([
-      { atMs: 22_000, ok: true, label: 'up', detail: 'Shadow Dance was up at this cast.' },
-      { atMs: 35_000, ok: false, label: 'down', detail: 'Shadow Dance was down at this cast.' },
+      { atS: 22, ok: true, label: 'up', detail: 'Shadow Dance was up at this cast.' },
+      { atS: 35, ok: false, label: 'down', detail: 'Shadow Dance was down at this cast.' },
     ]);
     expect(finding?.occurrenceTarget).toBe('buff state at cast');
   });
@@ -1089,10 +1095,10 @@ describe('occurrence strips', () => {
     const RUPTURE_MIN_PCT = 80;
     const finding = evaluateAuraUptimeBelow(uptime, ctx, thr(RUPTURE_MIN_PCT), 'warning');
     expect(finding?.measured).toEqual({ value: '58 / 80', unit: '% uptime' });
-    expect(finding?.timeline).toEqual({ segmentsMs: [[0, 50_000], [70_000, 90_000]], fightDurationMs: 120_000 });
+    expect(finding?.timeline).toEqual({ segmentsS: [[0, 50], [70, 90]], fightDurationS: 120 });
     expect(finding?.occurrences).toEqual([
-      { atMs: 50_000, ok: false, label: '20s', detail: 'Rupture was down here for 20s.' },
-      { atMs: 90_000, ok: false, label: '30s', detail: 'Rupture was down here for 30s.' },
+      { atS: 50, ok: false, label: '20s', detail: 'Rupture was down here for 20s.' },
+      { atS: 90, ok: false, label: '30s', detail: 'Rupture was down here for 30s.' },
     ]);
   });
 
@@ -1100,14 +1106,14 @@ describe('occurrence strips', () => {
     const uptime: AuraUptimeBelowCondition = {
       kind: 'aura_uptime_below', aura_spell_id: RUPTURE, aura_spell_name: 'Rupture', on: 'target',
     };
-    const FIGHT_END_MS = 20_000;
+    const FIGHT_END_S = 20;
     // Up 0.3-10s and 15-20s over a 20s fight: a 0.3s opening gap (travel-time noise, not a maintain miss) plus a real 5s gap.
     const debuffs = [applyDebuff(RUPTURE, 0.3), removeDebuff(RUPTURE, 10), applyDebuff(RUPTURE, 15)];
-    const ctx = ruleCtx([], { debuffs, fEnd: FIGHT_END_MS });
+    const ctx = ruleCtx([], { debuffs, fightDurationS: FIGHT_END_S });
     const finding = evaluateAuraUptimeBelow(uptime, ctx, thr(90), 'warning');
-    expect(finding?.timeline).toEqual({ segmentsMs: [[300, 10_000], [15_000, 20_000]], fightDurationMs: FIGHT_END_MS });
+    expect(finding?.timeline).toEqual({ segmentsS: [[0.3, 10], [15, 20]], fightDurationS: FIGHT_END_S });
     expect(finding?.occurrences).toEqual([
-      { atMs: 10_000, ok: false, label: '5s', detail: 'Rupture was down here for 5s.' },
+      { atS: 10, ok: false, label: '5s', detail: 'Rupture was down here for 5s.' },
     ]);
   });
 
@@ -1121,9 +1127,9 @@ describe('occurrence strips', () => {
     const OPENER_WINDOW_S = 12;
     const finding = evaluateOpeningSequence(opener, ctx, thr(OPENER_WINDOW_S), 'warning');
     expect(finding?.occurrences).toEqual([
-      { atMs: 1_000, ok: true, label: 'Shadow Blades', detail: 'Shadow Blades landed on time in its slot.' },
+      { atS: 1, ok: true, label: 'Shadow Blades', detail: 'Shadow Blades landed on time in its slot.' },
       { ok: false, label: 'Shadow Dance', note: 'not reached', detail: 'Shadow Dance was never reached in the opener window.' },
-      { atMs: 3_000, ok: true, label: 'Secret Technique', detail: 'Secret Technique landed on time in its slot.' },
+      { atS: 3, ok: true, label: 'Secret Technique', detail: 'Secret Technique landed on time in its slot.' },
     ]);
     expect(finding?.occurrenceTarget).toBe('expected order: Shadow Blades > Shadow Dance > Secret Technique');
   });
@@ -1140,8 +1146,8 @@ describe('occurrence strips', () => {
     });
     const finding = evaluateCastAtTargetCount(blackPowder, ctx, thr(3), 'warning');
     expect(finding?.occurrences).toEqual([
-      { atMs: 10_000, ok: false, label: '2', detail: 'Black Powder cast at 2.' },
-      { atMs: 30_000, ok: true, label: '3', detail: 'Black Powder cast at 3.' },
+      { atS: 10, ok: false, label: '2', detail: 'Black Powder cast at 2.' },
+      { atS: 30, ok: true, label: '3', detail: 'Black Powder cast at 3.' },
     ]);
     expect(finding?.occurrenceTarget).toBe('field waits for 3+');
   });
@@ -1156,8 +1162,8 @@ describe('occurrence strips', () => {
     const ctx = ruleCtx([atCombo(10, 3), atCombo(20, MAX_COMBO_POINTS)]);
     const finding = evaluateResourceAtCast(finisher, ctx, thr(1), 'warning');
     expect(finding?.occurrences).toEqual([
-      { atMs: 10_000, ok: false, label: '3/5', detail: 'Eviscerate cast at 3/5.' },
-      { atMs: 20_000, ok: true, label: '5/5', detail: 'Eviscerate cast at 5/5.' },
+      { atS: 10, ok: false, label: '3/5', detail: 'Eviscerate cast at 3/5.' },
+      { atS: 20, ok: true, label: '5/5', detail: 'Eviscerate cast at 5/5.' },
     ]);
     expect(finding?.occurrenceTarget).toBe('field waits for 5/5+');
   });
@@ -1173,8 +1179,8 @@ describe('occurrence strips', () => {
     const ctx = ruleCtx([atMana(10, MANA_MAX * 0.6), atMana(20, MANA_MAX)]);
     const finding = evaluateResourceAtCast(innervate, ctx, thr(1), 'warning');
     expect(finding?.occurrences).toEqual([
-      { atMs: 10_000, ok: false, label: '60%', detail: 'Innervate cast at 60%.' },
-      { atMs: 20_000, ok: true, label: '100%', detail: 'Innervate cast at 100%.' },
+      { atS: 10, ok: false, label: '60%', detail: 'Innervate cast at 60%.' },
+      { atS: 20, ok: true, label: '100%', detail: 'Innervate cast at 100%.' },
     ]);
     expect(finding?.occurrenceTarget).toBe('field waits for 100%+');
   });
@@ -1188,8 +1194,8 @@ describe('occurrence strips', () => {
     const ctx = ruleCtx([cast(SECRET_TECHNIQUE, 22)], { buffs });
     const finding = evaluateProcWasted(spendDance, ctx, 'warning');
     expect(finding?.occurrences).toEqual([
-      { atMs: 20_000, ok: true, label: 'used', detail: 'Shadow Dance was spent before it expired.' },
-      { atMs: 40_000, ok: false, label: 'wasted', detail: 'Shadow Dance expired unspent here.' },
+      { atS: 20, ok: true, label: 'used', detail: 'Shadow Dance was spent before it expired.' },
+      { atS: 40, ok: false, label: 'wasted', detail: 'Shadow Dance expired unspent here.' },
     ]);
     expect(finding?.occurrenceTarget).toBe('window it expired in');
   });
@@ -1204,9 +1210,9 @@ describe('occurrence strips', () => {
     const ctx = ruleCtx([cast(WRATH, 12), cast(STARFIRE, 14), cast(STARFIRE, 20)], { buffs: buffWindow(ECLIPSE_SOLAR, 10, 40) });
     const finding = evaluateFillerInBuff(wrathInSolar, ctx, thr(0.9), 'warning');
     expect(finding?.occurrences).toEqual([
-      { atMs: 12_000, ok: true, label: 'Wrath', detail: 'Wrath was the coached filler here.' },
-      { atMs: 14_000, ok: false, label: 'Starfire', detail: 'Starfire was pressed instead of Wrath here.' },
-      { atMs: 20_000, ok: false, label: 'Starfire', detail: 'Starfire was pressed instead of Wrath here.' },
+      { atS: 12, ok: true, label: 'Wrath', detail: 'Wrath was the coached filler here.' },
+      { atS: 14, ok: false, label: 'Starfire', detail: 'Starfire was pressed instead of Wrath here.' },
+      { atS: 20, ok: false, label: 'Starfire', detail: 'Starfire was pressed instead of Wrath here.' },
     ]);
     expect(finding?.occurrenceTarget).toBe('filler choice inside Eclipse (Solar)');
   });
@@ -1222,8 +1228,8 @@ describe('occurrence strips', () => {
     const ctx = ruleCtx([cast(LIGHTNING_BOLT, 6), cast(LIGHTNING_BOLT, 10)], { buffs });
     const finding = evaluateSpendAtStacks(spendAtStacks, ctx, thr(8), 'warning');
     expect(finding?.occurrences).toEqual([
-      { atMs: 6_000, ok: false, label: '5', detail: 'Lightning Bolt cast at 5.' },
-      { atMs: 10_000, ok: true, label: '9', detail: 'Lightning Bolt cast at 9.' },
+      { atS: 6, ok: false, label: '5', detail: 'Lightning Bolt cast at 5.' },
+      { atS: 10, ok: true, label: '9', detail: 'Lightning Bolt cast at 9.' },
     ]);
     expect(finding?.occurrenceTarget).toBe('field waits for 8+');
   });
@@ -1238,8 +1244,8 @@ describe('occurrence strips', () => {
     const ctx = ruleCtx([cast(MOONFIRE, 24), cast(MOONFIRE, 36)], { debuffs });
     const finding = evaluateAuraClipped(moonfireClipped, ctx, thr(12), 'warning');
     expect(finding?.occurrences).toEqual([
-      { atMs: 24_000, ok: false, label: '4s', detail: 'Refreshed with 4s still remaining.' },
-      { atMs: 36_000, ok: true, label: '12s', detail: 'Refreshed with 12s still remaining.' },
+      { atS: 24, ok: false, label: '4s', detail: 'Refreshed with 4s still remaining.' },
+      { atS: 36, ok: true, label: '12s', detail: 'Refreshed with 12s still remaining.' },
     ]);
     expect(finding?.occurrenceTarget).toBe('field waits for 12s remaining');
   });
@@ -1256,8 +1262,8 @@ describe('occurrence strips', () => {
     const ctx = ruleCtx([cast(EXECUTE, HIT_S + 0.5), cast(SLAM, HIT_S + 1)], { damage: [hitAt(HIT_S, 15)] });
     const finding = evaluateFillerBelowHealth(executeBelow, ctx, thr(0.95), 'warning');
     expect(finding?.occurrences).toEqual([
-      { atMs: 100_500, ok: true, label: 'Execute', detail: 'Execute was the coached filler here.' },
-      { atMs: 101_000, ok: false, label: 'Slam', detail: 'Slam was pressed instead of Execute here.' },
+      { atS: 100.5, ok: true, label: 'Execute', detail: 'Execute was the coached filler here.' },
+      { atS: 101, ok: false, label: 'Slam', detail: 'Slam was pressed instead of Execute here.' },
     ]);
     expect(finding?.occurrenceTarget).toBe('filler choice under 20% health');
   });
@@ -1272,8 +1278,8 @@ describe('occurrence strips', () => {
     const finding = evaluateCastAtTargetCount(blackPowder, ruleCtx(casts, { damage: dmg }), thr(3), 'warning');
     const occurrences = finding!.occurrences!;
     expect(occurrences.length).toBe(24);
-    expect(occurrences[0].atMs).toBe(1_000);
-    const timestamps = occurrences.map(o => o.atMs);
+    expect(occurrences[0].atS).toBe(1);
+    const timestamps = occurrences.map(o => o.atS);
     expect(timestamps).toEqual([...timestamps].sort((a, b) => (a ?? 0) - (b ?? 0)));
   });
 
@@ -1291,7 +1297,7 @@ describe('occurrence strips', () => {
     const finding = evaluateResourceAtCast(finisher, ruleCtx([...fails, ...passes]), thr(1), 'warning');
     const occurrences = finding!.occurrences!;
     expect(occurrences.length).toBe(24);
-    const failingAtMs = occurrences.filter(occ => !occ.ok).map(occ => occ.atMs);
-    expect(failingAtMs).toEqual(FAIL_AT_S.map(atS => atS * 1000));
+    const failingAtS = occurrences.filter(occ => !occ.ok).map(occ => occ.atS);
+    expect(failingAtS).toEqual(FAIL_AT_S);
   });
 });

@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
-import { WclEvent, ParseRanking } from '../../../core/models/wcl.models';
+import { ParseRanking } from '../../../core/models/wcl.models';
 import { RulebookCooldown, RulebookDefensive, RulebookRule } from '../../../core/models/rulebook.models';
 import { PerCdBenchmark, UsesPerMin } from '../../../core/models/encounter.models';
 import { logWarn } from '../../../core/log';
@@ -10,7 +10,7 @@ import { round, getOrInsert } from '../../../shared/analysis/analysis-math';
 import {
   HoldWindow, HOLD_CONSENSUS_FRAC, buildHoldTargets, detectHoldWindows,
 } from '../../../shared/analysis/hold-targets';
-import { abilityIcons, toParseRankings, unwrapRankings } from '../../../shared/analysis/wcl-projections';
+import { TimedEvent, abilityIcons, relativeS, toParseRankings, unwrapRankings, withRelativeS } from '../../../shared/analysis/wcl-projections';
 import { DataSource } from '../../../core/data-source/data-source';
 import { Result, LoadError, ok, missing } from '../../../core/result';
 import { toLoadError } from '../../../core/http-load-error';
@@ -33,7 +33,7 @@ const BL_WINDOW_BEFORE_S = 30;
 const BL_WINDOW_AFTER_S = 55;
 /** p90 of pooled cast gaps is the downtime floor. */
 const DOWNTIME_PERCENTILE = 0.9;
-const DEFAULT_DOWNTIME_THRESHOLD_MS = 1500;
+const DEFAULT_DOWNTIME_THRESHOLD_S = 1.5;
 
 export function rotationCdSpellIds(cooldowns: RulebookCooldown[], defensives: RulebookDefensive[]): Record<string, number> {
   const map: Record<string, number> = {};
@@ -42,10 +42,10 @@ export function rotationCdSpellIds(cooldowns: RulebookCooldown[], defensives: Ru
   return map;
 }
 
-export function detectBloodlust(buffEvents: WclEvent[], fightStartMs: number): number | null {
+export function detectBloodlust(buffEvents: TimedEvent[]): number | null {
   for (const event of buffEvents) {
     if (event.type === 'applybuff' && BLOODLUST_IDS.has(event.abilityGameID)) {
-      return (event.timestamp - fightStartMs) / 1000;
+      return event.atS;
     }
   }
   return null;
@@ -64,13 +64,13 @@ export interface CdSummary {
 }
 
 export function summarizeCooldownCasts(
-  castEvents: WclEvent[], cooldowns: RulebookCooldown[],
-  fightStartMs: number, fightDurS: number, blTimeS: number | null,
+  castEvents: TimedEvent[], cooldowns: RulebookCooldown[],
+  fightDurS: number, blTimeS: number | null,
 ): CdSummary[] {
   return cooldowns.map(cooldown => {
     const castTimesS = castEvents
       .filter(cast => cast.type === 'cast' && cast.abilityGameID === cooldown.spell_id)
-      .map(cast => (cast.timestamp - fightStartMs) / 1000)
+      .map(cast => cast.atS)
       .sort((a, b) => a - b);
 
     let blAligned = false;
@@ -101,10 +101,10 @@ export function summarizeCooldownCasts(
   });
 }
 
-export function castGapListMs(castEvents: WclEvent[]): number[] {
-  const completed = castEvents.filter(event => event.type === 'cast').sort((a, b) => a.timestamp - b.timestamp);
+export function castGapListS(castEvents: TimedEvent[]): number[] {
+  const completed = castEvents.filter(event => event.type === 'cast').sort((a, b) => a.atS - b.atS);
   const gaps: number[] = [];
-  for (let i = 1; i < completed.length; i++) gaps.push(Math.round(completed[i].timestamp - completed[i - 1].timestamp));
+  for (let i = 1; i < completed.length; i++) gaps.push(round(completed[i].atS - completed[i - 1].atS, 3));
   return gaps.sort((a, b) => a - b);
 }
 
@@ -112,7 +112,7 @@ function benchUsesPerMin(entries: CdSummary[]): UsesPerMin {
   const usesPerMin: number[] = [];
   for (const entry of entries) {
     if (entry.fight_duration_s > 0 && entry.cast_times_s.length) {
-      usesPerMin.push(Math.round((entry.cast_times_s.length / entry.fight_duration_s) * 60 * 1000) / 1000);
+      usesPerMin.push(round((entry.cast_times_s.length / entry.fight_duration_s) * 60, 3));
     }
   }
   if (!usesPerMin.length) return { avg: 0, stddev: 0, min: 0, max: 0 };
@@ -159,23 +159,23 @@ export function buildCdBenchmark(entries: CdSummary[], effectiveCd: number): Per
 
 export function computeEfficiencyThresholds(
   gapLists: number[][], durations: number[],
-): { downtimeThresholdMs: number; topAvgEfficiency: number; topEfficiencyStddev: number } {
+): { downtimeThresholdS: number; topAvgEfficiency: number; topEfficiencyStddev: number } {
   const allGaps = gapLists.flat().sort((a, b) => a - b);
-  let downtimeThresholdMs = DEFAULT_DOWNTIME_THRESHOLD_MS;
+  let downtimeThresholdS = DEFAULT_DOWNTIME_THRESHOLD_S;
   if (allGaps.length) {
-    downtimeThresholdMs = quantile(allGaps, DOWNTIME_PERCENTILE) ?? DEFAULT_DOWNTIME_THRESHOLD_MS;
+    downtimeThresholdS = quantile(allGaps, DOWNTIME_PERCENTILE) ?? DEFAULT_DOWNTIME_THRESHOLD_S;
   }
   const efficiencies: number[] = [];
   for (let i = 0; i < gapLists.length; i++) {
     const gaps = gapLists[i];
     const durationS = durations[i] ?? 0;
     if (gaps.length && durationS > 0) {
-      const downtimeS = gaps.filter(gap => gap > downtimeThresholdMs).reduce((sum, gap) => sum + gap, 0) / 1000;
+      const downtimeS = gaps.filter(gap => gap > downtimeThresholdS).reduce((sum, gap) => sum + gap, 0);
       efficiencies.push(round(Math.max(0, (1 - downtimeS / durationS) * 100)));
     }
   }
   return {
-    downtimeThresholdMs: Math.round(downtimeThresholdMs),
+    downtimeThresholdS: round(downtimeThresholdS, 3),
     topAvgEfficiency: efficiencies.length ? round((mean(efficiencies) ?? 0)) : 0,
     topEfficiencyStddev: efficiencies.length ? round((deviation(efficiencies) ?? 0)) : 0,
   };
@@ -200,7 +200,7 @@ export function aggregateCdBenchmarks(
 
 interface ParseRotation {
   summaries: CdSummary[];
-  gapListMs: number[];
+  gapListS: number[];
   durationS: number;
   encounterName: string;
   /** Index-aligned with the rules passed in, so the caller can aggregate per rule. */
@@ -243,14 +243,14 @@ export class RotationTransformService implements DataSource<RotationBench> {
         if (!parse) continue;
         perParse.push(parse.summaries);
         ruleSamples.push(parse.ruleSamples);
-        gapLists.push(parse.gapListMs);
+        gapLists.push(parse.gapListS);
         durations.push(parse.durationS);
         encounterName ||= parse.encounterName;
         if (perParse.length >= TOP_PARSE_COUNT) break;
       }
       if (!perParse.length) return missing('No usable top parses for this encounter.');
 
-      const { downtimeThresholdMs, topAvgEfficiency, topEfficiencyStddev } = computeEfficiencyThresholds(gapLists, durations);
+      const { downtimeThresholdS, topAvgEfficiency, topEfficiencyStddev } = computeEfficiencyThresholds(gapLists, durations);
 
       const cd_spell_ids = rotationCdSpellIds(cooldowns, defensives);
       return ok({
@@ -259,7 +259,7 @@ export class RotationTransformService implements DataSource<RotationBench> {
         encounter_name: encounterName,
         sample_count: perParse.length,
         avg_duration_s: durations.length ? round((mean(durations) ?? 0)) : 0,
-        downtime_threshold_ms: downtimeThresholdMs,
+        downtime_threshold_s: downtimeThresholdS,
         top_avg_efficiency: topAvgEfficiency,
         top_efficiency_stddev: topEfficiencyStddev,
         per_cd_benchmarks: aggregateCdBenchmarks(perParse, cooldowns),
@@ -301,16 +301,19 @@ export class RotationTransformService implements DataSource<RotationBench> {
           : Promise.resolve([]),
       ]);
 
-      const fightDurS = (fight.endTime - fight.startTime) / 1000;
-      const blTimeS = detectBloodlust(buffs, fight.startTime);
+      const fightDurS = relativeS(fight.endTime, fight.startTime);
+      const castsTimed = withRelativeS(casts, fight.startTime);
+      const buffsTimed = withRelativeS(buffs, fight.startTime);
+      const blTimeS = detectBloodlust(buffsTimed);
       const ruleCtx = buildRuleContext({
-        casts, buffs, damage, debuffs: enemyAuras.filter(event => event.sourceID === player.id),
-        deaths: raidDeaths.filter(event => event.targetID === player.id),
-        fStart: fight.startTime, fEnd: fight.endTime,
+        casts: castsTimed, buffs: buffsTimed, damage: withRelativeS(damage, fight.startTime),
+        debuffs: withRelativeS(enemyAuras.filter(event => event.sourceID === player.id), fight.startTime),
+        deaths: withRelativeS(raidDeaths.filter(event => event.targetID === player.id), fight.startTime),
+        fightDurationS: fightDurS,
       });
       return {
-        summaries: summarizeCooldownCasts(casts, cooldowns, fight.startTime, fightDurS, blTimeS),
-        gapListMs: castGapListMs(casts),
+        summaries: summarizeCooldownCasts(castsTimed, cooldowns, fightDurS, blTimeS),
+        gapListS: castGapListS(castsTimed),
         durationS: fightDurS,
         encounterName: fight.name ?? '',
         ruleSamples: rules.map(rule => measureRule(rule.condition, ruleCtx)),

@@ -37,7 +37,7 @@ describe('FindingOccurrencesComponent', () => {
   it('positions timeline segments as a percentage of the fight', () => {
     const { vm } = mountVm(FindingOccurrencesComponent, {
       occurrences: [occ()],
-      timeline: { segmentsMs: [[0, 25_000], [75_000, 100_000]], fightDurationMs: 100_000 },
+      timeline: { segmentsS: [[0, 25], [75, 100]], fightDurationS: 100 },
     });
     expect(vm.segments()).toEqual([
       { leftPercentage: 0, widthPercentage: 25 },

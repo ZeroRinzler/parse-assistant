@@ -7,7 +7,7 @@ import { ClipAnchor } from '../../../core/models/capture.models';
 import { logWarn } from '../../../core/log';
 import { Result, LoadError, ok } from '../../../core/result';
 import { toLoadError } from '../../../core/http-load-error';
-import { normalizeAbilityId, windowSpells } from '../../../shared/analysis/wcl-projections';
+import { TimedEvent, normalizeAbilityId, relativeS, windowSpells, withRelativeS } from '../../../shared/analysis/wcl-projections';
 import { BURST_DATA_SOURCE } from './burst-data-source';
 
 export type AbilityIcons = Record<number, { icon: string; name: string }>;
@@ -131,13 +131,12 @@ function eventDamage(event: WclEvent): number {
 // attributed by ability NAME, not spell id, because a damage event's `abilityGameID` often differs.
 function playerWindowAggregate(
   window: BurstWindow,
-  sortedDmg: WclEvent[],
-  casts: WclEvent[],
-  fightStartMs: number,
+  sortedDmg: TimedEvent[],
+  casts: TimedEvent[],
   nameOf: (spellId: number) => string,
 ): PlayerBurstWindow {
   const inWindow = (tsS: number): boolean => tsS >= window.time_s && tsS < window.time_s + window.window_length_s;
-  const winEvents = sortedDmg.filter(event => inWindow((event.timestamp - fightStartMs) / 1000));
+  const winEvents = sortedDmg.filter(event => inWindow(event.atS));
   const winTotal = winEvents.reduce((sum, event) => sum + eventDamage(event), 0);
   const byAbility: Record<number, number> = {};
   for (const event of winEvents) {
@@ -148,7 +147,7 @@ function playerWindowAggregate(
   }
   const castsByName = new Map<string, number>();
   for (const event of casts) {
-    if (inWindow((event.timestamp - fightStartMs) / 1000)) {
+    if (inWindow(event.atS)) {
       const name = nameOf(event.abilityGameID!);
       castsByName.set(name, (castsByName.get(name) ?? 0) + 1);
     }
@@ -164,17 +163,16 @@ function playerWindowAggregate(
 
 export function findPlayerBurstWindows(
   topWindows: BurstWindow[],
-  dmgEvents: WclEvent[],
-  castEvents: WclEvent[],
-  fightStartMs: number,
+  dmgEvents: TimedEvent[],
+  castEvents: TimedEvent[],
   abilityNames: Map<number, string>,
 ): PlayerBurstWindow[] {
   const nameOf = (spellId: number): string => abilityNames.get(spellId) ?? `Spell ${spellId}`;
   const sortedDmg = dmgEvents
-    .filter(event => event.timestamp >= fightStartMs && eventDamage(event) > 0)
-    .sort((a, b) => a.timestamp - b.timestamp);
+    .filter(event => event.atS >= 0 && eventDamage(event) > 0)
+    .sort((a, b) => a.atS - b.atS);
   const casts = castEvents.filter(event => event.type === 'cast' && event.abilityGameID);
-  return topWindows.map(window => playerWindowAggregate(window, sortedDmg, casts, fightStartMs, nameOf));
+  return topWindows.map(window => playerWindowAggregate(window, sortedDmg, casts, nameOf));
 }
 
 @Injectable({ providedIn: 'root' })
@@ -203,8 +201,10 @@ export class BurstFeatureService {
         this.wclApi.getAllEvents(reportCode, fightId, 'Casts', fight.startTime, fight.endTime, playerId),
         this.wclApi.getAllEvents(reportCode, fightId, 'DamageDone', fight.startTime, fight.endTime, playerId),
       ]);
-      const playerWindows = findPlayerBurstWindows(bench.value.windows, damage, casts, fight.startTime, abilityNames);
-      const fightDurationS = (fight.endTime - fight.startTime) / 1000;
+      const playerWindows = findPlayerBurstWindows(
+        bench.value.windows, withRelativeS(damage, fight.startTime), withRelativeS(casts, fight.startTime), abilityNames,
+      );
+      const fightDurationS = relativeS(fight.endTime, fight.startTime);
       return ok(buildBurstView(bench.value.windows, playerWindows, fightDurationS, bench.value.cd_spell_ids, bench.value.ability_icons));
     } catch (cause) {
       logWarn(`BurstFeatureService.loadPlayerView ${reportCode}:${fightId}`, cause);

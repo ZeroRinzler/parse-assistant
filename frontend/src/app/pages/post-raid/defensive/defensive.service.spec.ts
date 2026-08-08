@@ -15,8 +15,13 @@ import {
 } from './defensive.service';
 import { applyBuff, removeBuff, damageTaken, cast } from '../../../../testing/builders/events';
 import { CLOAK_OF_SHADOWS } from '../../../../testing/spell-ids';
-import { WCL_MELEE_EVENT_ABILITY_ID, WOW_AUTO_ATTACK_SPELL_ID, WCL_SYNTHETIC_SOURCE_FALLBACK_ID } from '../../../shared/analysis/wcl-projections';
+import {
+  WCL_MELEE_EVENT_ABILITY_ID, WOW_AUTO_ATTACK_SPELL_ID, WCL_SYNTHETIC_SOURCE_FALLBACK_ID, withRelativeS,
+} from '../../../shared/analysis/wcl-projections';
 import { Result, LoadError, ok, missing, transient } from '../../../core/result';
+
+/** Fixture events build against a fight-start of 0, so stamping is a pass-through to seconds. */
+const timed = withRelativeS;
 
 const CLOAK_META = { name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS, cooldown: 120, duration: 5, usage_rule: 'Use on big hits', talent_gated: false };
 
@@ -35,8 +40,8 @@ describe('analyzeDefensives', () => {
   it('builds buff-window-centric uses with damage taken during each window', () => {
     const out = analyzeDefensives(
       [CLOAK_META],
-      [], [applyBuff(CLOAK_OF_SHADOWS, 10), removeBuff(CLOAK_OF_SHADOWS, 15)], [damageTaken(700, 12, 500)],
-      0, 300_000,
+      [], timed([applyBuff(CLOAK_OF_SHADOWS, 10), removeBuff(CLOAK_OF_SHADOWS, 15)], 0), timed([damageTaken(700, 12, 500)], 0),
+      300,
     );
     expect(out).toHaveLength(1);
     expect(out[0]).toMatchObject({ name: 'Cloak of Shadows', uses: 1, cast_times_s: [10] });
@@ -45,35 +50,31 @@ describe('analyzeDefensives', () => {
 });
 
 describe('buildDefensiveUsageWindows', () => {
-  // The buff/cast fight window the fixtures live inside.
-  const F_START = 0;
-  const F_END = 300_000;
   const FIGHT_END_S = 300;
-  const rel = (ts: number): number => ts - F_START;
   // A constant damage-in-window function so each span's dmg_during is predictable.
   const FIXED_DMG = 500;
   const dmg = (): number => FIXED_DMG;
 
   it('builds a measured buff span with damage taken, open buff running to fight end', () => {
     const BUFF_START_S = 10;
-    const out = buildDefensiveUsageWindows(CLOAK_OF_SHADOWS, [[BUFF_START_S, null]], [], dmg, rel, F_START, F_END, FIGHT_END_S);
+    const out = buildDefensiveUsageWindows(CLOAK_OF_SHADOWS, [[BUFF_START_S, null]], [], dmg, FIGHT_END_S);
     expect(out).toEqual([{ start_s: BUFF_START_S, end_s: FIGHT_END_S, dmg_during: FIXED_DMG }]);
   });
 
   it('falls back to point casts (zero span, no damage) only when there is no buff span', () => {
     const CAST_S = 20;
     const out = buildDefensiveUsageWindows(
-      CLOAK_OF_SHADOWS, [], [cast(CLOAK_OF_SHADOWS, CAST_S)],
-      dmg, rel, F_START, F_END, FIGHT_END_S,
+      CLOAK_OF_SHADOWS, [], timed([cast(CLOAK_OF_SHADOWS, CAST_S)], 0),
+      dmg, FIGHT_END_S,
     );
     expect(out).toEqual([{ start_s: CAST_S, end_s: CAST_S, dmg_during: 0 }]);
   });
 
   it('ignores a cast outside the fight bounds (boundary)', () => {
-    const PAST_END_S = 301; // > FIGHT_END_S, so its timestamp is past F_END
+    const PAST_END_S = 301; // > FIGHT_END_S
     const out = buildDefensiveUsageWindows(
-      CLOAK_OF_SHADOWS, [], [cast(CLOAK_OF_SHADOWS, PAST_END_S)],
-      dmg, rel, F_START, F_END, FIGHT_END_S,
+      CLOAK_OF_SHADOWS, [], timed([cast(CLOAK_OF_SHADOWS, PAST_END_S)], 0),
+      dmg, FIGHT_END_S,
     );
     expect(out).toEqual([]);
   });
@@ -172,7 +173,7 @@ describe('computePlayerDefensiveWindows', () => {
     const top: BurstWindow[] = [
       { time_s: 10, window_length_s: 5, dmg_avg: 0, dmg_min: 0, dmg_max: 0, dmg_stddev: 0, common_cds: [], ability_breakdown: [] },
     ];
-    const out = computePlayerDefensiveWindows(top, [damageTaken(700, 12, 400, { absorbed: 150 }), damageTaken(701, 14, 100), damageTaken(700, 15, 999)], 0);
+    const out = computePlayerDefensiveWindows(top, timed([damageTaken(700, 12, 400, { absorbed: 150 }), damageTaken(701, 14, 100), damageTaken(700, 15, 999)], 0));
     // (400 + 150 absorbed) + 100 = 650; the event at exactly 15 (== end) is excluded (half-open).
     expect(out[0].window_damage).toBe(650);
     expect(out[0].ability_breakdown![0]).toMatchObject({ spell_id: 700, damage: 550 });
@@ -197,12 +198,12 @@ describe('computePlayerDefensiveWindows', () => {
         { spell_id: WCL_SYNTHETIC_SOURCE_FALLBACK_ID, avg_damage: 0, min_damage: 0, max_damage: 0, count: 1 },
       ],
     }];
-    const [playerWindow] = computePlayerDefensiveWindows(top, [
+    const [playerWindow] = computePlayerDefensiveWindows(top, timed([
       damageTaken(WCL_MELEE_EVENT_ABILITY_ID, WIN_START_S + 1, MELEE_HIT_A),
       damageTaken(WCL_MELEE_EVENT_ABILITY_ID, WIN_START_S + 2, MELEE_HIT_B),
       damageTaken(SYNTH_NEG_ID_A, WIN_START_S + 2, SYNTH_HIT_A),
       damageTaken(SYNTH_NEG_ID_B, WIN_START_S + 3, SYNTH_HIT_B),
-    ], 0);
+    ], 0));
 
     const breakdown = playerWindow.ability_breakdown!;
     expect(breakdown).toContainEqual({ spell_id: WOW_AUTO_ATTACK_SPELL_ID, damage: MELEE_TOTAL });
@@ -283,12 +284,12 @@ describe('defensiveClipAnchor', () => {
 });
 
 describe('defensiveFindingClipAnchor', () => {
-  it('is a point anchor at the cast time, keyed by the exact millisecond', () => {
-    expect(defensiveFindingClipAnchor(30_200)).toEqual({ timeS: 30.2, windowLengthS: 0, key: 'defensive-find-30200' });
+  it('is a point anchor at the cast time, keyed by the exact second', () => {
+    expect(defensiveFindingClipAnchor(30.2)).toEqual({ timeS: 30.2, windowLengthS: 0, key: 'defensive-find-30.2' });
   });
 
   it('keeps two findings within the same second on distinct clip keys', () => {
-    expect(defensiveFindingClipAnchor(30_200).key).not.toBe(defensiveFindingClipAnchor(30_600).key);
+    expect(defensiveFindingClipAnchor(30.2).key).not.toBe(defensiveFindingClipAnchor(30.6).key);
   });
 });
 

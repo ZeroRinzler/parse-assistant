@@ -12,7 +12,12 @@ import {
 } from './burst.service';
 import { SHADOW_BLADES, SHADOW_BLADES_DAMAGE } from '../../../../testing/spell-ids';
 import { cast, damage } from '../../../../testing/builders/events';
-import { WCL_MELEE_EVENT_ABILITY_ID, WOW_AUTO_ATTACK_SPELL_ID, WCL_SYNTHETIC_SOURCE_FALLBACK_ID } from '../../../shared/analysis/wcl-projections';
+import {
+  WCL_MELEE_EVENT_ABILITY_ID, WOW_AUTO_ATTACK_SPELL_ID, WCL_SYNTHETIC_SOURCE_FALLBACK_ID, withRelativeS,
+} from '../../../shared/analysis/wcl-projections';
+
+/** Fixture events build against a fight-start of 0, so stamping is a pass-through to seconds. */
+const timed = withRelativeS;
 
 // A melee auto-attack (event id 1) folds onto Auto Attack; two distinct synthetic negatives fold onto
 // the "I Don't Know" fallback. Each raw hit carries this much damage.
@@ -84,13 +89,12 @@ describe('burstDetailRows', () => {
     };
     const [playerWindow] = findPlayerBurstWindows(
       [window],
-      [
+      timed([
         damage(WCL_MELEE_EVENT_ABILITY_ID, 12, MELEE_HIT),
         damage(WCL_MELEE_EVENT_ABILITY_ID, 15, MELEE_HIT),
         damage(PET_MELEE_ID, 13, SYNTHETIC_HIT),
-      ],
+      ], 0),
       [],
-      0,
       new Map(),
     );
     const benchBreakdown = [
@@ -168,9 +172,8 @@ describe('findPlayerBurstWindows', () => {
   it('sums player damage inside the window (amount + absorbed) and counts casts by ability name', () => {
     const out = findPlayerBurstWindows(
       [window],
-      [damage(SHADOW_BLADES_DAMAGE, 12, 500, { absorbed: 100 }), damage(SHADOW_BLADES_DAMAGE, 15, 400), damage(1, 999, 5000)],
-      [cast(SHADOW_BLADES, 11), cast(SHADOW_BLADES, 13)],
-      0,
+      timed([damage(SHADOW_BLADES_DAMAGE, 12, 500, { absorbed: 100 }), damage(SHADOW_BLADES_DAMAGE, 15, 400), damage(1, 999, 5000)], 0),
+      timed([cast(SHADOW_BLADES, 11), cast(SHADOW_BLADES, 13)], 0),
       // Bridge the damage id and the cast id to one name so the damage row counts the casts by NAME, not id.
       new Map([[SHADOW_BLADES_DAMAGE, 'Shadow Blades'], [SHADOW_BLADES, 'Shadow Blades']]),
     );
@@ -182,14 +185,13 @@ describe('findPlayerBurstWindows', () => {
   it('folds synthetic damage ids onto their normalized spells, summing raw ids that collapse together', () => {
     const out = findPlayerBurstWindows(
       [window],
-      [
+      timed([
         damage(WCL_MELEE_EVENT_ABILITY_ID, 12, MELEE_HIT),
         damage(WCL_MELEE_EVENT_ABILITY_ID, 15, MELEE_HIT),
         damage(PET_MELEE_ID, 13, SYNTHETIC_HIT),
         damage(ENVIRONMENTAL_ID, 16, SYNTHETIC_HIT),
-      ],
+      ], 0),
       [],
-      0,
       new Map(),
     );
     const breakdown = out[0].ability_breakdown!;
@@ -200,7 +202,7 @@ describe('findPlayerBurstWindows', () => {
   });
 
   it('excludes an event at exactly the window end (half-open)', () => {
-    const out = findPlayerBurstWindows([window], [damage(SHADOW_BLADES_DAMAGE, 30, 800)], [], 0, new Map());
+    const out = findPlayerBurstWindows([window], timed([damage(SHADOW_BLADES_DAMAGE, 30, 800)], 0), [], new Map());
     expect(out[0].window_damage).toBe(0);
   });
 
@@ -213,9 +215,8 @@ describe('findPlayerBurstWindows', () => {
     const fillerHits = Array.from({ length: FILLER_COUNT }, (_, i) => damage(FILLER_BASE_ID + i, AT_S, FILLER_DAMAGE));
     const out = findPlayerBurstWindows(
       [window],
-      [...fillerHits, damage(SHADOW_BLADES_DAMAGE, AT_S, BENCH_HIT_DAMAGE)],
+      timed([...fillerHits, damage(SHADOW_BLADES_DAMAGE, AT_S, BENCH_HIT_DAMAGE)], 0),
       [],
-      0,
       new Map([[SHADOW_BLADES_DAMAGE, 'Eviscerate']]),
     );
     const benchBreakdown = [{ spell_id: SHADOW_BLADES_DAMAGE, avg_damage: 600, min_damage: 400, max_damage: 800, count: 5, avg_casts: 2 }];

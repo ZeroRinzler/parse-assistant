@@ -2,22 +2,25 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { DOCUMENT } from '@angular/common';
 import { Subscription, exhaustMap, timer } from 'rxjs';
-import { LiveReportSyncService, POLL_INTERVAL_MS } from './live-report-sync';
+import { LiveReportSyncService, POLL_INTERVAL_S } from './live-report-sync';
+
+/** vi's fake timers and Date.now() are ms-only; this is the one conversion point. */
+const ms = (s: number) => s * 1000;
 
 /** Half an interval: a delay clearly shorter than the refocus cooldown. */
-const HALF_INTERVAL_MS = POLL_INTERVAL_MS / 2;
+const HALF_INTERVAL_S = POLL_INTERVAL_S / 2;
 
 /**
  * An inner poll that outlasts one interval, so the next scheduled tick overlaps it.
  * Used to prove exhaustMap drops the overlapping trigger.
  */
-const INNER_POLL_DURATION_MS = POLL_INTERVAL_MS + HALF_INTERVAL_MS;
+const INNER_POLL_DURATION_S = POLL_INTERVAL_S + HALF_INTERVAL_S;
 
 /**
  * Base clock chosen so the very first refocus (with lastEmit still 0) clears the
- * cooldown: START_TIME_MS - 0 >= POLL_INTERVAL_MS.
+ * cooldown: START_TIME_S - 0 >= POLL_INTERVAL_S.
  */
-const START_TIME_MS = POLL_INTERVAL_MS;
+const START_TIME_S = POLL_INTERVAL_S;
 
 /** A minimal DOCUMENT stand-in: a real EventTarget plus a settable visibilityState. */
 class FakeDocument extends EventTarget {
@@ -48,7 +51,7 @@ describe('LiveReportSyncService pollTriggers', () => {
 
   beforeEach(() => {
     vi.useFakeTimers();
-    vi.setSystemTime(START_TIME_MS);
+    vi.setSystemTime(ms(START_TIME_S));
   });
 
   afterEach(() => {
@@ -71,13 +74,13 @@ describe('LiveReportSyncService pollTriggers', () => {
     let emissions = 0;
     sub = service.pollTriggers().subscribe(() => emissions++);
 
-    vi.advanceTimersByTime(POLL_INTERVAL_MS);
+    vi.advanceTimersByTime(ms(POLL_INTERVAL_S));
     expect(emissions).toBe(1);
 
-    vi.advanceTimersByTime(POLL_INTERVAL_MS);
+    vi.advanceTimersByTime(ms(POLL_INTERVAL_S));
     expect(emissions).toBe(2);
 
-    vi.advanceTimersByTime(POLL_INTERVAL_MS);
+    vi.advanceTimersByTime(ms(POLL_INTERVAL_S));
     expect(emissions).toBe(3);
   });
 
@@ -87,11 +90,11 @@ describe('LiveReportSyncService pollTriggers', () => {
     sub = service.pollTriggers().subscribe(() => emissions++);
 
     doc.setVisible(false);
-    vi.advanceTimersByTime(POLL_INTERVAL_MS * 3);
+    vi.advanceTimersByTime(ms(POLL_INTERVAL_S * 3));
     expect(emissions).toBe(0);
 
     doc.setVisible(true);
-    vi.advanceTimersByTime(POLL_INTERVAL_MS);
+    vi.advanceTimersByTime(ms(POLL_INTERVAL_S));
     expect(emissions).toBe(1);
   });
 
@@ -110,14 +113,14 @@ describe('LiveReportSyncService pollTriggers', () => {
     doc.setVisible(false);
 
     // Refocus half an interval later: inside the cooldown, so it is dropped.
-    vi.advanceTimersByTime(HALF_INTERVAL_MS);
+    vi.advanceTimersByTime(ms(HALF_INTERVAL_S));
     doc.setVisible(true);
     doc.fireVisibilityChange();
     expect(emissions).toBe(1);
     doc.setVisible(false);
 
     // Refocus a full interval after the last emission: cooldown elapsed, so it emits.
-    vi.advanceTimersByTime(HALF_INTERVAL_MS);
+    vi.advanceTimersByTime(ms(HALF_INTERVAL_S));
     doc.setVisible(true);
     doc.fireVisibilityChange();
     expect(emissions).toBe(2);
@@ -128,15 +131,15 @@ describe('LiveReportSyncService pollTriggers', () => {
     let innerStarts = 0;
     sub = service
       .pollTriggers()
-      .pipe(exhaustMap(() => { innerStarts++; return timer(INNER_POLL_DURATION_MS); }))
+      .pipe(exhaustMap(() => { innerStarts++; return timer(ms(INNER_POLL_DURATION_S)); }))
       .subscribe();
 
     // Tick 1 starts an inner poll that runs 1.5 intervals.
-    vi.advanceTimersByTime(POLL_INTERVAL_MS);
+    vi.advanceTimersByTime(ms(POLL_INTERVAL_S));
     // Tick 2 arrives while that inner poll is still running: exhaustMap drops it.
-    vi.advanceTimersByTime(POLL_INTERVAL_MS);
+    vi.advanceTimersByTime(ms(POLL_INTERVAL_S));
     // Tick 3 arrives after the inner poll completed: a new inner poll starts.
-    vi.advanceTimersByTime(POLL_INTERVAL_MS);
+    vi.advanceTimersByTime(ms(POLL_INTERVAL_S));
 
     expect(innerStarts).toBe(2);
   });
@@ -146,11 +149,11 @@ describe('LiveReportSyncService pollTriggers', () => {
     let emissions = 0;
     sub = service.pollTriggers().subscribe(() => emissions++);
 
-    vi.advanceTimersByTime(POLL_INTERVAL_MS);
+    vi.advanceTimersByTime(ms(POLL_INTERVAL_S));
     expect(emissions).toBe(1);
 
     sub.unsubscribe();
-    vi.advanceTimersByTime(POLL_INTERVAL_MS * 3);
+    vi.advanceTimersByTime(ms(POLL_INTERVAL_S * 3));
     doc.fireVisibilityChange();
 
     expect(emissions).toBe(1);

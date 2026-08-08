@@ -7,7 +7,7 @@
 import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
-import { WclEvent, ParseRanking, WclReport } from '../../../core/models/wcl.models';
+import { ParseRanking, WclReport } from '../../../core/models/wcl.models';
 import { RulebookDefensive } from '../../../core/models/rulebook.models';
 import { BurstWindow, TopDefensiveSummary } from '../../../core/models/analysis.models';
 import { PerDefensiveBenchmark } from '../../../core/models/encounter.models';
@@ -18,7 +18,7 @@ import { mean, median, deviation } from 'd3-array';
 import { round, groupByTime, getOrInsert } from '../../../shared/analysis/analysis-math';
 import { HoldWindow, buildHoldTargets, detectHoldWindows } from '../../../shared/analysis/hold-targets';
 import { buildAuraWindows } from '../../../shared/analysis/aura-windows';
-import { abilityIcons, normalizeAbilityId, toParseRankings, unwrapRankings } from '../../../shared/analysis/wcl-projections';
+import { TimedEvent, abilityIcons, normalizeAbilityId, relativeS, toParseRankings, unwrapRankings, withRelativeS } from '../../../shared/analysis/wcl-projections';
 import { DataSource } from '../../../core/data-source/data-source';
 import { DefensiveBench, DefensivePlanMeta } from './defensive-data-source';
 
@@ -93,8 +93,7 @@ export interface ParseDefWindow {
 export function summarizeDefensiveCasts(
   defensives: RulebookDefensive[],
   buffWindows: Map<number, [number, number | null][]>,
-  castEvents: WclEvent[],
-  fightStartMs: number,
+  castEvents: TimedEvent[],
   fightDurationS: number,
 ): ParseDefensiveSummary[] {
   const summaries: ParseDefensiveSummary[] = [];
@@ -103,12 +102,12 @@ export function summarizeDefensiveCasts(
     const cooldownS = defensive.cooldown;
     const castTimes: number[] = [];
 
-    for (const buffWindow of (buffWindows.get(spellId) ?? [])) castTimes.push(round(buffWindow[0] / 1000));
+    for (const buffWindow of (buffWindows.get(spellId) ?? [])) castTimes.push(round(buffWindow[0]));
 
     if (castTimes.length === 0) {
       for (const cast of castEvents) {
         if (cast.type === 'cast' && cast.abilityGameID === spellId) {
-          castTimes.push(round((cast.timestamp - fightStartMs) / 1000));
+          castTimes.push(round(cast.atS));
         }
       }
     }
@@ -131,7 +130,7 @@ export function summarizeDefensiveCasts(
   return summaries;
 }
 
-/** One window hit: `[timestampMs, damage, abilityId, sourceId]` (sorted by time). */
+/** One window hit: `[atS, damage, abilityId, sourceId]` (sorted by time). */
 type WindowHit = [number, number, number, number | null];
 
 /** Top-N damage sources in a window, summed by normalized spell id, highest damage first. */
@@ -154,29 +153,26 @@ export function windowDamageBreakdown(windowHits: WindowHit[]): { spell_id: numb
  * never a rulebook duration), its damage taken, its share of parse total, and dominant enemy.
  */
 export function findParseDefensiveWindows(
-  damageTaken: WclEvent[], fightStartMs: number, fightDurationS: number,
+  damageTaken: TimedEvent[], fightDurationS: number,
   buffWindows: Map<number, [number, number | null][]>,
   defensives: RulebookDefensive[],
   gameIdByActorId: Map<number, number>,
 ): ParseDefWindow[] {
   const hits = damageTaken
     .filter(event => event.type === 'damage' && (event.amount ?? 0) + (event.absorbed ?? 0) > 0)
-    .map(event => [event.timestamp, (event.amount ?? 0) + (event.absorbed ?? 0), event.abilityGameID ?? 0, event.sourceID ?? null] as WindowHit)
+    .map(event => [event.atS, (event.amount ?? 0) + (event.absorbed ?? 0), event.abilityGameID ?? 0, event.sourceID ?? null] as WindowHit)
     .sort((a, b) => a[0] - b[0]);
   if (!hits.length) return [];
   const total = hits.reduce((sum, hit) => sum + hit[1], 0);
-  const fightDurationMs = fightDurationS * 1000;
 
   const result: ParseDefWindow[] = [];
   for (const defensive of defensives) {
     const spellId = defensive.spell_id;
 
     for (const buffWindow of (buffWindows.get(spellId) ?? [])) {
-      const startMs = buffWindow[0];
-      const endMs = buffWindow[1] != null ? buffWindow[1] : fightDurationMs;
-      const startTs = fightStartMs + startMs;
-      const endTs = fightStartMs + endMs;
-      const windowHits = hits.filter(hit => hit[0] >= startTs && hit[0] <= endTs);
+      const startS = buffWindow[0];
+      const endS = buffWindow[1] != null ? buffWindow[1] : fightDurationS;
+      const windowHits = hits.filter(hit => hit[0] >= startS && hit[0] <= endS);
       const windowDmg = windowHits.reduce((sum, hit) => sum + hit[1], 0);
 
       const ability_breakdown = windowDamageBreakdown(windowHits);
@@ -189,8 +185,8 @@ export function findParseDefensiveWindows(
       const refGameId = topSource != null ? (gameIdByActorId.get(topSource) ?? null) : null;
 
       result.push({
-        time_s: round(startMs / 1000),
-        window_length_s: round((endMs - startMs) / 1000),
+        time_s: round(startS),
+        window_length_s: round(endS - startS),
         window_damage: windowDmg,
         pct_of_total: total > 0 ? windowDmg / total : 0,
         parse_index: 0,
@@ -307,7 +303,7 @@ export function buildDefensiveBenchmark(
     .map(summary => summary.uses / (summary.fight_duration_s / 60));
   const benchUsesPerMin = summaries
     .filter(summary => summary.fight_duration_s > 0 && summary.uses > 0)
-    .map(summary => Math.round(summary.uses / summary.fight_duration_s * 60 * 1000) / 1000);
+    .map(summary => round(summary.uses / summary.fight_duration_s * 60, 3));
 
   return {
     sample_count: totalParses,
@@ -321,8 +317,8 @@ export function buildDefensiveBenchmark(
     avg_uses_per_min: usesPerMinList.length ? Math.round((mean(usesPerMinList) ?? 0) * 100) / 100 : 0,
     uses_per_min: benchUsesPerMin.length
       ? {
-          avg: Math.round((mean(benchUsesPerMin) ?? 0) * 1000) / 1000,
-          stddev: Math.round((deviation(benchUsesPerMin) ?? 0) * 1000) / 1000,
+          avg: round(mean(benchUsesPerMin) ?? 0, 3),
+          stddev: round(deviation(benchUsesPerMin) ?? 0, 3),
           min: Math.min(...benchUsesPerMin),
           max: Math.max(...benchUsesPerMin),
         }
@@ -444,10 +440,10 @@ export class DefensiveTransformService implements DataSource<DefensiveBench> {
         this.wclApi.getAllEvents(ranking.report_code, fight.id, 'DamageTaken', fight.startTime, fight.endTime, player.id),
       ]);
 
-      const fightDurationS = (fight.endTime - fight.startTime) / 1000;
-      const buffWindows = buildAuraWindows(buffs, fight.startTime);
-      const windows = findParseDefensiveWindows(dmgTaken, fight.startTime, fightDurationS, buffWindows, defensives, gameIdByActorId);
-      const summaries = summarizeDefensiveCasts(defensives, buffWindows, casts, fight.startTime, fightDurationS);
+      const fightDurationS = relativeS(fight.endTime, fight.startTime);
+      const buffWindows = buildAuraWindows(withRelativeS(buffs, fight.startTime));
+      const windows = findParseDefensiveWindows(withRelativeS(dmgTaken, fight.startTime), fightDurationS, buffWindows, defensives, gameIdByActorId);
+      const summaries = summarizeDefensiveCasts(defensives, buffWindows, withRelativeS(casts, fight.startTime), fightDurationS);
       return { windows, summaries, encounterName: fight.name ?? '' };
     } catch (err) {
       logWarn(`DefensiveTransformService parse ${ranking.report_code}:${ranking.fight_id}`, err);

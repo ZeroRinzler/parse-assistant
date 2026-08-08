@@ -4,7 +4,7 @@ import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
 import {
   RotationTransformService,
-  detectBloodlust, summarizeCooldownCasts, castGapListMs,
+  detectBloodlust, summarizeCooldownCasts, castGapListS,
   buildCdBenchmark, computeEfficiencyThresholds, aggregateCdBenchmarks, rotationCdSpellIds,
   CdSummary,
 } from './rotation-transform.service';
@@ -12,6 +12,10 @@ import { SHADOW_BLADES, BLOODLUST, CLOAK_OF_SHADOWS } from '../../../../testing/
 import { cast, applyBuff } from '../../../../testing/builders/events';
 import { rulebook } from '../../../../testing/builders/rulebook';
 import { ok, missing } from '../../../core/result';
+import { withRelativeS } from '../../../shared/analysis/wcl-projections';
+
+/** Fixture events build against a fight-start of 0, so stamping is a pass-through to seconds. */
+const timed = withRelativeS;
 
 describe('rotationCdSpellIds', () => {
   it('maps cooldown + defensive names to spell ids, skipping missing ids', () => {
@@ -24,10 +28,10 @@ describe('rotationCdSpellIds', () => {
 
 describe('detectBloodlust', () => {
   it('returns the first BL apply time in seconds', () => {
-    expect(detectBloodlust([applyBuff(999, 5), applyBuff(BLOODLUST, 30)], 0)).toBe(30);
+    expect(detectBloodlust(timed([applyBuff(999, 5), applyBuff(BLOODLUST, 30)], 0))).toBe(30);
   });
   it('returns null when no BL buff present', () => {
-    expect(detectBloodlust([applyBuff(999, 5)], 0)).toBeNull();
+    expect(detectBloodlust(timed([applyBuff(999, 5)], 0))).toBeNull();
   });
 });
 
@@ -35,12 +39,12 @@ describe('summarizeCooldownCasts', () => {
   const cooldowns = [{ name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 90 }];
 
   it('counts casts, first cast, BL alignment and offset', () => {
-    const summaries = summarizeCooldownCasts([cast(SHADOW_BLADES, 32)], cooldowns, 0, 200, 30);
+    const summaries = summarizeCooldownCasts(timed([cast(SHADOW_BLADES, 32)], 0), cooldowns, 200, 30);
     expect(summaries[0]).toMatchObject({ name: 'Shadow Blades', total_uses: 1, first_cast_s: 32, bl_aligned: true, bl_offset_s: 2 });
   });
 
   it('flags a held second cast (>8s past the prior cast + cooldown)', () => {
-    const summaries = summarizeCooldownCasts([cast(SHADOW_BLADES, 0), cast(SHADOW_BLADES, 110)], cooldowns, 0, 200, null);
+    const summaries = summarizeCooldownCasts(timed([cast(SHADOW_BLADES, 0), cast(SHADOW_BLADES, 110)], 0), cooldowns, 200, null);
     expect(summaries[0].cast_pattern).toBe('hold');
     // prior 0 + cd 90 = expected 90; actual 110 -> 20s hold.
     expect(summaries[0].hold_windows[0]).toMatchObject({ cast_index: 2, actual_s: 110, delay_s: 20 });
@@ -49,23 +53,23 @@ describe('summarizeCooldownCasts', () => {
   it('measures each hold from the prior cast, so one hold does not cascade', () => {
     // cast 2 held (0 -> 200, well past reset); cast 3 is on cooldown after it (200 -> 290).
     const summaries = summarizeCooldownCasts(
-      [cast(SHADOW_BLADES, 0), cast(SHADOW_BLADES, 200), cast(SHADOW_BLADES, 290)], cooldowns, 0, 400, null);
+      timed([cast(SHADOW_BLADES, 0), cast(SHADOW_BLADES, 200), cast(SHADOW_BLADES, 290)], 0), cooldowns, 400, null);
     expect(summaries[0].hold_windows).toHaveLength(1);
     expect(summaries[0].hold_windows[0].cast_index).toBe(2);
   });
 
   it('does not flag a hold exactly at the threshold (strict)', () => {
     // prior 0 + cd 90 + 8s threshold = 98; a cast at 98 has delay exactly 8 -> not a hold.
-    const atBoundary = summarizeCooldownCasts([cast(SHADOW_BLADES, 0), cast(SHADOW_BLADES, 98)], cooldowns, 0, 200, null);
+    const atBoundary = summarizeCooldownCasts(timed([cast(SHADOW_BLADES, 0), cast(SHADOW_BLADES, 98)], 0), cooldowns, 200, null);
     expect(atBoundary[0].hold_windows).toHaveLength(0);
-    const past = summarizeCooldownCasts([cast(SHADOW_BLADES, 0), cast(SHADOW_BLADES, 98.1)], cooldowns, 0, 200, null);
+    const past = summarizeCooldownCasts(timed([cast(SHADOW_BLADES, 0), cast(SHADOW_BLADES, 98.1)], 0), cooldowns, 200, null);
     expect(past[0].hold_windows).toHaveLength(1);
   });
 });
 
-describe('castGapListMs', () => {
-  it('returns sorted inter-cast gaps in ms', () => {
-    expect(castGapListMs([cast(1, 0), cast(1, 3), cast(1, 1)])).toEqual([1000, 2000]);
+describe('castGapListS', () => {
+  it('returns sorted inter-cast gaps in seconds', () => {
+    expect(castGapListS(timed([cast(1, 0), cast(1, 3), cast(1, 1)], 0))).toEqual([1, 2]);
   });
 });
 
@@ -132,16 +136,16 @@ describe('buildCdBenchmark', () => {
 
 describe('computeEfficiencyThresholds', () => {
   it('derives a p90 downtime floor and per-parse efficiency mean', () => {
-    const result = computeEfficiencyThresholds([[500, 600, 700, 5000]], [100]);
-    // d3 p90 quantile of [500,600,700,5000]: 700 + 0.7*(5000-700) = 3710 ms.
-    expect(result.downtimeThresholdMs).toBe(3710);
-    // only the 5000ms gap clears the floor -> 5s downtime over 100s -> (1 - 5/100)*100 = 95%.
+    const result = computeEfficiencyThresholds([[0.5, 0.6, 0.7, 5]], [100]);
+    // d3 p90 quantile of [0.5,0.6,0.7,5]: 0.7 + 0.7*(5-0.7) = 3.71s.
+    expect(result.downtimeThresholdS).toBe(3.71);
+    // only the 5s gap clears the floor -> 5s downtime over 100s -> (1 - 5/100)*100 = 95%.
     expect(result.topAvgEfficiency).toBe(95);
   });
 
   it('falls back to the default floor with no gaps', () => {
     const result = computeEfficiencyThresholds([[]], [100]);
-    expect(result.downtimeThresholdMs).toBe(1500);
+    expect(result.downtimeThresholdS).toBe(1.5);
     expect(result.topAvgEfficiency).toBe(0);
   });
 });

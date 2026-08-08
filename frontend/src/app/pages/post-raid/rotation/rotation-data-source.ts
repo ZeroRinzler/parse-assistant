@@ -21,7 +21,7 @@ export interface RotationBench {
   encounter_name: string;
   sample_count: number;
   avg_duration_s: number;
-  downtime_threshold_ms: number;
+  downtime_threshold_s: number;
   top_avg_efficiency: number;
   top_efficiency_stddev: number;
   /** Per-cooldown statistical benchmarks (first cast, gaps, BL offset, holds, uses/min). */

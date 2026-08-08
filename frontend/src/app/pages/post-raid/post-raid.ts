@@ -12,7 +12,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { WclApiService } from '../../core/services/wcl-api';
-import { LiveReportSyncService, POLL_INTERVAL_MS } from '../../core/services/live-report-sync';
+import { LiveReportSyncService, POLL_INTERVAL_S } from '../../core/services/live-report-sync';
 import { WclFight, WclPlayer, WclReport, PlayerDetailGroups } from '../../core/models/wcl.models';
 import { ClipAnchor } from '../../core/models/capture.models';
 import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner/loading-spinner';
@@ -427,7 +427,7 @@ export class PostRaidComponent {
       const action = livePollActionOf(probedFights, this.selectedFightId(), this.ready());
       if (action === 'none') { this.liveCapture.setStatus('No boss pulls found.'); return; }
       if (action === 'skip') {
-        this.liveCapture.setStatus(`Last updated ${new Date().toLocaleTimeString()} · Polling every ${POLL_INTERVAL_MS / 1000}s`);
+        this.liveCapture.setStatus(`Last updated ${new Date().toLocaleTimeString()}, polling every ${POLL_INTERVAL_S}s`);
         return;
       }
 

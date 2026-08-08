@@ -10,6 +10,10 @@ import {
   MapFeatureService, buildActorTimelines, listReferenceEnemies, buildLiveOverlay, resolveLiveReference,
   FACING_OFFSET_RAD,
 } from './map.service';
+import { withRelativeS } from '../../../shared/analysis/wcl-projections';
+
+/** Fixture events build against a fight-start of 0, so stamping is a pass-through to seconds. */
+const timed = withRelativeS;
 
 function posEvent(
   fields: { ts: number; source?: number; target?: number; resourceActor?: number; x: number; y: number; facing?: number; mapID?: number },
@@ -23,21 +27,21 @@ function posEvent(
 
 describe('buildActorTimelines', () => {
   it('attributes the flattened position to the source by default (resourceActor 1)', () => {
-    const timelines = buildActorTimelines([posEvent({ ts: 1000, source: 7, x: 200, y: 400 })], 0);
+    const timelines = buildActorTimelines(timed([posEvent({ ts: 1000, source: 7, x: 200, y: 400 })], 0));
     const tl = timelines.get(7)!;
     expect(tl.samples).toEqual([{ t: 1, x: 2, y: 4, facing: undefined, mapID: undefined }]);
   });
 
   it('attributes the position to the target when resourceActor is 2', () => {
-    const timelines = buildActorTimelines([posEvent({ ts: 0, source: 7, target: 9, resourceActor: 2, x: 100, y: 0 })], 0);
+    const timelines = buildActorTimelines(timed([posEvent({ ts: 0, source: 7, target: 9, resourceActor: 2, x: 100, y: 0 })], 0));
     expect([...timelines.keys()]).toEqual([9]);
   });
 
   it('scales x/y to yards and facing milliradians to radians, sorted by time', () => {
-    const timelines = buildActorTimelines([
+    const timelines = buildActorTimelines(timed([
       posEvent({ ts: 3000, source: 1, x: 300, y: 0, facing: 1000 }),
       posEvent({ ts: 1000, source: 1, x: 100, y: 0, facing: 2000 }),
-    ], 0);
+    ], 0));
     const samples = timelines.get(1)!.samples;
     expect(samples.map(s => s.t)).toEqual([1, 3]);
     expect(samples[0]).toMatchObject({ x: 1, facing: 2 });
@@ -45,7 +49,7 @@ describe('buildActorTimelines', () => {
 
   it('skips events without a position', () => {
     const noPos: WclEvent = { type: 'cast', timestamp: 0, abilityGameID: 1, sourceID: 5 };
-    expect(buildActorTimelines([noPos], 0).size).toBe(0);
+    expect(buildActorTimelines(timed([noPos], 0)).size).toBe(0);
   });
 });
 
@@ -91,8 +95,8 @@ describe('buildLiveOverlay', () => {
   };
 
   it('maps the ingested boss gameId to the live actor id and keys enemies by gameId', () => {
-    const events = [posEvent({ ts: 0, source: 5, x: 100, y: 0 })];
-    const overlay = buildLiveOverlay({ positions, events, fightStartMs: 0, playerId: 5, enemies: [{ id: 42, name: 'Boss', gameID: 100 }] });
+    const events = timed([posEvent({ ts: 0, source: 5, x: 100, y: 0 })], 0);
+    const overlay = buildLiveOverlay({ positions, events, playerId: 5, enemies: [{ id: 42, name: 'Boss', gameID: 100 }] });
     expect(overlay).not.toBeNull();
     expect(overlay!.bossActorId).toBe(42);
     expect(overlay!.refActorByGameId.get(100)).toBe(42);
@@ -100,8 +104,8 @@ describe('buildLiveOverlay', () => {
   });
 
   it('returns null when the player has no position samples', () => {
-    const events = [posEvent({ ts: 0, source: 99, x: 1, y: 1 })];
-    expect(buildLiveOverlay({ positions, events, fightStartMs: 0, playerId: 5, enemies: [] })).toBeNull();
+    const events = timed([posEvent({ ts: 0, source: 99, x: 1, y: 1 })], 0);
+    expect(buildLiveOverlay({ positions, events, playerId: 5, enemies: [] })).toBeNull();
   });
 });
 

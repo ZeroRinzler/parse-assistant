@@ -10,6 +10,7 @@ import { EncounterPositions, ReferenceSelector } from '../../../core/models/posi
 import { logWarn } from '../../../core/log';
 import { Result, LoadError, permanent } from '../../../core/result';
 import { toLoadError } from '../../../core/http-load-error';
+import { TimedEvent, withRelativeS } from '../../../shared/analysis/wcl-projections';
 import { posActorId } from './map-positions';
 import { MAP_DATA_SOURCE, MapData } from './map-data-source';
 
@@ -78,7 +79,7 @@ export const MAP_POINT_PAD_S = 5;
  * Build per-actor position timelines. With `includeResources: true` WCL flattens one
  * actor's position onto each event, so each event yields one sample.
  */
-export function buildActorTimelines(events: WclEvent[], fightStartMs: number): Map<number, ActorTimeline> {
+export function buildActorTimelines(events: TimedEvent[]): Map<number, ActorTimeline> {
   const byActor = new Map<number, PosSample[]>();
   for (const event of events) {
     const id = posActorId(event);
@@ -86,7 +87,7 @@ export function buildActorTimelines(events: WclEvent[], fightStartMs: number): M
     let samples = byActor.get(id);
     if (!samples) { samples = []; byActor.set(id, samples); }
     samples.push({
-      t: (event.timestamp - fightStartMs) / 1000,
+      t: event.atS,
       x: event.x! * RAW_TO_YARDS,
       y: event.y! * RAW_TO_YARDS,
       facing: typeof event.facing === 'number' ? event.facing * FACING_TO_RAD : undefined,
@@ -131,17 +132,16 @@ export function resolveLiveReference(positions: EncounterPositions, enemies: Map
 
 export interface LiveOverlayInput {
   positions: EncounterPositions;
-  events: WclEvent[];
-  fightStartMs: number;
+  events: TimedEvent[];
   playerId: number;
   enemies: MapEnemyActor[];
 }
 
 /** Assemble the live overlay from position-bearing events; null when the player has no samples. */
 export function buildLiveOverlay(input: LiveOverlayInput): MapLiveOverlay | null {
-  const { positions, events, fightStartMs, playerId, enemies } = input;
+  const { positions, events, playerId, enemies } = input;
   const { bossActorId, refActorByGameId } = resolveLiveReference(positions, enemies);
-  const timelines = buildActorTimelines(events, fightStartMs);
+  const timelines = buildActorTimelines(events);
   if (!timelines.get(playerId)?.samples.length) return null;
   return { timelines, playerId, bossActorId, refActorByGameId };
 }
@@ -251,7 +251,7 @@ export class MapFeatureService {
       const { reportCode, fight, playerId, positions, enemies } = pending;
       const events = await this.fetchLiveEvents(reportCode, fight, playerId);
       if (pending.seq !== this.prepareSeq) return; // a newer prepare superseded this deferred overlay
-      const overlay = buildLiveOverlay({ positions, events, fightStartMs: fight.startTime, playerId, enemies });
+      const overlay = buildLiveOverlay({ positions, events: withRelativeS(events, fight.startTime), playerId, enemies });
       this.live.set(overlay);
       if (overlay) {
         this.error.set(null);

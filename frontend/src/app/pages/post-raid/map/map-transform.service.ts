@@ -17,7 +17,7 @@ import { ParsePositions, PlayerPosRow, PosRow } from '../../../core/models/posit
 import { logWarn } from '../../../core/log';
 import { Result, LoadError, ok, missing } from '../../../core/result';
 import { toLoadError } from '../../../core/http-load-error';
-import { toParseRankings, unwrapRankings } from '../../../shared/analysis/wcl-projections';
+import { TimedEvent, relativeS, toParseRankings, unwrapRankings, withRelativeS } from '../../../shared/analysis/wcl-projections';
 import { posActorId } from './map-positions';
 import { DataSource } from '../../../core/data-source/data-source';
 import { MapData } from './map-data-source';
@@ -51,12 +51,12 @@ export interface RawPosSample {
 }
 
 /** `maxHitPoints` is on the wire with `includeResources`; 0 when absent. */
-function eventMaxHp(event: WclEvent): number {
+function eventMaxHp(event: TimedEvent): number {
   return typeof event.maxHitPoints === 'number' ? event.maxHitPoints : 0;
 }
 
 /** Group raw position samples per actor id from resource-bearing events, sorted by time. */
-export function collectPositionSamples(events: WclEvent[], fightStartMs: number): Map<number, RawPosSample[]> {
+export function collectPositionSamples(events: TimedEvent[]): Map<number, RawPosSample[]> {
   const byActor = new Map<number, RawPosSample[]>();
   for (const event of events) {
     const actorId = posActorId(event);
@@ -64,7 +64,7 @@ export function collectPositionSamples(events: WclEvent[], fightStartMs: number)
     let samples = byActor.get(actorId);
     if (!samples) { samples = []; byActor.set(actorId, samples); }
     samples.push({
-      t: (event.timestamp - fightStartMs) / 1000,
+      t: event.atS,
       x: event.x!, y: event.y!,
       facing: typeof event.facing === 'number' ? event.facing : null,
       mapID: typeof event.mapID === 'number' ? event.mapID : null,
@@ -169,8 +169,7 @@ export interface ParsePositionInput {
   playerName: string;
   playerId: number;
   enemyMetaById: Map<number, EnemyMeta>;
-  posEvents: WclEvent[];
-  fightStartMs: number;
+  posEvents: TimedEvent[];
   durationS: number;
 }
 
@@ -180,8 +179,8 @@ export interface ParsePositionInput {
  * frontend matches "the same boss/add" across parses.
  */
 export function buildParsePositions(input: ParsePositionInput): ParsePositions {
-  const { reportCode, fightId, playerName, playerId, enemyMetaById, posEvents, fightStartMs, durationS } = input;
-  const byActor = collectPositionSamples(posEvents, fightStartMs);
+  const { reportCode, fightId, playerName, playerId, enemyMetaById, posEvents, durationS } = input;
+  const byActor = collectPositionSamples(posEvents);
   const playerSamples = byActor.get(playerId) ?? [];
   const { bossId, kept } = selectBossAndEnemies(byActor, playerId, enemyMetaById);
 
@@ -257,9 +256,8 @@ export class MapTransformService implements DataSource<MapData> {
         playerName: player.name,
         playerId: player.id,
         enemyMetaById,
-        posEvents,
-        fightStartMs: fight.startTime,
-        durationS: (fight.endTime - fight.startTime) / 1000,
+        posEvents: withRelativeS(posEvents, fight.startTime),
+        durationS: relativeS(fight.endTime, fight.startTime),
       });
       return { positions, encounterName: fight.name ?? '' };
     } catch (cause) {

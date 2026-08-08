@@ -1,12 +1,11 @@
 import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
-import { WclEvent } from '../../../core/models/wcl.models';
 import { logWarn } from '../../../core/log';
 import { Result, LoadError, ok, missing } from '../../../core/result';
 import { toLoadError } from '../../../core/http-load-error';
 import { round } from '../../../shared/analysis/analysis-math';
-import { abilityIcons, toParseRankings, unwrapRankings } from '../../../shared/analysis/wcl-projections';
+import { TimedEvent, abilityIcons, toParseRankings, unwrapRankings, withRelativeS } from '../../../shared/analysis/wcl-projections';
 import { DataSource } from '../../../core/data-source/data-source';
 import { NorthernSkyBench, NorthernSkyAbility } from './northern-sky-data-source';
 
@@ -15,10 +14,10 @@ interface ExportAbility { spell_id: number; name: string; kind: NorthernSkyAbili
 // Scan this far down the ranking to skip private/unfetchable logs before giving up.
 const CANDIDATE_POOL_COUNT = 10;
 
-export function cooldownCastTimes(casts: WclEvent[], spellId: number, fightStartMs: number): number[] {
+export function cooldownCastTimes(casts: TimedEvent[], spellId: number): number[] {
   return casts
     .filter(cast => cast.type === 'cast' && cast.abilityGameID === spellId)
-    .map(cast => round((cast.timestamp - fightStartMs) / 1000))
+    .map(cast => round(cast.atS))
     .sort((a, b) => a - b);
 }
 
@@ -75,9 +74,11 @@ export class NorthernSkyTransformService implements DataSource<NorthernSkyBench>
       const player = report.masterData?.actors?.find(actor => actor.name === ranking.player);
       if (!fight || !player) return null;
 
-      const casts = await this.wclApi.getAllEvents(ranking.report_code, fight.id, 'Casts', fight.startTime, fight.endTime, player.id);
+      const casts = withRelativeS(
+        await this.wclApi.getAllEvents(ranking.report_code, fight.id, 'Casts', fight.startTime, fight.endTime, player.id), fight.startTime,
+      );
       const timesBySpellId = new Map<number, number[]>();
-      for (const ability of abilities) timesBySpellId.set(ability.spell_id, cooldownCastTimes(casts, ability.spell_id, fight.startTime));
+      for (const ability of abilities) timesBySpellId.set(ability.spell_id, cooldownCastTimes(casts, ability.spell_id));
       return { timesBySpellId, encounterName: fight.name ?? '' };
     } catch (cause) {
       logWarn(`NorthernSkyTransformService parse ${ranking.report_code}:${ranking.fight_id}`, cause);

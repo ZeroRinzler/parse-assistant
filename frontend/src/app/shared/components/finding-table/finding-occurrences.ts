@@ -35,10 +35,10 @@ export class FindingOccurrencesComponent {
 
   readonly segments = computed<TimelineBand[]>(() => {
     const t = this.timeline();
-    if (!t || t.fightDurationMs <= 0) return [];
-    return t.segmentsMs.map(([start, end]) => ({
-      leftPercentage: (start / t.fightDurationMs) * 100,
-      widthPercentage: ((end - start) / t.fightDurationMs) * 100,
+    if (!t || t.fightDurationS <= 0) return [];
+    return t.segmentsS.map(([start, end]) => ({
+      leftPercentage: (start / t.fightDurationS) * 100,
+      widthPercentage: ((end - start) / t.fightDurationS) * 100,
     }));
   });
 

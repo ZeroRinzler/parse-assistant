@@ -1,17 +1,12 @@
 import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
-import { WclEvent, WclFight, WclReport, WclTableBlob } from '../../../core/models/wcl.models';
+import { WclFight, WclReport, WclTableBlob } from '../../../core/models/wcl.models';
 import { logWarn } from '../../../core/log';
 import { Result, LoadError, ok, permanent } from '../../../core/result';
 import { toLoadError } from '../../../core/http-load-error';
+import { TimedEvent, withRelativeS } from '../../../shared/analysis/wcl-projections';
 
-/**
- * Pull overview - the first, always-on card on the post-raid page. Summarizes one pull from the
- * player's OWN log (WCL, no bench): DPS, pull time, boss % reached, the player's deaths, and the
- * kill/wipe outcome. Injects only `WclApiService`; no bench, no `*_DATA_SOURCE`, no transform.
- */
-
-const MS_PER_S = 1000;
+/** Pull overview - the first, always-on post-raid card; summarizes one pull from the player's OWN log, no bench, no `*_DATA_SOURCE`, no transform. */
 
 export type PullResult = 'kill' | 'wipe';
 
@@ -51,17 +46,17 @@ const WIPE_DEATHS = 3;
  * that many down at once.
  */
 export function wipeTimeS(
-  deathEvents: WclEvent[], resurrectEvents: WclEvent[], fightStartMs: number, fightDurationS: number,
+  deathEvents: TimedEvent[], resurrectEvents: TimedEvent[], fightDurationS: number,
 ): number {
   const timeline = [
-    ...deathEvents.map(event => ({ t: event.timestamp, player: event.targetID, died: true })),
-    ...resurrectEvents.map(event => ({ t: event.timestamp, player: event.targetID, died: false })),
+    ...deathEvents.map(event => ({ t: event.atS, player: event.targetID, died: true })),
+    ...resurrectEvents.map(event => ({ t: event.atS, player: event.targetID, died: false })),
   ].sort((a, b) => a.t - b.t || Number(a.died) - Number(b.died));
   const dead = new Set<number | undefined>();
   for (const event of timeline) {
     if (event.died) dead.add(event.player);
     else dead.delete(event.player);
-    if (dead.size >= WIPE_DEATHS) return (event.t - fightStartMs) / MS_PER_S;
+    if (dead.size >= WIPE_DEATHS) return event.t;
   }
   return fightDurationS;
 }
@@ -116,19 +111,18 @@ export function abilityNameMap(report: WclReport): Map<number, string> {
  * resolve the killing-blow ability name.
  */
 export function buildDeathRows(
-  deathEvents: WclEvent[],
+  deathEvents: TimedEvent[],
   playerId: number,
-  fightStartMs: number,
   names: Map<number, string>,
 ): PullDeathRow[] {
   return deathEvents
     .filter(event => event.targetID === playerId)
-    .sort((a, b) => a.timestamp - b.timestamp)
+    .sort((a, b) => a.atS - b.atS)
     .map((event, i) => {
       const abilityId = event.killingAbilityGameID ?? 0;
       return {
         index: i + 1,
-        timeS: (event.timestamp - fightStartMs) / MS_PER_S,
+        timeS: event.atS,
         ability: abilityId ? (names.get(abilityId) ?? '') : '',
       };
     });
@@ -156,12 +150,13 @@ export class PullOverviewFeatureService {
       const dps = dpsFromTable(table, playerId, fight.duration_s);
       if (!dps.ok) return dps;
 
-      const myDeaths = deathEvents.filter(event => event.targetID === playerId);
-      const deaths = buildDeathRows(myDeaths, playerId, fight.startTime, names);
+      const deathEventsTimed = withRelativeS(deathEvents, fight.startTime);
+      const myDeaths = deathEventsTimed.filter(event => event.targetID === playerId);
+      const deaths = buildDeathRows(myDeaths, playerId, names);
       let outcomeTimeS = fight.duration_s;
       if (result === 'wipe') {
         const resurrects = await this.wclApi.getResurrects(reportCode, fight.id, fight.startTime, fight.endTime);
-        outcomeTimeS = wipeTimeS(deathEvents, resurrects, fight.startTime, fight.duration_s);
+        outcomeTimeS = wipeTimeS(deathEventsTimed, withRelativeS(resurrects, fight.startTime), fight.duration_s);
       }
 
       return ok({

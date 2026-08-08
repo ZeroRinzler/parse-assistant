@@ -36,8 +36,8 @@
                 <span class="inline-block bg-[var(--surface-alt)] border border-dashed border-[var(--border)] rounded w-[19px] h-[19px] shrink-0"></span>
                 <span class="text-sm text-[var(--text)]">{{ name }}</span>
               }
-              @if (row.timestampMs != null) {
-                <span class="text-[13px] text-[var(--accent)] tabular-nums">{{ row.timestampMs / 1000 | formatDuration }}</span>
+              @if (row.timestampS != null) {
+                <span class="text-[13px] text-[var(--accent)] tabular-nums">{{ row.timestampS | formatDuration }}</span>
                 @if (showMap()) {
                   <button mat-icon-button title="Open positioning map" (click)="openMap.emit(row)">
                     <mat-icon>my_location</mat-icon>

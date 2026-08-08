@@ -42,6 +42,8 @@ import { SHADOW_BLADES, FEINT } from '../../../../testing/spell-ids';
 const events = [cast(SHADOW_BLADES, 1), cast(SHADOW_BLADES, 185), ...buffWindow(FEINT, 10, 16)];
 ```
 
+Most analysis functions take `TimedEvent[]` (`WclEvent & { atS: number }`, from `shared/analysis/wcl-projections.ts`), not raw `WclEvent[]` - see the time-unit rule in **warcraft-architecture**. Stamp a fixture stream with `withRelativeS(events, 0)` before passing it in (fixtures build against a fight-start of 0, so the stamp is a pass-through to the seconds already given to the builder); the usual spec-local alias is `const timed = withRelativeS;`.
+
 **Rulebook fixture (`src/testing/builders/rulebook`).** `rulebook(...)` defaults every field so a spec states only what it exercises: cooldown seeds (`name`, `spell_id`, `cooldown` required) become `major_cooldowns` with `align_with_bloodlust` defaulted, defensive seeds become `defensives` with `duration` defaulted, and `spec` / `rules` default when omitted.
 
 ```ts

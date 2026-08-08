@@ -5,12 +5,13 @@ import { WclTransportError } from '../../../core/services/wcl-transport';
 import { Result, LoadError, ok, missing, transient } from '../../../core/result';
 import { AnalysisFinding } from '../../../core/models/analysis.models';
 import { PerCdBenchmark } from '../../../core/models/encounter.models';
-import { RulebookRule, CastWithoutPriorCondition } from '../../../core/models/rulebook.models';
+import { RulebookRule, RulebookCooldown, CastWithoutPriorCondition } from '../../../core/models/rulebook.models';
 import {
   SHADOW_BLADES, SHADOW_DANCE, SECRET_TECHNIQUE, VANISH, BLOODLUST, RUPTURE, BLACK_POWDER,
 } from '../../../../testing/spell-ids';
 import { cast, applyBuff, applyDebuff, removeDebuff, death } from '../../../../testing/builders/events';
 import { WclEvent } from '../../../core/models/wcl.models';
+import { withRelativeS } from '../../../shared/analysis/wcl-projections';
 import { ROTATION_DATA_SOURCE, RotationBench } from './rotation-data-source';
 import { DataSource } from '../../../core/data-source/data-source';
 import { BenchedRule, RuleThreshold } from './rotation-rules';
@@ -21,9 +22,6 @@ import {
   checkCastEfficiency, analyzeOneCooldown,
   partitionRotationFindings, buildRuleRows, buildOffensiveRows, buildOnPlanChips,
 } from './rotation.service';
-
-// The check* and analyzeOneCooldown functions take cast times in ms.
-const ONE_SEC_MS = 1000;
 
 // A zero band keeps the fixture arithmetic exact.
 const PAIR_WINDOW_S = 5;
@@ -36,11 +34,15 @@ function benched(rule: RulebookRule, threshold: RuleThreshold | null = thr(PAIR_
   return { rule, threshold, sample_count: threshold == null ? 0 : 10 };
 }
 // Build a RotationScanInput for a 0..120s fight - keeps the call sites terse.
-function scan(over: Partial<RotationScanInput> & { bench: RotationBench }): RotationScanInput {
+function scan(over: {
+  bench: RotationBench; fightDurationS?: number; castEvents?: WclEvent[]; buffEvents?: WclEvent[]; cooldowns?: RulebookCooldown[];
+}): RotationScanInput {
   return {
-    fStart: 0, fEnd: 120_000, castEvents: [], buffEvents: [],
-    cooldowns: over.bench.major_cooldowns,
-    ...over,
+    bench: over.bench,
+    fightDurationS: over.fightDurationS ?? 120,
+    castEvents: withRelativeS(over.castEvents ?? [], 0),
+    buffEvents: withRelativeS(over.buffEvents ?? [], 0),
+    cooldowns: over.cooldowns ?? over.bench.major_cooldowns,
   };
 }
 
@@ -59,7 +61,7 @@ function cdBench(over: Partial<PerCdBenchmark> = {}): PerCdBenchmark {
 function bench(over: Partial<RotationBench> = {}): RotationBench {
   return {
     spec: 'SubtletyRogue', encounter_id: 1, encounter_name: 'Boss', sample_count: 5,
-    avg_duration_s: 120, downtime_threshold_ms: 1500, top_avg_efficiency: 90, top_efficiency_stddev: 3,
+    avg_duration_s: 120, downtime_threshold_s: 1.5, top_avg_efficiency: 90, top_efficiency_stddev: 3,
     per_cd_benchmarks: { 'Shadow Blades': cdBench() },
     major_cooldowns: [{ name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 90, align_with_bloodlust: true }],
     rules: [],
@@ -167,12 +169,12 @@ describe('checkFirstCastDelay', () => {
 
   it('flags a first cast more than 2 sigma past the top open', () => {
     // first cast at 10s > 9s threshold.
-    expect(checkFirstCastDelay('Shadow Blades', [10 * ONE_SEC_MS], cdBench())?.category).toBe('cooldown_delay');
+    expect(checkFirstCastDelay('Shadow Blades', [10], cdBench())?.category).toBe('cooldown_delay');
   });
 
   it('does not flag a first cast exactly at the 2-sigma boundary (strict)', () => {
     // first cast at 9s == threshold; strict > so not flagged.
-    expect(checkFirstCastDelay('Shadow Blades', [9 * ONE_SEC_MS], cdBench())).toBeNull();
+    expect(checkFirstCastDelay('Shadow Blades', [9], cdBench())).toBeNull();
   });
 
   it('returns null with no casts', () => {
@@ -186,27 +188,27 @@ describe('checkBloodlustAlignment', () => {
 
   it('flags a BL miss when the cooldown lands outside the window and parsers align it', () => {
     // cast at 100s is outside [-20, 65]; wantsBL true.
-    const out = checkBloodlustAlignment('Shadow Blades', [100 * ONE_SEC_MS], cdBench(), BL_AT_S, true);
+    const out = checkBloodlustAlignment('Shadow Blades', [100], cdBench(), BL_AT_S, true);
     expect(out.blAligned).toBe(false);
     expect(out.findings[0]?.measured).toEqual({ value: 'missed', unit: 'BL' });
   });
 
   it('does not flag a miss when parsers do not align it', () => {
-    const out = checkBloodlustAlignment('Shadow Blades', [100 * ONE_SEC_MS], cdBench(), BL_AT_S, false);
+    const out = checkBloodlustAlignment('Shadow Blades', [100], cdBench(), BL_AT_S, false);
     expect(out.blAligned).toBe(false);
     expect(out.findings).toEqual([]);
   });
 
   it('flags an in-window offset more than 2 sigma off the top offset', () => {
     // avg_bl_offset 0, stddev 2 -> outlier beyond |offset| > 4. Cast at BL+5s -> offset 5.
-    const out = checkBloodlustAlignment('Shadow Blades', [(BL_AT_S + 5) * ONE_SEC_MS], cdBench(), BL_AT_S, true);
+    const out = checkBloodlustAlignment('Shadow Blades', [(BL_AT_S + 5)], cdBench(), BL_AT_S, true);
     expect(out.blAligned).toBe(true);
     expect(out.findings[0]?.measured).toEqual({ value: 'late', unit: 'in BL' });
   });
 
   it('does not flag an in-window offset exactly at the 2-sigma boundary (strict)', () => {
     // offset exactly 4 == 2*stddev; strict so not flagged.
-    const out = checkBloodlustAlignment('Shadow Blades', [(BL_AT_S + 4) * ONE_SEC_MS], cdBench(), BL_AT_S, true);
+    const out = checkBloodlustAlignment('Shadow Blades', [(BL_AT_S + 4)], cdBench(), BL_AT_S, true);
     expect(out.blAligned).toBe(true);
     expect(out.findings).toEqual([]);
   });
@@ -215,17 +217,17 @@ describe('checkBloodlustAlignment', () => {
     // avg_bl_offset -8, stddev 2 -> in-band [-12, -4]. Two in-window casts: an early one at
     // offset -8 (in-band) and a later one at offset -2 (closest to zero, so judged, and a late
     // outlier). The finding must anchor the judged late cast, not the earlier in-band one.
-    const EARLY_IN_BAND_MS = (BL_AT_S - 8) * ONE_SEC_MS;
-    const LATE_JUDGED_MS = (BL_AT_S - 2) * ONE_SEC_MS;
+    const EARLY_IN_BAND_S = BL_AT_S - 8;
+    const LATE_JUDGED_S = BL_AT_S - 2;
     const out = checkBloodlustAlignment(
-      'Shadow Blades', [EARLY_IN_BAND_MS, LATE_JUDGED_MS],
+      'Shadow Blades', [EARLY_IN_BAND_S, LATE_JUDGED_S],
       cdBench({ avg_bl_offset_s: -8, stddev_bl_offset_s: 2 }), BL_AT_S, true);
     expect(out.findings[0]?.measured).toEqual({ value: 'late', unit: 'in BL' });
-    expect(out.findings[0]?.timestamp_ms).toBe(LATE_JUDGED_MS);
+    expect(out.findings[0]?.timestamp_s).toBe(LATE_JUDGED_S);
   });
 
   it('returns not-aligned with no BL', () => {
-    expect(checkBloodlustAlignment('Shadow Blades', [5 * ONE_SEC_MS], cdBench(), null, true))
+    expect(checkBloodlustAlignment('Shadow Blades', [5], cdBench(), null, true))
       .toEqual({ blAligned: false, findings: [] });
   });
 });
@@ -235,16 +237,16 @@ describe('checkGaps', () => {
 
   it('flags a gap more than 2 sigma above the top gap', () => {
     // gap 0 -> 110 == 110s > 100s.
-    expect(checkGaps('Shadow Blades', [0, 110 * ONE_SEC_MS], cdBench())).toHaveLength(1);
+    expect(checkGaps('Shadow Blades', [0, 110], cdBench())).toHaveLength(1);
   });
 
   it('does not flag a gap exactly at the 2-sigma boundary (strict)', () => {
     // gap 0 -> 100 == 100s threshold; strict > so not flagged.
-    expect(checkGaps('Shadow Blades', [0, 100 * ONE_SEC_MS], cdBench())).toEqual([]);
+    expect(checkGaps('Shadow Blades', [0, 100], cdBench())).toEqual([]);
   });
 
   it('returns nothing when the bench has no gap stats', () => {
-    expect(checkGaps('Shadow Blades', [0, 200 * ONE_SEC_MS], cdBench({ avg_gap_s: null, stddev_gap_s: null }))).toEqual([]);
+    expect(checkGaps('Shadow Blades', [0, 200], cdBench({ avg_gap_s: null, stddev_gap_s: null }))).toEqual([]);
   });
 });
 
@@ -254,17 +256,17 @@ describe('checkCastEfficiency', () => {
   // efficiency% = (1 - idleS / FIGHT_DUR_S) * 100. Each idle span is a single gap > the 1.5s downtime floor.
   const IDLE_BELOW_BAND_S = 20;   // -> 83.3%, below the 87% warn threshold
   const IDLE_FAR_BELOW_S = 60;    // -> 50%, far below the band
-  const IDLE_ABOVE_AVG_MS = 1600; // just over the 1.5s downtime floor -> 98.7%, above top avg
+  const IDLE_ABOVE_AVG_S = 1.6; // just over the 1.5s downtime floor -> 98.7%, above top avg
 
   it('flags low cast efficiency more than 1 sigma below the top parses', () => {
-    const finding = checkCastEfficiency([0, IDLE_BELOW_BAND_S * ONE_SEC_MS], FIGHT_DUR_S, bench());
+    const finding = checkCastEfficiency([0, IDLE_BELOW_BAND_S], FIGHT_DUR_S, bench());
     expect(finding?.category).toBe('cast_efficiency');
     expect(finding?.severity).toBe('warning');
     expect(finding?.details?.remedy).toBeTruthy();
   });
 
   it('never escalates to critical, however far below', () => {
-    expect(checkCastEfficiency([0, IDLE_FAR_BELOW_S * ONE_SEC_MS], FIGHT_DUR_S, bench())?.severity).toBe('warning');
+    expect(checkCastEfficiency([0, IDLE_FAR_BELOW_S], FIGHT_DUR_S, bench())?.severity).toBe('warning');
   });
 
   it('does not flag efficiency exactly at the 1-sigma boundary (strict), but flags one bin below', () => {
@@ -272,13 +274,13 @@ describe('checkCastEfficiency', () => {
     const boundaryBench = bench({ top_avg_efficiency: 80, top_efficiency_stddev: 5 });
     const BOUNDARY_FIGHT_S = 128;
     // 32s idle -> exactly 75% = top - 1 sigma: strict boundary, no finding.
-    expect(checkCastEfficiency([0, 32 * ONE_SEC_MS], BOUNDARY_FIGHT_S, boundaryBench)).toBeNull();
+    expect(checkCastEfficiency([0, 32], BOUNDARY_FIGHT_S, boundaryBench)).toBeNull();
     // 33s idle -> 74.21875% < 75%: one bin below the boundary, warns.
-    expect(checkCastEfficiency([0, 33 * ONE_SEC_MS], BOUNDARY_FIGHT_S, boundaryBench)?.severity).toBe('warning');
+    expect(checkCastEfficiency([0, 33], BOUNDARY_FIGHT_S, boundaryBench)?.severity).toBe('warning');
   });
 
   it('does not flag when the player beats the top parses', () => {
-    expect(checkCastEfficiency([0, IDLE_ABOVE_AVG_MS], FIGHT_DUR_S, bench())).toBeNull();
+    expect(checkCastEfficiency([0, IDLE_ABOVE_AVG_S], FIGHT_DUR_S, bench())).toBeNull();
   });
 
   it('returns null with fewer than two casts', () => {
@@ -302,13 +304,13 @@ describe('analyzeOneCooldown', () => {
 
   it('reports success when a cooldown is used cleanly and BL-aligned', () => {
     // first cast 6s (under 9s open threshold), BL at 6s -> aligned.
-    const result = analyzeOneCooldown(cd, [6 * ONE_SEC_MS], single, 120, 6);
+    const result = analyzeOneCooldown(cd, [6], single, 120, 6);
     expect(result?.scan.issues).toEqual([]);
     expect(result?.success?.message).toContain('BL-aligned');
   });
 
   it('reports an issue (no success) when the opener is late', () => {
-    const result = analyzeOneCooldown(cd, [40 * ONE_SEC_MS], single, 120, 38);
+    const result = analyzeOneCooldown(cd, [40], single, 120, 38);
     expect(result?.success).toBeNull();
     expect(result?.scan.issues.some(finding => finding.category === 'cooldown_delay')).toBe(true);
   });
@@ -323,7 +325,7 @@ describe('analyzeOneCooldown', () => {
   it('does not flag a late opener of a minority-use cooldown (use-share gate)', () => {
     // Opened well past 2 sigma over the 5s top first cast, but the first-cast check is gated off.
     const LATE_OPENER_S = 40;
-    const result = analyzeOneCooldown(cd, [LATE_OPENER_S * ONE_SEC_MS], rareUse, FIGHT_DUR_S, null);
+    const result = analyzeOneCooldown(cd, [LATE_OPENER_S], rareUse, FIGHT_DUR_S, null);
     expect(result?.scan.issues.some(finding => finding.category === 'cooldown_delay')).toBe(false);
   });
 });
@@ -333,7 +335,7 @@ describe('bucketRotationFindings', () => {
   it('splits rule rows, cd issue rows and on-plan chips', () => {
     const findings: AnalysisFinding[] = [
       { severity: 'critical', category: 'rule_violation', label: 'Shadow Dance without Secret Technique', message: '', measured: { value: '1 / 1' }, details: { remedy: 'fix' }, occurrences: [] },
-      { severity: 'warning', category: 'cooldown_delay', cd_name: 'Shadow Blades', message: '', measured: { value: '+3s' }, timestamp_ms: 4000, occurrences: [] },
+      { severity: 'warning', category: 'cooldown_delay', cd_name: 'Shadow Blades', message: '', measured: { value: '+3s' }, timestamp_s: 4, occurrences: [] },
       { severity: 'success', category: 'cooldown_usage', cd_name: 'Vanish', message: '', occurrences: [] },
     ];
     const out = bucketRotationFindings(findings, { 'Shadow Blades': SHADOW_BLADES, 'Vanish': VANISH }, abilities);
@@ -348,7 +350,7 @@ describe('bucketRotationFindings', () => {
 describe('rotation finding partition and row builders', () => {
   const abilities = { [SHADOW_BLADES]: { icon: 'sb', name: 'Shadow Blades' }, [VANISH]: { icon: 'vanish', name: 'Vanish' } };
   const ruleFinding: AnalysisFinding = { severity: 'critical', category: 'rule_violation', label: 'Dance without Secret Technique', message: '', measured: { value: '1 / 1' }, details: { remedy: 'fix' }, occurrences: [] };
-  const issueFinding: AnalysisFinding = { severity: 'warning', category: 'cooldown_delay', cd_name: 'Shadow Blades', message: '', measured: { value: '+3s' }, timestamp_ms: 4000, occurrences: [] };
+  const issueFinding: AnalysisFinding = { severity: 'warning', category: 'cooldown_delay', cd_name: 'Shadow Blades', message: '', measured: { value: '+3s' }, timestamp_s: 4, occurrences: [] };
   const holdFinding: AnalysisFinding = { severity: 'info', category: 'hold_suggestion', message: '', measured: { value: '1:00' }, details: { cd_name: 'Shadow Blades', remedy: 'hold' }, occurrences: [] };
   const successFinding: AnalysisFinding = { severity: 'success', category: 'cooldown_usage', cd_name: 'Vanish', message: '', occurrences: [] };
 

@@ -10,6 +10,10 @@ import {
   posActorId, collectPositionSamples, resampleTimeline, resamplePlayerTimeline, buildParsePositions, selectBossAndEnemies,
   RawPosSample, EnemyMeta,
 } from './map-transform.service';
+import { withRelativeS } from '../../../shared/analysis/wcl-projections';
+
+/** Fixture events build against a fight-start of 0, so stamping is a pass-through to seconds. */
+const timed = withRelativeS;
 
 function resEvent(
   fields: { ts: number; source?: number; target?: number; resourceActor?: number; x: number; y: number; facing?: number; mapID?: number; maxHp?: number },
@@ -40,10 +44,10 @@ describe('posActorId', () => {
 
 describe('collectPositionSamples', () => {
   it('groups raw (unscaled) samples per actor and sorts by time, carrying maxHp', () => {
-    const byActor = collectPositionSamples([
+    const byActor = collectPositionSamples(timed([
       resEvent({ ts: 2000, source: 1, x: 200, y: 100, maxHp: 5000 }),
       resEvent({ ts: 1000, source: 1, x: 100, y: 50, facing: 1500, mapID: 7, maxHp: 5000 }),
-    ], 0);
+    ], 0));
     const samples = byActor.get(1)!;
     expect(samples.map(s => s.t)).toEqual([1, 2]);
     expect(samples[0]).toEqual({ t: 1, x: 100, y: 50, facing: 1500, mapID: 7, maxHp: 5000 });
@@ -254,7 +258,7 @@ describe('buildParsePositions', () => {
     ];
     const parse = buildParsePositions({
       reportCode: 'rep', fightId: 1, playerName: 'Me', playerId: 5,
-      enemyMetaById: enemyMeta, posEvents: events, fightStartMs: 0, durationS: 6,
+      enemyMetaById: enemyMeta, posEvents: timed(events, 0), durationS: 6,
     });
     expect(parse.report_code).toBe('rep');
     expect(parse.player_name).toBe('Me');
@@ -280,7 +284,7 @@ describe('buildParsePositions', () => {
     ];
     const parse = buildParsePositions({
       reportCode: 'rep', fightId: 1, playerName: 'Me', playerId: 5,
-      enemyMetaById: enemyMeta, posEvents: events, fightStartMs: 0, durationS: 1.5,
+      enemyMetaById: enemyMeta, posEvents: timed(events, 0), durationS: 1.5,
     });
     expect(parse.enemies.some(e => e.game_id === 200)).toBe(false);
     expect(parse.enemies.some(e => e.is_boss)).toBe(true);

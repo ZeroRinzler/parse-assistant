@@ -1,8 +1,8 @@
 export interface FindingOccurrence {
-  atMs?: number;
+  atS?: number;
   ok: boolean;
   label: string;
-  /** Rendered only when `atMs` is absent - never alongside it. */
+  /** Rendered only when `atS` is absent - never alongside it. */
   note?: string;
   detail: string;
   /** Excludes this entry from the ok/violation tone the template otherwise applies. */
@@ -10,8 +10,8 @@ export interface FindingOccurrence {
 }
 
 export interface FindingTimeline {
-  segmentsMs: [number, number][];
-  fightDurationMs: number;
+  segmentsS: [number, number][];
+  fightDurationS: number;
 }
 
 export interface AnalysisFinding {
@@ -30,7 +30,7 @@ export interface AnalysisFinding {
   label?: string;
   /** Rulebook `type` of the rule that produced this finding (rule violations only). */
   rule_type?: string;
-  timestamp_ms?: number;
+  timestamp_s?: number;
   details?: {
     cd_name?: string;
     remedy?: string;

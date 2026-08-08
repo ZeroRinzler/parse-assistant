@@ -87,7 +87,7 @@ export function holdSuggestionFindings(
       findings.push({
         severity: 'info',
         category: 'hold_suggestion',
-        timestamp_ms: Math.round(castTimesS[index] * 1000),
+        timestamp_s: castTimesS[index],
         measured: { value: fmtClock(castTimesS[index]), unit: `top ${fmtClock(target.target_s)}` },
         message: `${name} cast ${idxStr} at ${fmtClock(castTimesS[index])}. ${target.count}/${target.total_samples} top parses hold to ${fmtClock(target.target_s)}.`,
         details: { remedy: `Hold ${name} to ${fmtClock(target.target_s)}.`, cd_name: name },

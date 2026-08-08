@@ -32,7 +32,7 @@ export interface FindingRow {
   spellId?: number | null;
   /** Baked icon filename for `wl-game-icon` (empty string when there is no art). */
   icon: string;
-  timestampMs?: number | null;
+  timestampS?: number | null;
   chip?: string;
   what?: string;
   measured: FindingMeasure;
@@ -74,7 +74,7 @@ export function rowsFromEntries(entries: FindingEntry[], catLabel: Record<string
         name: entry.name,
         spellId: entry.spellId,
         icon: entry.icon,
-        timestampMs: f.timestamp_ms ?? null,
+        timestampS: f.timestamp_s ?? null,
         chip: catLabel[f.category],
         measured: f.measured ?? { value: '-' },
         fix: f.details?.remedy,

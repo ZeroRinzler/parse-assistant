@@ -12,9 +12,18 @@ export function targetKey(event: WclEvent): string {
   return `${event.targetID ?? 0}:${event.targetInstance ?? 0}`;
 }
 
-// WCL anonymizes a privacy-protected parse's player name to "Character <id>-<id>",
-// which can never match a report actor (real names are letters only), so the parse
-// is unfetchable. Drop these before mapping.
+export function relativeS(laterMs: number, earlierMs: number): number {
+  return (laterMs - earlierMs) / 1000;
+}
+
+export type TimedEvent = WclEvent & { atS: number };
+
+/** Stamps a WCL event stream with `atS` in one pass, so nothing past this point needs `fightStartMs` again. */
+export function withRelativeS(events: WclEvent[], fightStartMs: number): TimedEvent[] {
+  return events.map(event => ({ ...event, atS: relativeS(event.timestamp, fightStartMs) }));
+}
+
+// WCL anonymizes a privacy-protected parse's player name to "Character <id>-<id>", unfetchable since it can never match a report actor.
 const ANONYMIZED_NAME = /^Character \d+-\d+$/;
 
 // WCL reports the physical auto-attack as event ability id 1; the real spell is Auto Attack

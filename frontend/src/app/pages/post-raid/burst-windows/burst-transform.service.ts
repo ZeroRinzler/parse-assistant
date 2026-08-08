@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
-import { WclEvent, ParseRanking } from '../../../core/models/wcl.models';
+import { ParseRanking } from '../../../core/models/wcl.models';
 import { RulebookCooldown, RulebookDefensive } from '../../../core/models/rulebook.models';
 import { BurstWindow } from '../../../core/models/analysis.models';
 import { logWarn } from '../../../core/log';
@@ -9,7 +9,7 @@ import { Result, LoadError, ok, missing } from '../../../core/result';
 import { toLoadError } from '../../../core/http-load-error';
 import { mean, median, deviation, quantile } from 'd3-array';
 import { round, groupByTime, getOrInsert } from '../../../shared/analysis/analysis-math';
-import { abilityIcons, normalizeAbilityId, toParseRankings, unwrapRankings } from '../../../shared/analysis/wcl-projections';
+import { TimedEvent, abilityIcons, normalizeAbilityId, relativeS, toParseRankings, unwrapRankings, withRelativeS } from '../../../shared/analysis/wcl-projections';
 import { DataSource } from '../../../core/data-source/data-source';
 import { BurstBench } from './burst-data-source';
 
@@ -30,8 +30,7 @@ const MEMBER_MAJORITY_FRAC = 0.5;
 const CLUSTER_MERGE_S = 15;
 
 /** Sub-window bin width: damage is bucketed into 1s bins. */
-const BIN_MS = 1000;
-const BIN_S = BIN_MS / 1000;
+const BIN_S = 1;
 /** Rolling-rate window: each bin's rate sums itself + the next ROLL_BINS-1 bins. */
 const ROLL_BINS = 3;
 /** A bin is "dense" when its rolling rate is at least this multiple of the mean rolling rate. */
@@ -50,12 +49,12 @@ export function cdSpellIds(cooldowns: RulebookCooldown[], defensives: RulebookDe
 
 interface CdTiming { name: string; castTimesS: number[]; }
 
-export function cdTimings(casts: WclEvent[], cooldowns: RulebookCooldown[], fightStartMs: number): CdTiming[] {
+export function cdTimings(casts: TimedEvent[], cooldowns: RulebookCooldown[]): CdTiming[] {
   return cooldowns.map(cooldown => ({
     name: cooldown.name,
     castTimesS: casts
       .filter(cast => cast.type === 'cast' && cast.abilityGameID === cooldown.spell_id)
-      .map(cast => (cast.timestamp - fightStartMs) / 1000)
+      .map(cast => cast.atS)
       .sort((a, b) => a - b),
   }));
 }
@@ -76,14 +75,14 @@ export interface BinRun {
   endBin: number;
 }
 
-/** `[timestamp, damage, abilityGameID]`. */
+/** `[atS, damage, abilityGameID]`, fight-relative. */
 type DamageHit = [number, number, number];
 
 /** A hit before/after the fight span clamps into the first/last bin. */
-export function bucketDamagePerBin(hits: DamageHit[], fightStartMs: number, binCount: number): number[] {
+export function bucketDamagePerBin(hits: DamageHit[], binCount: number): number[] {
   const damagePerBin = new Array<number>(binCount).fill(0);
-  for (const [timestamp, hitDamage] of hits) {
-    const binIndex = Math.min(Math.max(Math.floor((timestamp - fightStartMs) / BIN_MS), 0), binCount - 1);
+  for (const [atS, hitDamage] of hits) {
+    const binIndex = Math.min(Math.max(Math.floor(atS / BIN_S), 0), binCount - 1);
     damagePerBin[binIndex] += hitDamage;
   }
   return damagePerBin;
@@ -136,16 +135,16 @@ export function trimRunToDamage(run: BinRun, damagePerBin: number[]): BinRun | n
   return { startBin: windowStartBin, endBin: windowEndBin };
 }
 
-/** `[timestamp, abilityGameID]`. */
+/** `[atS, abilityGameID]`, fight-relative. */
 type CastRow = [number, number];
 
 // Casts are attributed by ability NAME (a damage event's id often differs from the cast id); an
-// ability is passive when never cast anywhere in the parse. The window span is half-open `[startMs, endMs)`.
+// ability is passive when never cast anywhere in the parse. The window span is half-open `[startS, endS)`.
 export function windowAbilityBreakdown(
   windowHits: DamageHit[],
   castRows: CastRow[],
-  startMs: number,
-  endMs: number,
+  startS: number,
+  endS: number,
   nameOf: (spellId: number) => string,
   castNamesInParse: Set<string>,
 ): ParseWindow['ability_breakdown'] {
@@ -157,8 +156,8 @@ export function windowAbilityBreakdown(
   }
 
   const castsByName = new Map<string, number>();
-  for (const [timestamp, abilityId] of castRows) {
-    if (timestamp >= startMs && timestamp < endMs) castsByName.set(nameOf(abilityId), (castsByName.get(nameOf(abilityId)) ?? 0) + 1);
+  for (const [atS, abilityId] of castRows) {
+    if (atS >= startS && atS < endS) castsByName.set(nameOf(abilityId), (castsByName.get(nameOf(abilityId)) ?? 0) + 1);
   }
 
   return [...byAbility.entries()]
@@ -172,30 +171,28 @@ export function windowAbilityBreakdown(
 }
 
 export interface ParseWindowScan {
-  damage: WclEvent[];
-  fightStartMs: number;
-  fightEndMs: number;
+  damage: TimedEvent[];
+  fightLenS: number;
   timings: CdTiming[];
-  casts: WclEvent[];
+  casts: TimedEvent[];
   abilityNames: Map<number, string>;
 }
 
 // Windows are the parse's damage-density bursts (where the damage lands), not cooldown-duration
 // spans: bucket DamageDone into 1s bins, take a rolling rate, and cluster the bins that run dense.
 export function findParseWindows(scan: ParseWindowScan): ParseWindow[] {
-  const { damage, fightStartMs, fightEndMs, timings, casts, abilityNames } = scan;
-  const fightLenMs = fightEndMs - fightStartMs;
+  const { damage, fightLenS, timings, casts, abilityNames } = scan;
   const hits = damage
     .filter(event => event.type === 'damage' && (event.amount ?? 0) + (event.absorbed ?? 0) > 0)
-    .map(event => [event.timestamp, (event.amount ?? 0) + (event.absorbed ?? 0), event.abilityGameID] as DamageHit)
+    .map(event => [event.atS, (event.amount ?? 0) + (event.absorbed ?? 0), event.abilityGameID] as DamageHit)
     .sort((a, b) => a[0] - b[0]);
-  if (!hits.length || fightLenMs <= 0) return [];
+  if (!hits.length || fightLenS <= 0) return [];
   const total = hits.reduce((sum, hit) => sum + hit[1], 0);
   if (!total) return [];
 
-  const binCount = Math.ceil(fightLenMs / BIN_MS);
+  const binCount = Math.ceil(fightLenS / BIN_S);
   if (binCount < 2) return [];
-  const damagePerBin = bucketDamagePerBin(hits, fightStartMs, binCount);
+  const damagePerBin = bucketDamagePerBin(hits, binCount);
   const rollingDamage = forwardRollingDamage(damagePerBin, ROLL_BINS);
 
   // Threshold floored at the RATE_QUANTILE of the rolling-damage distribution, so a spiky parse
@@ -208,7 +205,7 @@ export function findParseWindows(scan: ParseWindowScan): ParseWindow[] {
 
   const castRows = casts
     .filter(event => event.type === 'cast' && event.abilityGameID)
-    .map(event => [event.timestamp, event.abilityGameID] as CastRow);
+    .map(event => [event.atS, event.abilityGameID] as CastRow);
   const nameOf = (spellId: number): string => abilityNames.get(spellId) ?? `Spell ${spellId}`;
   // Every ability name ever cast in the parse. A name absent here is passive (proc/auto/pet damage),
   // as opposed to an active ability that merely had no cast inside a given window.
@@ -220,15 +217,13 @@ export function findParseWindows(scan: ParseWindowScan): ParseWindow[] {
     if (!trimmed) continue;
     const windowStartS = trimmed.startBin * BIN_S;
     const windowEndS = (trimmed.endBin + 1) * BIN_S;
-    const startMs = fightStartMs + windowStartS * 1000;
-    const endMs = fightStartMs + windowEndS * 1000;
     // The fight-closing window counts the fight-end hit bucketDamagePerBin clamps into the last bin; interior windows stay half-open.
     const closesFight = trimmed.endBin === binCount - 1;
-    const windowHits = hits.filter(hit => hit[0] >= startMs && (closesFight ? hit[0] <= endMs : hit[0] < endMs));
+    const windowHits = hits.filter(hit => hit[0] >= windowStartS && (closesFight ? hit[0] <= windowEndS : hit[0] < windowEndS));
     const windowDmg = windowHits.reduce((sum, hit) => sum + hit[1], 0);
     if (!windowDmg || windowDmg / total < SIGNIFICANCE_PCT) continue;
 
-    const ability_breakdown = windowAbilityBreakdown(windowHits, castRows, startMs, endMs, nameOf, castNamesInParse);
+    const ability_breakdown = windowAbilityBreakdown(windowHits, castRows, windowStartS, windowEndS, nameOf, castNamesInParse);
 
     // Attribute (never bound by) the cooldowns whose cast lands inside the window.
     const active_cds = timings
@@ -385,9 +380,11 @@ export class BurstTransformService implements DataSource<BurstBench> {
         this.wclApi.getAllEvents(ranking.report_code, fight.id, 'DamageDone', fight.startTime, fight.endTime, player.id),
       ]);
 
-      const timings = cdTimings(casts, cooldowns, fight.startTime);
+      const castsTimed = withRelativeS(casts, fight.startTime);
+      const timings = cdTimings(castsTimed, cooldowns);
       const windows = findParseWindows({
-        damage, fightStartMs: fight.startTime, fightEndMs: fight.endTime, timings, casts, abilityNames,
+        damage: withRelativeS(damage, fight.startTime), fightLenS: relativeS(fight.endTime, fight.startTime),
+        timings, casts: castsTimed, abilityNames,
       });
       return { windows, encounterName: fight.name ?? '' };
     } catch (cause) {

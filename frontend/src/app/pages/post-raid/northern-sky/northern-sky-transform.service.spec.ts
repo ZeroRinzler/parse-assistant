@@ -7,19 +7,23 @@ import { NorthernSkyTransformService, cooldownCastTimes } from './northern-sky-t
 import { SHADOW_BLADES, SHADOW_DANCE, EVASION } from '../../../../testing/spell-ids';
 import { cast } from '../../../../testing/builders/events';
 import { rulebook } from '../../../../testing/builders/rulebook';
+import { withRelativeS } from '../../../shared/analysis/wcl-projections';
+
+/** Fixture events build against a fight-start of 0, so stamping is a pass-through to seconds. */
+const timed = withRelativeS;
 
 describe('cooldownCastTimes', () => {
   it('collects a cooldown\'s cast times in fight-relative seconds, sorted, ignoring other ids', () => {
-    const casts = [cast(SHADOW_BLADES, 30), cast(SHADOW_BLADES, 10), cast(SHADOW_DANCE, 5)];
-    expect(cooldownCastTimes(casts, SHADOW_BLADES, 0)).toEqual([10, 30]);
+    const casts = timed([cast(SHADOW_BLADES, 30), cast(SHADOW_BLADES, 10), cast(SHADOW_DANCE, 5)], 0);
+    expect(cooldownCastTimes(casts, SHADOW_BLADES)).toEqual([10, 30]);
   });
 
   it('rounds each cast time to one decimal', () => {
-    expect(cooldownCastTimes([cast(SHADOW_BLADES, 3.612)], SHADOW_BLADES, 0)).toEqual([3.6]);
+    expect(cooldownCastTimes(timed([cast(SHADOW_BLADES, 3.612)], 0), SHADOW_BLADES)).toEqual([3.6]);
   });
 
   it('returns [] when the ability was never cast', () => {
-    expect(cooldownCastTimes([cast(SHADOW_DANCE, 5)], SHADOW_BLADES, 0)).toEqual([]);
+    expect(cooldownCastTimes(timed([cast(SHADOW_DANCE, 5)], 0), SHADOW_BLADES)).toEqual([]);
   });
 });
 
