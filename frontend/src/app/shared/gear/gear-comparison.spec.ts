@@ -386,3 +386,42 @@ describe('talentStatusOf', () => {
     });
   });
 });
+
+describe('talentStatusOf (a player build matched against the top builds)', () => {
+  const MOST_COMMON = 'v3:11.1,22.2';
+  const ALT_1 = 'v3:12.1,22.2';
+  const ALT_2 = 'v3:11.1,22.1';
+  const OFF_META = 'v3:99.1,22.2';
+
+  function talentBuild(
+    partial: Partial<EncounterGearStats['talent_builds'][number]> = {},
+  ): EncounterGearStats['talent_builds'][number] {
+    return { key: MOST_COMMON, pct: 50, report_code: 'ABC123', fight_id: 1, player_name: 'Player', source_id: 1, diff: [], ...partial };
+  }
+
+  const topStats = stats({
+    talent_builds: [
+      talentBuild({ key: MOST_COMMON, pct: 50 }),
+      talentBuild({ key: ALT_1, pct: 30 }),
+      talentBuild({ key: ALT_2, pct: 15 }),
+    ],
+  });
+
+  it('marks a match to the most common build as standard', () => {
+    expect(talentStatusOf(topStats, MOST_COMMON)).toEqual({ status: 'ok', note: 'Standard build.' });
+  });
+
+  it('marks a match to a lower-ranked top build as a known alt, not standard', () => {
+    expect(talentStatusOf(topStats, ALT_1)).toEqual({
+      status: 'info',
+      note: 'Alt build 1. 30% run this build.',
+    });
+  });
+
+  it('marks a build matching none of the top builds as off-meta', () => {
+    expect(talentStatusOf(topStats, OFF_META)).toEqual({
+      status: 'warn',
+      note: 'Off-meta build. 50% run the standard one.',
+    });
+  });
+});

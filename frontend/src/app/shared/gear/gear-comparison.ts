@@ -149,8 +149,12 @@ export function talentStatusOf(topStats: EncounterGearStats | null, playerKey: s
   if (!playerKey || playerKey.split(':')[0] !== (builds[0]?.key ?? '').split(':')[0]) {
     return { status: 'unknown', note: 'No talent data.' };
   }
-  if (builds.some(b => b.key === playerKey)) {
+  if (builds[0]?.key === playerKey) {
     return { status: 'ok', note: 'Standard build.' };
+  }
+  const altIndex = builds.findIndex(b => b.key === playerKey);
+  if (altIndex > 0) {
+    return { status: 'info', note: `Alt build ${altIndex}. ${builds[altIndex].pct}% run this build.` };
   }
   return { status: 'warn', note: `Off-meta build. ${topPct}% run the standard one.` };
 }
