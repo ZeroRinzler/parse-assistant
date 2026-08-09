@@ -155,11 +155,12 @@ export class WclApiService {
     return result?.gameData ?? {};
   }
 
-  // Returned as-is (`null` for an unknown spec, since no query can be built); consumers unwrap both forms (see `unwrapRankings` / `toParseRankings`).
-  async getRankings(spec: string, encounterId: number): Promise<WclRankingsBlob | null> {
+  // Returned as-is (`null` for an unknown spec, since no query can be built); consumers unwrap both forms (see `unwrapRankings` / `toParseRankings`), and an omitted `partition` leaves the variable null, which is what makes WCL fall back to the zone's current one.
+  async getRankings(spec: string, encounterId: number, partition?: number | null): Promise<WclRankingsBlob | null> {
     const meta = specMetaOf(spec);
     if (!meta) return null;
     const vars: RankingsQueryVars = { encounterID: encounterId, className: meta.className, specName: meta.specName };
+    if (partition != null) vars.partition = partition;
     const result = await this.query<{ worldData: { encounter: { characterRankings: WclRankingsBlob } } }>(
       RANKINGS_Q, vars,
     );

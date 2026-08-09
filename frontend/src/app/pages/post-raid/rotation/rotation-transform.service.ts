@@ -220,7 +220,7 @@ export class RotationTransformService implements DataSource<RotationBench> {
   private readonly wclApi = inject(WclApiService);
   private readonly dataFiles = inject(DataFileApiService);
 
-  async getBench(spec: string, encounterId: number): Promise<Result<RotationBench, LoadError>> {
+  async getBench(spec: string, encounterId: number, partition?: number | null): Promise<Result<RotationBench, LoadError>> {
     const rulebookResult = await this.dataFiles.getRulebook(spec);
     if (!rulebookResult.ok) return rulebookResult;
     const rulebook = rulebookResult.value;
@@ -230,7 +230,7 @@ export class RotationTransformService implements DataSource<RotationBench> {
     const judgeable = judgeableRules(rulebook.rules ?? []);
 
     try {
-      const rankings = toParseRankings(unwrapRankings(await this.wclApi.getRankings(spec, encounterId)), CANDIDATE_POOL_COUNT);
+      const rankings = toParseRankings(unwrapRankings(await this.wclApi.getRankings(spec, encounterId, partition)), CANDIDATE_POOL_COUNT);
       if (!rankings.length) return missing('No top parses for this encounter.');
 
       const perParse: CdSummary[][] = [];

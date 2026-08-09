@@ -293,7 +293,7 @@ export class BurstTransformService implements DataSource<BurstBench> {
   private readonly wclApi = inject(WclApiService);
   private readonly dataFiles = inject(DataFileApiService);
 
-  async getBench(spec: string, encounterId: number): Promise<Result<BurstBench, LoadError>> {
+  async getBench(spec: string, encounterId: number, partition?: number | null): Promise<Result<BurstBench, LoadError>> {
     const rulebook = await this.dataFiles.getRulebook(spec);
     if (!rulebook.ok) return rulebook;
     const cooldowns = rulebook.value.major_cooldowns ?? [];
@@ -301,7 +301,7 @@ export class BurstTransformService implements DataSource<BurstBench> {
     const defensives = rulebook.value.defensives ?? [];
 
     try {
-      const rankings = toParseRankings(unwrapRankings(await this.wclApi.getRankings(spec, encounterId)), CANDIDATE_POOL_COUNT);
+      const rankings = toParseRankings(unwrapRankings(await this.wclApi.getRankings(spec, encounterId, partition)), CANDIDATE_POOL_COUNT);
       if (!rankings.length) return missing('Not yet ingested.');
 
       const allWindows: ParseWindow[] = [];

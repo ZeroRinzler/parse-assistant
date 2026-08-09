@@ -326,14 +326,14 @@ export class DefensiveTransformService implements DataSource<DefensiveBench> {
   private readonly wclApi = inject(WclApiService);
   private readonly dataFiles = inject(DataFileApiService);
 
-  async getBench(spec: string, encounterId: number): Promise<Result<DefensiveBench, LoadError>> {
+  async getBench(spec: string, encounterId: number, partition?: number | null): Promise<Result<DefensiveBench, LoadError>> {
     const rulebookResult = await this.dataFiles.getRulebook(spec);
     if (!rulebookResult.ok) return rulebookResult;
     const defensives = rulebookResult.value.defensives ?? [];
     if (!defensives.length) return missing(NO_DEFENSIVE_BENCH_MESSAGE);
 
     try {
-      const rankings = toParseRankings(unwrapRankings(await this.wclApi.getRankings(spec, encounterId)), CANDIDATE_POOL_COUNT);
+      const rankings = toParseRankings(unwrapRankings(await this.wclApi.getRankings(spec, encounterId, partition)), CANDIDATE_POOL_COUNT);
       if (!rankings.length) return missing(NO_DEFENSIVE_BENCH_MESSAGE);
 
       const allWindows: ParseDefWindow[] = [];

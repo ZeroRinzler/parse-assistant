@@ -179,9 +179,9 @@ export class MapTransformService implements DataSource<MapData> {
   private readonly wclApi = inject(WclApiService);
   private readonly dataFiles = inject(DataFileApiService);
 
-  async getBench(spec: string, encounterId: number): Promise<Result<MapData, LoadError>> {
+  async getBench(spec: string, encounterId: number, partition?: number | null): Promise<Result<MapData, LoadError>> {
     try {
-      const rankings = toParseRankings(unwrapRankings(await this.wclApi.getRankings(spec, encounterId)), CANDIDATE_POOL_COUNT);
+      const rankings = toParseRankings(unwrapRankings(await this.wclApi.getRankings(spec, encounterId, partition)), CANDIDATE_POOL_COUNT);
       if (!rankings.length) return missing('No top parses for this encounter.');
 
       const parses: ParsePositions[] = [];

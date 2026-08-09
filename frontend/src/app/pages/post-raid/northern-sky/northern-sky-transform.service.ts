@@ -26,7 +26,7 @@ export class NorthernSkyTransformService implements DataSource<NorthernSkyBench>
   private readonly wclApi = inject(WclApiService);
   private readonly dataFiles = inject(DataFileApiService);
 
-  async getBench(spec: string, encounterId: number): Promise<Result<NorthernSkyBench, LoadError>> {
+  async getBench(spec: string, encounterId: number, partition?: number | null): Promise<Result<NorthernSkyBench, LoadError>> {
     const rulebook = await this.dataFiles.getRulebook(spec);
     if (!rulebook.ok) return rulebook;
     const abilities: ExportAbility[] = [
@@ -36,7 +36,7 @@ export class NorthernSkyTransformService implements DataSource<NorthernSkyBench>
     if (!abilities.length) return missing('Not yet ingested.');
 
     try {
-      const rankings = toParseRankings(unwrapRankings(await this.wclApi.getRankings(spec, encounterId)), CANDIDATE_POOL_COUNT);
+      const rankings = toParseRankings(unwrapRankings(await this.wclApi.getRankings(spec, encounterId, partition)), CANDIDATE_POOL_COUNT);
       // One real log keeps each cooldown's cast spacing intact; take the best usable parse (#1, then backfill).
       for (const ranking of rankings) {
         const parse = await this.parseCastTimes(ranking, abilities);

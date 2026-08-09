@@ -60,7 +60,17 @@ export async function getEncounters(client: WclQueryClient, specWcl: SpecWclMap)
   return { encounters, protectedIds };
 }
 
-// Partitions are tried newest-first because a fresh patch's partition carries the current parses.
+/** Newest-first, since a fresh patch's partition carries the current parses; it reports which one answered because the signature, the transforms and the liveness probe have to read the same one, and a patch rolling the default over to a still-empty partition is where they would otherwise diverge. */
+export async function rankingsFromPartition<T>(
+  partitionIds: number[], fetch: (partition: number | null) => Promise<T[]>,
+): Promise<{ rows: T[]; partition: number | null }> {
+  for (const partition of (partitionIds.length ? partitionIds : [null])) {
+    const rows = await fetch(partition);
+    if (rows.length) return { rows, partition };
+  }
+  return { rows: [], partition: null };
+}
+
 export async function getRankingsLite(
   client: WclQueryClient, spec: string, encounterId: number, specWcl: SpecWclMap, count = 10, partitionIds: number[] = [],
 ): Promise<ParseRanking[]> {
@@ -68,13 +78,11 @@ export async function getRankingsLite(
   if (!mapping) throw new Error(`Unknown spec: ${spec}`);
   const [className, specName] = mapping;
 
-  const attempts: (number | null)[] = partitionIds.length > 0 ? partitionIds : [null];
-  for (const partition of attempts) {
+  const { rows } = await rankingsFromPartition(partitionIds, async partition => {
     const variables: RankingsQueryVars = { encounterID: encounterId, className, specName };
     if (partition != null) variables.partition = partition;
     const data = await client.query<{ worldData: { encounter: { characterRankings: WclRankingsBlob } } }, RankingsQueryVars>(RANKINGS_Q, variables);
-    const mapped = toParseRankings(unwrapRankings(data.worldData.encounter.characterRankings), count);
-    if (mapped.length > 0) return mapped;
-  }
-  return [];
+    return toParseRankings(unwrapRankings(data.worldData.encounter.characterRankings), count);
+  });
+  return rows;
 }

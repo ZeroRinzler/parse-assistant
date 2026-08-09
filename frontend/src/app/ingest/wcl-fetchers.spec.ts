@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from 'vitest';
-import { getEncounters, getRankingsLite } from './wcl-fetchers';
+import { getEncounters, getRankingsLite, rankingsFromPartition } from './wcl-fetchers';
 import { BudgetExceededError } from './wcl-client';
 import type { WclQueryClient } from './wcl-client';
 import type { SpecWclMap } from './wcl-mappers';
@@ -140,5 +140,43 @@ describe('getRankingsLite', () => {
     });
     const ranked = await getRankingsLite(client, 'SubtletyRogue', 100, SPEC_WCL, 10, []);
     expect(ranked[0].player).toBe('A');
+  });
+});
+
+describe('rankingsFromPartition', () => {
+  const NEWEST = 3, PREVIOUS = 2;
+
+  it('names the partition that answered, so every later read can be pinned to it', async () => {
+    const tried: (number | null)[] = [];
+    const result = await rankingsFromPartition([NEWEST, PREVIOUS], async partition => {
+      tried.push(partition);
+      return partition === NEWEST ? [] : ['a'];
+    });
+    expect(tried).toEqual([NEWEST, PREVIOUS]);
+    expect(result).toEqual({ rows: ['a'], partition: PREVIOUS });
+  });
+
+  it('stops at the newest partition that has rows, leaving the older ones unqueried', async () => {
+    const tried: (number | null)[] = [];
+    const result = await rankingsFromPartition([NEWEST, PREVIOUS], async partition => {
+      tried.push(partition);
+      return ['a'];
+    });
+    expect(tried).toEqual([NEWEST]);
+    expect(result.partition).toBe(NEWEST);
+  });
+
+  it('makes one unpartitioned attempt when the zone lists none, which is WCL\'s own default', async () => {
+    const tried: (number | null)[] = [];
+    const result = await rankingsFromPartition([], async partition => {
+      tried.push(partition);
+      return ['a'];
+    });
+    expect(tried).toEqual([null]);
+    expect(result.partition).toBeNull();
+  });
+
+  it('reports no partition when every one of them is empty', async () => {
+    expect(await rankingsFromPartition([NEWEST, PREVIOUS], async () => [])).toEqual({ rows: [], partition: null });
   });
 });

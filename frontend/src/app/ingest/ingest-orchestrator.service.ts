@@ -17,7 +17,7 @@ import { DefensiveTransformService } from '../pages/post-raid/defensive/defensiv
 import { GearTransformService } from '../pages/post-raid/gear/gear-transform.service';
 import { MapTransformService } from '../pages/post-raid/map/map-transform.service';
 import { NorthernSkyTransformService } from '../pages/post-raid/northern-sky/northern-sky-transform.service';
-import { getEncounters, type CurrentContent } from './wcl-fetchers';
+import { getEncounters, rankingsFromPartition, type CurrentContent } from './wcl-fetchers';
 import { mapClassesToSpecMeta, specWclFromMetas, type SpecWclMap } from './wcl-mappers';
 import { type WclQueryClient, BudgetExceededError } from './wcl-client';
 import { INGEST_VERSION } from './ingest-version';
@@ -244,7 +244,7 @@ export class IngestOrchestratorService {
       for (const encounter of orderEncountersByMissingFirst(encounters, presentIds)) {
         await client.assertBudget(POINTS_MARGIN);
 
-        const poolRows = await this.rankingPool(spec, encounter.id);
+        const { rows: poolRows, partition } = await this.rankingPool(spec, encounter);
         if (!poolRows.length) {
           console.log(`  [${encounter.name}] no rankings, skipped`);
           continue;
@@ -260,7 +260,7 @@ export class IngestOrchestratorService {
 
         console.log(`  [${encounter.name}] computing slices (signature ${skipKey})...`);
         try {
-          const wrote = await this.ingestEncounter(spec, encounter, version, poolRows);
+          const wrote = await this.ingestEncounter(spec, encounter, version, poolRows, partition);
           console.log(`  [${encounter.name}] ${wrote ? 'done' : 'no slice data produced'}`);
         } finally {
           // Drop this encounter's cached reports/events before the next one to bound memory.
@@ -285,25 +285,28 @@ export class IngestOrchestratorService {
     return false;
   }
 
-  private async rankingPool(spec: string, encounterId: number): Promise<SignatureRanking[]> {
-    const raw = await this.wclApi.getRankings(spec, encounterId);
-    return toParseRankings(unwrapRankings(raw), SIGNATURE_POOL_COUNT);
+  /** Resolves the partition here, once, so the signature and every slice below read the same parses. */
+  private rankingPool(spec: string, encounter: IngestEncounter): Promise<{ rows: SignatureRanking[]; partition: number | null }> {
+    return rankingsFromPartition(encounter.partitionIds, async partition => {
+      const raw = await this.wclApi.getRankings(spec, encounter.id, partition);
+      return toParseRankings(unwrapRankings(raw), SIGNATURE_POOL_COUNT);
+    });
   }
 
   /** Compute all five slices first, THEN stamp + write: the signature is known only after every transform has fetched. */
   private async ingestEncounter(
-    spec: string, encounter: IngestEncounter, version: string, poolRows: SignatureRanking[],
+    spec: string, encounter: IngestEncounter, version: string, poolRows: SignatureRanking[], partition: number | null,
   ): Promise<boolean> {
     const encId = encounter.id;
     const limit = pLimit(SLICE_CONCURRENCY);
 
     const [burst, rotation, defensive, gear, map, northernSky] = await Promise.all([
-      limit(() => this.transforms.burst.getBench(spec, encId)),
-      limit(() => this.transforms.rotation.getBench(spec, encId)),
-      limit(() => this.transforms.defensive.getBench(spec, encId)),
-      limit(() => this.transforms.gear.getBench(spec, encId)),
-      limit(() => this.transforms.map.getBench(spec, encId)),
-      limit(() => this.transforms.northernSky.getBench(spec, encId)),
+      limit(() => this.transforms.burst.getBench(spec, encId, partition)),
+      limit(() => this.transforms.rotation.getBench(spec, encId, partition)),
+      limit(() => this.transforms.defensive.getBench(spec, encId, partition)),
+      limit(() => this.transforms.gear.getBench(spec, encId, partition)),
+      limit(() => this.transforms.map.getBench(spec, encId, partition)),
+      limit(() => this.transforms.northernSky.getBench(spec, encId, partition)),
     ]);
 
     const inaccessibleCodes = new Set(this.wclTransport.takeInaccessibleCodes());

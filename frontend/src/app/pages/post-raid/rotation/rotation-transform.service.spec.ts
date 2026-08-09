@@ -249,6 +249,45 @@ describe('RotationTransformService (live, in-browser)', () => {
     if (result.ok) expect(result.value.sample_count).toBe(FULL_SAMPLE_COUNT);
   });
 
+  it('samples the partition it was handed, so the slice reads the parses the signature was taken over', async () => {
+    const RESOLVED_PARTITION = 2;
+    const asked: (number | null | undefined)[] = [];
+    const partitionWcl = {
+      ...wclFake,
+      getRankings: async (_spec: string, _encounterId: number, partition?: number | null) => {
+        asked.push(partition);
+        return { rankings: [{ name: 'P1', report: { code: 'r1', fightID: 1 } }, { name: 'P2', report: { code: 'r2', fightID: 2 } }] };
+      },
+    };
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: WclApiService, useValue: partitionWcl as unknown as WclApiService },
+        { provide: DataFileApiService, useValue: filesFake as unknown as DataFileApiService },
+      ],
+    });
+    await TestBed.inject(RotationTransformService).getBench('SubtletyRogue', 1, RESOLVED_PARTITION);
+    expect(asked).toEqual([RESOLVED_PARTITION]);
+  });
+
+  it('leaves the partition unset when the orchestrator resolved none, which is WCL\'s own default', async () => {
+    const asked: (number | null | undefined)[] = [];
+    const partitionWcl = {
+      ...wclFake,
+      getRankings: async (_spec: string, _encounterId: number, partition?: number | null) => {
+        asked.push(partition);
+        return { rankings: [] };
+      },
+    };
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: WclApiService, useValue: partitionWcl as unknown as WclApiService },
+        { provide: DataFileApiService, useValue: filesFake as unknown as DataFileApiService },
+      ],
+    });
+    await TestBed.inject(RotationTransformService).getBench('SubtletyRogue', 1);
+    expect(asked).toEqual([undefined]);
+  });
+
   it('propagates a missing error when the spec has no rulebook cooldowns', async () => {
     TestBed.configureTestingModule({
       providers: [

@@ -159,9 +159,9 @@ export class GearTransformService implements DataSource<GearBench> {
   private readonly wclApi = inject(WclApiService);
   private readonly talentData = inject(TalentDataService);
 
-  async getBench(spec: string, encounterId: number): Promise<Result<GearBench, LoadError>> {
+  async getBench(spec: string, encounterId: number, partition?: number | null): Promise<Result<GearBench, LoadError>> {
     try {
-      const rankings = toParseRankings(unwrapRankings(await this.wclApi.getRankings(spec, encounterId)), CANDIDATE_POOL_COUNT);
+      const rankings = toParseRankings(unwrapRankings(await this.wclApi.getRankings(spec, encounterId, partition)), CANDIDATE_POOL_COUNT);
       if (!rankings.length) return missing('Not yet ingested.');
 
       const parses: ParseGear[] = [];

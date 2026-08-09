@@ -2,5 +2,6 @@
 import { Result, LoadError } from '../result';
 
 export interface DataSource<T> {
-  getBench(spec: string, encounterId: number): Promise<Result<T, LoadError>>;
+  /** `partition` is ingest-only: the transforms sample the one the orchestrator resolved, so every slice reads the parses the signature was taken over. */
+  getBench(spec: string, encounterId: number, partition?: number | null): Promise<Result<T, LoadError>>;
 }
