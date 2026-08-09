@@ -81,15 +81,13 @@ test('a broken rule renders the rulebook remedy, and a followed one only its nam
   // The Fix column is the rule's authored action, carried through the bench file untouched.
   const firstRow = rotationRules.locator('div.border-t').first();
   await expect(firstRow.locator('wl-collapsible-text')).not.toHaveText('');
-  // A rule the pull kept is a chip under On plan, with no Fix column next to it.
   await shows(rotationRules, 'On plan');
   await expect(rotationRules.locator('.chip-onplan').first()).toBeVisible();
 });
 
 test('a rule row expands into a chip strip of the instances behind its count', async () => {
   const rotationRules = page.locator('wl-finding-table').filter({ hasText: 'Rotation rules vs top parses.' });
-  // The button's accessible name flips to "Hide instances" once clicked, so the filter matches
-  // either name - otherwise re-resolving `row` after the click would land on a different row.
+  // The button's accessible name flips to "Hide instances" once clicked, so the filter matches either name.
   const row = rotationRules.locator('div.border-t')
     .filter({ has: page.getByRole('button', { name: /instances/i }) }).first();
   await row.getByRole('button', { name: 'Show instances' }).click();
@@ -116,7 +114,6 @@ test('offensives flag the lost cooldown casts and the holds', async () => {
 test('burst windows compare the player damage against the top-parse windows', async () => {
   const burstWindows = page.locator('wl-burst-windows');
   await shows(burstWindows, 'Damage in each burst window vs top parses.');
-  // The card opens on the player's worst window.
   await shows(burstWindows, 'window');
   await shows(burstWindows, /\d+:\d{2} - \d+:\d{2}/);
   await shows(burstWindows, 'burst');
@@ -144,7 +141,6 @@ test('defensives flag a held cooldown and benchmark the damage taken', async () 
 test('gear lists the top-parse talent builds and how the alt build differs, plus trinkets and enchants', async () => {
   const gear = page.locator('wl-gear');
   await shows(gear, 'Gear vs top parses.');
-  // The talent builds are listed in the post-raid card, most common first.
   const talents = gear.locator('div.border-t').filter({ hasText: 'Talents' }).first();
   await shows(talents, 'Your build');
   await shows(talents, 'Most common build');

@@ -668,7 +668,6 @@ describe('evaluateAuraClipped', () => {
     cast_spell_id: MOONFIRE, cast_spell_name: 'Moonfire', on: 'target',
   };
   const APPLY_AT_S = 20, CLIPPED_ELAPSED_S = 4;
-  // The dot goes up, then is re-applied `elapsed` seconds later.
   const reapplied = (elapsed: number) => [applyDebuff(MOONFIRE_DOT, APPLY_AT_S), refreshDebuff(MOONFIRE_DOT, APPLY_AT_S + elapsed)];
 
   it('flags a refresh the player cast well before the field would have', () => {

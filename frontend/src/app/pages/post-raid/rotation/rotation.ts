@@ -22,9 +22,7 @@ export class RotationComponent {
   readonly fightId = input.required<number>();
   readonly playerId = input.required<number>();
 
-  /** Emits false when the card has finished loading; the page gates its spinner on it. */
   readonly busyChange = output<boolean>();
-  /** Whether the top-parse bench exists (Offensives). The page aggregates it for the banner. */
   readonly availableChange = output<boolean>();
 
   protected readonly available = signal(true);

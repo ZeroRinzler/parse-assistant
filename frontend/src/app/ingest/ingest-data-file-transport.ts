@@ -11,19 +11,14 @@ import { isFutureVersion } from './signature';
 /** The file server (scripts/ingest-server.js) is dumb file ops; all ingestion semantics stay on this side. */
 export const INGEST_SERVER_URL = 'http://localhost:3000';
 
-// DataFileApiService paths are relative to data/specs/; the file server is rooted one
-// level up at data/ so a single containment guard covers the whole data folder.
+// The file server is rooted one level up at data/ so a single containment guard covers the whole data folder.
 const SPECS_PREFIX = 'specs/';
 
 function fileUrl(relPath: string): string {
   return `${INGEST_SERVER_URL}/api/data/${SPECS_PREFIX}${relPath}`;
 }
 
-/**
- * Read + write `DataFileTransport` over the local file server. Reads go through it too:
- * the server returns an exact 404 for an absent file (the `missing` signal), where the
- * dev server would be ambiguous about paths it does not know.
- */
+/** The server returns an exact 404 for an absent file - the `missing` signal. */
 @Injectable({ providedIn: 'root' })
 export class IngestHttpDataFileTransport implements DataFileTransport {
   private readonly http = inject(HttpClient);
@@ -40,8 +35,7 @@ export class IngestHttpDataFileTransport implements DataFileTransport {
       }
       return result;
     }
-    // A newer-versioned file has a shape this build does not know; fail it (driving a
-    // re-ingest) rather than cast the drifted JSON to T.
+    // A newer-versioned file has a shape this build does not know; fail it rather than cast the drifted JSON to T.
     if (isFutureVersion(parsed, INGEST_VERSION)) {
       return permanent('Data file is from a newer ingest version.', `data-file.version.${relPath}`);
     }

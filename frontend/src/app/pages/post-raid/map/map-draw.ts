@@ -1,18 +1,10 @@
-/**
- * Pure drawing-geometry helpers for the map canvas, colocated with the map slice.
- *
- * These are ported from `positioning-core` (positionAt / toReferenceLocal /
- * trails / top-parse aggregation) so the map components import no domain service -
- * only this slice-local module + `MapFeatureService`. Coordinates here are already
- * scaled to yards / radians (the bench rows are scaled by `rowsToTimeline`).
- */
+/** Ported from `positioning-core` so the map components import no domain service - only this slice-local module + `MapFeatureService`. */
 import { EncounterPositions, ParsePositions, PlayerPosRow, PosRow, ReferenceSelector } from '../../../core/models/positioning.models';
 import { ActorTimeline, PosSample, FACING_OFFSET_RAD } from './map.service';
 
 const RAW_TO_YARDS = 1 / 100;
 const FACING_TO_RAD = 1 / 1000;
 
-/** A player position expressed in a reference actor's local frame. */
 export interface RelPos {
   t: number;
   /** Yards in front of (+) / behind (-) the reference's facing. */
@@ -40,10 +32,7 @@ function sameMap(a: PosSample, b: PosSample): boolean {
   return a.mapID == null || b.mapID == null || a.mapID === b.mapID;
 }
 
-/**
- * Interpolated position of an actor at fight-relative time `t`. Returns null when
- * `t` is more than `tolerance` seconds past either end of the timeline.
- */
+/** Returns null when `t` is more than `tolerance` seconds past either end of the timeline. */
 export function positionAt(timeline: ActorTimeline | undefined, t: number, tolerance = 3): PosSample | null {
   const samples = timeline?.samples;
   if (!samples || !samples.length) return null;
@@ -77,11 +66,7 @@ export function positionAt(timeline: ActorTimeline | undefined, t: number, toler
   };
 }
 
-/**
- * Express a player position in the reference's local frame: forward/right relative
- * to the reference's facing, plus distance and clock angle. When the reference has
- * no facing, world axes are used (forward = +y).
- */
+/** When the reference has no facing, world axes are used (forward = +y). */
 export function toReferenceLocal(player: PosSample, ref: PosSample, t = 0): RelPos {
   const dx = player.x - ref.x;
   const dy = player.y - ref.y;
@@ -94,7 +79,6 @@ export function toReferenceLocal(player: PosSample, ref: PosSample, t = 0): RelP
   return { t, fwd, right, dist, angleDeg, mapID: player.mapID };
 }
 
-/** Build an enemy timeline from stored position rows (scaling raw units to yards/radians). */
 export function rowsToTimeline(id: number, rows: PosRow[]): ActorTimeline {
   const samples: PosSample[] = rows.map(([t, x, y, facing, mapID]) => ({
     t,
@@ -117,7 +101,6 @@ export function playerRowsToTimeline(id: number, rows: PlayerPosRow[]): ActorTim
   return { id, samples };
 }
 
-/** Reference enemy rows for a parse per the selector (boss = is_boss, else gameId). */
 function refRows(parse: ParsePositions, selector: ReferenceSelector): PosRow[] | null {
   if (selector.kind === 'boss') {
     const boss = parse.enemies.find(enemy => enemy.is_boss) ?? parse.enemies[0];
@@ -126,16 +109,9 @@ function refRows(parse: ParsePositions, selector: ReferenceSelector): PosRow[] |
   return parse.enemies.find(enemy => enemy.game_id === selector.gameId)?.samples ?? null;
 }
 
-/**
- * One top parse's player + chosen-reference timelines, already scaled to yards/radians.
- * Building these is the expensive part (it maps every stored row into a sample object), and
- * it depends only on the bench + selector, never on the scrubbed time - so the map canvas
- * builds them once per positions/selector (`buildParseTimelines`) and reuses them across every
- * playback frame.
- */
+/** Depends only on the bench + selector, never on the scrubbed time, so it's built once per positions/selector and reused across every playback frame. */
 export interface ParseTimelines { player: ActorTimeline; ref: ActorTimeline; }
 
-/** Scale each parse's player + reference rows into timelines once, for the chosen reference. */
 export function buildParseTimelines(positions: EncounterPositions, selector: ReferenceSelector): ParseTimelines[] {
   const out: ParseTimelines[] = [];
   for (const parse of positions.parses) {
@@ -146,7 +122,6 @@ export function buildParseTimelines(positions: EncounterPositions, selector: Ref
   return out;
 }
 
-/** Each parse's player position relative to the reference at `t`, from prebuilt timelines. */
 export function parsePointsAt(timelines: ParseTimelines[], t: number): RelPos[] {
   const out: RelPos[] = [];
   for (const { player: playerTl, ref: refTl } of timelines) {
@@ -157,7 +132,6 @@ export function parsePointsAt(timelines: ParseTimelines[], t: number): RelPos[] 
   return out;
 }
 
-/** Each parse's player trail across the window, from prebuilt timelines. */
 export function parseTrailsOf(
   timelines: ParseTimelines[], t: number, pre: number, post: number, step: number,
 ): RelPos[][] {
@@ -174,10 +148,6 @@ export function parseTrailsOf(
   return trails;
 }
 
-/**
- * An actor's relative trail across [tCast - pre, tCast + post] in live (already
- * yard-scaled) timelines - the player's own movement overlay.
- */
 export function buildTrail(
   actorId: number, refId: number, timelines: Map<number, ActorTimeline>,
   tCast: number, pre: number, post: number, step: number,

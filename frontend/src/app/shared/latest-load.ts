@@ -1,13 +1,6 @@
 import { logWarn } from '../core/log';
 
-/**
- * Latest-wins guard for feature-component loads. A component reloads whenever
- * its input signals change, and a slow earlier response must never overwrite a
- * newer one: run() tags each load, and only the most recent tag's apply/settled
- * callbacks fire. A rejected load logs a warning via logWarn (the view keeps its
- * current state); settled fires for the latest load whether it resolved or
- * rejected, so busy flags always clear.
- */
+/** Latest-wins guard: a slow earlier response must never overwrite a newer one, so only the most recent run()'s callbacks fire. */
 export class LatestLoad {
   private token = 0;
 

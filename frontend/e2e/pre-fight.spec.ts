@@ -1,8 +1,7 @@
 import { expect, test, Page } from '@playwright/test';
 import { shows, showsEntity, CLOCK, DAMAGE, DECIMAL, PERCENT } from './support';
 
-// Bench-only page, so this file spends no WCL budget.
-// One shared page: the spec and encounter are selected once and every card asserts against that selection.
+// Bench-only page (no WCL budget spent): one shared page, spec and encounter picked once, every card asserts against it.
 test.describe.configure({ mode: 'serial' });
 
 let page: Page;

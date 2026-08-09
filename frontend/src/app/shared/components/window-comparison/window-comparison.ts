@@ -8,7 +8,6 @@ import { FormatDamagePipe } from '../../pipes/format-damage-pipe';
 import { SignedPercentPipe } from '../../pipes/signed-percent-pipe';
 import { RangeRow, ComparisonWindow } from '../../../core/models/window-comparison.models';
 
-/** One slot on the timeline row: a real window chip, or a dashed pacing spacer. */
 type TimelineCell =
   | { readonly kind: 'window'; readonly index: number }
   | { readonly kind: 'gap'; readonly id: string };
@@ -28,19 +27,15 @@ export class WindowComparisonComponent {
   readonly windows = input.required<ComparisonWindow[]>();
   readonly higherIsBetter = input<boolean>(true);
   readonly showMap = input<boolean>(false);
-  /** Whether a "watch clip" button shows (the page owns recording + the clip panel). */
   readonly showClip = input<boolean>(false);
   // Casts column is meaningful for burst (offensive) windows only; hidden for defensives.
   readonly showCasts = input<boolean>(true);
   readonly heading = input<string>('');
   readonly subtitle = input<string>('');
   readonly openMap = output<number>();
-  /** Emits the active window index when its clip button is clicked; the page forwards it. */
   readonly openClip = output<number>();
 
-  // Each dashed pacing slot stands for this many seconds of pause before the next
-  // window, so a sub-slot pause is the same burst (0 slots) and longer lulls add
-  // proportionally more slots.
+  // Each dashed pacing slot stands for this many seconds of pause; a sub-slot pause is 0 slots and longer lulls add proportionally more.
   private static readonly GAP_SLOT_SECONDS = 20;
 
   protected readonly selectedIndex = computed(() => {
@@ -83,9 +78,7 @@ export class WindowComparisonComponent {
   // The listbox keeps focus; aria-activedescendant points screen readers at the active chip.
   protected readonly activeOptionId = computed(() => this.optionId(this.activeIndex()));
 
-  // Flat left-to-right sequence of chips interleaved with dashed pacing slots, so
-  // the template renders one row without measuring time: chip size is fixed and
-  // the gap count carries the rhythm of the fight.
+  // Flat sequence of chips interleaved with dashed pacing slots so the template renders one row without measuring time.
   protected readonly timelineCells = computed<TimelineCell[]>(() => {
     const windows = this.windows();
     const cells: TimelineCell[] = [];
@@ -115,21 +108,16 @@ export class WindowComparisonComponent {
     if (next >= 0 && next < this.windows().length) this.select(next);
   }
 
-  // 'info' (bench-only, pre-fight) has no player overlay, so it hides the
-  // absent player columns/delta exactly like a muted (not-reached) window.
+  // 'info' (bench-only, pre-fight) has no player overlay, so it hides the absent player columns/delta like a muted window.
   protected readonly activeIsMuted = computed(() => {
     const status = this.activeWindow()?.status;
     return status === 'muted' || status === 'info';
   });
 
-  // Bench-only (pre-fight) window: no player overlay at all, so the You/Top
-  // comparison bar is hidden and the header shows the top-parse damage instead.
+  // Bench-only (pre-fight) window has no player overlay, so the You/Top bar is hidden and the header shows top-parse damage instead.
   protected readonly activeIsBenchOnly = computed(() => this.activeWindow()?.status === 'info');
 
-  // Active window's ability rows, sorted by absolute gap (biggest damage loss
-  // first) so the most actionable abilities surface at the top of the table.
-  // Direction-aware: burst wants player >= top (loss = negative gap); defensives
-  // want player <= top (loss = positive gap, i.e. more damage taken).
+  // Sorted by absolute gap so the biggest loss surfaces first; direction-aware since burst wants player >= top but defensives want player <= top.
   protected readonly activeDetailRows = computed<RangeRow[]>(() => {
     const rows = this.activeWindow()?.detailRows ?? [];
     const higherIsBetter = this.higherIsBetter();
@@ -165,7 +153,6 @@ export class WindowComparisonComponent {
     return Number.isFinite(delta) ? delta : null;
   });
 
-  // Semantic delta state only - the template maps it to a badge-* class.
   protected readonly overviewDeltaStatus = computed<'muted' | 'better' | 'worse'>(() => {
     const delta = this.overviewDelta();
     if (delta == null) return 'muted';
@@ -173,8 +160,7 @@ export class WindowComparisonComponent {
     return isBetter ? 'better' : 'worse';
   });
 
-  // Overview bar geometry as plain percentages, bound via [style.left.%] /
-  // [style.width.%] in the template; colors come from token classes there.
+  // Overview bar geometry as plain percentages, bound via [style.left.%]/[style.width.%] in the template.
   protected readonly overviewPlayerWidthPct = computed<number | null>(() => {
     const w = this.activeWindow();
     if (!w || w.overview.playerPct == null) return null;

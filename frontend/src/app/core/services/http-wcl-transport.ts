@@ -9,29 +9,21 @@ interface GraphQLResponse<TData> {
   errors?: { message: string }[];
 }
 
-/**
- * WCL GraphQL transport (`HttpClient` POST). The bearer is attached per request because the token
- * renews on expiry; the query's cache-control headers come from `wclCachingHeaders`.
- */
+// The bearer is attached per request because the token renews on expiry.
 @Injectable({ providedIn: 'root' })
 export class HttpWclTransport implements WclTransport {
   private readonly http = inject(HttpClient);
-  // A private log is only knowable by fetching it; the ingest orchestrator persists this
-  // set so the next cheap signature check excludes it without re-fetching. Only
-  // deterministic permission denials land here - a transient error must not stick a
-  // usable log as inaccessible.
+  // Only deterministic permission denials land here - a transient error must not stick a usable log as inaccessible.
   private readonly inaccessibleCodes = new Set<string>();
   // Every code-bearing fetch that failed this run (permission + transient), so the stamp keys on the parses actually used.
   private readonly failedCodes = new Set<string>();
 
-  /** Return + clear the report codes that hit a permission-denied error since the last call. */
   takeInaccessibleCodes(): string[] {
     const codes = [...this.inaccessibleCodes];
     this.inaccessibleCodes.clear();
     return codes;
   }
 
-  /** Return + clear every report code whose fetch failed since the last call. */
   takeFailedCodes(): string[] {
     const codes = [...this.failedCodes];
     this.failedCodes.clear();
@@ -56,8 +48,7 @@ export class HttpWclTransport implements WclTransport {
       }
       throw error;
     }
-    // A 200 with a GraphQL `errors` array (report not found, private, denied) never
-    // improves on retry, so it classifies permanent, not transient.
+    // A 200 with a GraphQL `errors` array never improves on retry, so it classifies permanent, not transient.
     if (body.errors?.length) {
       const message = body.errors[0]?.message || 'WCL GraphQL error';
       if (code) {

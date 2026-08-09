@@ -1,7 +1,4 @@
-/**
- * Pre-fight spec + encounter discovery shell over the pass-through `DataFileApiService`,
- * colocated with its one pure projection so the page shell stays free of the transport.
- */
+/** Pre-fight spec + encounter discovery shell, colocated with its one pure projection so the page shell stays free of the transport. */
 import { Injectable, inject } from '@angular/core';
 import { DataFileApiService } from '../../core/services/data-file-api';
 import { EncounterEntry, SpecEntry } from '../../core/models/encounter.models';

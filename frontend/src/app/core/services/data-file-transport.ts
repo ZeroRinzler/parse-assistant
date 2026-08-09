@@ -6,9 +6,7 @@ import { Result, LoadError, ok } from '../result';
 import { toLoadError } from '../http-load-error';
 import { environment } from '../../../environments/environment';
 
-// The low-level transport DataFileApiService delegates to so the data API works in both
-// environments. Paths are relative to the `data/specs/` root (e.g. `SubtletyRogue/burst/3176.json`).
-// The browser binds HttpDataFileTransport (read-only); the Node ingestion binds an fs one.
+// Paths are relative to the `data/specs/` root (e.g. `SubtletyRogue/burst/3176.json`).
 export interface DataFileTransport {
   readJson<T>(relPath: string): Promise<Result<T, LoadError>>;
   // The write side is Node-ingestion only; the browser transport throws.
@@ -24,8 +22,7 @@ const BROWSER_READONLY = 'DataFileApiService is read-only in the browser';
 @Injectable({ providedIn: 'root' })
 export class HttpDataFileTransport implements DataFileTransport {
   private readonly http = inject(HttpClient);
-  // Deployed builds set an absolute `dataBaseHref` pointing at the single shared gh-pages-root
-  // data copy; empty (development) resolves `data/specs/` relative to `document.baseURI`.
+  // Deployed builds set an absolute `dataBaseHref` pointing at the single shared gh-pages-root data copy; empty (development) resolves relative to `document.baseURI`.
   private readonly base = new URL(environment.dataBaseHref || 'data/specs/', document.baseURI).href;
 
   async readJson<T>(relPath: string): Promise<Result<T, LoadError>> {

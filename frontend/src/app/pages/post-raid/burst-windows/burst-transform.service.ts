@@ -16,28 +16,18 @@ import { BurstBench } from './burst-data-source';
 // Re-exported so call sites and specs can import it from this service.
 export { toParseRankings } from '../../../shared/analysis/wcl-projections';
 
-/** How many top parses to sample. */
 const TOP_PARSE_COUNT = 10;
 // Over-fetch so a private/unfetchable top parse can be backfilled by the next-best one.
 const CANDIDATE_POOL_COUNT = TOP_PARSE_COUNT * 2;
-/** A window must carry at least this share of fight damage to count. */
 const SIGNIFICANCE_PCT = 0.015;
-/** Min cluster size as a fraction of samples to surface a window. */
 const CLUSTER_MIN_FRAC = 0.4;
-/** "At least half the member parses" - ability/cd inclusion in a cluster. */
 const MEMBER_MAJORITY_FRAC = 0.5;
-/** Windows within this many seconds cluster together. */
 const CLUSTER_MERGE_S = 15;
 
-/** Sub-window bin width: damage is bucketed into 1s bins. */
 const BIN_S = 1;
-/** Rolling-rate window: each bin's rate sums itself + the next ROLL_BINS-1 bins. */
 const ROLL_BINS = 3;
-/** A bin is "dense" when its rolling rate is at least this multiple of the mean rolling rate. */
 const THRESHOLD_MULT = 1.6;
-/** Floor the density threshold at this quantile of the rolling-rate distribution. */
 const RATE_QUANTILE = 0.66;
-/** Bridge two dense runs separated by at most this many sub-threshold bins. */
 const MERGE_GAP_BINS = 2;
 
 export function cdSpellIds(cooldowns: RulebookCooldown[], defensives: RulebookDefensive[]): Record<string, number> {
@@ -88,7 +78,6 @@ export function bucketDamagePerBin(hits: DamageHit[], binCount: number): number[
   return damagePerBin;
 }
 
-/** Each bin's forward rolling damage: itself + the next `rollBins - 1` bins. */
 export function forwardRollingDamage(damagePerBin: number[], rollBins: number): number[] {
   const binCount = damagePerBin.length;
   const rollingDamage = new Array<number>(binCount).fill(0);
@@ -100,8 +89,7 @@ export function forwardRollingDamage(damagePerBin: number[], rollBins: number): 
   return rollingDamage;
 }
 
-// A bin is dense when its rolling damage clears `densityThreshold` (strict `>=`). A run extends
-// across up to `mergeGapBins` sub-threshold bins bridging two dense stretches; a longer gap ends it.
+// A bin is dense at rolling damage >= densityThreshold (strict); runs bridge across up to mergeGapBins sub-threshold bins.
 export function detectDenseRuns(rollingDamage: number[], densityThreshold: number, mergeGapBins: number): BinRun[] {
   const denseRuns: BinRun[] = [];
   let runStartBin = -1;
@@ -124,8 +112,7 @@ export function detectDenseRuns(rollingDamage: number[], densityThreshold: numbe
   return denseRuns;
 }
 
-// Snap a dense run to the bins that actually carry damage: the forward rolling rate can flag up to
-// ROLL_BINS-1 damage-free bins before a burst, which would otherwise start the window early.
+// Snaps to the bins that actually carry damage: the rolling rate can flag up to ROLL_BINS-1 damage-free bins before a burst.
 export function trimRunToDamage(run: BinRun, damagePerBin: number[]): BinRun | null {
   let windowStartBin = run.startBin;
   let windowEndBin = run.endBin;
@@ -138,8 +125,7 @@ export function trimRunToDamage(run: BinRun, damagePerBin: number[]): BinRun | n
 /** `[atS, abilityGameID]`, fight-relative. */
 type CastRow = [number, number];
 
-// Casts are attributed by ability NAME (a damage event's id often differs from the cast id); an
-// ability is passive when never cast anywhere in the parse. The window span is half-open `[startS, endS)`.
+// Casts are attributed by ability NAME because a damage event's id often differs from the cast id.
 export function windowAbilityBreakdown(
   windowHits: DamageHit[],
   castRows: CastRow[],
@@ -178,8 +164,7 @@ export interface ParseWindowScan {
   abilityNames: Map<number, string>;
 }
 
-// Windows are the parse's damage-density bursts (where the damage lands), not cooldown-duration
-// spans: bucket DamageDone into 1s bins, take a rolling rate, and cluster the bins that run dense.
+// Windows are the parse's damage-density bursts, not cooldown-duration spans.
 export function findParseWindows(scan: ParseWindowScan): ParseWindow[] {
   const { damage, fightLenS, timings, casts, abilityNames } = scan;
   const hits = damage
@@ -195,8 +180,7 @@ export function findParseWindows(scan: ParseWindowScan): ParseWindow[] {
   const damagePerBin = bucketDamagePerBin(hits, binCount);
   const rollingDamage = forwardRollingDamage(damagePerBin, ROLL_BINS);
 
-  // Threshold floored at the RATE_QUANTILE of the rolling-damage distribution, so a spiky parse
-  // still has to beat its own typical bin, not just its mean.
+  // Threshold floors at RATE_QUANTILE so a spiky parse must beat its own typical bin, not just its mean.
   const meanRollingDamage = (total / binCount) * ROLL_BINS;
   const densityThreshold = Math.max(THRESHOLD_MULT * meanRollingDamage, quantile(rollingDamage, RATE_QUANTILE) ?? 0);
 
@@ -207,8 +191,7 @@ export function findParseWindows(scan: ParseWindowScan): ParseWindow[] {
     .filter(event => event.type === 'cast' && event.abilityGameID)
     .map(event => [event.atS, event.abilityGameID] as CastRow);
   const nameOf = (spellId: number): string => abilityNames.get(spellId) ?? `Spell ${spellId}`;
-  // Every ability name ever cast in the parse. A name absent here is passive (proc/auto/pet damage),
-  // as opposed to an active ability that merely had no cast inside a given window.
+  // A name absent here is passive (proc/auto/pet damage), not merely uncast within this window.
   const castNamesInParse = new Set(castRows.map(([, abilityId]) => nameOf(abilityId)));
 
   const windows: ParseWindow[] = [];
@@ -252,12 +235,10 @@ export function dedupeByParse(cluster: ParseWindow[]): ParseWindow[] {
   return [...byParse.values()];
 }
 
-// Groups windows whose start is within CLUSTER_MERGE_S and keeps only a burst a majority of parses share.
 export function clusterParseWindows(windows: ParseWindow[], sampleCount: number, mergeS = CLUSTER_MERGE_S): BurstWindow[] {
   const result: BurstWindow[] = [];
   for (const cluster of groupByTime(windows, mergeS)) {
-    // Reduce to one window per parse so the consensus gate and damage stats count DISTINCT parses:
-    // a parse landing two dense runs near the cluster counts once.
+    // Reduces to one window per parse so the consensus gate and damage stats count DISTINCT parses.
     const members = dedupeByParse(cluster);
     if (members.length < Math.max(2, sampleCount * CLUSTER_MIN_FRAC)) continue;
     const damages = members.map(member => member.window_damage);
@@ -281,7 +262,6 @@ export function clusterParseWindows(windows: ParseWindow[], sampleCount: number,
         max_damage: Math.round(Math.max(...list)),
         count: list.length,
         avg_casts: Math.round(mean(abilityCasts.get(spell_id) ?? []) ?? 0),
-        // Passive only when no member parse ever cast it.
         is_passive: (abilityPassive.get(spell_id) ?? []).every(Boolean),
       }))
       .sort((a, b) => b.avg_damage - a.avg_damage)
@@ -341,8 +321,7 @@ export class BurstTransformService implements DataSource<BurstBench> {
 
       const windows = clusterParseWindows(allWindows, sampleCount);
       const cd_spell_ids = cdSpellIds(cooldowns, defensives);
-      // A real icon for every spell the card renders (header cooldowns and each window ability)
-      // by id, so the map is complete (no fallback).
+      // Complete over every spell the card renders (header cooldowns and each window ability), so there's no icon fallback.
       const referencedIds = [
         ...Object.values(cd_spell_ids),
         ...windows.flatMap(window => window.ability_breakdown.map(ability => ability.spell_id)),

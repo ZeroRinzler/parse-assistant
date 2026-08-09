@@ -1,10 +1,4 @@
-/**
- * Spec-metadata helpers over a runtime-hydrated cache. The spec universe (class/spec names,
- * slugs, icons) is derived from WCL `gameData.classes` at ingest and baked to `spec-meta.json`;
- * the browser hydrates the cache once at startup (an app initializer) and the headless ingest
- * runtime hydrates it explicitly. These helpers read that cache; both the rankings query
- * (`wcl-api.ts`) and the selection dropdowns use them.
- */
+// The browser hydrates the cache once at startup (an app initializer); the headless ingest runtime hydrates it explicitly.
 import type { SpecMeta } from './models/spec-meta.models';
 
 export type { SpecMeta };
@@ -20,10 +14,7 @@ function classIconStem(className: string): string {
 let META: Record<string, SpecMeta> = {};
 let KNOWN_CLASS_ICONS = new Set<string>();
 
-/**
- * Populate the spec-meta cache from the baked `spec-meta.json` (browser: app initializer;
- * ingest: the runtime). Idempotent - a later call replaces the cache.
- */
+// Idempotent - a later call replaces the cache.
 export function hydrateSpecMeta(metas: SpecMeta[] | Record<string, SpecMeta>): void {
   const list = Array.isArray(metas) ? metas : Object.values(metas);
   META = Object.fromEntries(list.map(meta => [meta.spec, meta]));
@@ -49,15 +40,11 @@ export function specsForClass(className: string, available: string[]): SpecMeta[
     .sort((first, second) => first.specLabel.localeCompare(second.specLabel));
 }
 
-/** Lookup a spec folder's metadata, or `undefined` for an unknown spec. */
 export function specMetaOf(spec: string | null | undefined): SpecMeta | undefined {
   return spec ? META[spec] : undefined;
 }
 
-/**
- * zamimg class-icon URL for a class name (space-tolerant: accepts 'Death Knight' or 'DeathKnight').
- * Returns '' for an unknown class, so a name-only fallback never shows a broken image.
- */
+// Returns '' for an unknown class, so a name-only fallback never shows a broken image.
 export function classIconUrl(className: string): string {
   const stem = classIconStem(className);
   return KNOWN_CLASS_ICONS.has(stem) ? `${ZAM}/${stem}.jpg` : '';

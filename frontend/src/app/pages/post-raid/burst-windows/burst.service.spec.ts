@@ -19,8 +19,7 @@ import {
 /** Fixture events build against a fight-start of 0, so stamping is a pass-through to seconds. */
 const timed = withRelativeS;
 
-// A melee auto-attack (event id 1) folds onto Auto Attack; two distinct synthetic negatives fold onto
-// the "I Don't Know" fallback. Each raw hit carries this much damage.
+// A melee auto-attack (event id 1) folds onto Auto Attack; synthetic negatives fold onto the "I Don't Know" fallback.
 const MELEE_HIT = 300;
 const SYNTHETIC_HIT = 100;
 // Two distinct negative ids WCL synthesizes for sourceless events; both normalize to the fallback spell.
@@ -75,8 +74,7 @@ describe('burstClipAnchor', () => {
 
 describe('burstDetailRows', () => {
   it('labels an ability whose spell id is missing from the ability map with a placeholder and empty icon', () => {
-    // SHADOW_BLADES_DAMAGE is intentionally left out of the ability map, so the guarded lookup must
-    // not throw; it renders a labelled placeholder instead of a blank card.
+    // SHADOW_BLADES_DAMAGE is intentionally left out of the ability map, so the guarded lookup must not throw.
     const breakdown = [{ spell_id: SHADOW_BLADES_DAMAGE, avg_damage: 600, min_damage: 400, max_damage: 800, count: 5, avg_casts: 2 }];
     const rows = burstDetailRows(breakdown, null, {});
     expect(rows[0].label).toBe(`Ability #${SHADOW_BLADES_DAMAGE}`);

@@ -3,12 +3,6 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { LiveCaptureFeatureService } from './live-capture.service';
 
-/**
- * The live feature's control strip: the two independent toggles ("Follow latest pull"
- * and "Record game client") with their inline, right-aligned status. A feature component -
- * it injects exactly one service (`LiveCaptureFeatureService`) and renders. Recording and
- * live sync run independently; each source shows its own status and nothing when off.
- */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-live-controls',

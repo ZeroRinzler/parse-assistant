@@ -22,9 +22,7 @@ function benchWith(overrides: Partial<GearBench> = {}): GearBench {
   };
 }
 
-// Reconstruct a raw CombatantInfo event from a desired CharacterGear so the feature
-// service (which reads raw combatant info + extracts gear itself) reproduces it.
-// Names are baked onto the gear items, so getGameNames is not consulted.
+// Reconstructs a raw CombatantInfo event; names are baked onto the gear items, so getGameNames is not consulted.
 function toRawEvent(gear: CharacterGear): WclCombatantInfo {
   const items: WclGearItem[] = [];
   for (const trinket of gear.trinkets ?? []) items[trinket.slot] = { id: trinket.id, name: trinket.name };

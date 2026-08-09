@@ -196,7 +196,7 @@ jobs:
               cp -a ../shell-out/. .
             fi
             if [ "$BUILD_PREVIEWS" = "true" ]; then
-              # previews/ is a legacy wrapper dir that may still exist at the root.
+              # Remove any existing previews/ wrapper dir along with the per-PR dirs.
               rm -rf pr-* previews
               if compgen -G "../preview-out/pr-*" > /dev/null; then
                 cp -a ../preview-out/pr-* .

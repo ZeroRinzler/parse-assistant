@@ -69,7 +69,6 @@ export interface BenchedRule {
   rule: RulebookRule;
   /** Null when the kind needs no magnitude, or when too few parses could supply one. */
   threshold: RuleThreshold | null;
-  /** Parses the magnitude could be measured on. */
   sample_count: number;
 }
 
@@ -91,7 +90,6 @@ type DamageRow = [number, string];
 /** One enemy's health as `[atS, share of max]`, time-ordered. */
 type HealthRow = [number, number];
 
-/** Everything the rule evaluators read, derived once per pull. */
 export interface RuleContext {
   castTimes: CastTimes;
   castEvents: TimedEvent[];
@@ -393,7 +391,6 @@ export function evaluateAuraUptimeBelow(
   };
 }
 
-/** Steps completed in order within `windowS` of the pull, and the pull time itself. */
 function openerProgress(
   cond: OpeningSequenceCondition, ctx: RuleContext, windowS: number,
 ): { pullS: number; matched: number; completedS: number | null } | null {

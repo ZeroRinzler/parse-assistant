@@ -83,12 +83,10 @@ describe('buildHoldTargets', () => {
 
 describe('holdSuggestionFindings', () => {
   const NAME = 'Shadow Blades';
-  // Prior-relative band: the top parses hold this cast HOLD_DELAY_S past the reset, and a player
-  // is flagged only when their own gap from their prior cast falls more than HOLD_BAND_S below
-  // that. Over-holding is tolerated.
+  // Prior-relative band: flags only when the player's own gap from their prior cast falls more than HOLD_BAND_S below HOLD_DELAY_S; over-holding is tolerated.
   const HELD_CAST_INDEX = 2;      // the second cast (1-based key)
-  const EFFECTIVE_CD_S = 60;      // the cooldown (cadence zero-point)
-  const HOLD_DELAY_S = 40;        // top parses hold ~40s past the reset
+  const EFFECTIVE_CD_S = 60;
+  const HOLD_DELAY_S = 40;
   const HOLD_BAND_S = 5;          // tolerance half-width
   const TARGET_CLOCK_S = 130;     // display-only median clock target ("hold to 02:10")
   const HELD_COUNT = 6;           // "6 of 10 top parses hold" copy

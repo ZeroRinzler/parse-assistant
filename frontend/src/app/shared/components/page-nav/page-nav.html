@@ -1,7 +1,4 @@
-<!-- Full-width top app bar: hamburger at the top-left, branding always visible -
-     the drawer/rail below it never hides the wordmark (Material's standard
-     navigation-drawer layout). Toolbar background comes from mat.toolbar-overrides
-     in styles.scss (a plain bg-* utility loses to Material's unlayered rule). -->
+<!-- Toolbar background comes from mat.toolbar-overrides in styles.scss; a plain bg-* utility loses to Material's unlayered rule. -->
 <mat-toolbar class="border-b border-[var(--border)] gap-2 shrink-0">
   <button mat-icon-button (click)="toggleNav()" aria-label="Toggle navigation menu">
     <mat-icon>menu</mat-icon>
@@ -21,8 +18,7 @@
 </mat-toolbar>
 
 <mat-sidenav-container class="flex-1 min-h-0">
-  <!-- Mobile: modal overlay (over) that slides in below the bar with a scrim.
-       Desktop: permanent drawer that collapses to an icons-only rail via its width. -->
+  <!-- Mobile: modal overlay that slides in with a scrim. Desktop: permanent drawer that collapses to an icons-only rail via its width. -->
   <mat-sidenav class="border-r border-[var(--border)]"
                [class.nav-drawer-modal]="isMobile()"
                [class.nav-drawer-full]="!isMobile() && !railCollapsed()"

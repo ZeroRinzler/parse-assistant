@@ -1,14 +1,4 @@
-/**
- * Live `DataSource<MapData>`: computes the top-parse position bench in the browser (no ingestion).
- * Fetches each top parse's position-bearing events (Casts with `includeResources` for friendlies +
- * enemies), groups samples per actor, resamples to a fixed cadence, and emits `EncounterPositions`.
- * The pure position math is owned here (self-contained, per the layer rules). Bound by
- * the development and ingest environments' provider list; ingestion drives this same service.
- *
- * Boss pick: the WCL master `enemies[]` carries gameID + name but no HP, so the boss is the actor
- * with the highest observed `maxHitPoints` (flattened onto events by `includeResources`). This can
- * differ from ingest when an add briefly out-HPs the boss in a snapshot.
- */
+/** Boss pick: the boss is the actor with the highest observed `maxHitPoints`; this can differ from ingest when an add briefly out-HPs the boss in a snapshot. */
 import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
@@ -28,19 +18,15 @@ export { posActorId } from './map-positions';
 
 /** How many top parses to sample (matches the ingest bench). */
 const TOP_PARSE_COUNT = 10;
-// Over-fetch so a private/unfetchable top parse can be backfilled by the
-// next-best one; the break in the loop caps actual fetches at TOP_PARSE_COUNT.
+// Over-fetches so a private/unfetchable top parse can be backfilled by the next-best one; the break in the loop caps actual fetches at TOP_PARSE_COUNT.
 const CANDIDATE_POOL_COUNT = TOP_PARSE_COUNT * 2;
 /** Fixed resample cadence, seconds (mirrors ingest `POSITIONS_INTERVAL_S`). */
 export const POSITIONS_INTERVAL_S = 1.5;
-/** Keep the boss plus this many most-active enemies. */
 const MAX_TRACKED_ENEMIES = 5;
-/** A non-boss enemy needs at least this many resampled rows to be kept. */
 const MIN_ENEMY_SAMPLES = 4;
 // Times/durations are stored rounded to deciseconds (0.1s): multiply, round, divide.
 const DECISECONDS_PER_S = 10;
 
-/** One raw position sample before resampling (raw WCL units; HP for boss pick). */
 export interface RawPosSample {
   t: number;
   x: number;
@@ -55,7 +41,6 @@ function eventMaxHp(event: TimedEvent): number {
   return typeof event.maxHitPoints === 'number' ? event.maxHitPoints : 0;
 }
 
-/** Group raw position samples per actor id from resource-bearing events, sorted by time. */
 export function collectPositionSamples(events: TimedEvent[]): Map<number, RawPosSample[]> {
   const byActor = new Map<number, RawPosSample[]>();
   for (const event of events) {
@@ -75,10 +60,8 @@ export function collectPositionSamples(events: TimedEvent[]): Map<number, RawPos
   return byActor;
 }
 
-/** One cadence point of the shared resample walk, before row projection. */
 interface CadencePoint { t: number; x: number; y: number; nearest: RawPosSample; }
 
-/** Walk the fixed cadence: lerp x/y within a mapID, snap to the nearest sample across a mapID change. */
 function resamplePoints(samples: RawPosSample[], durationS: number, intervalS: number): CadencePoint[] {
   if (!samples.length) return [];
   const first = samples[0].t;
@@ -108,7 +91,6 @@ function resamplePoints(samples: RawPosSample[], durationS: number, intervalS: n
   return out;
 }
 
-/** Resample an enemy timeline to [t, x, y, facing, mapID] rows at the fixed cadence. */
 export function resampleTimeline(samples: RawPosSample[], durationS: number, intervalS: number): PosRow[] {
   return resamplePoints(samples, durationS, intervalS).map(({ t, x, y, nearest }) => [
     t, x, y, nearest.facing == null ? null : Math.round(nearest.facing), nearest.mapID,
@@ -135,11 +117,7 @@ export interface SelectedEnemies {
   kept: EnemyCandidate[];
 }
 
-/**
- * Pick the tracked enemy set: the boss is the actor with the highest observed maxHitPoints; the
- * rest rank by sample count, capped at MAX_TRACKED_ENEMIES (the boss is kept even past the cap).
- * The MIN_ENEMY_SAMPLES floor is applied later on resampled rows, not here.
- */
+/** The `MIN_ENEMY_SAMPLES` floor is applied later on resampled rows, not here. */
 export function selectBossAndEnemies(
   byActor: Map<number, RawPosSample[]>, playerId: number, enemyMetaById: Map<number, EnemyMeta>,
 ): SelectedEnemies {
@@ -173,11 +151,7 @@ export interface ParsePositionInput {
   durationS: number;
 }
 
-/**
- * Build one parse's position payload: the player's resampled timeline plus notable enemy timelines
- * (boss = highest observed maxHitPoints, then most-sampled). Enemies are keyed by gameID so the
- * frontend matches "the same boss/add" across parses.
- */
+/** Enemies are keyed by gameID so the frontend matches "the same boss/add" across parses. */
 export function buildParsePositions(input: ParsePositionInput): ParsePositions {
   const { reportCode, fightId, playerName, playerId, enemyMetaById, posEvents, durationS } = input;
   const byActor = collectPositionSamples(posEvents);
@@ -235,7 +209,6 @@ export class MapTransformService implements DataSource<MapData> {
     }
   }
 
-  /** One parse's resampled positions via the colocated pure fns; null if it can't be fetched. */
   private async computeParse(
     ranking: ParseRanking,
   ): Promise<{ positions: ParsePositions; encounterName: string } | null> {
@@ -266,11 +239,7 @@ export class MapTransformService implements DataSource<MapData> {
     }
   }
 
-  /**
-   * Player casts + enemy casts, both with positions (`includeResources`). The enemy fetch needs
-   * `hostilityType: 'Enemies'` because the events query defaults to Friendlies; the boss is
-   * identified afterward by observed maxHitPoints in `selectBossAndEnemies`.
-   */
+  /** The enemy fetch needs `hostilityType: 'Enemies'` because the events query defaults to Friendlies. */
   private async fetchPositionEvents(
     reportCode: string, fight: WclFight, playerId: number,
   ): Promise<WclEvent[]> {

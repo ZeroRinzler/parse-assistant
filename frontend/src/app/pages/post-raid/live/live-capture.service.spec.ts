@@ -5,14 +5,10 @@ import {
 } from './live-capture.service';
 import { ClipAnchor } from '../../../core/models/capture.models';
 
-// A fixed report clock (unix epoch ms) and a fight starting one minute into the report,
-// so the absolute mapping report + fight + offset is easy to read by eye.
 const REPORT_START_MS = 1_700_000_000_000;
 const FIGHT_START_MS = 60_000;
-// Bench window: opens 10s into the fight and lasts 6s (a burst window).
 const WINDOW_TIME_S = 10;
 const WINDOW_LENGTH_S = 6;
-// 5s of lead-in and 5s of tail around each window.
 const ROLL: ClipRoll = { preMs: 5_000, postMs: 5_000 };
 
 /** A blob-less segment stub - the pure fns only read the wall-clock bounds. */
@@ -26,7 +22,6 @@ function anchor(over: Partial<ClipAnchor> = {}): ClipAnchor {
 
 describe('absoluteWindowStart', () => {
   it('adds the fight offset and the bench offset onto the report clock', () => {
-    // 1_700_000_000_000 + 60_000 + 10 * 1000
     expect(absoluteWindowStart(REPORT_START_MS, FIGHT_START_MS, WINDOW_TIME_S)).toBe(REPORT_START_MS + 60_000 + 10_000);
   });
 

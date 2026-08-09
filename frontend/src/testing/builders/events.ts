@@ -1,17 +1,4 @@
-/**
- * Plain factory functions for WCL combat-log event fixtures.
- *
- * Each factory returns a single `WclEvent` and hides the two WCL wire quirks
- * every spec would otherwise repeat: timestamps are in milliseconds (factories
- * take fight-relative *seconds* and convert), and event kinds are lowercase
- * wire strings (`'cast'`, `'applybuff'`, `'removebuff'`, `'damage'`). Optional
- * actor and absorb fields exist on the event only when the caller provides
- * them; an omitted opt leaves the field absent, not `undefined`.
- *
- * ```ts
- * const events = [cast(SHADOW_BLADES, 1), ...buffWindow(FEINT, 10, 16)];
- * ```
- */
+/** Factories for `WclEvent` fixtures; an omitted opt leaves the field absent on the event, not `undefined`. */
 import { WclEvent } from '../../app/core/models/wcl.models';
 
 /** WCL timestamps are milliseconds; factory times are fight-relative seconds. */
@@ -52,7 +39,6 @@ export function removeBuff(spellId: number, atS: number, opts?: { target?: numbe
   };
 }
 
-/** A debuff applied to an enemy (`type: 'applydebuff'`). */
 export function applyDebuff(spellId: number, atS: number, opts?: { target?: number }): WclEvent {
   return {
     type: 'applydebuff',
@@ -62,7 +48,6 @@ export function applyDebuff(spellId: number, atS: number, opts?: { target?: numb
   };
 }
 
-/** A debuff re-applied to an enemy before it expired (`type: 'refreshdebuff'`). */
 export function refreshDebuff(spellId: number, atS: number, opts?: { target?: number }): WclEvent {
   return {
     type: 'refreshdebuff',
@@ -83,7 +68,6 @@ export function applyBuffStack(spellId: number, atS: number, stack: number, opts
   };
 }
 
-/** A debuff dropping off an enemy (`type: 'removedebuff'`). */
 export function removeDebuff(spellId: number, atS: number, opts?: { target?: number }): WclEvent {
   return {
     type: 'removedebuff',
@@ -93,7 +77,6 @@ export function removeDebuff(spellId: number, atS: number, opts?: { target?: num
   };
 }
 
-/** A buff active from `fromS` until `toS`: the applybuff / removebuff pair. */
 export function buffWindow(spellId: number, fromS: number, toS: number, opts?: { target?: number }): WclEvent[] {
   return [applyBuff(spellId, fromS, opts), removeBuff(spellId, toS, opts)];
 }
@@ -109,7 +92,6 @@ export function death(atS: number, opts?: { target?: number; killingAbility?: nu
   };
 }
 
-/** Damage the player deals (`type: 'damage'`). */
 export function damage(
   spellId: number,
   atS: number,

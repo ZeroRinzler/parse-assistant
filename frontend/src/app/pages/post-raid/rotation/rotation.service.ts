@@ -181,8 +181,7 @@ export function checkCastEfficiency(
   const topE = bench.top_avg_efficiency;
   const topSD = bench.top_efficiency_stddev;
   const effPct = castEfficiencyPct(totalDtS, fightDurS);
-  // Flag only more than 1 sigma below the top-parse efficiency, so beating the top parses never
-  // trips a warning. Always a warning, never critical.
+  // Flag only more than 1 sigma below the top-parse efficiency, so beating the top parses never trips a warning.
   const WARN_SIGMAS_BELOW = 1;
   if (!isOutlierBelow(effPct, topE, topSD, WARN_SIGMAS_BELOW)) return null;
   return {
@@ -214,9 +213,7 @@ export function analyzeOneCooldown(
   const { expected, floor } = benchExpectedUses(fightDurS, cdBench.uses_per_min);
 
   const issues: AnalysisFinding[] = [];
-  // Judge lost/unused casts and a late opener only when a MAJORITY of top parses used this cooldown:
-  // a situational cd most parses skip has a noisy expected count and a meaningless avg_first_cast_s,
-  // so flagging it would punish the player for correctly matching the parses.
+  // A situational cd most parses skip has a noisy expected count and a meaningless avg_first_cast_s, so flagging it would punish the player for correctly matching the parses.
   if (usedShare(cdBench) >= MIN_USE_SHARE_FRAC) {
     const lost = checkLostUses(cdName, actual, expected, floor, fightDurS);
     if (lost) issues.push(lost);

@@ -4,11 +4,7 @@ import { MatIconModule } from '@angular/material/icon';
 /** Which page the banner explains: the post-raid analysis or the pre-fight plan. */
 export type BenchEmptyVariant = 'post' | 'pre';
 
-/**
- * Top-of-page banner for an encounter with no ingested bench yet: names it and lays out the
- * three-step ingest pipeline. Inputs-only leaf. `variant` switches the body + final step
- * between the post-raid ("Comparisons unlock") and pre-fight ("Plan unlocks") copy.
- */
+/** `variant` switches the body + final step between the post-raid and pre-fight copy. */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-bench-empty-banner',

@@ -33,12 +33,10 @@ function mountPreFight(encounters: EncounterEntry[] = [BENCHED_ENCOUNTER]) {
   return mountVm(PreFightComponent, {}, providers(encounters));
 }
 
-/** The signal the card gate reads; it mirrors `encControl.valueChanges`. */
 function selectedEncId(vm: Record<string, unknown>): number {
   return (vm['selectedEncId'] as () => number)();
 }
 
-/** Mirror a user having picked an encounter, so the feature cards are showing. */
 function pickEncounter(vm: Record<string, unknown>, id: number): void {
   const encControl = vm['encControl'] as FormControl<number>;
   encControl.enable();

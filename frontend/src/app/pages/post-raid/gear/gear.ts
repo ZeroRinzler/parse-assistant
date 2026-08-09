@@ -8,10 +8,6 @@ import { LatestLoad } from '../../../shared/latest-load';
 import { logWarn } from '../../../core/log';
 import { GearFeatureService, GearComparisonView, emptyGearView } from './gear.service';
 
-/**
- * Gear card. Dual-mode: with a `report`/`fight`/`player` selection (post-raid) it compares
- * the player's gear against the bench; with only `spec`/`encounterId` it shows the consensus.
- */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-gear',
@@ -23,14 +19,11 @@ export class GearComponent {
 
   readonly spec = input.required<string>();
   readonly encounterId = input.required<number>();
-  /** Post-raid selection - omit (or leave 0/'') for the pre-fight bench-only view. */
   readonly report = input<string>('');
   readonly fight = input<number>(0);
   readonly player = input<number>(0);
 
-  /** Emits false when the card has finished loading; the page gates its spinner on it. */
   readonly busyChange = output<boolean>();
-  /** Whether the top-parse gear bench exists. The page aggregates it for the banner. */
   readonly availableChange = output<boolean>();
 
   private readonly _view = signal<GearComparisonView>(emptyGearView());

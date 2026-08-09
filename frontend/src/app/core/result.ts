@@ -1,19 +1,9 @@
-/**
- * A total, serializable outcome for a fallible load, returned instead of throwing or
- * returning null so every caller must decide what a failure means. Kept Angular-free so
- * the pure transforms and the headless Node ingestion can import it. Both arms are plain
- * literals (no class) so they tree-shake, serialize, and assert as data.
- */
+// Kept Angular-free so the pure transforms and the headless Node ingestion can import it.
 export type Result<T, E = LoadError> =
   | { readonly ok: true; readonly value: T }
   | { readonly ok: false; readonly error: E };
 
-/**
- * The load-failure taxonomy the UI renders. `missing` is deliberately not an error: it
- * feeds the bench-empty waiting state, not an error banner. `transient` has already been
- * retried once by the interceptor. `permanent` carries an `id` (+ optional `context`) so
- * the shell can logWarn enough to reproduce a user report.
- */
+// `missing` is deliberately not an error: it feeds the bench-empty waiting state, not an error banner.
 export type LoadError =
   | { readonly kind: 'missing'; readonly message: string }
   | { readonly kind: 'transient'; readonly message: string }

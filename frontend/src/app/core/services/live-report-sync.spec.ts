@@ -10,16 +10,10 @@ const ms = (s: number) => s * 1000;
 /** Half an interval: a delay clearly shorter than the refocus cooldown. */
 const HALF_INTERVAL_S = POLL_INTERVAL_S / 2;
 
-/**
- * An inner poll that outlasts one interval, so the next scheduled tick overlaps it.
- * Used to prove exhaustMap drops the overlapping trigger.
- */
+/** An inner poll that outlasts one interval, so the next scheduled tick overlaps it (proves exhaustMap drops it). */
 const INNER_POLL_DURATION_S = POLL_INTERVAL_S + HALF_INTERVAL_S;
 
-/**
- * Base clock chosen so the very first refocus (with lastEmit still 0) clears the
- * cooldown: START_TIME_S - 0 >= POLL_INTERVAL_S.
- */
+/** Base clock chosen so the very first refocus (with lastEmit still 0) already clears the cooldown. */
 const START_TIME_S = POLL_INTERVAL_S;
 
 /** A minimal DOCUMENT stand-in: a real EventTarget plus a settable visibilityState. */
@@ -101,8 +95,7 @@ describe('LiveReportSyncService pollTriggers', () => {
   it('honors the interval cooldown between the last emission and a refocus tick', () => {
     const { service, doc } = setup();
     let emissions = 0;
-    // Advance time only while hidden so scheduled interval ticks stay filtered and
-    // the assertions isolate refocus behavior.
+    // Advance time only while hidden so scheduled interval ticks stay filtered and the assertions isolate refocus behavior.
     sub = service.pollTriggers().subscribe(() => emissions++);
     doc.setVisible(false);
 

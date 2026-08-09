@@ -23,15 +23,11 @@ function deferred<T>(): Deferred<T> {
   return { promise, resolve, reject };
 }
 
-/**
- * Awaits one microtask tick per stage of run()'s then -> catch -> finally
- * chain, so every callback of an already-settled load has fired before the
- * test asserts.
- */
+/** Awaits one microtask tick per then -> catch -> finally stage so every callback has fired before asserting. */
 async function flushLoadChain(): Promise<void> {
-  await Promise.resolve(); // then
-  await Promise.resolve(); // catch
-  await Promise.resolve(); // finally
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
 }
 
 function spyOnConsoleWarn() {

@@ -2,8 +2,8 @@ name: Ingest Parse Samples
 
 on:
   # Hourly scheduling is driven by an EXTERNAL scheduler (cron-job.org) that calls the
-  # workflow_dispatch REST API once an hour. GitHub's own schedule: cron was removed - it
-  # dropped most fires under load (3 fires in 7 hours observed) and ignores the set minute.
+  # workflow_dispatch REST API once an hour. GitHub's own cron schedule is not used: it
+  # drops most fires under load (3 fires in 7 hours observed) and ignores the set minute.
   workflow_dispatch:
 
 # Shared with deploy-pages - see the note there. This job owns the data/ tree on gh-pages;
@@ -71,7 +71,7 @@ jobs:
 
       # Ingestion self-selects the current live raids from WCL (current expansion,
       # non-frozen zones confirmed live by a rankings probe) and self-prunes data for
-      # encounters that are no longer current. No manual per-patch edits needed.
+      # encounters outside the current live window. No manual per-patch edits needed.
       - name: Run parse ingestion
         working-directory: frontend
         run: npm run ingest

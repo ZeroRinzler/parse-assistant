@@ -25,7 +25,6 @@ const timed = withRelativeS;
 
 const CLOAK_META = { name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS, cooldown: 120, duration: 5, usage_rule: 'Use on big hits', talent_gated: false };
 
-/** The common per-defensive benchmark shape; each site overrides only the fields it documents. */
 function defBench(overrides: Partial<PerDefensiveBenchmark> = {}): PerDefensiveBenchmark {
   return {
     sample_count: 5, used_sample_count: 5, avg_first_cast_s: 10, stddev_first_cast_s: 2, avg_gap_s: 60, stddev_gap_s: 5,

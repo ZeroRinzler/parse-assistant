@@ -33,7 +33,6 @@ export function auraAlreadyUpAt(windows: AuraWindows, spellId: number, timeS: nu
   return (windows.get(spellId) ?? []).some(([start, end]) => timeS > start && (end == null || timeS <= end));
 }
 
-/** One aura's stack changes as `[atS, count]`, in order. */
 export type StackTimeline = [number, number][];
 
 /** A bare apply carries no count and means one; every stack event carries the new total. */

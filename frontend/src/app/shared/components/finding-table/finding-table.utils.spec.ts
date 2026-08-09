@@ -23,8 +23,7 @@ const f = (
 });
 
 describe('bucketFindings', () => {
-  // An unidentified-cooldown finding is surfaced and logged via logWarn -> console.warn;
-  // the spy keeps the runner output clean and lets those tests assert on the warning.
+  // Spied to keep runner output clean and let tests assert on the logWarn call.
   let warnSpy: MockInstance<typeof console.warn>;
   beforeEach(() => { warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined); });
   afterEach(() => { warnSpy.mockRestore(); });
@@ -101,7 +100,7 @@ describe('bucketFindings', () => {
   });
 
   it('surfaces a finding with no cd_name as an Unknown cooldown entry', () => {
-    const finding = f('warning', 'cast_efficiency'); // no cd_name
+    const finding = f('warning', 'cast_efficiency');
     const entries = bucketFindings([finding], { spellId, icon });
     expect(entries).toHaveLength(1);
     expect(entries[0].name).toBe(UNKNOWN_COOLDOWN_LABEL);
@@ -110,7 +109,7 @@ describe('bucketFindings', () => {
   });
 
   it('logs a warning carrying the finding so an unidentified cooldown can be reproduced', () => {
-    const finding = f('warning', 'cast_efficiency'); // no cd_name
+    const finding = f('warning', 'cast_efficiency');
     bucketFindings([finding], { spellId, icon });
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('unknown-cooldown'), finding);
   });

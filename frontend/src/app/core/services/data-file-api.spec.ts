@@ -6,8 +6,7 @@ import { EncounterEntry, SpecEntry } from '../models/encounter.models';
 import { SpecMeta } from '../models/spec-meta.models';
 import { Result, LoadError, ok, missing, transient } from '../result';
 
-// These tests pin the exact relative paths the service owns: a drift silently 404s every
-// runtime read or writes ingested data to the wrong place.
+// These tests pin the exact relative paths the service owns: a drift silently 404s every runtime read or writes ingested data to the wrong place.
 const SPEC = 'SubtletyRogue';
 const ENCOUNTER_ID = 3176;
 const SLICE = 'burst';

@@ -104,7 +104,7 @@ describe('closestToZero', () => {
 });
 
 describe('benchExpectedUses', () => {
-  const FIGHT_DUR_S = 120; // 2 minutes
+  const FIGHT_DUR_S = 120;
   it('scales avg uses/min by the fight length', () => {
     expect(benchExpectedUses(FIGHT_DUR_S, { avg: 2, stddev: 0 }).expected).toBe(4);
   });

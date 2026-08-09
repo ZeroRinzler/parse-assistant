@@ -6,7 +6,6 @@ const MYTHIC_DIFFICULTY = 'Mythic';
 // The raid lead re-assigns lines to their roster on import; no Blizzard spec id is exposed to tag with.
 const EVERYONE_TAG = 'everyone';
 
-// Assembles the plain-text NSRT note (Mythic, no phase) chronologically for the selected abilities.
 export function buildNorthernSkyNote(bench: NorthernSkyBench, selectedSpellIds: ReadonlySet<number>): string {
   const header = `EncounterID:${bench.encounter_id};Name:${bench.encounter_name};Difficulty:${MYTHIC_DIFFICULTY}`;
   const lines: { time_s: number; text: string }[] = [];
@@ -43,7 +42,6 @@ export function toggleExclusion(excluded: ReadonlySet<number>, spellId: number, 
   return next;
 }
 
-// Select-all clears every exclusion; when everything is already on, the same button excludes all.
 export function toggleAllExclusion(abilities: NorthernSkyAbility[], excluded: ReadonlySet<number>): Set<number> {
   return isAllSelected(abilities, excluded) ? new Set(abilities.map(ability => ability.spell_id)) : new Set();
 }

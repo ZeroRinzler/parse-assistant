@@ -1,11 +1,4 @@
-/**
- * Shapes for the ingested top-parse position file
- * (`data/specs/{spec}/positions/{enc_id}.json`).
- *
- * Written by `MapTransformService.getBench` (`buildParsePositions`), which
- * ingestion drives. Coordinates are raw WCL units (x/y in hundredths of a yard,
- * facing in milliradians); the frontend scales them in `map-draw.ts`.
- */
+// Coordinates are raw WCL units (x/y in hundredths of a yard, facing in milliradians); the frontend scales them in `map-draw.ts`.
 
 /** A resampled enemy position row: [t_s, x, y, facing | null, mapID | null]. */
 export type PosRow = [number, number, number, number | null, number | null];
@@ -26,7 +19,6 @@ export interface ParsePositions {
   player_name: string;
   duration_s: number;
   interval_s: number;
-  /** The ranked player's resampled timeline. */
   player: PlayerPosRow[];
   enemies: ParseEnemyTimeline[];
 }

@@ -8,13 +8,7 @@ import { LatestLoad } from '../../../shared/latest-load';
 import { logWarn } from '../../../core/log';
 import { DefensiveFeatureService, DefensivePlanRow } from './defensive.service';
 
-/**
- * Defensive game plan (pre-fight) as a 3-column table (What / Plan / How to use),
- * mirroring the cooldown plan schema. A feature component: injects exactly one
- * service (`DefensiveFeatureService`) and reads the bench-only plan rows via the
- * swappable `DEFENSIVE_DATA_SOURCE`. Defensives never align with Bloodlust so that
- * tag is omitted. Self-contained to /pre.
- */
+// Defensives never align with Bloodlust, so that tag is omitted.
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-defensive-plan',
@@ -29,7 +23,6 @@ export class DefensivePlanComponent {
   readonly title = input('Defensive plan');
   readonly subtitle = input('Defensive usage across top parses.');
 
-  /** Whether the top-parse bench exists. The page aggregates it for the banner. */
   readonly availableChange = output<boolean>();
 
   protected readonly available = signal(true);

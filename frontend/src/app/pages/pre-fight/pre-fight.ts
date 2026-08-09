@@ -26,11 +26,7 @@ import { MapPanelComponent } from '../post-raid/map/map-panel';
 import { MapFeatureService, MapAnchor } from '../post-raid/map/map.service';
 import { NorthernSkyExportComponent } from '../post-raid/northern-sky/northern-sky-export';
 
-/**
- * Pre-fight page shell. Owns only spec + encounter selection; each feature card reads its own
- * bench-only slice. Selection is not carried in the URL: the last spec is restored from
- * localStorage, the encounter is always re-selected.
- */
+/** Pre-fight page shell; selection is not carried in the URL - the last spec is restored from localStorage, the encounter is always re-selected. */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-pre-fight',
@@ -50,7 +46,6 @@ export class PreFightComponent implements OnInit {
   private readonly mapFeature = inject(MapFeatureService);
   private readonly selectionStore = inject(SelectionStore);
 
-  // The spec select stays disabled until a class is picked, mirroring how encounter gates on spec.
   protected readonly classControl = new FormControl('', { nonNullable: true });
   protected readonly specControl = new FormControl<string>({ value: '', disabled: true }, { nonNullable: true });
   protected readonly encControl = new FormControl<number>({ value: 0, disabled: true }, { nonNullable: true });
@@ -61,21 +56,18 @@ export class PreFightComponent implements OnInit {
   protected readonly selectedSpec = toSignal(this.specControl.valueChanges, { initialValue: this.specControl.value });
   protected readonly selectedEncId = toSignal(this.encControl.valueChanges, { initialValue: this.encControl.value });
 
-  // Only classes that actually have ingested specs appear in the Class dropdown.
   protected readonly classes = computed(() => {
     const available = this.specs().map(entry => entry.spec);
     return classList().filter(cls => specsForClass(cls.className, available).length > 0);
   });
   protected readonly specsForSelectedClass = computed(() =>
     specsForClass(this.selectedClass(), this.specs().map(entry => entry.spec)));
-  // The select trigger renders the selected row's boss icon + name.
   protected readonly selectedEncounter = computed(() =>
     this.encounters().find(entry => entry.id === this.selectedEncId()));
   protected readonly loading = signal(false);
   protected readonly error = signal<RenderableLoadError | null>(null);
 
-  // Per-card bench availability; the banner shows when none have a bench. Init true avoids a
-  // one-frame banner flash on a benched encounter (pre-fight cards render with no reveal gate).
+  // Init true avoids a one-frame banner flash on a benched encounter (pre-fight cards render with no reveal gate).
   protected readonly gearAvailable = signal(true);
   protected readonly cdPlanAvailable = signal(true);
   protected readonly defensivePlanAvailable = signal(true);
@@ -85,7 +77,6 @@ export class PreFightComponent implements OnInit {
     this.gearAvailable() || this.cdPlanAvailable() || this.defensivePlanAvailable()
     || this.burstAvailable() || this.northernSkyAvailable());
 
-  // The burst-window positioning button lights up once the top-parse trails load.
   protected readonly mapReady = this.mapFeature.ready;
 
   protected onOpenMap(anchor: MapAnchor): void {
@@ -106,7 +97,6 @@ export class PreFightComponent implements OnInit {
       this.loading.set(false);
     }
 
-    // The class is derived from the restored spec (not stored); the encounter is re-selected.
     const autoSpec = this.selectionStore.loadPreFight()?.spec ?? '';
     const meta = specMetaOf(autoSpec);
     if (autoSpec && meta && this.specs().some(specEntry => specEntry.spec === autoSpec)) {
@@ -118,8 +108,7 @@ export class PreFightComponent implements OnInit {
   }
 
   protected onClassChange(): void {
-    // Emit so the `selectedSpec` signal (and the select trigger) clears; suppressing the event
-    // would leave the trigger showing the now-invalid spec from the old class.
+    // Emit so the selectedSpec signal (and select trigger) clears; suppressing it would leave the trigger showing the now-invalid spec from the old class.
     this.specControl.setValue('', { emitEvent: true });
     this.selectionStore.savePreFight({ spec: null });
     this.mapFeature.clear();
@@ -163,7 +152,6 @@ export class PreFightComponent implements OnInit {
     }
   }
 
-  // Surface a real read failure on the page instead of an empty dropdown.
   private surfaceLoadError(error: LoadError): void {
     if (error.kind === 'permanent') logWarn(error.id, error.context);
     this.error.set(error.kind === 'missing' ? null : error);

@@ -1,5 +1,4 @@
-// Self-containment exception (blessed by CLAUDE.md): this slice MAY import the cross-slice
-// presentational helper `shared/gear/gear-comparison.ts`; all gear math is delegated to it.
+// Self-containment exception (blessed by CLAUDE.md): this slice MAY import the cross-slice `shared/gear/gear-comparison.ts`.
 import { Injectable, inject } from '@angular/core';
 import { CharacterGear, WclCombatantInfo } from '../../../core/models/wcl.models';
 import { EncounterGearStats } from '../../../core/models/encounter.models';
@@ -19,9 +18,7 @@ import {
 } from '../../../shared/gear/gear-comparison';
 import { GEAR_DATA_SOURCE, GearBench } from './gear-data-source';
 
-/** The gear card's success payload (an `ok` `Result` carries this). */
 export interface GearComparisonView {
-  /** True when the player's own gear is shown alongside the bench (post-raid). */
   comparison: boolean;
 
   talentBuilds: TalentBuildRow[];
@@ -36,7 +33,6 @@ export interface GearComparisonView {
   benchEnchantRows: BenchEnchantRow[];
 }
 
-/** Empty placeholder view the card holds while loading or in an error state. */
 export function emptyGearView(): GearComparisonView {
   return {
     comparison: false,
@@ -46,11 +42,7 @@ export function emptyGearView(): GearComparisonView {
   };
 }
 
-/**
- * Assemble a `CharacterGear` from a raw CombatantInfo event, filling absent names from the
- * resolved `i<id>`/`e<id>` map. A log with no combatant info is a usable-looking 200 OK, so
- * it is a `permanent` error rather than a placeholder the caller silently discards.
- */
+// A log with no combatant info is a usable-looking 200 OK, so it is a permanent error, not a placeholder the caller silently discards.
 export function buildCharacterGear(
   event: WclCombatantInfo | null,
   names: Record<string, { id: number; name: string }>,
@@ -73,15 +65,11 @@ export function buildCharacterGear(
   return ok({ found: true, spec, source_report: code, talent_key, trinkets, enchants });
 }
 
-/** Reshape a `GearBench` into the `EncounterGearStats` shape the helpers consume. */
 export function benchToStats(bench: GearBench): EncounterGearStats {
   return { talent_builds: bench.talent_builds, trinkets: bench.trinkets, enchants: bench.enchants };
 }
 
-/**
- * Post-raid comparison view: the player's own gear against the bench. `playerGear` is never
- * null (the card builds comparison rows only once the combatant-info gear is in hand).
- */
+// playerGear is never null: the card builds comparison rows only once the combatant-info gear is in hand.
 export function buildGearView(playerGear: CharacterGear, stats: EncounterGearStats): GearComparisonView {
   const playerKey = playerGear.talent_key ?? '';
   const enchantRows = buildEnchantRows(playerGear, stats);
@@ -100,10 +88,7 @@ export function buildGearView(playerGear: CharacterGear, stats: EncounterGearSta
   };
 }
 
-/**
- * Pre-fight bench-only view (no player overlay). Uses the dedicated bench builders, so the
- * comparison builders are never reached without a player.
- */
+// Uses the dedicated bench builders, so the comparison builders are never reached without a player.
 export function buildBenchGearView(stats: EncounterGearStats): GearComparisonView {
   return {
     comparison: false,
@@ -123,10 +108,7 @@ export class GearFeatureService {
   private readonly source = inject(GEAR_DATA_SOURCE);
   private readonly wclApi = inject(WclApiService);
 
-  /**
-   * Post-raid: the analyzed player's gear vs the top-parse bench. Propagates a non-ok bench
-   * and the player's own no-combatant-info error unchanged, never degrading to bench-only.
-   */
+  // Propagates a non-ok bench and the player's own no-combatant-info error unchanged, never degrading to bench-only.
   async loadComparisonView(
     spec: string, encounterId: number,
     reportCode: string, fightId: number, playerId: number,
@@ -138,17 +120,13 @@ export class GearFeatureService {
     return ok(buildGearView(playerGear.value, benchToStats(bench.value)));
   }
 
-  /** Pre-fight: bench-only consensus (no player log). Propagates a non-ok bench. */
   async loadBenchView(spec: string, encounterId: number): Promise<Result<GearComparisonView, LoadError>> {
     const bench = await this.source.getBench(spec, encounterId);
     if (!bench.ok) return bench;
     return ok(buildBenchGearView(benchToStats(bench.value)));
   }
 
-  /**
-   * The analyzed player's combatant-info gear, resolving item / enchant names in one batched
-   * round-trip. A WCL fetch failure becomes a mapped `LoadError`, never a silent fallback.
-   */
+  // A WCL fetch failure becomes a mapped LoadError, never a silent fallback.
   private async fetchPlayerGear(
     reportCode: string, fightId: number, playerId: number, spec: string,
   ): Promise<Result<CharacterGear, LoadError>> {

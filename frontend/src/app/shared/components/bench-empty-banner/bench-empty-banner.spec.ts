@@ -30,7 +30,6 @@ describe('BenchEmptyBannerComponent', () => {
   });
 
   it('uses the post-raid copy by default (Comparisons unlock)', () => {
-    // No variant input: exercises the declared 'post' default rather than an explicit value.
     const text = render({ encounter: 'Boss' });
     expect(text).toContain('Your pull graded against the spec rulebook below.');
     expect(text).toContain('Comparisons unlock');

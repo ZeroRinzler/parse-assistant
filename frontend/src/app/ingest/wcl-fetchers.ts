@@ -1,9 +1,4 @@
-/**
- * Ingest discovery layer: resolves which raids are "current" from `worldData` plus a
- * cheap rankings liveness probe - the one piece of orchestration the transforms do not
- * own. Accepts a `WclQueryClient` so tests can inject a fake; best-effort failures are
- * logged via `logWarn`, never swallowed.
- */
+// Accepts a `WclQueryClient` so tests can inject a fake; best-effort failures are logged via `logWarn`, never swallowed.
 
 import { logWarn } from '../core/log';
 import { toParseRankings, unwrapRankings } from '../shared/analysis/wcl-projections';
@@ -15,28 +10,20 @@ import {
 } from './wcl-mappers';
 import type { WclExpansion, IngestEncounter } from './models/wcl.models';
 
-// Reliably-populated DPS specs used to probe a zone for liveness. A genuinely live
-// raid has many real parses for any of these; a beta/PTR/test zone has none, so one
-// representative encounter probed across these specs cleanly separates the two.
+// A genuinely live raid has many real parses for any of these; a beta/PTR/test zone has none.
 const PROBE_SPECS = ['FireMage', 'RetributionPaladin', 'FuryWarrior'];
-// Minimum non-anonymous rankings (summed across PROBE_SPECS on the zone's first
-// encounter) for a zone to count as live. >=1 is unsafe: a single non-anon parse on a
-// test boss would promote it; a real raid clears this easily.
+// >=1 is unsafe: a single non-anon parse on a test boss would promote it; a real raid clears this easily.
 const LIVE_RANKINGS_THRESHOLD = 3;
 const PROBE_COUNT = 10;
-// Stop probing cleanly when the WCL hourly budget runs low.
 const PROBE_BUDGET_MARGIN = 500;
 
 export interface CurrentContent {
-  // Live current-expansion raid encounters to ingest (frozen:false, not name-excluded,
-  // confirmed live by the rankings probe).
+  // Confirmed live by the rankings probe.
   encounters: IngestEncounter[];
-  // All non-frozen current-expansion encounter ids - the prune-protected set.
   protectedIds: Set<number>;
 }
 
-// BudgetExceeded propagates (a clean stop); other per-spec probe errors are logged and
-// treated as zero so one flaky spec cannot sink a live zone.
+// BudgetExceeded propagates (a clean stop); other per-spec probe errors are logged as zero so one flaky spec can't sink a live zone.
 async function isZoneLive(client: WclQueryClient, zoneEncounters: IngestEncounter[], specWcl: SpecWclMap): Promise<boolean> {
   const probeEncounter = zoneEncounters[0];
   if (!probeEncounter) return false;
@@ -55,8 +42,7 @@ async function isZoneLive(client: WclQueryClient, zoneEncounters: IngestEncounte
   return false;
 }
 
-// The probe runs once per zone here, not per spec, so beta/PTR/test zones cost a
-// handful of queries total instead of one per spec per run.
+// The probe runs once per zone here, not per spec, so beta/PTR/test zones cost a handful of queries total.
 export async function getEncounters(client: WclQueryClient, specWcl: SpecWclMap): Promise<CurrentContent> {
   const data = await client.query<{ worldData: { expansions: WclExpansion[] } }>(ENCOUNTERS_Q);
   const expansions = data.worldData.expansions;
@@ -74,8 +60,7 @@ export async function getEncounters(client: WclQueryClient, specWcl: SpecWclMap)
   return { encounters, protectedIds };
 }
 
-// Partitions are tried newest-first because a fresh patch's partition carries the
-// current parses; a zone with no partitions falls back to null (WCL's current).
+// Partitions are tried newest-first because a fresh patch's partition carries the current parses.
 export async function getRankingsLite(
   client: WclQueryClient, spec: string, encounterId: number, specWcl: SpecWclMap, count = 10, partitionIds: number[] = [],
 ): Promise<ParseRanking[]> {

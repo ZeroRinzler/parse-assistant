@@ -60,8 +60,8 @@ describe('WindowComparisonComponent overviewDelta', () => {
 describe('WindowComparisonComponent selectedIndex', () => {
   it('picks the lowest player/top ratio when higher is better (burst)', () => {
     const windows = [
-      win({ playerPct: 95, topAvg: 100 }), // ratio 0.95
-      win({ playerPct: 40, topAvg: 100 }), // ratio 0.40 - worst
+      win({ playerPct: 95, topAvg: 100 }),
+      win({ playerPct: 40, topAvg: 100 }),
       win({ playerPct: 120, topAvg: 100 }),
     ];
     expect(selectedIndexOf(windows, true)).toBe(1);
@@ -71,7 +71,7 @@ describe('WindowComparisonComponent selectedIndex', () => {
     const windows = [
       win({ playerPct: 95, topAvg: 100 }),
       win({ playerPct: 40, topAvg: 100 }),
-      win({ playerPct: 200, topAvg: 100 }), // ratio 2.0 - worst (most damage taken)
+      win({ playerPct: 200, topAvg: 100 }),
     ];
     expect(selectedIndexOf(windows, false)).toBe(2);
   });
@@ -101,7 +101,7 @@ describe('WindowComparisonComponent selection', () => {
   it('activates a non-muted window on select, overriding the default', () => {
     const windows = [win({ playerPct: 40, topAvg: 100 }), win({ playerPct: 95, topAvg: 100 })];
     const { vm } = mountVm(WindowComparisonComponent, { windows });
-    expect((vm['activeIndex'] as () => number)()).toBe(0); // worst by default
+    expect((vm['activeIndex'] as () => number)()).toBe(0);
     (vm['select'] as (i: number) => void)(1);
     expect((vm['activeIndex'] as () => number)()).toBe(1);
   });
@@ -110,7 +110,7 @@ describe('WindowComparisonComponent selection', () => {
 describe('WindowComparisonComponent keyboard navigation', () => {
   const threeWindows = () => [
     win({ playerPct: 95, topAvg: 100 }),
-    win({ playerPct: 40, topAvg: 100 }), // worst -> active by default
+    win({ playerPct: 40, topAvg: 100 }),
     win({ playerPct: 120, topAvg: 100 }),
   ];
   const press = (key: string) => new KeyboardEvent('keydown', { key });
@@ -130,8 +130,8 @@ describe('WindowComparisonComponent keyboard navigation', () => {
 
   it('clamps at the ends instead of wrapping', () => {
     const { vm } = mountVm(WindowComparisonComponent, { windows: threeWindows(), higherIsBetter: true });
-    (vm['onKeydown'] as (e: KeyboardEvent) => void)(press('ArrowLeft'));  // to 0
-    (vm['onKeydown'] as (e: KeyboardEvent) => void)(press('ArrowLeft'));  // stays at 0
+    (vm['onKeydown'] as (e: KeyboardEvent) => void)(press('ArrowLeft'));
+    (vm['onKeydown'] as (e: KeyboardEvent) => void)(press('ArrowLeft'));
     expect((vm['activeIndex'] as () => number)()).toBe(0);
   });
 
@@ -159,7 +159,7 @@ describe('WindowComparisonComponent selection reset on windows swap', () => {
     (vm['select'] as (i: number) => void)(MANUAL_PICK);
     expect((vm['activeIndex'] as () => number)()).toBe(MANUAL_PICK);
 
-    // A shorter List B no longer has index 3, so the stale pick would blank the detail pane.
+    // A shorter List B lacks index 3, so the stale pick would blank the detail pane.
     const WORST_IN_LIST_B = 1; // lowest player/top ratio when higher is better
     const listB = [
       win({ playerPct: 95, topAvg: 100 }), // ratio 0.95
@@ -251,9 +251,7 @@ describe('WindowComparisonComponent showCasts', () => {
 });
 
 describe('WindowComparisonComponent timelineCells', () => {
-  // GAP_SLOT_SECONDS = 20: each dashed pacing slot stands for 20s of pause
-  // (next.start - this.end), floored, so a sub-20s pause is the same burst (0 slots)
-  // and longer lulls add proportionally more slots with no cap.
+  // Each dashed pacing slot stands for 20s of pause (next.start - this.end), floored and uncapped.
   const SLOT_SECONDS = 20;
 
   type Cell = { kind: 'window'; index: number } | { kind: 'gap'; id: string };
@@ -264,9 +262,7 @@ describe('WindowComparisonComponent timelineCells', () => {
     timeEndS,
   });
 
-  // One mount whose `windows` input is re-set per case (mountVm's TestBed configures
-  // once, so a test never mounts twice). Two windows: the first ends at 0, the second
-  // starts at `pauseS`, so the gap count is a direct function of the pause between them.
+  // One mount whose `windows` input is re-set per case, since mountVm's TestBed configures once and a test never mounts twice.
   const gapCounter = () => {
     const { vm, setInput } = mountVm(WindowComparisonComponent, { windows: [] as ComparisonWindow[] });
     const cells = vm['timelineCells'] as () => Cell[];
@@ -294,7 +290,6 @@ describe('WindowComparisonComponent timelineCells', () => {
   });
 
   it('interleaves window and gap cells in fight order', () => {
-    // 0->0 (start), then a 40s pause (2 slots) to the second window.
     const { vm } = mountVm(WindowComparisonComponent, { windows: [winSpan(0, 0), winSpan(2 * SLOT_SECONDS, 2 * SLOT_SECONDS + 10)] });
     const cells = (vm['timelineCells'] as () => Cell[])();
     expect(cells.map(c => c.kind)).toEqual(['window', 'gap', 'gap', 'window']);

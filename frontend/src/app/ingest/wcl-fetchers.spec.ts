@@ -5,7 +5,6 @@ import type { WclQueryClient } from './wcl-client';
 import type { SpecWclMap } from './wcl-mappers';
 import type { WclRawRanking } from '../core/models/wcl.models';
 
-// Folder -> [className, specName] for the probe specs plus the specs these tests query.
 const SPEC_WCL: SpecWclMap = {
   FireMage: ['Mage', 'Fire'],
   RetributionPaladin: ['Paladin', 'Retribution'],
@@ -30,15 +29,12 @@ const ranks = (count: number): WclRawRanking[] =>
   Array.from({ length: count }, (_unused, index) => ({ name: `P${index}`, report: { code: `r${index}`, fightID: index } }));
 
 describe('getEncounters', () => {
-  // Each dropped zone is reported via logWarn -> console.warn; the spy keeps the runner
-  // output clean and lets the drop tests assert on the warning.
+  // The spy keeps the runner output clean and lets the drop tests assert on the warning.
   let warnSpy: MockInstance<typeof console.warn>;
   beforeEach(() => { warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined); });
   afterEach(() => { warnSpy.mockRestore(); });
 
-  // Live raids (frozen:false + real rankings) are kept; a frozen tier, a name-excluded
-  // Mythic+ zone, and a frozen:false-but-no-rankings test zone are all dropped. Modeled
-  // on the real Midnight worldData.
+  // Modeled on the real Midnight worldData.
   const expansions = [{
     id: 7, name: 'Midnight', zones: [
       { id: 46, name: 'VS / DR / MQD', frozen: false, encounters: [{ id: 3176, name: 'Imperator' }, { id: 3177, name: 'Vorasius' }] },
@@ -49,14 +45,12 @@ describe('getEncounters', () => {
     ],
   }];
 
-  // rankings per encounter id: live bosses return 10, the test boss returns none.
   const rankingsByEncounter: Record<number, number> = { 3176: 10, 3177: 10, 3159: 10, 3591: 0 };
 
   function contentClient(overrides: Partial<FakeHandlers> = {}, probeCounter?: { count: number }): WclQueryClient {
     return fakeClient({
       query: (gql, vars) => {
         if (gql.includes('expansions')) return { worldData: { expansions } };
-        // RANKINGS_Q probe
         if (probeCounter) probeCounter.count++;
         const encounterID = (vars as { encounterID: number }).encounterID;
         return { worldData: { encounter: { name: 'Boss', characterRankings: { rankings: ranks(rankingsByEncounter[encounterID] ?? 0) } } } };
@@ -68,7 +62,6 @@ describe('getEncounters', () => {
   it('keeps live zones, drops frozen / name-excluded / no-ranking zones', async () => {
     const { encounters, protectedIds } = await getEncounters(contentClient(), SPEC_WCL);
     expect(encounters.map(encounter => encounter.id).sort((a, b) => a - b)).toEqual([3159, 3176, 3177]);
-    // protected set = all non-frozen ids (includes the name-excluded M+ and test zone), excludes the frozen tier.
     expect([...protectedIds].sort((a, b) => a - b)).toEqual([3159, 3176, 3177, 3591, 112526]);
     // logWarn(context, message) lands as two console.warn args: '[warcraft-learner] <context>:', message.
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('getEncounters'), expect.stringContaining('Dummy Dome'));
@@ -136,7 +129,6 @@ describe('getRankingsLite', () => {
       },
     });
     const ranked = await getRankingsLite(client, 'SubtletyRogue', 100, SPEC_WCL, 10, [3, 2]);
-    // The partition variable is sent on each attempt, newest first, stopping once one returns rankings.
     expect(queried).toEqual([3, 2]);
     expect(ranked).toHaveLength(1);
     expect(ranked[0].player).toBe('A');

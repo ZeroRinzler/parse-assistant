@@ -1,12 +1,4 @@
-/**
- * Dumb file store over frontend/public/data for the ingest app - the one process with
- * filesystem access. All ingestion logic (signatures, versioning, ordering, transforms)
- * lives in the Angular app; this server must never grow any.
- *
- * REST surface: a file is /api/data/{path} (GET/PUT/DELETE), a directory listing is
- * /api/dirs/{path} (GET). PUT bodies are stored verbatim - the Angular HttpClient
- * already serializes minified JSON, so the server never parses the payload.
- */
+// All ingestion logic (signatures, versioning, ordering, transforms) lives in the Angular app; this server must never grow any.
 import express from 'express';
 import cors from 'cors';
 import fs from 'fs';
@@ -18,8 +10,7 @@ const DATA_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..
 // Position payloads reach tens of MB; express's default 100kb body cap would reject them.
 const BODY_LIMIT = '200mb';
 
-// The ingest app (ng serve) is the only legitimate caller; a wildcard origin would let any
-// site open in the dev's browser drive this unauthenticated, write-capable store.
+// A wildcard origin would let any site open in the dev's browser drive this unauthenticated, write-capable store.
 const ALLOWED_ORIGINS = ['http://localhost:4200', 'http://127.0.0.1:4200'];
 // Reject any other Host so a rebound DNS name resolving to loopback cannot reach the store.
 const ALLOWED_HOSTS = new Set([`localhost:${PORT}`, `127.0.0.1:${PORT}`]);

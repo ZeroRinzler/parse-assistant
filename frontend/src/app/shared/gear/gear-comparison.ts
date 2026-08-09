@@ -1,4 +1,3 @@
-/** Pure gear-comparison helpers shared between the pre-fight boss-study page and the gear section. */
 import { CharacterGear } from '../../core/models/wcl.models';
 import { EncounterGearStats } from '../../core/models/encounter.models';
 import { SpecTalents, TalentEntry, TalentDiff } from '../../core/models/talent.models';
@@ -54,14 +53,9 @@ export interface TrinketRow {
   note: string | null;
 }
 
-// The comparison builders below take a real `CharacterGear` (never null): the card only
-// compares once the player's gear is in hand. The bench-only view uses the dedicated
-// `buildBench*` builders instead, so a not-yet-loaded player never renders "Not enchanted".
+// The comparison builders below take a real `CharacterGear` (never null); the bench-only view uses the dedicated `buildBench*` builders instead, so a not-yet-loaded player never renders "Not enchanted".
 
-/**
- * Enchants: flag slots the player left un-enchanted that top parsers consider
- * mandatory, and surface where the player differs from the consensus enchant.
- */
+/** Flags slots the player left un-enchanted that top parsers consider mandatory, and surfaces where the player differs from the consensus enchant. */
 export function buildEnchantRows(gear: CharacterGear, stats: EncounterGearStats | null): EnchantRow[] {
   const topEnch = stats?.enchants ?? {};
   const playerEnch = gear.enchants ?? [];
@@ -109,8 +103,7 @@ export function buildTalentBuilds(stats: EncounterGearStats | null, playerKey: s
   return builds.map((b, i) => ({
     pct: b.pct,
     isPlayer: !!playerKey && b.key === playerKey,
-    // Deep-link to the example parse: select the fight, the summary tab, and the player
-    // (`source` = their actor id within that report).
+    // Deep-link to the example parse: select the fight, the summary tab, and the player (`source` = their actor id within that report).
     link: `https://www.warcraftlogs.com/reports/${b.report_code}?fight=${b.fight_id}&type=summary&source=${b.source_id}`,
     playerName: b.player_name,
     label: i === 0 ? 'Most common build' : `Alt build ${i}`,
@@ -153,8 +146,7 @@ export function talentStatusOf(topStats: EncounterGearStats | null, playerKey: s
   const builds = topStats?.talent_builds ?? [];
   if (!builds.length) return { status: 'unknown', note: 'No talent data.' };
   const topPct = builds[0]?.pct ?? 0;
-  // No comparable player build (not ranked here, or format mismatch): just
-  // present the consensus build positively rather than flagging it.
+  // No comparable player build (not ranked here, or format mismatch): present the consensus build positively rather than flagging it.
   if (!playerKey || playerKey.split(':')[0] !== (builds[0]?.key ?? '').split(':')[0]) {
     return { status: 'ok', note: `${topPct}% run this build` };
   }
@@ -179,19 +171,13 @@ function trinketUsagePct(stats: EncounterGearStats | null, id: number): number |
   return found ? sum : null;
 }
 
-/**
- * Per-slot trinket comparison (slots 12, 13). Recommendations come from `topTrinketPair`
- * (two distinct trinkets), each consumed by at most one slot, so the same item is never
- * suggested for both.
- */
+/** Per-slot trinket comparison (slots 12, 13); recommendations come from `topTrinketPair`, each consumed by at most one slot, so the same item is never suggested for both. */
 export function buildTrinketRows(gear: CharacterGear, stats: EncounterGearStats | null): TrinketRow[] {
   const playerTrinkets = gear.trinkets ?? [];
   const pair = topTrinketPair(stats);
   const rows: TrinketRow[] = [];
 
-  // Hand each remaining (distinct) recommendation to a slot that needs one, consuming it once,
-  // so the two suggestions never collide. Slot order is irrelevant in WoW, and claiming handles
-  // that for free: each worn trinket matches its own recommendation whichever slot holds it.
+  // Hand each remaining (distinct) recommendation to a slot that needs one, consuming it once, so the two suggestions never collide.
   const wornIds = new Set(playerTrinkets.map(trinket => trinket.id));
   const remainingRecs = pair.filter(rec => !wornIds.has(rec.id));
   let recIndex = 0;
@@ -202,7 +188,6 @@ export function buildTrinketRows(gear: CharacterGear, stats: EncounterGearStats 
     const player = playerTrinkets.find(trinket => trinket.slot === slot);
 
     if (!player) {
-      // No player item; surface the next recommendation as an info prompt.
       const rec = remainingRecs[recIndex];
       if (!rec) continue;
       recIndex++;
@@ -262,11 +247,7 @@ export interface RecommendedTrinket {
   pct: number;
 }
 
-/**
- * The two distinct trinkets top parsers run, ranked by overall usage. The per-slot
- * distributions are merged by id: no parse wears the same trinket in both slots, so slot-12 +
- * slot-13 usage sums to the true "% of top parsers running it" (40% + 30% = 70%).
- */
+/** The two distinct trinkets top parsers run, merged by id: no parse wears the same trinket in both slots, so slot-12 + slot-13 usage sums to the true "% running it" (40% + 30% = 70%). */
 export function topTrinketPair(stats: EncounterGearStats | null): RecommendedTrinket[] {
   const topTrinkets = stats?.trinkets ?? {};
   const byId = new Map<number, RecommendedTrinket>();
@@ -280,10 +261,7 @@ export function topTrinketPair(stats: EncounterGearStats | null): RecommendedTri
   return [...byId.values()].sort((a, b) => b.pct - a.pct).slice(0, 2);
 }
 
-/**
- * Shows the consensus enchant per slot for the boss-study view.
- * Omits slots below the top-parse consensus share.
- */
+/** Shows the consensus enchant per slot for the boss-study view; omits slots below the top-parse consensus share. */
 export function buildBenchEnchantRows(stats: EncounterGearStats | null): BenchEnchantRow[] {
   const topEnch = stats?.enchants ?? {};
   return Object.keys(topEnch)

@@ -46,16 +46,13 @@ export class PageNavComponent {
     { initialValue: false },
   );
 
-  // Mobile: a modal drawer that overlays the content below the bar, closed by
-  // default. Desktop: a permanent drawer that collapses to an icons-only rail;
-  // the collapsed choice is restored from the last session.
+  // Mobile: modal drawer, closed by default. Desktop: permanent drawer that collapses to an icons-only rail restored from the last session.
   protected readonly mobileOpen = signal(false);
   protected readonly desktopCollapsed = signal(this.navState.loadCollapsed());
 
   protected readonly sidenavMode = computed<'over' | 'side'>(() =>
     this.isMobile() ? 'over' : 'side');
-  // The desktop drawer stays open at all times; the hamburger toggles its width,
-  // not its opened state, so it never fully disappears.
+  // The desktop drawer stays open at all times; the hamburger toggles its width, not its opened state.
   protected readonly sidenavOpened = computed(() =>
     this.isMobile() ? this.mobileOpen() : true);
   protected readonly railCollapsed = computed(() =>
@@ -70,10 +67,7 @@ export class PageNavComponent {
       inject(DomSanitizer).bypassSecurityTrustHtml(GITHUB_SVG),
     );
 
-    // Material sizes the sidenav content margin from the drawer width only when the
-    // drawer opens or closes, not when an already-open side drawer resizes. The rail
-    // collapses by swapping a width class, so recompute the margin once the new width
-    // has been laid out, otherwise the content stays offset at the previous width.
+    // Material only recomputes the sidenav content margin on open/close, not on an already-open drawer's width change, so force it after the rail's width class swaps.
     effect(() => {
       this.railCollapsed();
       requestAnimationFrame(() => this.container()?.updateContentMargins());
@@ -96,8 +90,6 @@ export class PageNavComponent {
   }
 
   protected onOpenedChange(opened: boolean): void {
-    // Backdrop click / escape only closes the mobile overlay; the desktop rail
-    // is permanent and toggled through its width, not its opened state.
     if (this.isMobile()) {
       this.mobileOpen.set(opened);
     }

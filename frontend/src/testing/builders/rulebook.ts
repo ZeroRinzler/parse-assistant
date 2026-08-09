@@ -1,16 +1,6 @@
-/**
- * Rulebook fixture factory.
- *
- * A test usually cares about exactly one cooldown or one rule. The factory
- * fills in the boilerplate so a spec only states what matters:
- *
- * ```ts
- * const rb = rulebook({ cooldowns: [{ name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 180 }] });
- * ```
- */
+/** Rulebook fixture factory: fills in the boilerplate so a test only states the one cooldown or rule it cares about. */
 import { Rulebook, RulebookCooldown, RulebookDefensive, RulebookRule } from '../../app/core/models/rulebook.models';
 
-/** The minimal fields every cooldown fixture must name. */
 type CooldownSeed = Pick<RulebookCooldown, 'name' | 'spell_id' | 'cooldown'> & Partial<RulebookCooldown>;
 type DefensiveSeed = Pick<RulebookDefensive, 'name' | 'spell_id' | 'cooldown'> & Partial<RulebookDefensive>;
 

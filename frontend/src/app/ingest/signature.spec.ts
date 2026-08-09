@@ -57,21 +57,15 @@ describe('readInaccessibleParses', () => {
 });
 
 describe('inaccessible-aware skip key', () => {
-  // Each parse has a STABLE identity (report_code:fight_id) independent of its rank, so a
-  // parse keeps its key when it moves position. The cases below drive the PRODUCTION
-  // encounterSkipKey / signatureAfterFetch through thin fixture shims (array -> Set, fixed
-  // version) - the two halves of the orchestrator: the cheap skip check and the post-fetch stamp.
+  // Each parse has a STABLE identity (report_code:fight_id) independent of its rank, so a parse keeps its key when it moves position.
   const P = (report_code: string): SignatureRanking => ({ report_code, fight_id: 1 });
   const pool = (...codes: string[]): SignatureRanking[] => codes.map(P);
   const sig = (rows: SignatureRanking[]): string => encounterSignature('1', rows);
 
-  // Skip check (orchestrator loop): key on the top-N accessible parses (pool minus the
-  // persisted known-inaccessible keys).
+  // Key on the top-N accessible parses (pool minus the persisted known-inaccessible keys).
   const skipKey = (rows: SignatureRanking[], knownInaccessible: string[], n = 10): string =>
     encounterSkipKey(rows, new Set(knownInaccessible), '1', n);
 
-  // Post-fetch stamp (ingestEncounter): given the report codes the fetch found inaccessible,
-  // return the stamped signature + the inaccessible key set persisted on the burst file.
   // Codes never fetched (e.g. a parse below the 10th accessible) are naturally pruned.
   const stampAfterCompute = (rows: SignatureRanking[], inaccessibleCodes: string[], n = 10) => {
     // A permission denial is both persisted (inaccessible) and stamp-shaping (failed).
@@ -101,12 +95,10 @@ describe('inaccessible-aware skip key', () => {
     // X (private) enters at rank 5, pushing j to rank 11.
     const poolN1 = pool('a', 'b', 'c', 'd', 'X', 'e', 'f', 'g', 'h', 'i', 'j');
 
-    // The cheap check still uses last run's (empty) set, so the unknown X counts in the
-    // top-10 and the key changes -> recompute fires.
+    // The cheap check still uses last run's (empty) set, so the unknown X counts in the top-10 and the key changes -> recompute fires.
     expect(skipKey(poolN1, stampN.inaccessible_parses)).not.toBe(stampN.signature);
 
-    // The recompute fetches X, finds it inaccessible, persists it, and keys on the top-10
-    // accessible - which is the original a..j, so the data and signature are unchanged.
+    // The recompute keys on the top-10 accessible - which is the original a..j, so the data and signature are unchanged.
     const stampN1 = stampAfterCompute(poolN1, ['X']);
     expect(stampN1.inaccessible_parses).toEqual(['X:1']);
     expect(stampN1.signature).toBe(stampN.signature);
@@ -126,11 +118,10 @@ describe('inaccessible-aware skip key', () => {
     // Y (accessible) enters at rank 5, pushing T to rank 11 (out of the top 10).
     const poolB = pool('a', 'b', 'c', 'd', 'Y', 'e', 'f', 'g', 'h', 'i', 'T', 'u', 'v');
 
-    // Top-10 accessible is now a..i + Y (u no longer needed) -> differs from stampA -> recompute.
+    // Top-10 accessible is now a..i + Y (u is unnecessary) -> differs from stampA -> recompute.
     expect(skipKey(poolB, stampA.inaccessible_parses)).not.toBe(stampA.signature);
 
-    // The recompute reaches 10 accessible without fetching T (now rank 11), so T is pruned
-    // from the persisted set and the key is the plain top-10.
+    // The recompute reaches 10 accessible without fetching T (now rank 11), so T is pruned from the persisted set.
     const stampB = stampAfterCompute(poolB, []);
     expect(stampB.inaccessible_parses).toEqual([]);
     expect(stampB.signature).toBe(sig(pool('a', 'b', 'c', 'd', 'Y', 'e', 'f', 'g', 'h', 'i')));
@@ -151,10 +142,7 @@ describe('inaccessible-aware skip key', () => {
   });
 
   it('a top-N parse turning inaccessible is missed by the cheap check until a recompute (documented residual)', () => {
-    // d is accessible at the last compute, so it is NOT in the persisted set; the key
-    // includes it. If d later goes private with no ranking change, the cheap check - still
-    // keyed on the same pool minus the same (d-free) known set - produces the same key and
-    // SKIPS. The staleness self-heals only when the encounter recomputes for another reason.
+    // The staleness self-heals only when the encounter recomputes for another reason.
     const rows = pool('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j');
     const stampN = stampAfterCompute(rows, []);
     expect(skipKey(rows, stampN.inaccessible_parses)).toBe(stampN.signature);
@@ -289,15 +277,13 @@ describe('stampSignature', () => {
 });
 
 describe('stampBurstFile', () => {
-  // The skip check reads only the burst file's source_signature: a stamped burst makes the next
-  // run skip the encounter; an unstamped one makes it recompute (so a failed sibling is retried).
+  // An unstamped burst makes the next run recompute, so a failed sibling is retried.
   const SIGNATURE = encounterSignature('1', rankings(['r1', 1]));
   const VERSION = 1;
   const INACCESSIBLE = ['r2:2'];
   const data = { spec: 'X', encounter_id: 1 };
 
-  // Only .ok and .error.kind matter to the stamp, so the ok payload is a placeholder; the five
-  // entries stand for burst, rotation, defensive, gear and map results.
+  // Only .ok and .error.kind matter to the stamp, so the ok payload is a placeholder.
   const OK: Result<unknown, LoadError> = ok('slice');
   const ALL_OK: Result<unknown, LoadError>[] = [OK, OK, OK, OK, OK];
   const withSibling = (sibling: Result<unknown, LoadError>): Result<unknown, LoadError>[] => [OK, sibling, OK, OK, OK];

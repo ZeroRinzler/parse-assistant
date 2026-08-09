@@ -1,7 +1,5 @@
-<!-- One card: title + timeline segments + detail panel all inside a single surface card. -->
 <div class="bg-[var(--surface)] border border-[var(--border)] rounded-[10px] overflow-hidden">
 
-  <!-- Title / subtitle header (optional) -->
   @if (heading()) {
     <div class="px-4 pt-3 pb-2">
       <div class="text-[17px] font-semibold text-[var(--text)]">{{ heading() }}</div>
@@ -11,9 +9,7 @@
     </div>
   }
 
-  <!-- Timeline track: equal fixed chips wrapping across rows. Chip size is decoupled
-       from fight time, so windows never overlap however tightly they fire; dashed
-       half-width slots between chips stand in for the pause before the next window. -->
+  <!-- Chip size is decoupled from fight time, so windows never overlap however tightly they fire. -->
   <div class="px-4" [class.pt-3]="!heading()" [class.pb-3]="!activeWindow()">
     <div
       class="pt-2 pb-1"
@@ -25,8 +21,7 @@
       <div class="flex flex-wrap items-start gap-1.5 px-0.5">
         @for (cell of timelineCells(); track cell.kind === 'window' ? 'w' + cell.index : 'g' + cell.id) {
           @if (cell.kind === 'gap') {
-            <!-- Pacing slot: half-width dashed placeholder, no interaction. The hidden
-                 label keeps its box top-aligned with the chips' timestamp row. -->
+            <!-- The hidden label keeps this box top-aligned with the chips' timestamp row. -->
             <div class="flex flex-col items-center gap-1.5 shrink-0" aria-hidden="true">
               <div class="w-5 h-10 rounded-md border border-dashed border-[var(--border)] opacity-40"></div>
               <span class="text-[10px] invisible">0</span>
@@ -34,7 +29,6 @@
           } @else {
             @let w = windows()[cell.index];
             @let active = activeIndex() === cell.index;
-            <!-- Neutral chip; status shows as the icon tint and a bottom accent bar. -->
             @let iconTone =
               w.status === 'good' ? 'text-[var(--success)]' :
               w.status === 'warn' ? 'text-[var(--warning)]' :
@@ -68,9 +62,7 @@
     </div>
   </div>
 
-  <!-- Detail panel: driven by activeIndex(), inside the same card. -->
   @if (activeWindow(); as w) {
-    <!-- Status fill color for the overview bar player fill. -->
     @let fillBg =
       w.status === 'good' ? 'bg-[var(--success)]' :
       w.status === 'warn' ? 'bg-[var(--warning)]' :
@@ -86,7 +78,6 @@
             {{ w.timeStartS | formatDuration }} - {{ w.timeEndS | formatDuration }}
           </span>
         </div>
-        <!-- Burst value: player damage when reached, top-parse damage for bench-only, else the not-reached label. -->
         <div class="flex flex-col shrink-0">
           <span class="text-[9px] uppercase tracking-[1px] text-[var(--muted)]">burst</span>
           @if (!activeIsMuted()) {
@@ -157,11 +148,10 @@
       </div>
     }
 
-    <!-- Grid tracks mirror compact-ability-row.html and the finding-table so the casts|top-avg divider lines up with its measured|fix divider; a fixed grid holds columns in place when casts/gap are hidden. -->
+    <!-- Grid tracks mirror compact-ability-row.html and finding-table's column dividers. -->
     @if (w.detailRows.length) {
       <!-- Border is desktop-only so it does not double up with the mobile per-row borders. -->
       <div class="md:border-t border-[var(--border)] pt-2 pb-2">
-        <!-- Column labels are desktop-only; on mobile each row carries inline labels instead. -->
         <div class="hidden md:grid grid-cols-[minmax(0,1fr)_96px_96px_90px] gap-x-[14px] items-center px-4 pb-1">
           <span class="col-start-1 text-[10px] uppercase tracking-widest text-[var(--muted)]">ability</span>
           @if (showCasts() && !activeIsMuted()) {

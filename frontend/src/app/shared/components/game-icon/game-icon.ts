@@ -4,16 +4,7 @@ import { WowheadTooltipsService } from '../../../core/services/wowhead-tooltips'
 
 export type GameIconKind = 'spell' | 'item';
 
-/**
- * Renders a WoW spell or item as an icon + name that links to Wowhead.
- *
- * Inputs-only leaf with three required inputs: callers pass `id`, `icon`, and
- * `name` explicitly on every use - feature services resolve icon + name from the
- * ingest-baked `ability_icons` map (or the report's `masterData.abilities`). An
- * empty `icon` legitimately renders name-only (no art), and a resolved icon whose
- * image fails to load falls back to the same name-only rendering (no broken-image
- * glyph); `name` is always supplied by the caller.
- */
+/** Renders a WoW spell or item as an icon + name linking to Wowhead; an empty icon or a failed image load falls back to name-only. */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-game-icon',
@@ -30,8 +21,7 @@ export type GameIconKind = 'spell' | 'item';
           <img [ngSrc]="src" [width]="18" [height]="18" alt="" class="rounded-sm" (error)="failedSrc.set(src)" />
         }
       }
-      <!-- text-sm keeps names the same size as the no-icon fallback names next to
-           this component (finding-table, compact-ability-row, the plan cards). -->
+      <!-- text-sm keeps names the same size as the no-icon fallback names next to this component. -->
       <span class="text-sm">{{ name() }}</span>
     </a>
   `,
@@ -49,19 +39,14 @@ export class GameIconComponent {
 
   readonly id = input.required<number>();
   readonly kind = input<GameIconKind>('spell');
-  /** Explicit display name (always provided by the caller). */
   readonly name = input.required<string>();
   /** Explicit icon filename; an empty string renders name-only (no art). */
   readonly icon = input.required<string>();
 
-  // The URL whose image last failed to load; the template hides that img so a
-  // broken art request degrades to name-only. A changed `icon` yields a new URL
-  // that no longer matches, so the image is retried.
+  // Tracks the URL that last failed to load so the template hides it and degrades to name-only; a changed `icon` retries.
   protected readonly failedSrc = signal<string | null>(null);
 
-  // The icon may arrive with or without a trailing image extension (WCL's
-  // master-data icons carry `.jpg`); normalize before appending the zamimg suffix
-  // so the URL never doubles up (`foo.jpg.jpg`).
+  // WCL's master-data icons may already carry a `.jpg` extension; strip it first so the zamimg URL never doubles up.
   protected readonly iconUrl = computed(() => {
     const file = this.icon().replace(/\.(jpg|jpeg|png|gif|webp)$/i, '');
     return file ? `https://wow.zamimg.com/images/wow/icons/small/${file}.jpg` : null;

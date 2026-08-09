@@ -18,10 +18,7 @@ export class WclApiService {
   private readonly auth = inject(WclAuthService);
   private readonly transport = inject(WCL_TRANSPORT);
 
-  /**
-   * A 401 refreshes the token and retries once, so an early-rejected token (early expiry, rotated
-   * secret) recovers in place; other `WclTransportError`s propagate intact for `toLoadError`.
-   */
+  // A 401 refreshes the token and retries once, so an early-rejected token (early expiry, rotated secret) recovers in place.
   async query<TData = unknown>(gqlString: string, variables: object = {}): Promise<TData> {
     const token = await this.auth.getToken();
     try {
@@ -41,8 +38,7 @@ export class WclApiService {
     const vars: ReportQueryVars = { code };
     const result = await this.query<{ reportData: { report: WclReport | null } }>(REPORT_Q, vars);
     const report = result?.reportData?.report;
-    // WCL returns report: null for a code it won't serve (missing, private, expired) with no
-    // GraphQL error. Fail typed so a caller can't dereference the null into a TypeError.
+    // WCL returns report: null for a code it won't serve (missing, private, expired) with no GraphQL error.
     if (!report) throw this.reportUnavailable(code);
     return report;
   }
@@ -102,12 +98,7 @@ export class WclApiService {
     return events;
   }
 
-  /**
-   * Raw CombatantInfo events for one player actor in a fight (gear + talentTree).
-   * Returns the events array as WCL returns it (empty when the log carries none);
-   * consumers pick the player's event (see `selectCombatantInfo`), extract gear /
-   * talents, and resolve names (see `getGameNames`).
-   */
+  // Returns the events array as WCL returns it (empty when the log carries none); consumers pick the player's event (see `selectCombatantInfo`).
   async getCombatantInfo(code: string, fightId: number, playerId: number): Promise<WclCombatantInfo[]> {
     const vars: CombatantInfoQueryVars = { code, fightIDs: [fightId], sourceID: playerId };
     const result = await this.query<{ reportData: { report: { events: { data: WclCombatantInfo[] } } | null } }>(
@@ -119,11 +110,7 @@ export class WclApiService {
     return report.events?.data ?? [];
   }
 
-  /**
-   * Raw damage-done summary table for a fight (JSON blob, string or object). Consumers
-   * pick their player's `data.entries` row by actor id and derive DPS from `total` over
-   * the fight duration.
-   */
+  // Consumers pick their player's `data.entries` row by actor id and derive DPS from `total` over the fight duration.
   async getDamageDoneTable(code: string, fightId: number): Promise<WclTableBlob | null> {
     const vars: TableQueryVars = { code, fightIDs: [fightId], dataType: 'DamageDone' };
     const result = await this.query<{ reportData: { report: { table: WclTableBlob } } }>(
@@ -132,11 +119,7 @@ export class WclApiService {
     return result?.reportData?.report?.table ?? null;
   }
 
-  /**
-   * Resurrect events (type `resurrect`) for a fight - who was brought back and when - so the
-   * wipe analysis can tell when a dead player is alive again. WCL has no `Resurrects` data
-   * type, so this scans `All` with a server-side `type` filter (only matches come back).
-   */
+  // WCL has no `Resurrects` data type, so this scans `All` with a server-side `type` filter (only matches come back).
   async getResurrects(code: string, fightId: number, startTime: number, endTime: number): Promise<WclEvent[]> {
     const events: WclEvent[] = [];
     let currentStart = startTime;
@@ -153,11 +136,7 @@ export class WclApiService {
     return events;
   }
 
-  /**
-   * Resolve item + enchant names by ID in one batched gameData round-trip. Returns
-   * the raw aliased map (`i<itemId>` / `e<enchantId>` -> { id, name }); names may
-   * carry HTML entities, so consumers decode them.
-   */
+  // Names may carry HTML entities, so consumers decode them.
   async getGameNames(itemIds: number[], enchantIds: number[]): Promise<Record<string, { id: number; name: string }>> {
     if (!itemIds.length && !enchantIds.length) return {};
     const result = await this.query<{ gameData: Record<string, { id: number; name: string }> }>(
@@ -166,16 +145,7 @@ export class WclApiService {
     return result?.gameData ?? {};
   }
 
-  /**
-   * Resolve each spell id via `gameData.ability(id)` in one batched round-trip.
-   * Returns the raw aliased `gameData` map (`a<spellId>` -> { id, name, icon } | null,
-   * the icon carrying its `.jpg`); consumers project it to the id-keyed art
-   * `wl-game-icon` expects (see `abilityIcons`). `gameData.ability` resolves any REAL id
-   * - including passives a report's `masterData.abilities` omits - but returns `null` for
-   * a nonexistent id (which `abilityIcons` skips). Ability ids that come from live events
-   * are always real; the only hand-authored ids are the rulebook's, and the ingest
-   * integrity gate rejects an unresolvable one before it can reach a card.
-   */
+  // `gameData.ability` resolves any REAL id - including passives a report's `masterData.abilities` omits - but returns `null` for a nonexistent id.
   async getAbilities(ids: number[]): Promise<Record<string, WclRawAbility | null>> {
     const unique = [...new Set(ids)].filter(id => id > 0);
     if (!unique.length) return {};
@@ -185,12 +155,7 @@ export class WclApiService {
     return result?.gameData ?? {};
   }
 
-  /**
-   * Raw top-DPS rankings envelope for an encounter + spec. `characterRankings` comes
-   * back as a JSON blob (string or object); it is returned as-is (`null` for an
-   * unknown spec, since no query can be built). Consumers unwrap both forms and map
-   * to fetchable `ParseRanking` rows (see `unwrapRankings` / `toParseRankings`).
-   */
+  // Returned as-is (`null` for an unknown spec, since no query can be built); consumers unwrap both forms (see `unwrapRankings` / `toParseRankings`).
   async getRankings(spec: string, encounterId: number): Promise<WclRankingsBlob | null> {
     const meta = specMetaOf(spec);
     if (!meta) return null;

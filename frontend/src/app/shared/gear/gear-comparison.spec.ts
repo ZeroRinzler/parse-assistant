@@ -30,8 +30,7 @@ describe('buildBenchEnchantRows', () => {
   });
 
   it('falls back to Enchant #id when the bench enchant name is empty', () => {
-    // WCL does not populate permanentEnchantName; ingest writes empty strings
-    // until gameData.enchant(id) resolves them on the next ingest run.
+    // WCL does not populate permanentEnchantName; ingest writes empty strings until gameData.enchant(id) resolves them on the next ingest run.
     const rows = buildBenchEnchantRows(stats({
       enchants: { 15: [{ id: 8041, name: '', pct: 90 }] },
     }));
@@ -87,9 +86,7 @@ describe('buildBenchTrinketRows', () => {
   });
 
   it('never repeats the same trinket when one item dominates both slots', () => {
-    // The Rotmire bug: "Gaze" is the single most popular trinket, so the raw
-    // per-slot aggregation ranks it #1 in both slot 12 and slot 13. The merged
-    // pair must surface Gaze once (summed 40+30=70) and the next distinct item.
+    // The Rotmire bug: "Gaze" is the single most popular trinket, so raw per-slot aggregation ranks it #1 in both slots; the merged pair must surface it once (summed 40+30=70).
     const rows = buildBenchTrinketRows(stats({
       trinkets: {
         12: [{ id: 249343, name: 'Gaze of the Alnseer', icon: 'gaze', pct: 40 },
@@ -127,8 +124,7 @@ describe('buildTrinketRows', () => {
   });
 
   it('accepts both rows when the two top trinkets are worn in swapped slots', () => {
-    // Player wears the same two top trinkets but with the slots reversed:
-    // slot 12 = Gaze (bench top of 13), slot 13 = Puzzle Box (bench top of 12).
+    // Player wears the same two top trinkets but with the slots reversed.
     const rows = buildTrinketRows(
       gear({
         trinkets: [
@@ -158,8 +154,7 @@ describe('buildTrinketRows', () => {
     );
     expect(rows).toHaveLength(2);
     expect(rows.every(row => row.status === 'ok' && row.note === null)).toBe(true);
-    // Each worn trinket reports its own consensus share, the same figures the swapped
-    // slot order produces - slot position carries no meaning either way.
+    // Each worn trinket reports its own consensus share regardless of slot - slot position carries no meaning.
     expect(rows[0]).toMatchObject({ slotLabel: 'Trinket 1', id: 193701, topPct: 50 });
     expect(rows[1]).toMatchObject({ slotLabel: 'Trinket 2', id: 249343, topPct: 80 });
   });
@@ -185,9 +180,7 @@ describe('buildTrinketRows', () => {
   });
 
   it('flags a slot whose worn trinket matches neither recommended trinket', () => {
-    // Neither worn trinket is recommended, so both slots get a "Switch to" - the
-    // distinct recommendations are assigned in overall-usage order (Gaze 80 then
-    // Puzzle Box 50) and never collide.
+    // Neither worn trinket is recommended, so both slots get a "Switch to", assigned in overall-usage order without colliding.
     const rows = buildTrinketRows(
       gear({
         trinkets: [
@@ -202,8 +195,7 @@ describe('buildTrinketRows', () => {
   });
 
   it('never recommends the same trinket for both slots when one item dominates', () => {
-    // Same dominant-trinket bench as the Rotmire bug; a player wearing neither
-    // recommended trinket must get two distinct suggestions, not Gaze twice.
+    // Same dominant-trinket bench as the Rotmire bug; a player wearing neither recommended trinket must get two distinct suggestions, not Gaze twice.
     const dominantStats = stats({
       trinkets: {
         12: [{ id: 249343, name: 'Gaze of the Alnseer', icon: 'gaze', pct: 40 },
@@ -227,9 +219,7 @@ describe('buildTrinketRows', () => {
   });
 
   it('suggests the remaining trinket when the player wears one recommendation in both slots', () => {
-    // A recommendation is consumed by at most one slot: the same top pick worn in both
-    // trinket slots yields one on-plan row plus a switch to the other bench trinket, never
-    // two on-plan rows that silently drop the second recommendation.
+    // A recommendation is consumed by at most one slot: the same top pick worn in both slots yields one on-plan row plus a switch, never two on-plan rows that drop the second recommendation.
     const rows = buildTrinketRows(
       gear({
         trinkets: [
@@ -265,17 +255,14 @@ describe('buildTrinketRows', () => {
   });
 
   it('returns an empty array when the player wears no trinket and there is no bench data', () => {
-    // The comparison builders take real player gear; a player with no trinkets and
-    // no bench data yields no rows (the bench-only plan uses buildBenchTrinketRows).
+    // The comparison builders take real player gear; a player with no trinkets and no bench data yields no rows (the bench-only plan uses buildBenchTrinketRows).
     expect(buildTrinketRows(gear({ trinkets: [] }), null)).toEqual([]);
     expect(buildTrinketRows(gear({ trinkets: [] }), stats({ trinkets: {} }))).toEqual([]);
   });
 });
 
 describe('buildEnchantRows (comparison, real player gear)', () => {
-  // The comparison builder is only ever called with a real player's gear. The
-  // bench-only /pre plan has no player and uses buildBenchEnchantRows instead, so a
-  // "Not enchanted for every slot" render for a not-yet-loaded player never happens.
+  // The comparison builder is only ever called with a real player's gear; the bench-only /pre plan uses buildBenchEnchantRows instead, so a not-yet-loaded player never renders "Not enchanted".
 
   it('flags a high-consensus slot the real player left un-enchanted', () => {
     const rows = buildEnchantRows(

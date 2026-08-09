@@ -3,7 +3,6 @@ import { GameIconComponent } from '../game-icon/game-icon';
 import { FormatDamagePipe } from '../../pipes/format-damage-pipe';
 import { RangeRow } from '../../../core/models/window-comparison.models';
 
-/** Severity state a row can be in; the template maps it to a badge-* class. */
 export type RowStatus = 'success' | 'warning' | 'critical' | 'muted';
 
 @Component({
@@ -18,7 +17,6 @@ export class CompactAbilityRowComponent {
   readonly showCasts = input<boolean>(true);
   readonly hidePlayer = input<boolean>(false);
 
-  // Absolute gap = player damage - top average. Positive = ahead of top parses.
   private readonly gap = computed<number | null>(() => {
     const { playerPct, topAvg } = this.row();
     if (playerPct == null || topAvg == null) return null;
@@ -28,7 +26,6 @@ export class CompactAbilityRowComponent {
   protected readonly gapSign = computed(() => (this.gap() ?? 0) >= 0 ? '+' : '-');
   protected readonly gapMagnitude = computed(() => Math.abs(this.gap() ?? 0));
 
-  // Semantic severity state only - the template maps it to a badge-* class.
   protected readonly gapStatus = computed<RowStatus>(() => {
     const { playerPct, topAvg } = this.row();
     if (playerPct == null) return 'critical';
@@ -41,8 +38,7 @@ export class CompactAbilityRowComponent {
     return 'critical';
   });
 
-  // Passive abilities (proc/auto/pet damage) are never cast, so the casts cell shows
-  // a "passive" tag instead of a count. Semantic state only; the template renders it.
+  // Passive abilities (proc/auto/pet damage) are never cast, so the casts cell shows a "passive" tag instead of a count.
   protected readonly isPassive = computed<boolean>(() => this.row().passive === true);
 
   protected readonly castsStatus = computed<RowStatus>(() => {

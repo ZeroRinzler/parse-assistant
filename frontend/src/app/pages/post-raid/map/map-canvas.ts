@@ -16,16 +16,9 @@ import {
 } from './map-draw';
 
 const STEP_S = 0.5;
-/** Playback advances the scrubber by real elapsed wall-time, clamped per frame so a
- *  backgrounded-then-resumed tab does not jump the scrubber by the whole elapsed gap. */
+/** Clamped per frame so a backgrounded-then-resumed tab does not jump the scrubber by the whole elapsed gap. */
 const MAX_FRAME_DT_S = 0.1;
 
-/**
- * The positioning map canvas: the top-parse benchmark plus the analysed player's own trail.
- * Injects one service (`MapFeatureService`) and reads its bench/live/anchor/reference signals.
- * Reference is switchable; a scrubber steps through the window around the anchor. Design tokens
- * are resolved at draw time (no hardcoded colors).
- */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-map-canvas',
@@ -66,11 +59,7 @@ export class MapCanvasComponent {
   protected readonly windowStart = computed(() => this.anchorTime() - this.preS());
   protected readonly windowEnd = computed(() => this.anchorTime() + this.postS());
 
-  /**
-   * Player + reference timelines per parse, rebuilt only when the bench or reference changes, never
-   * per scrubbed frame. Scaling every stored row into a sample is the expensive step, so caching it
-   * here keeps playback cheap: each frame just interpolates the cached timelines.
-   */
+  /** Scaling every stored row into a sample is the expensive step, so caching it here keeps playback cheap: each frame just interpolates the cached timelines. */
   private readonly parseTimelines = computed<ParseTimelines[]>(() => {
     const positions = this.positions();
     return positions ? buildParseTimelines(positions, this.selector()) : [];
@@ -93,7 +82,6 @@ export class MapCanvasComponent {
     return buildTrail(live.playerId, refId, live.timelines, this.anchorTime(), this.preS(), this.postS(), STEP_S);
   });
 
-  /** Readout at the scrubbed moment: the top-parse cluster centroid + the player's position. */
   protected readonly readout = computed(() => {
     if (!this.positions()) return null;
     const t = this.scrubT();
@@ -111,7 +99,6 @@ export class MapCanvasComponent {
 
   constructor() {
     inject(DestroyRef).onDestroy(() => this.stopTimer());
-    // New context (anchor moved): reset reference, jump to the anchor, stop playback.
     effect(() => {
       this.anchorTime();
       this.selector.set(this.map.reference());
@@ -141,9 +128,7 @@ export class MapCanvasComponent {
     this.playing.set(true);
     this.stopTimer();
     this.lastFrameMs = 0;
-    // Drive playback off requestAnimationFrame: it aligns redraws to the display refresh and pauses
-    // when the tab is hidden. The scrubber advances by real elapsed wall-time, so speed stays ~1x
-    // independent of frame rate.
+    // requestAnimationFrame aligns redraws to the display refresh and pauses when the tab is hidden.
     const step = (nowMs: number): void => {
       const dt = this.lastFrameMs ? Math.min((nowMs - this.lastFrameMs) / 1000, MAX_FRAME_DT_S) : 0;
       this.lastFrameMs = nowMs;
@@ -180,8 +165,7 @@ export class MapCanvasComponent {
     const dpr = globalThis.devicePixelRatio || 1;
     const cssW = canvas.clientWidth || 600;
     const cssH = canvas.clientHeight || 420;
-    // Only resize the backing buffer when it changed: assigning width/height reallocates + clears it,
-    // wasted work every frame during playback. setTransform + clearRect below still run each frame.
+    // Only resize the backing buffer when it changed: assigning width/height reallocates + clears it, wasted work every frame during playback.
     const bufW = Math.round(cssW * dpr);
     const bufH = Math.round(cssH * dpr);
     if (canvas.width !== bufW || canvas.height !== bufH) {
@@ -205,8 +189,7 @@ export class MapCanvasComponent {
     const scale = radiusPx / maxYd;
     const toScreen = (point: { fwd: number; right: number }): [number, number] => [cx + point.right * scale, cy - point.fwd * scale];
 
-    // The canvas draws imperatively and cannot consume `var(--token)`, so design tokens are resolved
-    // to concrete values here. No hardcoded fallbacks - a missing token is a styles.scss bug.
+    // The canvas draws imperatively and cannot consume `var(--token)`, so design tokens are resolved to concrete values here.
     const css = getComputedStyle(canvas);
     const token = (name: string): string => css.getPropertyValue(name).trim();
     const gold = token('--gold');
@@ -222,11 +205,9 @@ export class MapCanvasComponent {
       ctx.fillText(`${yd}y`, cx + 3, cy - yd * scale + 12);
     }
 
-    // Reference at centre, facing up.
     ctx.fillStyle = enemyColor;
     ctx.beginPath(); ctx.moveTo(cx, cy - 9); ctx.lineTo(cx - 7, cy + 6); ctx.lineTo(cx + 7, cy + 6); ctx.closePath(); ctx.fill();
 
-    // Benchmark: faint top-parse trails + their current dots.
     const t = this.scrubT();
     ctx.strokeStyle = muted; ctx.globalAlpha = 0.25; ctx.lineWidth = 1.5;
     for (const trail of benchTrails) {
@@ -247,7 +228,6 @@ export class MapCanvasComponent {
       ctx.beginPath(); ctx.arc(x, y, 7, 0, 2 * Math.PI); ctx.stroke();
     }
 
-    // Live player trail across the window.
     if (liveTrail.length) {
       ctx.strokeStyle = gold; ctx.globalAlpha = 0.5; ctx.lineWidth = 2;
       ctx.beginPath();
@@ -257,7 +237,6 @@ export class MapCanvasComponent {
       });
       ctx.stroke(); ctx.globalAlpha = 1;
     }
-    // Live player current position at the scrubbed moment.
     if (read?.player) {
       const [x, y] = toScreen(read.player);
       const r = 5;

@@ -2,7 +2,6 @@
   <wl-load-state [heading]="title()" [subtitle]="subtitle()" [error]="error()"></wl-load-state>
 } @else if (items().length) {
   <div class="bg-[var(--surface)] border border-[var(--border)] rounded-[10px] overflow-hidden">
-    <!-- Header -->
     <div class="px-4 pt-3 pb-2">
       <div class="text-[17px] font-semibold text-[var(--text)]">{{ title() }}</div>
       <div class="text-xs text-[var(--muted)] mt-0.5">{{ subtitle() }}</div>
@@ -15,10 +14,8 @@
       <div class="text-[10px] uppercase tracking-widest text-[var(--muted)] pl-[14px]">How to use</div>
     </div>
 
-    <!-- Rows -->
     @for (cd of items(); track cd.name) {
       <div class="grid grid-cols-1 md:grid-cols-[1fr_190px_200px] gap-3 md:gap-[14px] items-start md:items-center px-4 py-[10px] border-t border-[var(--border)]">
-        <!-- What (Bloodlust tag sits inline with the ability name) -->
         <div class="flex items-center gap-[11px] min-w-0 flex-wrap">
           @if (cd.spellId; as spellId) {
             <wl-game-icon [id]="spellId" [icon]="cd.icon" [name]="cd.name"></wl-game-icon>
@@ -30,7 +27,6 @@
           }
         </div>
 
-        <!-- Plan: first use + avg uses (one line on mobile, stacked right at md), holds below -->
         <div class="flex flex-col items-start md:items-end gap-1.5">
           <div class="flex flex-wrap items-baseline gap-x-4 gap-y-1 md:flex-col md:items-end md:gap-1.5">
             <span class="flex items-baseline gap-1.5">
@@ -54,7 +50,6 @@
           </div>
         </div>
 
-        <!-- How to use -->
         <div class="text-[13px] text-[var(--muted)] leading-[1.45] border-t md:border-t-0 md:border-l border-[var(--border)] pt-2.5 md:pt-0 pl-0 md:pl-[14px]">
           <span class="md:hidden block font-mono text-[10px] uppercase tracking-wider text-[var(--muted)] mb-1">How to use</span>
           <wl-collapsible-text>{{ cd.rule }}</wl-collapsible-text>

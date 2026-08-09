@@ -12,9 +12,7 @@ import {
 } from './gear-transform.service';
 import { talentKeyFromTree, parseTalentKey } from '../../../shared/gear/talent-key';
 
-// Per-slot caps mirrored from the transform service (MAX_TALENT_BUILDS = 3,
-// MAX_TRINKETS_PER_SLOT = 5, MAX_ENCHANTS_PER_SLOT = 3). The aggregator boundary
-// tests build one more than the cap to assert the slice keeps exactly the cap.
+// Per-slot caps mirrored from the transform service; the boundary tests build one more than the cap.
 const MAX_TALENT_BUILDS = 3;
 const MAX_TRINKETS_PER_SLOT = 5;
 const MAX_ENCHANTS_PER_SLOT = 3;

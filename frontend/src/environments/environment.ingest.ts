@@ -1,13 +1,4 @@
-/**
- * Ingest environment (swapped in by the `ingest` build configuration; run via
- * `npm run start:ingest`, which also starts the local file server on :3000). Progress
- * logs to the browser console. Run `npm run data:pull` first so the signature-skip
- * check has the current published data to compare against.
- *
- * `wclClientId`/`wclClientSecret` default to the intentionally public pair every build
- * ships (see wcl-public-client.ts). To ingest on a dedicated WCL client's budget, edit
- * them here locally (do not commit a private pair).
- */
+/** Ingest environment: run `npm run start:ingest` first so the signature-skip check has the current published data to compare against. */
 import { EnvironmentProviders, Provider, inject, provideAppInitializer } from '@angular/core';
 import { WCL_PUBLIC_CLIENT_ID, WCL_PUBLIC_CLIENT_SECRET } from './wcl-public-client';
 import { provideLiveDataSource } from '../app/core/data-source/provide-data-source';
@@ -35,7 +26,6 @@ export const environment = {
   /** Unused in ingest mode: every data-file read goes through the file server. */
   dataBaseHref: '',
   ingest: true,
-  /** Set locally to target a single spec folder (e.g. 'SubtletyRogue') instead of all. */
   wclClientId: WCL_PUBLIC_CLIENT_ID,
   wclClientSecret: WCL_PUBLIC_CLIENT_SECRET,
 };

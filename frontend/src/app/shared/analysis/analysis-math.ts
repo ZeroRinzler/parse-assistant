@@ -1,8 +1,4 @@
-/**
- * Generic, cross-slice analysis math + formatting helpers: pure, non-domain primitives (rounding,
- * time clustering, outlier predicates, expected-use arithmetic, clock formatting, severity
- * ordering) that several slices need, so each imports one implementation instead of re-declaring it.
- */
+/** Generic, cross-slice analysis math + formatting helpers that several slices import instead of re-declaring. */
 import { median } from 'd3-array';
 import { AnalysisFinding } from '../../core/models/analysis.models';
 
@@ -11,10 +7,7 @@ export function round(value: number, decimals = 1): number {
   return Math.round(value * 10 ** decimals) / 10 ** decimals;
 }
 
-/**
- * Return `map`'s value for `key`, inserting `makeDefault()` first when absent - so a caller can
- * group-and-append in one call instead of a `has`/`set` guard plus a non-null `get`.
- */
+/** Inserts `makeDefault()` first when `key` is absent, so a caller can group-and-append in one call instead of a has/set guard plus a non-null get. */
 export function getOrInsert<K, V>(map: Map<K, V>, key: K, makeDefault: () => V): V {
   let value = map.get(key);
   if (value === undefined) {
@@ -67,7 +60,6 @@ export function closestToZero(values: number[]): number {
   return values.reduce((best, value) => (Math.abs(value) < Math.abs(best) ? value : best));
 }
 
-/** Data-driven expected + floor uses for a fight from the top-parse uses/min. */
 export function benchExpectedUses(
   fightDurS: number, upm: { avg: number; stddev: number },
 ): { expected: number; floor: number } {

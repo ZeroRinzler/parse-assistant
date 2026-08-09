@@ -40,33 +40,22 @@ import { Result, LoadError, permanent } from '../../core/result';
 import { toLoadError } from '../../core/http-load-error';
 import { LoadStateComponent, RenderableLoadError } from '../../shared/components/load-state/load-state';
 
-/** Pull a report code out of a WCL report URL, or pass through a bare code. */
 export function extractCode(url: string): string {
   const m = url.match(/\/reports\/([a-zA-Z0-9]+)/);
   return m ? m[1] : url.trim();
 }
 
-/** Pull a specific fight id out of a WCL report URL's `fight=` parameter; null for `last` or non-numeric. */
 export function extractFightId(url: string): number | null {
   const m = url.match(/[#?&]fight=(\d+)/);
   const id = m ? Number(m[1]) : NaN;
   return Number.isInteger(id) && id > 0 ? id : null;
 }
 
-/**
- * A WCL report code is exactly 16 alphanumeric characters. Validating the extracted
- * code before any network call keeps junk input (or a crawled `?report=garbage` link)
- * from reaching WCL and wasting the shared rate-limit budget.
- */
+// Validating before any network call keeps junk input (or a crawled ?report=garbage link) from wasting the shared rate-limit budget.
 export function isValidReportCode(code: string): boolean {
   return /^[a-zA-Z0-9]{16}$/.test(code);
 }
 
-/**
- * Project the report's fights into encounter pulls: drop trash fights, order by
- * start time, and number each boss's attempts (1, 2, 3 ...) with a derived
- * duration in seconds.
- */
 export function buildFights(fights: WclReport['fights'] = []): WclFight[] {
   const bossAttempt: Record<number, number> = {};
   return (fights || [])
@@ -79,17 +68,12 @@ export function buildFights(fights: WclReport['fights'] = []): WclFight[] {
     });
 }
 
-/** Project the report's master-data actors into player rows, sorted by name. */
 export function buildPlayers(actors: WclReport['masterData']['actors'] = []): WclPlayer[] {
   return (actors || [])
     .map(a => ({ id: a.id, name: a.name, spec: a.subType || 'Unknown', server: a.server || '' }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/**
- * The players to offer for the selected fight: when the fight lists its friendly
- * participants, restrict to those; otherwise show everyone in the report.
- */
 export function visiblePlayersOf(
   fights: WclFight[],
   players: WclPlayer[],
@@ -113,14 +97,7 @@ export function livePollActionOf(
   return latest.id === selectedFightId && analyzed ? 'skip' : 'analyze';
 }
 
-/**
- * Choose which player to track across live-sync pulls.
- *
- * If the currently selected player is visible in the new pull (matched by name,
- * case-insensitively), keep them - this lets you watch a raidmate and have the
- * selection persist pull-to-pull. If they are absent, fall back to the first
- * visible player.
- */
+// Keeps the currently selected player if visible in the new pull (matched by name, case-insensitively); else falls back to the first visible player.
 export function pickLivePlayerId(
   visiblePlayers: WclPlayer[],
   currentPlayerName: string | null,
@@ -134,24 +111,14 @@ export function pickLivePlayerId(
   return visiblePlayers[0]?.id ?? null;
 }
 
-/**
- * Reactive-form validator for the report field: valid only when the input resolves to a
- * real 16-char WCL report code (a bare code or one inside a report URL). This keeps the
- * Analyze button disabled - and no WCL request firing - until the input is a usable log
- * reference, so typing junk never spends rate-limit budget.
- */
+// Keeps the Analyze button disabled - and no WCL request firing - until the input resolves to a usable report code.
 function reportCodeValidator(control: AbstractControl): ValidationErrors | null {
   const value = ((control.value as string | null) ?? '').trim();
   if (!value) return null; // empty is not an error (no red field); the button is disabled separately
   return isValidReportCode(extractCode(value)) ? null : { invalidReportCode: true };
 }
 
-/**
- * Resolve the selected player's spec from a raw `playerDetails` response: across
- * the dps / healers / tanks / unknown roles, find the player by id and build
- * `<spec><class>` with spaces stripped (e.g. "Subtlety" + "Rogue" -> "SubtletyRogue").
- * Returns '' when the player is not found or has no spec/class.
- */
+// Builds <spec><class> with spaces stripped (e.g. "Subtlety" + "Rogue" -> "SubtletyRogue"); '' when not found.
 export function specOf(groups: PlayerDetailGroups, playerId: number): string {
   for (const role of ['dps', 'healers', 'tanks', 'unknown']) {
     for (const player of (groups[role] ?? [])) {
@@ -164,18 +131,7 @@ export function specOf(groups: PlayerDetailGroups, playerId: number): string {
   return '';
 }
 
-/**
- * Post-raid analyzer page shell. It owns only selection (report / fight / player) and
- * live polling - no domain analysis. It resolves the minimal context (spec + encounter +
- * the player log selection) and composes the feature cards, each of which fetches and
- * computes its own slice. The map is a normal feature: the page renders `<wl-map-panel>`
- * and forwards each card's `openMap` output to the `MapFeatureService`.
- *
- * Selection is NOT mirrored to the URL: a report is loaded only by an explicit Analyze
- * action on a validated code, never auto-run from a query param. This stops crawlers
- * following a shared link from spending the shared WCL rate-limit budget. The sticky
- * player NAME (localStorage) is the only persisted selection.
- */
+// Selection is NOT mirrored to the URL: a report loads only via an explicit Analyze action, never auto-run from a query param, so a crawled link never spends the shared WCL rate-limit budget.
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-post-raid',
@@ -186,9 +142,7 @@ export function specOf(groups: PlayerDetailGroups, playerId: number): string {
     DefensiveComponent, GearComponent, MapPanelComponent, LiveControlsComponent, ClipPanelComponent,
     FormatDurationPipe, FormatSpecPipe, SpecIconPipe, ClassIconPipe, BossIconPipe,
   ],
-  // No reserved subscript strip under this page's form fields; a field grows to
-  // show its mat-error only while one is active. Provided here (not app.config) so
-  // the form-field import stays out of the initial bundle - this page is lazy.
+  // Provided here (not app.config) so the form-field import stays out of the initial bundle - this page is lazy.
   providers: [{ provide: MAT_FORM_FIELD_DEFAULT_OPTIONS, useValue: { subscriptSizing: 'dynamic' } }],
   templateUrl: './post-raid.html',
 })
@@ -204,9 +158,7 @@ export class PostRaidComponent {
   protected readonly playerControl = new FormControl<number | null>(null);
 
   constructor() {
-    // Live sync owns the fight selection: disable the control while it drives the fight
-    // (setValue from the poll still works on a disabled control). The record toggle is
-    // independent and does not touch selection.
+    // Live sync owns the fight selection: disable the control while it drives it (setValue from the poll still works on a disabled control).
     effect(() => {
       if (this.liveCapture.liveEnabled()) this.fightControl.disable();
       else this.fightControl.enable();
@@ -217,11 +169,7 @@ export class PostRaidComponent {
   protected readonly loadingAnalysis = signal(false);
   protected readonly loadingMsg = signal('Loading…');
 
-  // Per-card busy state. Each feature card emits `busyChange(false)` when its async load
-  // settles; the page sets them true at the start of each analysis (resolveSelection). The
-  // spinner stays up - and the cards stay hidden - until every card has finished loading,
-  // so the cards never flash empty content between mount and first data. Init true: cards
-  // are never shown before the first load completes.
+  // Starts true, and the spinner stays up until every card emits busyChange(false), so the cards never flash empty content between mount and first data.
   protected readonly pullOverviewBusy = signal(true);
   protected readonly rotationBusy = signal(true);
   protected readonly burstBusy = signal(true);
@@ -230,8 +178,7 @@ export class PostRaidComponent {
   protected readonly cardsBusy = computed(() =>
     this.pullOverviewBusy() || this.rotationBusy() || this.burstBusy() || this.defensiveBusy() || this.gearBusy());
 
-  // Per-card bench availability (from each card's `availableChange`); the banner shows when
-  // none have a bench. Rotation counts via its offensives, which is also what gates its rules card.
+  // The banner shows when none have a bench. Rotation counts via its offensives, which is also what gates its rules card.
   protected readonly rotationAvailable = signal(false);
   protected readonly burstAvailable = signal(false);
   protected readonly defensiveAvailable = signal(false);
@@ -247,18 +194,13 @@ export class PostRaidComponent {
   protected readonly players = signal<WclPlayer[]>([]);
   protected readonly selectedFightId = toSignal(this.fightControl.valueChanges, { initialValue: this.fightControl.value });
   protected readonly selectedPlayerId = toSignal(this.playerControl.valueChanges, { initialValue: this.playerControl.value });
-  /** Live-sync on/off is owned by the live slice; the polling pipeline keys off it. */
   protected readonly liveSyncEnabled = this.liveCapture.liveEnabled;
 
-  /** Resolved spec of the selected player; drives every feature card. Empty until resolved. */
   protected readonly spec = signal('');
 
-  /** playerDetails for the selected fight (all roles), kept so the dropdown can show each
-   *  player's spec icon - `actor.subType` is class-only since Midnight, so the dropdown can't
-   *  resolve specs on its own. */
+  // actor.subType is class-only since Midnight, so the dropdown resolves each player's spec from playerDetails instead.
   protected readonly playerDetailGroups = signal<PlayerDetailGroups>({});
 
-  /** Current report code, driven by loadReport(). Used by the polling pipeline. */
   protected readonly reportCode = signal('');
 
   /** Report clock (unix epoch ms), the shared timebase for correlating clips to fights. */
@@ -272,8 +214,6 @@ export class PostRaidComponent {
   protected readonly visiblePlayers = computed(() =>
     visiblePlayersOf(this.fights(), this.players(), this.selectedFightId()));
 
-  /** Per-player resolved spec folder (e.g. 'SubtletyRogue') for the visible roster, for the
-   *  player dropdown's spec icon. Empty for a player until playerDetails for the fight loads. */
   protected readonly playerSpecs = computed(() => {
     const groups = this.playerDetailGroups();
     const result: Record<number, string> = {};
@@ -281,31 +221,24 @@ export class PostRaidComponent {
     return result;
   });
 
-  /** The selected fight row, so the select trigger can render its boss icon + label. */
   protected readonly selectedFight = computed(() =>
     this.fights().find(f => f.id === this.selectedFightId()));
 
-  /** The selected player, so the select trigger can render its spec icon + name. */
   protected readonly selectedPlayer = computed(() =>
     this.visiblePlayers().find(p => p.id === this.selectedPlayerId()));
 
-  /** Encounter id of the selected fight, passed to every feature card. */
   protected readonly selectedEncounterId = computed(() =>
     this.fights().find(f => f.id === this.selectedFightId())?.encounterID ?? 0);
 
-  /** The cards render once a spec, fight, player and encounter are all resolved. */
   protected readonly ready = computed(() =>
     !!this.spec() && !!this.reportCode() && !!this.selectedFightId() && !!this.selectedPlayerId() && !!this.selectedEncounterId());
 
-  /** Map is available once the map feature has loaded top-parse positions for this fight. */
   protected readonly mapReady = this.mapFeature.ready;
 
-  /** A feature card asked to open the map; the page forwards it to the map feature. */
   protected onOpenMap(anchor: MapAnchor): void {
     this.mapFeature.openAt(anchor);
   }
 
-  /** Defensive cards carry a reference enemy gameID; convert it to a MapAnchor reference. */
   protected onDefensiveOpenMap(anchor: DefensiveMapAnchor): void {
     this.mapFeature.openAt({
       timeS: anchor.timeS,
@@ -314,16 +247,13 @@ export class PostRaidComponent {
     });
   }
 
-  /** Clip is offered once the rolling buffer covers this fight (recording on or already stopped). */
   protected readonly clipReady = this.liveCapture.clipReady;
 
-  /** A feature card asked to open a clip; the page forwards it to the live feature. */
   protected onOpenClip(anchor: ClipAnchor): void {
     this.liveCapture.openClip(anchor);
   }
 
-  // Declarative polling pipeline. Must live in a field initializer so that
-  // toObservable() and takeUntilDestroyed() run inside the injection context.
+  // Must live in a field initializer so that toObservable() and takeUntilDestroyed() run inside the injection context.
   private readonly _pollingSub = combineLatest([
     toObservable(this.liveSyncEnabled),
     toObservable(this.reportCode),
@@ -344,14 +274,11 @@ export class PostRaidComponent {
   ).subscribe();
 
   protected onPaste(): void {
-    // The pasted text is committed to the control after this event fires; defer a tick so
-    // loadReport() reads the updated value, then load it (loadReport validates first, so a
-    // pasted non-code never reaches WCL).
+    // Defers a tick so loadReport() reads the control's updated value, since the paste commits after this event fires.
     setTimeout(() => void this.loadReport());
   }
 
-  // `missing` is not expected for these reads; folding it to the notice keeps the shell
-  // exhaustive over the taxonomy without leaking a raw string.
+  // Folding `missing` to the notice keeps the shell exhaustive over the taxonomy without leaking a raw string.
   private _showError(result: Result<never, LoadError>): void {
     if (result.ok) return; // toLoadError / permanent never return ok; this narrows the union
     if (result.error.kind === 'missing') this.notice.set(result.error.message);
@@ -363,8 +290,7 @@ export class PostRaidComponent {
     this.notice.set('');
     const rawInput = this.reportControl.value;
     const code = extractCode(rawInput.trim());
-    // Guard before any network call: an invalid code never reaches WCL. The Analyze button
-    // is already disabled while invalid; this also covers the Enter-key path.
+    // The Analyze button is already disabled while invalid; this guard also covers the Enter-key path.
     if (!isValidReportCode(code)) {
       if (code) this.notice.set('Enter a valid Warcraft Logs report URL or 16-character report code.');
       return;
@@ -405,7 +331,6 @@ export class PostRaidComponent {
     }
   }
 
-  /** Project a freshly fetched report into fight/player state. */
   private _applyReport(report: WclReport): void {
     this.fights.set(buildFights(report.fights));
     this.players.set(buildPlayers(report.masterData?.actors));
@@ -419,9 +344,7 @@ export class PostRaidComponent {
     // Pin the report this poll fetches; a mid-flight live-off or report switch must abandon its late writes.
     const code = this.reportCode();
     try {
-      // Cheap probe first: an idle tick costs one fights-only read, and skipping the apply
-      // on an unchanged report keeps the rebuilt fight objects from retriggering the cards'
-      // own WCL fetches.
+      // Skipping the apply on an unchanged report keeps the rebuilt fight objects from retriggering the cards' own WCL fetches.
       const probedFights = buildFights(await this.wclApi.getReportFights(code));
       if (this._pollSuperseded(code)) return;
       const action = livePollActionOf(probedFights, this.selectedFightId(), this.ready());
@@ -446,7 +369,7 @@ export class PostRaidComponent {
       this.playerControl.setValue(pickLivePlayerId(visible, currentName));
       await this.resolveSelection();
       if (this._pollSuperseded(code)) return;
-      this.liveCapture.setStatus(`Updated ${new Date().toLocaleTimeString()} · ${latest.name}`);
+      this.liveCapture.setStatus(`Updated ${new Date().toLocaleTimeString()} - ${latest.name}`);
     } catch (err) {
       logWarn('PostRaidComponent._pollOnce', err);
       if (this._pollSuperseded(code)) return;
@@ -472,11 +395,7 @@ export class PostRaidComponent {
     await this.resolveSelection();
   }
 
-  /**
-   * Resolve the spec for the selected player and prepare the map context. The feature
-   * cards self-load from their `spec`/`encounterId`/selection inputs; this only does
-   * the cross-cutting work a shell legitimately owns (spec resolution + map prepare).
-   */
+  // The feature cards self-load from their spec/encounterId/selection inputs; this only does the cross-cutting work a shell owns.
   protected async resolveSelection(): Promise<void> {
     this.loadError.set(null);
     const fightId = this.selectedFightId();
@@ -496,8 +415,7 @@ export class PostRaidComponent {
       if (!spec) { this._showError(permanent('Could not resolve the selected player\'s spec.', 'post-raid.spec-resolve')); return; }
       this.spec.set(spec);
 
-      // Mark every card busy before they mount/reload, so the spinner stays up continuously
-      // until each card emits busyChange(false) - no gap where the cards render empty.
+      // Marks every card busy before they mount/reload, so the spinner stays up with no gap where the cards render empty.
       this.pullOverviewBusy.set(true);
       this.rotationBusy.set(true);
       this.burstBusy.set(true);
@@ -519,8 +437,7 @@ export class PostRaidComponent {
   }
 
   private _applyAutoPlayer(): void {
-    // Stick to the saved player name so the same character stays selected across fights and
-    // logs (actor ids are not stable across reports).
+    // Sticks to the saved player NAME, not actor id, since actor ids are not stable across reports.
     const stickyName = this.selectionStore.loadPostRaid()?.playerName ?? null;
     this.playerControl.setValue(pickLivePlayerId(this.visiblePlayers(), stickyName));
   }

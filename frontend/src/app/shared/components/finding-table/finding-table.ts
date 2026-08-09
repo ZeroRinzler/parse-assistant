@@ -27,16 +27,11 @@ export class FindingTableComponent {
   readonly subtitle = input<string>('');
   readonly rows = input.required<FindingRow[]>();
   readonly onPlan = input<OnPlanChip[]>([]);
-  /** Whether timed cooldown rows show an "open map" button (the page owns the map). */
   readonly showMap = input<boolean>(false);
-  /** Whether timed cooldown rows show a "watch clip" button (the page owns recording). */
   readonly showClip = input<boolean>(false);
-  /** Emitted when a timed finding's map button is clicked; the page forwards it. */
   readonly openMap = output<FindingRow>();
-  /** Emitted when a timed finding's clip button is clicked; the page forwards it. */
   readonly openClip = output<FindingRow>();
 
-  /** At most one row's instances open at a time, so the table cannot bloat into every row expanded. */
   readonly openIndex = signal<number | null>(null);
 
   toggle(index: number): void {

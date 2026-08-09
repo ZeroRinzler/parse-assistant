@@ -95,8 +95,7 @@ describe('windowSpells', () => {
   const UNKNOWN_SPELL_ID = 999999; // an id the ability map never resolved
   const abilities = { [SHADOW_BLADES]: { icon: 'ability_sb', name: 'Shadow Blades' } };
 
-  // A missing id is reported via logWarn -> console.warn; the spy keeps the runner
-  // output clean and lets the missing-id test assert on the warning.
+  // A missing id is reported via logWarn -> console.warn; the spy keeps runner output clean and lets the test assert on it.
   let warnSpy: MockInstance<typeof console.warn>;
   beforeEach(() => { warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined); });
   afterEach(() => { warnSpy.mockRestore(); });

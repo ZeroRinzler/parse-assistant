@@ -103,8 +103,7 @@ describe('analyzeRotationFindings', () => {
   });
 
   it('gives the cast-efficiency finding a label and a remedy so the row is not blank', () => {
-    // A 24s idle gap on the 120s scan fight = 80% efficiency, below the 87% (top avg 90 minus
-    // 1 sigma) warn threshold.
+    // A 24s idle gap on the 120s scan fight = 80% efficiency, below the 87% (top avg 90 minus 1 sigma) warn threshold.
     const FIRST_CAST_S = 6;
     const LATE_CAST_S = 30;
     const casts = [cast(SHADOW_BLADES, FIRST_CAST_S), cast(SHADOW_BLADES, LATE_CAST_S)];
@@ -214,9 +213,7 @@ describe('checkBloodlustAlignment', () => {
   });
 
   it('stamps the judged cast, not the earliest in-window cast', () => {
-    // avg_bl_offset -8, stddev 2 -> in-band [-12, -4]. Two in-window casts: an early one at
-    // offset -8 (in-band) and a later one at offset -2 (closest to zero, so judged, and a late
-    // outlier). The finding must anchor the judged late cast, not the earlier in-band one.
+    // avg_bl_offset -8, stddev 2 -> in-band [-12, -4]; the later cast (closest to zero) is judged, not the earlier in-band one.
     const EARLY_IN_BAND_S = BL_AT_S - 8;
     const LATE_JUDGED_S = BL_AT_S - 2;
     const out = checkBloodlustAlignment(
@@ -253,7 +250,6 @@ describe('checkGaps', () => {
 describe('checkCastEfficiency', () => {
   const FIGHT_DUR_S = 120;
   // bench(): top_avg_efficiency 90%, top_efficiency_stddev 3% -> warn strictly below 87% (top - 1 sigma).
-  // efficiency% = (1 - idleS / FIGHT_DUR_S) * 100. Each idle span is a single gap > the 1.5s downtime floor.
   const IDLE_BELOW_BAND_S = 20;   // -> 83.3%, below the 87% warn threshold
   const IDLE_FAR_BELOW_S = 60;    // -> 50%, far below the band
   const IDLE_ABOVE_AVG_S = 1.6; // just over the 1.5s downtime floor -> 98.7%, above top avg
@@ -463,8 +459,7 @@ describe('buildCdPlan', () => {
   });
 });
 
-// A WCL fake that resolves a valid (empty) player log, so a test's outcome is driven by the
-// bench Result rather than an incidental transport throw.
+// Resolves a valid (empty) player log, so a test's outcome is driven by the bench Result rather than an incidental transport throw.
 const WORKING_WCL = {
   getReport: async () => ({
     title: 't', fights: [{ id: 1, name: 'Boss', startTime: 0, endTime: 120_000 }],
@@ -513,8 +508,7 @@ describe('RotationFeatureService', () => {
     const result = await service.loadPlayerView('SubtletyRogue', 1, 'rX', 1, 10);
     expect(result.ok).toBe(true);
     if (result.ok) {
-      // The baked rule is evaluated exactly once into a rule row (the sparse cast fixture also
-      // yields a separate cast-efficiency row, so assert on the rule row rather than the count).
+      // The sparse cast fixture also yields a separate cast-efficiency row, so assert on the rule row rather than the count.
       const ruleRows = result.value.ruleRows.filter(row => row.what === 'Secret Technique without Shadow Dance');
       expect(ruleRows).toHaveLength(1);
     }

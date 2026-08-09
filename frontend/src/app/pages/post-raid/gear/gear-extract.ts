@@ -1,36 +1,19 @@
-/**
- * Slice-local gear projection helpers shared between the gear transform service
- * (ingest / live bench) and the gear feature service (player gear). This is a
- * within-slice, gear-domain module - analogous to the cross-slice presentational
- * `shared/gear/gear-comparison.ts` - so both files import one copy instead of
- * duplicating the projection. It owns no Angular / IO; pure functions only.
- */
 import { CharacterGear, WclCombatantInfo, WclGearItem } from '../../../core/models/wcl.models';
 
-/**
- * Pick the player's CombatantInfo from a fight's raw events. WCL keys the event by
- * `sourceID`, so prefer the exact match; fall back to the first event (a fight has
- * one CombatantInfo per player) and `null` when none was recorded.
- */
+// WCL keys the CombatantInfo event by sourceID; falls back to the first event when there is no exact match.
 export function selectCombatantInfo(
   events: WclCombatantInfo[], playerId: number,
 ): WclCombatantInfo | null {
   return events.find(event => event.sourceID === playerId) ?? events[0] ?? null;
 }
 
-/**
- * Trinket slots, per the WCL gear quirk: the CombatantInfo gear array is
- * positionally indexed (the index IS the slot), and the two trinket slots are
- * indices 12 (Trinket 1) and 13 (Trinket 2).
- */
+// WCL's CombatantInfo gear array is positionally indexed (the index IS the slot); trinkets are 12 and 13.
 export const TRINKET_SLOTS = [12, 13] as const;
 
-/** Normalize a WCL gear icon ("inv_x.jpg") to the bare filename used by zamimg. */
 export function iconFile(icon?: string): string {
   return (icon ?? '').replace(/\.jpg$/i, '');
 }
 
-/** Decode HTML entities in a string returned by WCL's gameData queries. */
 export function decodeHtmlEntities(text: string): string {
   return text
     .replace(/&amp;/g, '&')
@@ -40,7 +23,6 @@ export function decodeHtmlEntities(text: string): string {
     .replace(/&#39;/g, "'");
 }
 
-/** Extract trinkets (slots 12/13) and enchants from a CombatantInfo gear array. */
 export function extractGear(gear: WclGearItem[] | undefined): {
   trinkets: NonNullable<CharacterGear['trinkets']>;
   enchants: NonNullable<CharacterGear['enchants']>;

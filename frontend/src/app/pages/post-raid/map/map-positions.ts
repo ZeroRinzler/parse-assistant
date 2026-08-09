@@ -1,10 +1,4 @@
-/**
- * Slice-local position projection helpers shared between the map transform service
- * (ingest / live position bench) and the map feature service (live overlay). This is
- * a within-slice, map-domain module - analogous to the gear slice's `gear-extract.ts`
- * - so both files import one copy instead of duplicating the projection. It owns no
- * Angular / IO; pure functions only.
- */
+/** Shared between the map transform service and the map feature service so both import one copy instead of duplicating the projection. */
 import { WclEvent } from '../../../core/models/wcl.models';
 
 /** The actor a resource-bearing event's flattened position describes (1 = source, 2 = target). */

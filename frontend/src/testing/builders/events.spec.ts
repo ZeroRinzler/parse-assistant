@@ -12,7 +12,6 @@ const BOSS_ID = 9;
 const HIT_AMOUNT = 500;
 const ABSORBED_AMOUNT = 120;
 
-/** One event per factory, built with every opt omitted. */
 const BARE_EVENTS = [
   { factory: 'cast', event: cast(SHADOW_BLADES, AT_S), type: 'cast', spellId: SHADOW_BLADES },
   { factory: 'applyBuff', event: applyBuff(FEINT, AT_S), type: 'applybuff', spellId: FEINT },

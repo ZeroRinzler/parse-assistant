@@ -161,7 +161,6 @@ describe('selectBossAndEnemies', () => {
     return { t: 0, x: 0, y: 0, facing: null, mapID: null, maxHp };
   }
 
-  // Build a per-actor sample map: each entry is [actorId, sampleCount, maxHp].
   function actorMap(entries: [number, number, number][]): Map<number, RawPosSample[]> {
     const byActor = new Map<number, RawPosSample[]>();
     for (const [actorId, count, maxHp] of entries) {
@@ -239,9 +238,7 @@ describe('buildParsePositions', () => {
   ]);
 
   it('emits the player timeline and picks the boss by highest maxHp', () => {
-    // duration 6s, interval 1.5 -> rows resample at t = 0, 1.5, 3, 4.5, 6 when
-    // samples span the fight, so an enemy with samples across the window clears
-    // the MIN_ENEMY_SAMPLES (4) resampled-row gate.
+    // duration 6s, interval 1.5 -> rows resample at t = 0, 1.5, 3, 4.5, 6, clearing the MIN_ENEMY_SAMPLES (4) resampled-row gate.
     const PLAYER_FACING = 1500; // sampled on the wire, but player rows store no facing
     const events: WclEvent[] = [
       // player (id 5), not in enemyMeta
@@ -317,11 +314,7 @@ describe('MapTransformService.getBench', () => {
     },
   };
 
-  /**
-   * A `MapTransformService` over a fake `WclApiService`. `getRankings` defaults to one
-   * top parse; a test overrides it to drive the empty / thrown paths. `onFetch` records
-   * each position-event fetch so the fetch-shape assertion still sees every call.
-   */
+  /** `onFetch` records each position-event fetch so the fetch-shape assertion still sees every call. */
   function serviceWith(
     over: { getRankings?: () => Promise<unknown>; onFetch?: (call: RecordedFetch) => void } = {},
   ): MapTransformService {

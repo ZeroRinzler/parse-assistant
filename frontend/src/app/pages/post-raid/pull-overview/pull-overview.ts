@@ -12,13 +12,7 @@ import { FormatDamagePipe } from '../../../shared/pipes/format-damage-pipe';
 import { LoadStateComponent, RenderableLoadError } from '../../../shared/components/load-state/load-state';
 import { PullOverviewFeatureService, PullOverviewView } from './pull-overview.service';
 
-/**
- * Pull overview card - the first card on the post-raid page. Injects one service
- * (`PullOverviewFeatureService`) and renders a single pull's summary from the player's own log. It
- * needs no bench, so it is always available (no `availableChange`). The positioning / rewatch
- * actions are outputs the page forwards; `showMap` gates the positioning button once the fight has
- * bench positions, `showClip` the rewatch button once the rolling buffer covers the fight.
- */
+// Needs no bench, so it is always available (no availableChange, unlike the other post-raid cards).
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-pull-overview',
@@ -32,14 +26,11 @@ export class PullOverviewComponent {
   readonly report = input.required<string>();
   readonly player = input.required<number>();
   readonly fight = input.required<WclFight>();
-  /** Positioning button is enabled once the page has loaded top-parse positions (bench). */
   readonly showMap = input<boolean>(false);
-  /** Rewatch button is enabled once the page's rolling buffer covers this fight. */
   readonly showClip = input<boolean>(false);
 
   readonly openMap = output<MapAnchor>();
   readonly openClip = output<ClipAnchor>();
-  /** Emits false when the card has finished loading; the page gates its spinner on it. */
   readonly busyChange = output<boolean>();
 
   private readonly _view = signal<PullOverviewView | null>(null);
@@ -62,8 +53,7 @@ export class PullOverviewComponent {
             this._view.set(result.value);
           } else {
             if (result.error.kind === 'permanent') logWarn(result.error.id, result.error.context);
-            // transient/permanent render the load-error leaf; a `missing` clears the error so the
-            // template's waiting placeholder shows, never a blank card.
+            // A `missing` clears the error so the template's waiting placeholder shows, never a blank card.
             this._error.set(result.error.kind === 'missing' ? null : result.error);
             this._view.set(null);
           }

@@ -1,8 +1,4 @@
-/**
- * Ingestion orchestrator: drives the same `*TransformService`s the runtime uses and
- * persists through the same `DataFileApiService`, so ingestion and the live browser
- * transform share one implementation. Orchestration only; no transformation lives here.
- */
+// Orchestration only; no transformation lives here.
 import { Injectable, inject } from '@angular/core';
 import pLimit from 'p-limit';
 import { NgHttpCachingService } from 'ng-http-caching';
@@ -34,10 +30,9 @@ import {
 import type { WclRateLimitData, IngestEncounter, WclGameClass } from './models/wcl.models';
 
 const TOP_N = 10;
-// Matches the depth the transforms over-fetch to (CANDIDATE_POOL_COUNT = TOP_PARSE_COUNT * 2),
-// so a parse that backfills a private top parse is part of the skip key.
+// Matches the depth the transforms over-fetch to, so a parse that backfills a private top parse is part of the skip key.
 const SIGNATURE_POOL_COUNT = TOP_N * 2;
-const POINTS_MARGIN = 500;     // stop cleanly when fewer than this many WCL points remain in the hour
+const POINTS_MARGIN = 500;
 const SLICE_CONCURRENCY = 3;
 
 // The skip check reads only `burst`'s source_signature, stamped only when every slice of the encounter produced data.
@@ -55,13 +50,11 @@ function publishSummary(summary: IngestRunSummary): void {
   (globalThis as { __INGEST_DONE__?: IngestRunSummary }).__INGEST_DONE__ = summary;
 }
 
-/** A budget exhaustion at discovery is a clean stop; any other error returns null to propagate as fatal. */
 export function discoveryBudgetSummary(err: unknown): IngestRunSummary | null {
   if (err instanceof BudgetExceededError) return { succeeded: [], failed: [], budgetStopped: true };
   return null;
 }
 
-/** Budget-gated `WclQueryClient` over `WclApiService`. */
 class ApiWclClient implements WclQueryClient {
   private _limitPerHour: number | null = null;
   private _pointsSpentThisHour = 0;
@@ -90,8 +83,7 @@ class ApiWclClient implements WclQueryClient {
 export class IngestOrchestratorService {
   private readonly wclApi = inject(WclApiService);
   private readonly dataFile = inject(DataFileApiService);
-  // The concrete transport (WCL_TRANSPORT aliases the same singleton): the orchestrator
-  // needs its inaccessible-code drain, which is ingest-only surface.
+  // The orchestrator needs the transport's inaccessible-code drain, which is ingest-only surface.
   private readonly wclTransport = inject(HttpWclTransport);
   private readonly wclCache = inject(NgHttpCachingService);
   private readonly transforms = {
@@ -120,8 +112,7 @@ export class IngestOrchestratorService {
     const version = String(INGEST_VERSION);
     console.log(`Ingest version: ${version}`);
 
-    // The spec icon is not on WCL, so enrich each meta from that spec's rulebook (its spec_icon
-    // stem). Hydrating the cache lets getRankings resolve a spec.
+    // The spec icon is not on WCL, so enrich each meta from that spec's rulebook (its spec_icon stem).
     const classesData = await client.query<{ gameData?: { classes?: WclGameClass[] } }>(CLASSES_Q);
     const metas = mapClassesToSpecMeta(classesData.gameData?.classes ?? []);
     for (const meta of metas) {
@@ -162,9 +153,7 @@ export class IngestOrchestratorService {
       return;
     }
 
-    // Isolate each spec so one throw drops only that spec, not the whole run. Publishing partial
-    // progress is safe: a total WCL outage already aborted at raid resolution above, and a failed
-    // spec keeps its existing data untouched.
+    // Isolate each spec so one throw drops only that spec, not the whole run.
     const succeeded: string[] = [];
     const failed: { spec: string; message: string }[] = [];
     let budgetStopped = false;
@@ -179,7 +168,6 @@ export class IngestOrchestratorService {
       }
     }
 
-    // Distinguish a clean run from one that aborted partway; otherwise failures are only scattered logs.
     console.log('\n=== Ingestion summary ===');
     console.log(`Specs processed: ${succeeded.length} of ${specs.length}`);
     if (budgetStopped) {
@@ -196,7 +184,6 @@ export class IngestOrchestratorService {
     publishSummary({ succeeded, failed, budgetStopped });
   }
 
-  /** Rulebook-bearing specs in the specsForRun order (version-ordered, capped at SPEC_LIMIT; cheap file reads, zero WCL budget). */
   private async orderedSpecsFromDisk(): Promise<string[]> {
     const onDisk = await this.dataFile.listSpecs();
     const withRulebook: string[] = [];
@@ -224,7 +211,6 @@ export class IngestOrchestratorService {
         dataCount: burstFiles.length,
         onCurrentVersion: burstFiles.length > 0 && versions.every(stored => stored === INGEST_VERSION),
       };
-      // The lowest on-disk version decides the spec's old/current group.
       const displayVersion = storedVersions.length ? Math.min(...storedVersions) : null;
       return { spec, entry, displayVersion };
     }));
@@ -304,11 +290,7 @@ export class IngestOrchestratorService {
     return toParseRankings(unwrapRankings(raw), SIGNATURE_POOL_COUNT);
   }
 
-  /**
-   * Compute all five slices first (concurrently, sharing fetches), THEN stamp + write: the final
-   * signature and inaccessible-parse set are known only after every transform has fetched, so a
-   * private top parse a transform backfilled past is excluded from the skip key.
-   */
+  /** Compute all five slices first, THEN stamp + write: the signature is known only after every transform has fetched. */
   private async ingestEncounter(
     spec: string, encounter: IngestEncounter, version: string, poolRows: SignatureRanking[],
   ): Promise<boolean> {
@@ -397,10 +379,7 @@ export class IngestOrchestratorService {
     await this.dataFile.writeSpecs(entries);
   }
 
-  /**
-   * Prune on-disk data for a spec's encounters whose ids are outside the protected set.
-   * An empty protected set (a transient worldData failure) never deletes anything.
-   */
+  /** An empty protected set (a transient worldData failure) never deletes anything. */
   private async pruneStaleEncounters(spec: string, protectedIds: Set<number>): Promise<number[]> {
     if (protectedIds.size === 0) {
       logWarn('pruneStaleEncounters', 'empty protected set - skipping prune (likely a transient WCL failure)');

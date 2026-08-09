@@ -1,4 +1,4 @@
-<!-- Desktop grid tracks mirror the window-comparison header + finding-table (keeps the casts|top-avg divider on the measured|fix divider); md:row-start-1 pins each cell to row 1 since the mobile DOM order (name, gap, top-avg, casts) is out of column order. -->
+<!-- Desktop grid tracks mirror window-comparison's + finding-table's column dividers. -->
 <div class="md:grid md:grid-cols-[minmax(0,1fr)_96px_96px_90px] md:gap-x-[14px] md:items-center px-4 py-1.5 min-w-0 border-t md:border-t-0 border-[var(--border)]">
 
   <div class="flex items-baseline gap-2 min-w-0 md:contents">
@@ -32,7 +32,6 @@
 
     @if (showCasts() && !hidePlayer()) {
       @if (isPassive()) {
-        <!-- Passive ability (proc/auto/pet damage) has no player cast count. -->
         <span class="shrink-0 md:col-start-2 md:row-start-1 w-auto text-center text-xs rounded px-2 py-0.5 border border-current badge-muted">passive</span>
       } @else {
         <span class="md:hidden font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">Casts</span>

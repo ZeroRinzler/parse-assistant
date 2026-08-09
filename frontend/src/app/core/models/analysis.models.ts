@@ -19,12 +19,7 @@ export interface AnalysisFinding {
   category: string;
   cd_name?: string;
   message: string;
-  /**
-   * The prominent metric for this finding, rendered as value-over-unit in the
-   * "Measured" column of the finding table (e.g. { value: '1 / 15', unit:
-   * 'cast(s)' }). Populated by the analysis engine so the UI never has to parse
-   * the templated `message`. Findings without a meaningful metric omit it.
-   */
+  // Populated by the analysis engine so the UI never has to parse the templated `message`.
   measured?: { value: string; unit?: string };
   /** Short display label for the "What" column (rule violations only). */
   label?: string;
@@ -49,11 +44,7 @@ export interface AbilityBreakdown {
   count: number;
   /** Top-parse average cast count per window. Burst windows only; absent on defensives. */
   avg_casts?: number;
-  /**
-   * Burst windows only: true when no top parse ever cast this ability (passive/proc,
-   * auto-attack, or pet damage), so the UI shows a "passive" tag instead of a cast
-   * count. Absent (treated as false) on defensives and on pre-`is_passive` baked files.
-   */
+  // Burst windows only: true when no top parse ever cast this ability, so the UI shows a "passive" tag instead of a cast count.
   is_passive?: boolean;
 }
 
@@ -72,11 +63,7 @@ export interface BurstWindow {
   spell_id?: number;
   /** Map reference for defensive windows: gameID of the enemy dealing the window's main damage. */
   ref_game_id?: number | null;
-  /**
-   * Defensive windows only: mean share of each parse's total damage taken that the window
-   * carried (window_damage / parse total), used to gate/rank windows by mitigation
-   * magnitude. Absent on burst windows.
-   */
+  // Defensive windows only: mean share of each parse's total damage taken the window carried, used to gate/rank windows by mitigation magnitude.
   dmg_pct_avg?: number;
 }
 

@@ -3,6 +3,12 @@ import eslint from '@eslint/js';
 import { defineConfig } from 'eslint/config';
 import tseslint from 'typescript-eslint';
 import angular from 'angular-eslint';
+import singleLineComment from './eslint-rules/single-line-comment.js';
+import bannedCharacters from './eslint-rules/banned-characters.js';
+
+const local = {
+  rules: { 'single-line-comment': singleLineComment, 'banned-characters': bannedCharacters },
+};
 
 export default defineConfig([
   {
@@ -10,6 +16,7 @@ export default defineConfig([
     // in the src-only block below; the plain-JS Node scripts have their own block.
     files: ['**/*.ts'],
     extends: [eslint.configs.recommended, tseslint.configs.recommended, tseslint.configs.stylistic],
+    plugins: { local },
     rules: {
       // Style-guide enforcement (mapped from the former frontend/.claude/CLAUDE.md).
       '@typescript-eslint/no-explicit-any': 'error', // ban `any`, use `unknown`
@@ -17,6 +24,8 @@ export default defineConfig([
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
       // Empty private constructors are the idiomatic "force the static factory" guard.
       '@typescript-eslint/no-empty-function': ['error', { allow: ['private-constructors'] }],
+      'local/single-line-comment': 'error',
+      'local/banned-characters': 'error',
     },
   },
   {
@@ -52,6 +61,7 @@ export default defineConfig([
     // so the Node globals they use are declared here.
     files: ['scripts/**/*.{js,mjs}'],
     extends: [eslint.configs.recommended],
+    plugins: { local },
     languageOptions: {
       globals: {
         process: 'readonly',
@@ -64,16 +74,21 @@ export default defineConfig([
     },
     rules: {
       'no-console': 'off',
+      'local/single-line-comment': 'error',
+      'local/banned-characters': 'error',
     },
   },
   {
     files: ['**/*.html'],
     extends: [angular.configs.templateRecommended, angular.configs.templateAccessibility],
+    plugins: { local },
     rules: {
       '@angular-eslint/template/prefer-control-flow': 'error', // native @if/@for/@switch over *ngIf/*ngFor
       // Keep strict equality, but allow the deliberate `x != null` / `x == null`
       // idiom (matches both null and undefined) the templates use for optional fields.
       '@angular-eslint/template/eqeqeq': ['error', { allowNullOrUndefined: true }],
+      'local/single-line-comment': 'error',
+      'local/banned-characters': 'error',
     },
   },
 ]);

@@ -1,13 +1,4 @@
-/**
- * WCL GraphQL query strings and their typed variable interfaces.
- *
- * Keep query strings here and nowhere else. Each query has a companion
- * *Vars interface so callers get static type checking on variables rather
- * than the stringly-typed `Record<string, unknown>` fallback.
- */
-
-// Variable interfaces
-
+// Keep query strings here and nowhere else.
 export interface ReportQueryVars { code: string }
 export interface PlayerDetailsQueryVars { code: string; fightIDs: number[] }
 export interface EventsQueryVars {
@@ -25,8 +16,6 @@ export interface CombatantInfoQueryVars { code: string; fightIDs: number[]; sour
 export interface RankingsQueryVars { encounterID: number; className: string; specName: string; partition?: number }
 export interface TableQueryVars { code: string; fightIDs: number[]; dataType: string }
 export interface ResurrectsQueryVars { code: string; fightIDs: number[]; filter: string; startTime: number; endTime: number }
-
-// Query strings
 
 export const REPORT_Q = `
 query($code:String!){reportData{report(code:$code){
@@ -58,22 +47,13 @@ query($code:String!,$fightIDs:[Int]!,$dataType:EventDataType,$sourceID:Int,$star
   }}
 }`;
 
-/**
- * Damage-done summary table for a fight. Returns a JSON blob whose `data.entries` holds
- * one row per source actor (`id`, `total`); the caller picks its player and derives DPS
- * from `total` over the fight duration. This is the whole pull's table (no source filter),
- * because filtering by `sourceID` regroups the rows by ability rather than by player.
- */
+// The whole pull's table (no source filter), because filtering by `sourceID` regroups the rows by ability rather than by player.
 export const TABLE_Q = `
 query($code:String!,$fightIDs:[Int]!,$dataType:TableDataType){
   reportData{report(code:$code){table(fightIDs:$fightIDs,dataType:$dataType)}}
 }`;
 
-/**
- * Resurrect events for a fight. WCL has no `Resurrects` data type, so this scans `All`
- * with a server-side `filterExpression` (only the matching events come back), so the wipe
- * analysis can tell when a dead player is brought back. Paginated like the events reader.
- */
+// WCL has no `Resurrects` data type, so this scans `All` with a server-side `filterExpression` (only the matching events come back).
 export const RESURRECTS_Q = `
 query($code:String!,$fightIDs:[Int]!,$filter:String,$startTime:Float,$endTime:Float){
   reportData{report(code:$code){
@@ -81,13 +61,7 @@ query($code:String!,$fightIDs:[Int]!,$filter:String,$startTime:Float,$endTime:Fl
   }}
 }`;
 
-/**
- * Top DPS parses for an encounter + spec. `characterRankings` returns a JSON blob
- * (string or object) carrying each parse's report code + fight id + player name -
- * enough for the burst transform to refetch and recompute the bench live. `$partition`
- * is nullable: absent selects WCL's current partition (what the runtime always wants);
- * the ingest liveness probe passes explicit partitions newest-first.
- */
+// `$partition` is nullable: absent selects WCL's current partition (what the runtime always wants); the ingest liveness probe passes explicit partitions newest-first.
 export const RANKINGS_Q = `
 query($encounterID:Int!,$className:String!,$specName:String!,$partition:Int){
   worldData{encounter(id:$encounterID){
@@ -95,7 +69,6 @@ query($encounterID:Int!,$className:String!,$specName:String!,$partition:Int){
   }}
 }`;
 
-/** Fetch CombatantInfo for a single player actor in a specific fight. */
 export const COMBATANT_INFO_Q = `
 query($code:String!,$fightIDs:[Int]!,$sourceID:Int){
   reportData{report(code:$code){
@@ -103,12 +76,7 @@ query($code:String!,$fightIDs:[Int]!,$sourceID:Int){
   }}
 }`;
 
-/**
- * Build a batched `gameData { ... }` query that resolves trinket item names and
- * enchant names by ID in a single round-trip. Item aliases are prefixed `i`,
- * enchant aliases `e` (bare numeric identifiers are not valid GraphQL field names).
- * Enchant names may contain HTML entities - callers must decode them.
- */
+// Item aliases are prefixed `i`, enchant aliases `e` (bare numeric identifiers are not valid GraphQL field names).
 export function buildGearNamesQuery(itemIds: number[], enchantIds: number[]): string {
   const fields = [
     ...itemIds.map(id => `i${id}: item(id:${id}){id name}`),
@@ -117,14 +85,7 @@ export function buildGearNamesQuery(itemIds: number[], enchantIds: number[]): st
   return `query{gameData{${fields}}}`;
 }
 
-/**
- * Build a batched `gameData { ... }` query that resolves spell icon + name by ID in
- * one round-trip. Aliases are prefixed `a` (bare numeric identifiers are not valid
- * GraphQL field names). `gameData.ability(id)` resolves any REAL spell id - including
- * passives a report's `masterData.abilities` omits - but returns `null` for a
- * nonexistent id, so a bad (e.g. mistyped rulebook) id resolves to null rather than a
- * wrong icon; `abilityIcons` skips nulls.
- */
+// `gameData.ability(id)` returns `null` for a nonexistent id, so a bad (e.g. mistyped rulebook) id resolves to null rather than a wrong icon.
 export function buildAbilityIconsQuery(ids: number[]): string {
   const fields = ids.map(id => `a${id}: ability(id:${id}){id name icon}`).join(' ');
   return `query{gameData{${fields}}}`;
@@ -135,8 +96,7 @@ export function buildAbilityIconsQuery(ids: number[]): string {
 /** The WCL hourly point budget - the ingest orchestrator's budget gate. */
 export const RATE_LIMIT_Q = `query { rateLimitData { limitPerHour pointsSpentThisHour pointsResetIn } }`;
 
-// The full spec universe: all classes and their specs. `class.slug`/`spec.slug` are the exact
-// `className`/`specName` the rankings query takes; the folder key is `spec.slug + class.slug`.
+// `class.slug`/`spec.slug` are the exact `className`/`specName` the rankings query takes; the folder key is `spec.slug + class.slug`.
 export const CLASSES_Q = `query { gameData { classes { id name slug specs { id name slug } } } }`;
 
 /** The worldData expansion tree the current-raid discovery filters. */

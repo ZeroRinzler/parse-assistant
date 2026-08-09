@@ -22,8 +22,7 @@ describe('filterEncounters', () => {
     expect(filterEncounters([])).toEqual([]);
   });
 
-  // Mirrors the real Midnight worldData: an old tier and a "complete raid" aggregate
-  // are frozen (and slip the name patterns), the live raids are frozen:false.
+  // Mirrors the real Midnight worldData.
   it('drops frozen zones even when their name matches no exclude pattern, and carries zoneId', () => {
     const expansions: WclExpansion[] = [
       {
@@ -84,7 +83,7 @@ describe('mapClassesToSpecMeta', () => {
       { id: 253, name: 'Beast Mastery', slug: 'BeastMastery' },
     ] },
     { id: 12, name: 'Demon Hunter', slug: 'DemonHunter', specs: [
-      { id: 1473, name: 'Devourer', slug: 'Devourer' }, // a new spec absent from the curated icon map
+      { id: 1473, name: 'Devourer', slug: 'Devourer' },
     ] },
   ];
 

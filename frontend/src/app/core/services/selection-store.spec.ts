@@ -1,11 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { PostRaidSelection, PreFightSelection, SelectionStore } from './selection-store';
 
-/**
- * The localStorage keys the selections persist under (mirror POST_RAID_KEY /
- * PRE_FIGHT_KEY in the source). They pin the persisted-key contract: stored
- * selections outlive deploys, so changing a key orphans every visitor's saved state.
- */
+// Mirror POST_RAID_KEY / PRE_FIGHT_KEY in the source; stored selections outlive deploys, so changing a key orphans every visitor's saved state.
 const POST_RAID_STORAGE_KEY = 'wl.sel.postRaid';
 const PRE_FIGHT_STORAGE_KEY = 'wl.sel.preFight';
 

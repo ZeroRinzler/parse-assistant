@@ -1,8 +1,4 @@
-/**
- * Headless ingest harness (npm run ingest): drives the browser ingestion unattended
- * for CI. All ingestion logic lives in the Angular app; this file must never grow any.
- * If no browser resolves, run `npx playwright install chromium` once.
- */
+// All ingestion logic lives in the Angular app; this file must never grow any.
 import { spawn } from 'child_process';
 import { chromium } from 'playwright';
 

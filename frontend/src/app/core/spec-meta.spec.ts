@@ -3,8 +3,7 @@ import {
   hydrateSpecMeta, classList, specsForClass, specMetaOf, classIconUrl, specIconUrl,
 } from './spec-meta';
 
-// The spec universe is hydrated at runtime from the WCL-derived spec-meta.json, so these tests
-// seed one fixed spec and assert the helpers behave over it.
+// The spec universe is hydrated at runtime from the WCL-derived spec-meta.json, so these tests seed one fixed spec.
 const SUBTLETY = {
   spec: 'SubtletyRogue', className: 'Rogue', specName: 'Subtlety',
   classLabel: 'Rogue', specLabel: 'Subtlety', classIcon: 'class_rogue', specIcon: 'ability_stealth',

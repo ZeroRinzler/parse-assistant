@@ -89,7 +89,6 @@ export function burstClipAnchor(window: BurstWindow, index: number): ClipAnchor 
   return { timeS: window.time_s, windowLengthS: window.window_length_s, key: `burst-${index}` };
 }
 
-/** A window whose start is past the player's fight length is "not reached" and shown muted. */
 export function buildBurstView(
   topWindows: BurstWindow[],
   playerWindows: PlayerBurstWindow[],
@@ -127,8 +126,7 @@ function eventDamage(event: WclEvent): number {
   return (event.amount || 0) + (event.absorbed || 0);
 }
 
-// Half-open window boundary: an event at exactly `time_s + window_length_s` falls OUTSIDE. Casts are
-// attributed by ability NAME, not spell id, because a damage event's `abilityGameID` often differs.
+// Casts are attributed by ability NAME, not spell id, because a damage event's abilityGameID often differs.
 function playerWindowAggregate(
   window: BurstWindow,
   sortedDmg: TimedEvent[],
@@ -189,8 +187,7 @@ export class BurstFeatureService {
     try {
       const report = await this.wclApi.getReport(reportCode);
       const fight = report.fights.find(entry => entry.id === fightId);
-      // A selected fight may legitimately not be in the report yet during a live sync:
-      // an informational bench-only view, not a failure.
+      // A selected fight may legitimately not be in the report yet during a live sync: not a failure.
       if (!fight) return ok(buildBurstView(bench.value.windows, [], Number.POSITIVE_INFINITY, bench.value.cd_spell_ids, bench.value.ability_icons, true));
 
       // Names only, to attribute the player's casts by ability name in each window.

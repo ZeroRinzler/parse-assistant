@@ -6,16 +6,13 @@ import { EncounterPositions } from '../models/positioning.models';
 import { DATA_FILE_TRANSPORT } from './data-file-transport';
 import { Result, LoadError, ok } from '../result';
 
-// A manifest with no file yet is the legitimate empty fresh-tier state; a real read failure
-// must propagate so the UI surfaces it instead of a silently empty list.
+// A manifest with no file yet is the legitimate empty fresh-tier state; a real read failure must propagate so the UI surfaces it instead of a silently empty list.
 function foldMissingToEmpty<T>(result: Result<T[], LoadError>): Result<T[], LoadError> {
   if (result.ok) return result;
   return result.error.kind === 'missing' ? ok([]) : result;
 }
 
-// Pass-through data API over the ingested `data/specs/**` files. Delegates IO to an injected
-// DataFileTransport so one API serves both runtimes: the browser binds an HTTP read-only
-// transport, the Node ingestion an fs read+write one that also drives the write*/list*/remove*.
+// Delegates IO to an injected DataFileTransport so one API serves both runtimes: the browser binds an HTTP read-only transport, Node ingestion an fs read+write one.
 @Injectable({ providedIn: 'root' })
 export class DataFileApiService {
   private readonly io = inject(DATA_FILE_TRANSPORT);
@@ -64,8 +61,7 @@ export class DataFileApiService {
     return this.io.writeJson('spec-meta.json', metas);
   }
 
-  // A spec folder name never contains a dot, so drop the co-located index.json and any
-  // dotfiles; otherwise the index rebuild reads `index.json/encounters.json` and hits ENOTDIR.
+  // A spec folder name never contains a dot; otherwise the index rebuild reads `index.json/encounters.json` and hits ENOTDIR.
   async listSpecs(): Promise<string[]> {
     return (await this.io.list('')).filter(name => !name.includes('.'));
   }

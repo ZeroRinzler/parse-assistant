@@ -1,11 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NavStateStore } from './nav-state-store';
 
-/**
- * The localStorage key the rail preference persists under (mirrors NAV_COLLAPSED_KEY
- * in the source). It pins the persisted-key contract: a stored preference outlives
- * deploys, so changing the key orphans every visitor's saved choice.
- */
+// Mirrors NAV_COLLAPSED_KEY in the source; a stored preference outlives deploys, so changing the key orphans every visitor's saved choice.
 const NAV_COLLAPSED_STORAGE_KEY = 'wl.nav.collapsed';
 
 /** Stands in for a disabled, full, or otherwise unavailable localStorage. */

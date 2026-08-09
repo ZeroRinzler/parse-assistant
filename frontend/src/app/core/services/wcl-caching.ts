@@ -7,8 +7,7 @@ import { REPORT_Q, REPORT_FIGHTS_Q, RATE_LIMIT_Q, CLASSES_Q, ENCOUNTERS_Q } from
 /** Below the live-sync poll interval, so each tick sees a fresh pull while a tick's overlapping reads still share one fetch. */
 export const WCL_LIVE_CACHE_MS = 10_000;
 
-// Report reads are code-keyed, so they change as a live raid records pulls; discovery/budget reads
-// must stay fresh. Everything else is fight-window-keyed (immutable) and keeps the long default.
+// Report reads are code-keyed, so they change as a live raid records pulls; everything else is fight-window-keyed (immutable) and keeps the long default.
 const VOLATILE_QUERIES: ReadonlySet<string> = new Set([REPORT_Q, REPORT_FIGHTS_Q]);
 const UNCACHED_QUERIES: ReadonlySet<string> = new Set([RATE_LIMIT_Q, CLASSES_Q, ENCOUNTERS_Q]);
 
@@ -19,18 +18,13 @@ export function wclCachingHeaders(query: string): Record<string, string> {
   return {};
 }
 
-/**
- * Keyed on the GraphQL body so the renewing Authorization header can't fragment the cache. The
- * default lifetime is nominal-infinite because eviction is by scope: a page close drops the store,
- * and the ingest orchestrator clears it between encounters.
- */
+// Keyed on the GraphQL body so the renewing Authorization header can't fragment the cache.
 export function provideWclCaching(): EnvironmentProviders {
   return provideNgHttpCaching({
     store: new NgHttpCachingMemoryStorage(),
     lifetime: NG_HTTP_CACHING_YEAR_IN_MS,
     allowedMethod: ['POST'],
-    // undefined falls through to the library's default checks (DISALLOW_CACHE header,
-    // allowedMethod); false hard-excludes every non-WCL request.
+    // undefined falls through to the library's default checks; false hard-excludes every non-WCL request.
     isCacheable: (req: HttpRequest<unknown>) => (req.url === WCL_API_URL ? undefined : false),
     getKey: (req: HttpRequest<unknown>) =>
       req.url === WCL_API_URL ? `${req.method}@${req.url}@${JSON.stringify(req.body)}` : undefined,

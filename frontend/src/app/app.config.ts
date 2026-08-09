@@ -24,17 +24,11 @@ export const appConfig: ApplicationConfig = {
     provideBrowserGlobalErrorListeners(),
     provideRouter(routes, withComponentInputBinding()),
     provideAnimationsAsync(),
-    // One HttpClient carries every request, so the retry interceptor covers WCL POSTs
-    // and data-file GETs alike; withInterceptorsFromDi() admits the DI-registered
-    // ng-http-caching interceptor into the same chain.
+    // withInterceptorsFromDi() admits the DI-registered ng-http-caching interceptor into the same chain.
     provideHttpClient(withFetch(), withInterceptors([retryTransientInterceptor]), withInterceptorsFromDi()),
     provideAppInitializer(async () => {
-      // Hydrate the spec-meta cache (folder -> class/spec names + icons) from the baked
-      // spec-meta.json before anything renders, so the class/spec dropdowns, the icon pipes,
-      // and getRankings resolve. One tiny (~40-entry) file fetch, blocking bootstrap.
       const dataFile = inject(DataFileApiService);
-      // Bootstrap has no card to surface an error on, so a failed read degrades to an empty
-      // universe (which then shows the empty dropdowns) rather than blocking the app.
+      // A failed read degrades to an empty universe rather than blocking the app.
       const specMeta = await dataFile.getSpecMeta();
       hydrateSpecMeta(specMeta.ok ? specMeta.value : []);
     }),
@@ -44,9 +38,7 @@ export const appConfig: ApplicationConfig = {
     }),
     { provide: WCL_TRANSPORT, useExisting: HttpWclTransport },
     { provide: DATA_FILE_TRANSPORT, useExisting: HttpDataFileTransport },
-    // Last so an environment can override the bindings above (the ingest one swaps the
-    // data-file transport); the per-environment list is also what keeps a production
-    // build from importing the transforms and ingest machinery, so they tree-shake out.
+    // Last so an environment can override the bindings above (the ingest one swaps the data-file transport).
     ...environmentProviders,
   ],
 };

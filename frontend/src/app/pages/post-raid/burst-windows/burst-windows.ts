@@ -18,20 +18,15 @@ export class BurstWindowsComponent {
 
   readonly spec = input.required<string>();
   readonly encounterId = input.required<number>();
-  /** Post-raid selection - omit (or leave 0/'') for the pre-fight bench-only view. */
   readonly report = input<string>('');
   readonly fight = input<number>(0);
   readonly player = input<number>(0);
-  /** Map button is available once the page has loaded top-parse positions. */
   readonly showMap = input<boolean>(false);
-  /** Clip button is available once the page's rolling buffer covers this fight. */
   readonly showClip = input<boolean>(false);
 
   readonly openMap = output<BurstMapAnchor>();
   readonly openClip = output<ClipAnchor>();
-  /** Emits false when the card has finished loading; the page gates its spinner on it. */
   readonly busyChange = output<boolean>();
-  /** Whether the top-parse bench exists. The page aggregates it for the banner. */
   readonly availableChange = output<boolean>();
 
   protected readonly available = signal(true);

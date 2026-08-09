@@ -1,8 +1,6 @@
-<!-- Mobile clamps to 2 lines until expanded; md:line-clamp-none keeps desktop unclamped. -->
 <div #content class="md:line-clamp-none" [class.line-clamp-2]="!expanded()"><ng-content /></div>
 
-<!-- Toggle renders only when the clamped text actually overflows (rendering it conditionally avoids a
-     display-utility clash between `hidden` and `inline-flex`); md:hidden keeps it off desktop. -->
+<!-- Rendering the toggle conditionally (vs. hiding it) avoids a display-utility clash between `hidden` and `inline-flex`. -->
 @if (overflowing()) {
   <button
     type="button"

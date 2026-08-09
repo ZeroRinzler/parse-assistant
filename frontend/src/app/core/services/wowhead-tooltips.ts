@@ -26,8 +26,7 @@ export class WowheadTooltipsService {
     const config = this.document.createElement('script');
     config.src = CONFIG_SRC;
     config.addEventListener('error', (err) => logWarn('wowhead tooltips config load', err));
-    // Chain tooltips.js off config's load: it needs the whTooltips global, and
-    // dynamically inserted scripts have no execution-order guarantee.
+    // Chain tooltips.js off config's load: it needs the whTooltips global, and dynamically inserted scripts have no execution-order guarantee.
     config.addEventListener('load', () => {
       const tooltips = this.document.createElement('script');
       tooltips.src = TOOLTIPS_SRC;

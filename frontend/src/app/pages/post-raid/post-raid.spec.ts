@@ -533,7 +533,6 @@ describe('PostRaidComponent loadReport latest-wins', () => {
   };
   const detailsB: PlayerDetailGroups = { dps: [{ id: PLAYER_B_ID, type: 'Rogue', name: 'Bee', specs: [{ spec: 'Subtlety' }] }] };
 
-  /** Fake WCL client whose getReport / getPlayerDetails stay pending until the test settles them. */
   class FakeWclApi {
     private readonly reportResolvers = new Map<string, (report: WclReport) => void>();
     private readonly playerDetailResolvers: ((groups: PlayerDetailGroups) => void)[] = [];
@@ -547,11 +546,10 @@ describe('PostRaidComponent loadReport latest-wins', () => {
     settlePlayerDetails(groups: PlayerDetailGroups): void { this.playerDetailResolvers.shift()!(groups); }
   }
 
-  /** Drain microtasks + the macrotask queue so each awaited loadReport step settles. */
+  // setTimeout, not just a microtask flush, so each awaited loadReport step settles.
   const settle = (): Promise<void> => new Promise(resolve => setTimeout(resolve, 0));
 
-  // Construct the shell directly (no view attached) so loadReport runs without rendering the
-  // card templates, whose own data sources are out of scope here.
+  // Constructs the shell directly (no view attached) so loadReport runs without rendering the card templates.
   function setup(): { api: FakeWclApi; vm: Record<string, unknown> } {
     const api = new FakeWclApi();
     TestBed.configureTestingModule({

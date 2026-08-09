@@ -14,7 +14,6 @@
   </div>
 
   <div class="flex items-stretch gap-1 bg-[var(--bg)] border border-[var(--border)] rounded-lg px-4 py-3.5 mt-3.5">
-    <!-- Step 1: kills logged (waiting) -->
     <div class="flex-1 flex flex-col gap-1.5">
       <mat-icon class="icon-seg text-[var(--muted)]">military_tech</mat-icon>
       <div class="text-xs font-semibold text-[var(--text)]">Mythic kills logged</div>
@@ -26,7 +25,6 @@
       <mat-icon class="icon-16 text-[var(--border)]">arrow_forward</mat-icon>
     </div>
 
-    <!-- Step 2: ingest (hourly) -->
     <div class="flex-1 flex flex-col gap-1.5">
       <mat-icon class="icon-seg text-[var(--muted)]">cloud_sync</mat-icon>
       <div class="text-xs font-semibold text-[var(--text)]">Ingest samples them</div>
@@ -38,7 +36,6 @@
       <mat-icon class="icon-16 text-[var(--border)]">arrow_forward</mat-icon>
     </div>
 
-    <!-- Step 3: unlock (automatic) -->
     <div class="flex-1 flex flex-col gap-1.5">
       <mat-icon class="icon-seg text-[var(--success)]">check_circle</mat-icon>
       @if (variant() === 'pre') {

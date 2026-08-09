@@ -5,12 +5,7 @@ import { LoadError } from '../../../core/result';
 /** The hard-error kinds this panel renders; a null error is the waiting (not-yet-ingested) state. */
 export type RenderableLoadError = Extract<LoadError, { kind: 'transient' | 'permanent' }>;
 
-/**
- * Card-shaped stand-in shown in place of a bench-driven card that has no data to render:
- * an `error` shows the transient/permanent failure, otherwise the waiting state for a fresh,
- * un-ingested tier. `heading`/`subtitle` mirror the card it replaces (omit them for a
- * standalone error with no card header).
- */
+/** Card-shaped stand-in for a bench-driven card with no data: shows the load error, or a waiting state for an un-ingested tier. */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-load-state',

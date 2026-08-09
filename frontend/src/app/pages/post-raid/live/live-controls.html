@@ -1,5 +1,4 @@
 <div class="mt-2 flex flex-col gap-3">
-  <!-- Follow latest pull: active state is the accent dot; status is the last poll result. -->
   <div class="flex items-center gap-3">
     <mat-slide-toggle [checked]="capture.liveEnabled()" (change)="onLiveToggle($event.checked)">
       Follow latest pull
@@ -11,8 +10,6 @@
     }
   </div>
 
-  <!-- Record game client: privacy line only before opt-in; a live dot while recording;
-       toggling off stops the capture (there is no separate stop button). -->
   <div class="flex items-center gap-3">
     <mat-slide-toggle [checked]="capture.recordToggleOn()" [disabled]="capture.isStarting()" (change)="onRecordToggle($event.checked)">
       Record game client

@@ -3,12 +3,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { ClipHandle, LiveCaptureFeatureService, pipeIntoElement, releaseElement } from './live-capture.service';
 
-/**
- * Inner leaf of the recording flyover. Injects only the slice service and renders the
- * resolved clip: it stitches the ordered segment blobs into its own `<video>` via MSE (the
- * MediaSource must attach to a real element to open, so assembly happens here, not in the
- * service), then seeks to the window start. Plus a download affordance.
- */
+/** MediaSource must attach to a real element to open, so assembly happens here, not in the service. */
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-clip-player',
@@ -39,7 +34,6 @@ export class ClipPlayerComponent {
     });
   }
 
-  /** Seek to the window start and begin looping once the stitched clip's metadata is known. */
   protected onLoaded(video: HTMLVideoElement): void {
     const handle = this.clip.handle();
     if (handle) {
@@ -48,7 +42,6 @@ export class ClipPlayerComponent {
     }
   }
 
-  /** Loop over the exact window `[startOffsetS, endOffsetS]` forever. */
   protected onTick(video: HTMLVideoElement): void {
     const handle = this.clip.handle();
     if (!handle) return;

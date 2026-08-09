@@ -1,9 +1,3 @@
-/**
- * Live `DataSource<DefensiveBench>`: computes the defensive bench in the browser with its
- * own domain math (it does NOT reference the ingest analysis), mirroring the ingest bench
- * shape. Fetches the top parses, builds per-parse defensive windows + usage summaries,
- * clusters them across parses, and derives the per-defensive benchmarks.
- */
 import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
@@ -25,30 +19,21 @@ import { DefensiveBench, DefensivePlanMeta } from './defensive-data-source';
 // Re-exported so call sites / specs importing it from the transform service keep working.
 export { toParseRankings } from '../../../shared/analysis/wcl-projections';
 
-/** How many top parses to sample (matches the ingest bench). */
 const TOP_PARSE_COUNT = 10;
-// Over-fetch so a private/unfetchable top parse can be backfilled by the
-// next-best one; the break in the loop caps actual fetches at TOP_PARSE_COUNT.
+// Over-fetch so a private/unfetchable top parse can be backfilled; the loop break caps actual fetches at TOP_PARSE_COUNT.
 const CANDIDATE_POOL_COUNT = TOP_PARSE_COUNT * 2;
-/** A window must appear in at least this share of parses (a majority) to surface. */
 const CONSENSUS_FRAC = 0.5;
-/** "At least this share of member parses" - ability inclusion in a cluster. */
 const MEMBER_MAJORITY_FRAC = 0.5;
-/** Defensive windows within this many seconds cluster together. */
 const CLUSTER_MERGE_S = 20;
-/** Keep only the top-N damage sources in a window's ability breakdown (UI row cap). */
 const ABILITY_BREAKDOWN_TOP_N = 6;
-/** No ingestable bench (empty rulebook, no top parses, or no fetchable sample); reported as `missing`. */
 const NO_DEFENSIVE_BENCH_MESSAGE = 'Not yet ingested.';
 
-/** Defensive name -> spell id, for the defensive window header icons. */
 export function defensiveSpellIds(defensives: RulebookDefensive[]): Record<string, number> {
   const map: Record<string, number> = {};
   for (const defensive of defensives) if (defensive.spell_id) map[defensive.name] = defensive.spell_id;
   return map;
 }
 
-/** Rulebook defensives -> the static plan metadata carried in the slice. */
 export function defensivePlanMeta(defensives: RulebookDefensive[]): DefensivePlanMeta[] {
   return defensives.map(defensive => ({
     name: defensive.name,
@@ -60,7 +45,6 @@ export function defensivePlanMeta(defensives: RulebookDefensive[]): DefensivePla
   }));
 }
 
-/** One parse's defensive usage summary (buff-window-centric, cast fallback). */
 export interface ParseDefensiveSummary {
   name: string;
   cast_times_s: number[];
@@ -71,12 +55,10 @@ export interface ParseDefensiveSummary {
   cast_pattern: 'hold' | 'on_cooldown';
 }
 
-/** One parse's defensive window before cross-parse clustering. */
 export interface ParseDefWindow {
   time_s: number;
   window_length_s: number;
   window_damage: number;
-  /** window_damage as a share of the parse's total damage taken (mitigation magnitude). */
   pct_of_total: number;
   /** Index of the parse this window came from, so clustering counts DISTINCT parses. */
   parse_index: number;
@@ -86,10 +68,7 @@ export interface ParseDefWindow {
   ability_breakdown: { spell_id: number; damage: number }[];
 }
 
-/**
- * Per-defensive usage summary for one parse: each buff span (or explicit cast for
- * self-buff-less defensives) is one use; hold windows mark casts delayed > 8s past reset.
- */
+// Each buff span (or explicit cast for self-buff-less defensives) is one use; hold windows mark casts delayed > 8s past reset.
 export function summarizeDefensiveCasts(
   defensives: RulebookDefensive[],
   buffWindows: Map<number, [number, number | null][]>,
@@ -133,7 +112,6 @@ export function summarizeDefensiveCasts(
 /** One window hit: `[atS, damage, abilityId, sourceId]` (sorted by time). */
 type WindowHit = [number, number, number, number | null];
 
-/** Top-N damage sources in a window, summed by normalized spell id, highest damage first. */
 export function windowDamageBreakdown(windowHits: WindowHit[]): { spell_id: number; damage: number }[] {
   const abilityDmg = new Map<number, number>();
   // Normalize before grouping so raw ids that fold to one spell (melee, synthetic negatives) sum, not split into rows.
@@ -148,10 +126,7 @@ export function windowDamageBreakdown(windowHits: WindowHit[]): { spell_id: numb
     .map(([spell_id, damage]) => ({ spell_id, damage }));
 }
 
-/**
- * Per-defensive windows for one parse: the measured buff span (open buffs run to fight end,
- * never a rulebook duration), its damage taken, its share of parse total, and dominant enemy.
- */
+// Open buffs run to fight end, never a rulebook duration.
 export function findParseDefensiveWindows(
   damageTaken: TimedEvent[], fightDurationS: number,
   buffWindows: Map<number, [number, number | null][]>,
@@ -200,7 +175,6 @@ export function findParseDefensiveWindows(
   return result.sort((a, b) => a.time_s - b.time_s);
 }
 
-/** Absolute damage stats (avg/stddev/min/max, rounded) over a cluster's window damages. */
 export function clusterDamageStats(damages: number[]): { dmg_avg: number; dmg_stddev: number; dmg_min: number; dmg_max: number } {
   return {
     dmg_avg: Math.round((mean(damages) ?? 0)),
@@ -210,7 +184,6 @@ export function clusterDamageStats(damages: number[]): { dmg_avg: number; dmg_st
   };
 }
 
-/** Cross-parse top-N ability breakdown: abilities in a majority of distinct parses, avg/min/max, highest avg first. */
 export function clusterAbilityBreakdown(cluster: ParseDefWindow[]): BurstWindow['ability_breakdown'] {
   // Sum per parse first so a parse landing an ability across several of its windows counts once toward the gate.
   const damageByAbilityParse = new Map<number, Map<number, number>>();
@@ -237,7 +210,6 @@ export function clusterAbilityBreakdown(cluster: ParseDefWindow[]): BurstWindow[
     .slice(0, ABILITY_BREAKDOWN_TOP_N);
 }
 
-/** Clusters per-parse windows into the bench `BurstWindow[]`, one per consensus of distinct parses. */
 export function clusterDefensiveWindows(windows: ParseDefWindow[], sampleCount: number, mergeS = CLUSTER_MERGE_S): BurstWindow[] {
   if (!windows.length) return [];
   const byDefensive = new Map<string, ParseDefWindow[]>();
@@ -249,7 +221,6 @@ export function clusterDefensiveWindows(windows: ParseDefWindow[], sampleCount: 
   const result: BurstWindow[] = [];
   for (const [defensiveName, group] of byDefensive.entries()) {
     for (const cluster of groupByTime(group, mergeS)) {
-      // A majority of DISTINCT parses must defend here.
       const distinctParses = new Set(cluster.map(member => member.parse_index)).size;
       if (distinctParses < minParses) continue;
       // Damage-taken share is reported for context (dmg_pct_avg) but does not gate the window.
@@ -279,16 +250,7 @@ export function clusterDefensiveWindows(windows: ParseDefWindow[], sampleCount: 
   return result.sort((a, b) => a.time_s - b.time_s);
 }
 
-/**
- * Cast indices a majority of parses held past reset, with the prior-relative band the runtime
- * compares the player's own gap against. `effectiveCd` is the cooldown (cadence zero-point);
- * `totalParses` is every sampled parse (not users-only), so the consensus denominator matches.
- */
-
-/**
- * Per-defensive benchmark. `summaries` is users-only; `totalParses` is every sampled parse,
- * so `sample_count` (total) and `used_sample_count` (users) drive the runtime use-share gate.
- */
+// `summaries` is users-only; `totalParses` is every sampled parse, so sample_count and used_sample_count drive the runtime use-share gate.
 export function buildDefensiveBenchmark(
   summaries: ParseDefensiveSummary[], effectiveCd: number, totalParses: number,
 ): PerDefensiveBenchmark {
@@ -417,7 +379,6 @@ export class DefensiveTransformService implements DataSource<DefensiveBench> {
     }
   }
 
-  /** One parse's defensive windows + usage summaries via the colocated pure fns; null on fetch failure. */
   private async computeParse(
     ranking: ParseRanking, defensives: RulebookDefensive[],
   ): Promise<{

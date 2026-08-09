@@ -16,13 +16,11 @@ export interface HoldWindow {
   delay_s: number;
 }
 
-/** Anything carrying the per-parse hold windows a bench aggregates over. */
 export interface HoldWindowSource {
   hold_windows: HoldWindow[];
 }
 
-// Prior-relative: each cast is measured against the prior ACTUAL cast + the cooldown, not a
-// cumulative ideal schedule, so a single hold does not cascade into every later cast looking held.
+// Prior-relative: each cast is measured against the prior ACTUAL cast + the cooldown, not a cumulative ideal schedule, so a single hold does not cascade into later casts.
 export function detectHoldWindows(castTimesS: number[], effectiveCd: number): HoldWindow[] {
   const holdWindows: HoldWindow[] = [];
   for (let castIndex = 1; castIndex < castTimesS.length; castIndex++) {
@@ -36,8 +34,7 @@ export function detectHoldWindows(castTimesS: number[], effectiveCd: number): Ho
   return holdWindows;
 }
 
-// `target_s` is the absolute clock median (display); `delay_s`/`band_s`/`effective_cd_s` are the
-// prior-relative band the runtime compares the player's own gap against.
+// `target_s` is the absolute clock median (display); `delay_s`/`band_s`/`effective_cd_s` are the prior-relative band the runtime compares the player's own gap against.
 export function buildHoldTargets(
   entries: HoldWindowSource[], effectiveCd: number, totalSamples = entries.length,
 ): CdHoldTargets {
@@ -69,10 +66,7 @@ export function buildHoldTargets(
   return targets;
 }
 
-/**
- * Prior-relative (cascade-free): compares the player's own gap from their previous cast against
- * the band. Flags only an under-hold clearly below it; over-holding is tolerated.
- */
+/** Prior-relative (cascade-free): compares the player's own gap from their previous cast against the band; flags only a clear under-hold, tolerates over-holding. */
 export function holdSuggestionFindings(
   name: string, castTimesS: number[], holdTargets: CdHoldTargets,
 ): AnalysisFinding[] {
