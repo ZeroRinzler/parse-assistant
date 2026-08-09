@@ -1,14 +1,10 @@
 name: Ingest Parse Samples
 
 on:
-  # Hourly scheduling is driven by an EXTERNAL scheduler (cron-job.org) that calls the
-  # workflow_dispatch REST API once an hour. GitHub's own cron schedule is not used: it
-  # drops most fires under load (3 fires in 7 hours observed) and ignores the set minute.
+  # Fired hourly by an external scheduler (cron-job.org): GitHub's own cron drops fires and ignores the set minute.
   workflow_dispatch:
 
-# Shared with deploy-pages - see the note there. This job owns the data/ tree on gh-pages;
-# serializing all gh-pages writers keeps their single-commit force-pushes from reverting
-# each other's folder.
+# Serializing every gh-pages writer keeps their single-commit force-pushes from reverting each other's folder.
 concurrency:
   group: gh-pages
   cancel-in-progress: false
@@ -33,24 +29,16 @@ jobs:
         with:
           ref: main
           token: ${{ steps.app-token.outputs.token }}
-          # Fetch all refs so origin/gh-pages survives locally even if the overlay step's explicit
-          # fetch fails; losing it before the clean:true publish would wipe the gh-pages-only data.
+          # Keeps origin/gh-pages when the overlay's fetch fails; without it the publish wipes the gh-pages-only data.
           fetch-depth: 0
 
-      # The generated bench data is NOT tracked on main - it lives once at the gh-pages root
-      # under data/specs/ (this workflow is its only writer). Overlay that copy into the working
-      # tree BEFORE scrape/ingest so the orchestrator's signature-skip has the current data on
-      # disk to compare against. Untracked worktree only, so the paths stay ignored on main. On
-      # the very first run gh-pages has no data yet, so the archive is a no-op and ingest starts
-      # from empty.
+      # Bench data lives only on gh-pages; overlay it before ingest so the signature-skip has current data to compare.
       - name: Overlay bench data from gh-pages
         run: |
           set -euo pipefail
           git fetch origin gh-pages || true
           rm -rf frontend/public/data/specs
-          # When gh-pages has data, a failed extraction must abort (no `|| echo` swallow): an empty
-          # tree would otherwise reach the clean:true publish and delete every spec and rulebook.
-          # An absent tree is a legitimate first run.
+          # A failed extraction must abort: an empty tree reaching the clean:true publish deletes every spec.
           if git rev-parse --verify --quiet origin/gh-pages >/dev/null \
             && git ls-tree --name-only "origin/gh-pages:data/specs" >/dev/null 2>&1; then
             git archive origin/gh-pages data/specs | tar -x -C frontend/public
@@ -69,16 +57,12 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      # Ingestion self-selects the current live raids from WCL (current expansion,
-      # non-frozen zones confirmed live by a rankings probe) and self-prunes data for
-      # encounters outside the current live window. No manual per-patch edits needed.
+      # Ingestion self-selects the live raids from WCL and prunes what falls outside; no per-patch edits.
       - name: Run parse ingestion
         working-directory: frontend
         run: npm run ingest
 
-      # Backstop for the clean:true publish: an empty tree over a populated gh-pages would delete
-      # every spec and rulebook. Pruning never removes whole spec dirs, so this only trips on the
-      # empty/partial-overlay catastrophe, not a quiet hour.
+      # Pruning never removes whole spec dirs, so this trips only on an overlay catastrophe, not a quiet hour.
       - name: Guard against an empty publish tree
         run: |
           set -euo pipefail
@@ -91,11 +75,16 @@ jobs:
             exit 1
           fi
 
-      # Publish the fresh (minified) data into the data/specs/ folder at the gh-pages root.
-      # clean:true is scoped to the target-folder, so it replaces data/specs/ only and never
-      # touches main/ or the pr-* previews. The action commits nothing when the tree is byte-identical,
-      # so quiet hours produce no push and no needless redeploy. The site reads this copy
-      # directly (no rebuild needed), so publishing the data IS the deploy.
+      # Ingestion never writes a rulebook, so the published copy wins; runs after the guard it would defeat by making dirs.
+      - name: Refresh rulebooks from gh-pages before publishing
+        run: |
+          set -euo pipefail
+          git fetch origin gh-pages || true
+          if git ls-tree "origin/gh-pages:data/specs" >/dev/null 2>&1; then
+            git archive origin/gh-pages 'data/specs/*/rulebook.json' | tar -x -C frontend/public
+          fi
+
+      # clean:true is scoped to target-folder, so it replaces data/specs/ only and never touches main/ or pr-* previews.
       - name: Publish data to gh-pages
         uses: JamesIves/github-pages-deploy-action@d92aa235d04922e8f08b40ce78cc5442fcfbfa2f # v4.8.0
         with:
