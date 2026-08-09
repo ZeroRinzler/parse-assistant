@@ -12,7 +12,7 @@ import { mean, median, deviation } from 'd3-array';
 import { round, groupByTime, getOrInsert } from '../../../shared/analysis/analysis-math';
 import { HoldWindow, buildHoldTargets, detectHoldWindows } from '../../../shared/analysis/hold-targets';
 import { buildAuraWindows } from '../../../shared/analysis/aura-windows';
-import { TimedEvent, abilityIcons, normalizeAbilityId, relativeS, toParseRankings, unwrapRankings, withRelativeS } from '../../../shared/analysis/wcl-projections';
+import { TimedEvent, abilityIcons, findParseActor, normalizeAbilityId, relativeS, toParseRankings, unwrapRankings, withRelativeS } from '../../../shared/analysis/wcl-projections';
 import { DataSource } from '../../../core/data-source/data-source';
 import { DefensiveBench, DefensivePlanMeta } from './defensive-data-source';
 
@@ -389,7 +389,7 @@ export class DefensiveTransformService implements DataSource<DefensiveBench> {
     try {
       const report: WclReport = await this.wclApi.getReport(ranking.report_code);
       const fight = report.fights.find(entry => entry.id === ranking.fight_id);
-      const player = report.masterData?.actors?.find(actor => actor.name === ranking.player);
+      const player = findParseActor(report.masterData?.actors, ranking);
       if (!fight || !player) return null;
 
       const gameIdByActorId = new Map<number, number>();

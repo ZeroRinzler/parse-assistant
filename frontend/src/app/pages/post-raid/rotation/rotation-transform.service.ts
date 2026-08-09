@@ -10,7 +10,7 @@ import { round, getOrInsert } from '../../../shared/analysis/analysis-math';
 import {
   HoldWindow, HOLD_CONSENSUS_FRAC, buildHoldTargets, detectHoldWindows,
 } from '../../../shared/analysis/hold-targets';
-import { TimedEvent, abilityIcons, relativeS, toParseRankings, unwrapRankings, withRelativeS } from '../../../shared/analysis/wcl-projections';
+import { TimedEvent, abilityIcons, findParseActor, relativeS, toParseRankings, unwrapRankings, withRelativeS } from '../../../shared/analysis/wcl-projections';
 import { DataSource } from '../../../core/data-source/data-source';
 import { Result, LoadError, ok, missing } from '../../../core/result';
 import { toLoadError } from '../../../core/http-load-error';
@@ -285,7 +285,7 @@ export class RotationTransformService implements DataSource<RotationBench> {
     try {
       const report = await this.wclApi.getReport(ranking.report_code);
       const fight = report.fights.find(entry => entry.id === ranking.fight_id);
-      const player = report.masterData?.actors?.find(actor => actor.name === ranking.player);
+      const player = findParseActor(report.masterData?.actors, ranking);
       if (!fight || !player) return null;
 
       const [casts, buffs, enemyAuras, damage, raidDeaths] = await Promise.all([

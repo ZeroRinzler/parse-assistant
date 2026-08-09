@@ -9,7 +9,7 @@ import { Result, LoadError, ok, missing } from '../../../core/result';
 import { toLoadError } from '../../../core/http-load-error';
 import { mean, median, deviation, quantile } from 'd3-array';
 import { round, groupByTime, getOrInsert } from '../../../shared/analysis/analysis-math';
-import { TimedEvent, abilityIcons, normalizeAbilityId, relativeS, toParseRankings, unwrapRankings, withRelativeS } from '../../../shared/analysis/wcl-projections';
+import { TimedEvent, abilityIcons, findParseActor, normalizeAbilityId, relativeS, toParseRankings, unwrapRankings, withRelativeS } from '../../../shared/analysis/wcl-projections';
 import { DataSource } from '../../../core/data-source/data-source';
 import { BurstBench } from './burst-data-source';
 
@@ -347,7 +347,7 @@ export class BurstTransformService implements DataSource<BurstBench> {
     try {
       const report = await this.wclApi.getReport(ranking.report_code);
       const fight = report.fights.find(entry => entry.id === ranking.fight_id);
-      const player = report.masterData?.actors?.find(actor => actor.name === ranking.player);
+      const player = findParseActor(report.masterData?.actors, ranking);
       if (!fight || !player) return null;
 
       // Names only, to attribute casts by ability name inside a parse window.

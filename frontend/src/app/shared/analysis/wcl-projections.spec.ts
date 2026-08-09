@@ -1,11 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach, MockInstance } from 'vitest';
 import {
-  abilityIcons, normalizeAbilityId, toParseRankings, unwrapRankings, windowSpells,
+  abilityIcons, findParseActor, normalizeAbilityId, toParseRankings, unwrapRankings, windowSpells,
   WCL_SYNTHETIC_SOURCE_FALLBACK_ID,
 } from './wcl-projections';
+import { ParseRanking } from '../../core/models/wcl.models';
 
 // A raw ranking row as WCL surfaces it in the characterRankings blob.
 const rankingRow = (name: string, code: string, fightID: number) => ({ name, report: { code, fightID } });
+
+const TWISTING_NETHER = 'Twisting Nether';
+const AREA_52 = 'Area 52';
 
 describe('unwrapRankings', () => {
   it('parses the JSON blob string form and returns its rankings', () => {
@@ -34,7 +38,7 @@ describe('unwrapRankings', () => {
 
   it('composes with toParseRankings to yield fetchable parses', () => {
     const blob = JSON.stringify({ rankings: [rankingRow('Keep', 'r1', 3)] });
-    expect(toParseRankings(unwrapRankings(blob), 10)).toEqual([{ player: 'Keep', report_code: 'r1', fight_id: 3 }]);
+    expect(toParseRankings(unwrapRankings(blob), 10)).toEqual([{ player: 'Keep', server: '', report_code: 'r1', fight_id: 3 }]);
   });
 });
 
@@ -42,9 +46,14 @@ describe('toParseRankings', () => {
   it('maps raw rankings to fetchable parses and caps at count', () => {
     const raw = [rankingRow('P1', 'r1', 1), rankingRow('P2', 'r2', 2), rankingRow('P3', 'r3', 3)];
     expect(toParseRankings(raw, 2)).toEqual([
-      { player: 'P1', report_code: 'r1', fight_id: 1 },
-      { player: 'P2', report_code: 'r2', fight_id: 2 },
+      { player: 'P1', server: '', report_code: 'r1', fight_id: 1 },
+      { player: 'P2', server: '', report_code: 'r2', fight_id: 2 },
     ]);
+  });
+
+  it('carries the ranked character\'s realm, and an empty realm when the row omits it', () => {
+    const raw = [{ ...rankingRow('P1', 'r1', 1), server: { name: TWISTING_NETHER } }, rankingRow('P2', 'r2', 2)];
+    expect(toParseRankings(raw, 10).map(ranking => ranking.server)).toEqual([TWISTING_NETHER, '']);
   });
 
   it('drops anonymized "Character <id>-<id>" names and rows without a report code', () => {
@@ -53,7 +62,43 @@ describe('toParseRankings', () => {
       { name: 'NoReport', report: { fightID: 2 } }, // report code missing -> unfetchable
       rankingRow('Keep', 'r3', 3),
     ];
-    expect(toParseRankings(raw, 10)).toEqual([{ player: 'Keep', report_code: 'r3', fight_id: 3 }]);
+    expect(toParseRankings(raw, 10)).toEqual([{ player: 'Keep', server: '', report_code: 'r3', fight_id: 3 }]);
+  });
+});
+
+describe('findParseActor', () => {
+  const RANKED_NAME = 'Keep';
+  const TWIN_ID = 20;
+  const actor = (id: number, name: string, server: string) => ({ id, name, subType: 'Rogue', server });
+  const ranked = (server: string): ParseRanking => ({ player: RANKED_NAME, server, report_code: 'r1', fight_id: 1 });
+
+  it('binds the one actor carrying the ranked name', () => {
+    const actors = [actor(10, 'Other', AREA_52), actor(TWIN_ID, RANKED_NAME, TWISTING_NETHER)];
+    expect(findParseActor(actors, ranked(TWISTING_NETHER))?.id).toBe(TWIN_ID);
+  });
+
+  it('binds a lone name match even when its realm differs from the ranked realm', () => {
+    expect(findParseActor([actor(TWIN_ID, RANKED_NAME, TWISTING_NETHER)], ranked(AREA_52))?.id).toBe(TWIN_ID);
+  });
+
+  it('is null when no actor carries the ranked name, and for an absent actor list', () => {
+    expect(findParseActor([actor(10, 'Other', AREA_52)], ranked(AREA_52))).toBeNull();
+    expect(findParseActor(undefined, ranked(AREA_52))).toBeNull();
+  });
+
+  it('separates two same-named raiders by realm, ignoring spacing and case', () => {
+    const actors = [actor(10, RANKED_NAME, 'Twisting-Nether'), actor(TWIN_ID, RANKED_NAME, 'area 52')];
+    expect(findParseActor(actors, ranked(AREA_52))?.id).toBe(TWIN_ID);
+  });
+
+  it('is null for two same-named raiders when the ranking carries no realm', () => {
+    const actors = [actor(10, RANKED_NAME, TWISTING_NETHER), actor(TWIN_ID, RANKED_NAME, AREA_52)];
+    expect(findParseActor(actors, ranked(''))).toBeNull();
+  });
+
+  it('is null for two same-named raiders when neither sits on the ranked realm', () => {
+    const actors = [actor(10, RANKED_NAME, TWISTING_NETHER), actor(TWIN_ID, RANKED_NAME, '')];
+    expect(findParseActor(actors, ranked(AREA_52))).toBeNull();
   });
 });
 

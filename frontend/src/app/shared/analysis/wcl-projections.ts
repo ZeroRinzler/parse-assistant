@@ -1,6 +1,6 @@
 /** Generic, cross-slice WCL-response projections and window view-row builders, kept here so each slice imports one implementation. No Angular / IO. */
 import { logWarn } from '../../core/log';
-import { ParseRanking, WclEvent, WclRankingsBlob, WclRawAbility, WclRawRanking } from '../../core/models/wcl.models';
+import { ParseRanking, WclEvent, WclRankingsBlob, WclRawAbility, WclRawRanking, WclReport } from '../../core/models/wcl.models';
 import { WindowSpell } from '../../core/models/window-comparison.models';
 
 /** Copies of one NPC share a targetID, so identity needs the instance too; an event naming no target folds into a single bucket. */
@@ -69,9 +69,26 @@ export function toParseRankings(raw: WclRawRanking[], count: number): ParseRanki
     .slice(0, count)
     .map(ranking => ({
       player: ranking.name ?? '',
+      server: ranking.server?.name ?? '',
       report_code: ranking.report?.code ?? '',
       fight_id: ranking.report?.fightID ?? 0,
     }));
+}
+
+type ReportActor = WclReport['masterData']['actors'][number];
+
+// A rankings row spells a realm "Twisting Nether" where a report actor spells it "Twisting-Nether", so identity is the alphanumerics.
+function realmKey(server: string): string {
+  return server.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+/** Binds a ranking to the actor it names; same-named raiders the realm cannot separate yield null, so no parse is bound to a coin-flip actor. */
+export function findParseActor(actors: ReportActor[] | undefined, ranking: ParseRanking): ReportActor | null {
+  const named = (actors ?? []).filter(actor => actor.name === ranking.player);
+  if (named.length < 2) return named[0] ?? null;
+  const rankedRealm = realmKey(ranking.server);
+  const onRealm = rankedRealm ? named.filter(actor => realmKey(actor.server) === rankedRealm) : [];
+  return onRealm.length === 1 ? onRealm[0] : null;
 }
 
 /** Header chips for a window: each spell id with its baked icon + name. */

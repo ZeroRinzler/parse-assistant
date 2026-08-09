@@ -72,6 +72,7 @@ export interface WclReport {
 /** A mapped top parse: which report + fight + player to refetch (from rankings). */
 export interface ParseRanking {
   player: string;
+  server: string;
   report_code: string;
   fight_id: number;
 }
@@ -108,6 +109,7 @@ export type PlayerDetailGroups = Record<string, PlayerDetailEntry[]>;
 
 export interface WclRawRanking {
   name?: string;
+  server?: { name?: string };
   report?: { code?: string; fightID?: number };
 }
 

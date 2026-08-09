@@ -7,7 +7,7 @@ import { ParsePositions, PlayerPosRow, PosRow } from '../../../core/models/posit
 import { logWarn } from '../../../core/log';
 import { Result, LoadError, ok, missing } from '../../../core/result';
 import { toLoadError } from '../../../core/http-load-error';
-import { TimedEvent, relativeS, toParseRankings, unwrapRankings, withRelativeS } from '../../../shared/analysis/wcl-projections';
+import { TimedEvent, findParseActor, relativeS, toParseRankings, unwrapRankings, withRelativeS } from '../../../shared/analysis/wcl-projections';
 import { posActorId } from './map-positions';
 import { DataSource } from '../../../core/data-source/data-source';
 import { MapData } from './map-data-source';
@@ -215,7 +215,7 @@ export class MapTransformService implements DataSource<MapData> {
     try {
       const report = await this.wclApi.getReport(ranking.report_code);
       const fight = report.fights.find(entry => entry.id === ranking.fight_id);
-      const player = report.masterData?.actors?.find(actor => actor.name === ranking.player);
+      const player = findParseActor(report.masterData?.actors, ranking);
       if (!fight || !player) return null;
 
       const enemyMetaById = new Map<number, EnemyMeta>(

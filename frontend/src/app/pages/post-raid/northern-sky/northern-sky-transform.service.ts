@@ -1,11 +1,12 @@
 import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
+import { ParseRanking } from '../../../core/models/wcl.models';
 import { logWarn } from '../../../core/log';
 import { Result, LoadError, ok, missing } from '../../../core/result';
 import { toLoadError } from '../../../core/http-load-error';
 import { round } from '../../../shared/analysis/analysis-math';
-import { TimedEvent, abilityIcons, toParseRankings, unwrapRankings, withRelativeS } from '../../../shared/analysis/wcl-projections';
+import { TimedEvent, abilityIcons, findParseActor, toParseRankings, unwrapRankings, withRelativeS } from '../../../shared/analysis/wcl-projections';
 import { DataSource } from '../../../core/data-source/data-source';
 import { NorthernSkyBench, NorthernSkyAbility } from './northern-sky-data-source';
 
@@ -65,13 +66,13 @@ export class NorthernSkyTransformService implements DataSource<NorthernSkyBench>
   }
 
   private async parseCastTimes(
-    ranking: { player: string; report_code: string; fight_id: number },
+    ranking: ParseRanking,
     abilities: ExportAbility[],
   ): Promise<{ timesBySpellId: Map<number, number[]>; encounterName: string } | null> {
     try {
       const report = await this.wclApi.getReport(ranking.report_code);
       const fight = report.fights.find(entry => entry.id === ranking.fight_id);
-      const player = report.masterData?.actors?.find(actor => actor.name === ranking.player);
+      const player = findParseActor(report.masterData?.actors, ranking);
       if (!fight || !player) return null;
 
       const casts = withRelativeS(

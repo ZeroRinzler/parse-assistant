@@ -51,7 +51,7 @@ describe('talentKeyFromTree', () => {
 });
 
 describe('toParseGear', () => {
-  const ranking = { player: 'Ann', report_code: 'rep1', fight_id: 3 };
+  const ranking = { player: 'Ann', server: 'Area 52', report_code: 'rep1', fight_id: 3 };
 
   it('reduces a found CharacterGear to its fingerprint tagged with the parse identity', () => {
     const gear: CharacterGear = {
@@ -291,6 +291,44 @@ describe('GearTransformService (live, in-browser)', () => {
     // 11 candidates, one private: the 11th backfills the skipped parse to a full 10.
     expect(bench.ok).toBe(true);
     if (bench.ok) expect(bench.value.sample_count).toBe(10);
+  });
+
+  it('bakes the same-named raider sitting on the ranked realm, not the first name match', async () => {
+    const TWIN_NAME = 'P1';
+    const DECOY_ID = 10;
+    const RANKED_ID = 11;
+    const RANKED_TALENT_ENTRY = 651;
+    const twinReport = {
+      title: 't',
+      fights: [{ id: 1, name: 'Boss', startTime: 0, endTime: 300_000, kill: true, encounterID: 1, friendlyPlayers: [] }],
+      masterData: {
+        actors: [
+          { id: DECOY_ID, name: TWIN_NAME, subType: 'Rogue', server: 'Twisting Nether' },
+          { id: RANKED_ID, name: TWIN_NAME, subType: 'Rogue', server: 'Area 52' },
+        ],
+        abilities: [],
+      },
+    };
+    const twinWcl = {
+      ...wclFake,
+      getRankings: async () => ({ rankings: [{ name: TWIN_NAME, server: { name: 'Area-52' }, report: { code: 'r1', fightID: 1 } }] }),
+      getReport: async () => twinReport,
+      getCombatantInfo: async () => [
+        combatantInfo(DECOY_ID),
+        { ...combatantInfo(RANKED_ID), talentTree: [{ nodeID: 65, id: RANKED_TALENT_ENTRY, rank: 1 }] },
+      ],
+    };
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: WclApiService, useValue: twinWcl as unknown as WclApiService },
+        { provide: DataFileApiService, useValue: {} as unknown as DataFileApiService },
+        { provide: TalentDataService, useValue: { getTalents: async () => null } as unknown as TalentDataService },
+      ],
+    });
+    const bench = await TestBed.inject(GearTransformService).getBench('SubtletyRogue', 1);
+    expect(bench.ok).toBe(true);
+    if (!bench.ok) return;
+    expect(bench.value.talent_builds[0]).toMatchObject({ key: `v3:${RANKED_TALENT_ENTRY}.1`, source_id: RANKED_ID });
   });
 
   it('is a missing error when there are no rankings', async () => {

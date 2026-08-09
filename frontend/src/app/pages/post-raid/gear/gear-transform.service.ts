@@ -10,7 +10,7 @@ import { talentKeyFromTree } from '../../../shared/gear/talent-key';
 import { buildTalentDiff } from '../../../shared/gear/gear-comparison';
 import { TalentDataService } from '../../../core/services/talent-data';
 import { SpecTalents } from '../../../core/models/talent.models';
-import { toParseRankings, unwrapRankings } from '../../../shared/analysis/wcl-projections';
+import { findParseActor, toParseRankings, unwrapRankings } from '../../../shared/analysis/wcl-projections';
 import { getOrInsert } from '../../../shared/analysis/analysis-math';
 import { DataSource } from '../../../core/data-source/data-source';
 import { GearBench } from './gear-data-source';
@@ -197,7 +197,7 @@ export class GearTransformService implements DataSource<GearBench> {
     try {
       const report = await this.wclApi.getReport(ranking.report_code);
       const fight = report.fights.find(entry => entry.id === ranking.fight_id);
-      const player = report.masterData?.actors?.find(actor => actor.name === ranking.player);
+      const player = findParseActor(report.masterData?.actors, ranking);
       if (!fight || !player) return null;
 
       const event = selectCombatantInfo(await this.wclApi.getCombatantInfo(ranking.report_code, fight.id, player.id), player.id);
