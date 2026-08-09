@@ -19,7 +19,7 @@ const POST_RAID_KEY = 'wl.sel.postRaid';
 const PRE_FIGHT_KEY = 'wl.sel.preFight';
 const NORTHERN_SKY_KEY = 'wl.sel.northernSky';
 
-// There are no URL query params by design (see the "URL routing" section of the warcraft-architecture skill), so sticky state lives only in localStorage.
+// There are no URL query params by design, so sticky state lives only in localStorage.
 @Injectable({ providedIn: 'root' })
 export class SelectionStore {
   savePostRaid(value: PostRaidSelection): void {

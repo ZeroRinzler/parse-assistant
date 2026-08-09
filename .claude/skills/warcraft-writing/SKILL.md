@@ -1,9 +1,11 @@
 ---
-name: warcraft-copy
+name: warcraft-writing
 description: warcraft-learner user-facing writing and branding rules. Covers the terse-expert-analyst UI copy voice for all finding messages, remedies, card subtitles, empty states and microcopy, plus the product branding/naming rules (the warcraft-learner wordmark, never conflating it with Warcraft Logs/WCL) and the logo/favicon source of truth. Load this before writing or editing any string a user sees - findings, remedies, labels, empty states, page titles, nav wordmark, CLI banners, READMEs - or before touching the logo/favicon.
 ---
 
-# warcraft-learner copy and branding
+# warcraft-learner writing and branding
+
+**Deliverable:** every string a user sees follows the voice rules below - fact then fix, no hedging, no statistics clutter, quiet success states - and the product name stays exactly `warcraft-learner`.
 
 ## Branding & naming
 
