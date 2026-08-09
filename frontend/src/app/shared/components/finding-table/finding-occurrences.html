@@ -15,6 +15,7 @@
 <div
   role="listbox"
   tabindex="0"
+  aria-label="Finding instances"
   [attr.aria-activedescendant]="activeOptionId()"
   (keydown)="onKeydown($event)">
   <div class="flex flex-wrap items-start gap-1.5">
@@ -30,6 +31,7 @@
           [id]="optionId($index)"
           [class]="'relative flex items-center justify-center min-w-10 h-10 px-2 rounded-lg overflow-hidden bg-[var(--bg)] border border-[var(--border)] text-[11.5px] font-semibold whitespace-nowrap ' + tone + (active ? ' outline outline-2 outline-offset-0 outline-[var(--gold)]' : ' focus:outline-none')"
           [attr.aria-selected]="active"
+          [attr.aria-describedby]="active ? detailId : null"
           (click)="select($index)">
           {{ occ.label }}
           <span [class]="'absolute bottom-0 left-0 right-0 h-1 ' + barTone" aria-hidden="true"></span>
@@ -49,7 +51,7 @@
 }
 
 @if (active(); as occ) {
-  <div class="mt-[11px] text-[13px] text-[var(--muted)] leading-[1.5]">
+  <div [id]="detailId" class="mt-[11px] text-[13px] text-[var(--muted)] leading-[1.5]">
     @if (occ.atS != null) {
       <span class="text-[var(--accent)] font-semibold mr-0.5">{{ occ.atS | formatDuration }}</span>
     }

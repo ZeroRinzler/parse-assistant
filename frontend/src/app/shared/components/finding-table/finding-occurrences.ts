@@ -48,6 +48,8 @@ export class FindingOccurrencesComponent {
     return `${this.instanceId}-opt-${index}`;
   }
 
+  readonly detailId = `${this.instanceId}-detail`;
+
   // The listbox keeps focus; aria-activedescendant points screen readers at the active chip.
   readonly activeOptionId = computed(() => this.optionId(this.activeIndex()));
 
