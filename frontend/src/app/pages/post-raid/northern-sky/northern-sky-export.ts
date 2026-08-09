@@ -5,8 +5,10 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { FlyoverPanelComponent } from '../../../shared/components/flyover-panel/flyover-panel';
 import { GameIconComponent } from '../../../shared/components/game-icon/game-icon';
+import { LoadStateComponent, RenderableLoadError } from '../../../shared/components/load-state/load-state';
 import { SelectionStore } from '../../../core/services/selection-store';
 import { LatestLoad } from '../../../shared/latest-load';
+import { logWarn } from '../../../core/log';
 import { NorthernSkyBench } from './northern-sky-data-source';
 import {
   NorthernSkyFeatureService, buildNorthernSkyNote, abilitiesByKind, selectedIds, isAllSelected,
@@ -16,7 +18,7 @@ import {
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-northern-sky-export',
-  imports: [MatButtonModule, MatIconModule, MatCheckboxModule, FlyoverPanelComponent, GameIconComponent],
+  imports: [MatButtonModule, MatIconModule, MatCheckboxModule, FlyoverPanelComponent, GameIconComponent, LoadStateComponent],
   templateUrl: './northern-sky-export.html',
 })
 export class NorthernSkyExportComponent {
@@ -32,6 +34,7 @@ export class NorthernSkyExportComponent {
   private readonly excluded = signal<ReadonlySet<number>>(new Set(this.selection.loadNorthernSky()?.excludedSpellIds ?? []));
   protected readonly open = signal(false);
   protected readonly copied = signal(false);
+  protected readonly error = signal<RenderableLoadError | null>(null);
 
   protected readonly abilities = computed(() => this.bench()?.abilities ?? []);
   private readonly grouped = computed(() => abilitiesByKind(this.abilities()));
@@ -49,7 +52,14 @@ export class NorthernSkyExportComponent {
       this.loader.run(this.feature.getExport(spec, encounterId), {
         context: 'northernSky.getExport',
         apply: result => {
-          this.bench.set(result.ok ? result.value : null);
+          if (result.ok) {
+            this.error.set(null);
+            this.bench.set(result.value);
+          } else {
+            if (result.error.kind === 'permanent') logWarn(result.error.id, result.error.context);
+            this.error.set(result.error.kind === 'missing' ? null : result.error);
+            this.bench.set(null);
+          }
           this.availableChange.emit(this.available());
         },
       });
