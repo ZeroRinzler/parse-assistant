@@ -1,7 +1,7 @@
 import { CharacterGear } from '../../core/models/wcl.models';
 import { EncounterGearStats } from '../../core/models/encounter.models';
 import { SpecTalents, TalentEntry, TalentDiff } from '../../core/models/talent.models';
-import { parseTalentKey } from './talent-key';
+import { TalentPick, parseTalentKey } from './talent-key';
 
 export type GearStatus = 'ok' | 'warn' | 'info' | 'unknown';
 
@@ -118,6 +118,32 @@ function talentOf(talents: SpecTalents, entryId: number): TalentEntry {
   return talents[entryId] ?? { name: `Talent #${entryId}`, icon: '' };
 }
 
+interface TalentSpend {
+  talent: TalentEntry;
+  points: number;
+  entryIds: Set<number>;
+}
+
+// A tiered slot reports one entry per rank tier, all named alike, so points belong to the talent, not to any one entry.
+function spendByTalent(picks: TalentPick[], talents: SpecTalents): Map<string, TalentSpend> {
+  const spend = new Map<string, TalentSpend>();
+  for (const pick of picks) {
+    const talent = talentOf(talents, pick.entryId);
+    const existing = spend.get(talent.name);
+    if (existing) {
+      existing.points += pick.rank;
+      existing.entryIds.add(pick.entryId);
+    } else {
+      spend.set(talent.name, { talent, points: pick.rank, entryIds: new Set([pick.entryId]) });
+    }
+  }
+  return spend;
+}
+
+function sameEntries(a: Set<number>, b: Set<number>): boolean {
+  return a.size === b.size && [...a].every(entryId => b.has(entryId));
+}
+
 export function buildTalentDiff(
   buildKey: string, baselineKey: string, talents: SpecTalents | null,
 ): TalentDiff[] {
@@ -126,18 +152,22 @@ export function buildTalentDiff(
   const basePicks = parseTalentKey(baselineKey);
   if (!buildPicks.length || !basePicks.length) return [];
 
-  const baseByEntry = new Map(basePicks.map(pick => [pick.entryId, pick]));
-  const buildByEntry = new Map(buildPicks.map(pick => [pick.entryId, pick]));
+  const build = spendByTalent(buildPicks, talents);
+  const baseline = spendByTalent(basePicks, talents);
   const diffs: TalentDiff[] = [];
-  for (const pick of buildPicks) {
-    const base = baseByEntry.get(pick.entryId);
-    if (!base) diffs.push({ kind: 'added', talent: talentOf(talents, pick.entryId) });
-    else if (base.rank !== pick.rank) {
-      diffs.push({ kind: 'rank', talent: talentOf(talents, pick.entryId), rank: pick.rank, standardRank: base.rank });
+  for (const [name, picked] of build) {
+    const standard = baseline.get(name);
+    if (!standard) {
+      diffs.push({ kind: 'added', talent: picked.talent });
+    } else if (standard.points !== picked.points) {
+      diffs.push({ kind: 'rank', talent: picked.talent, rank: picked.points, standardRank: standard.points });
+    } else if (!sameEntries(picked.entryIds, standard.entryIds)) {
+      // Same points on different entries of an alike-named choice slot: a swap, not a points change.
+      diffs.push({ kind: 'added', talent: picked.talent }, { kind: 'dropped', talent: standard.talent });
     }
   }
-  for (const pick of basePicks) {
-    if (!buildByEntry.has(pick.entryId)) diffs.push({ kind: 'dropped', talent: talentOf(talents, pick.entryId) });
+  for (const [name, standard] of baseline) {
+    if (!build.has(name)) diffs.push({ kind: 'dropped', talent: standard.talent });
   }
   return diffs;
 }

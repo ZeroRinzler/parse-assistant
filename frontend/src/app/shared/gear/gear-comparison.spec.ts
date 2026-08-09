@@ -310,7 +310,15 @@ const TALENTS: SpecTalents = {
   22: { name: 'Beta', icon: 'icon_b', spellId: 222 },
   33: { name: 'Gamma', icon: 'icon_c', spellId: 333 },
   44: { name: 'Hero Tree', icon: '' },
+  55: { name: 'Tiered', icon: 'icon_t', spellId: 551 },
+  56: { name: 'Tiered', icon: 'icon_t', spellId: 552 },
+  57: { name: 'Tiered', icon: 'icon_t', spellId: 553 },
+  66: { name: 'Twin', icon: 'icon_w', spellId: 661 },
+  67: { name: 'Twin', icon: 'icon_w', spellId: 662 },
 };
+const TIERED_2_POINTS = 'v3:11.1,22.2,55.1,56.1';
+const TIERED_3_POINTS = 'v3:11.1,22.2,55.1,56.2';
+const TIERED_4_POINTS = 'v3:11.1,22.2,55.1,56.2,57.1';
 
 describe('buildTalentDiff (an alt build vs the most common build)', () => {
   it('is empty when the build matches the most common one', () => {
@@ -351,6 +359,32 @@ describe('buildTalentDiff (an alt build vs the most common build)', () => {
   it('falls back to the entry id when the talents file does not name it', () => {
     expect(buildTalentDiff('v3:11.1,22.2,99.1', BASELINE, TALENTS)).toEqual([
       { kind: 'added', talent: { name: 'Talent #99', icon: '' } },
+    ]);
+  });
+
+  it('reports a tiered slot both builds run as the points each spends on it', () => {
+    expect(buildTalentDiff(TIERED_4_POINTS, TIERED_3_POINTS, TALENTS)).toEqual([
+      { kind: 'rank', talent: TALENTS[55], rank: 4, standardRank: 3 },
+    ]);
+    expect(buildTalentDiff(TIERED_2_POINTS, TIERED_4_POINTS, TALENTS)).toEqual([
+      { kind: 'rank', talent: TALENTS[55], rank: 2, standardRank: 4 },
+    ]);
+  });
+
+  it('is empty when both builds spend the same points on a tiered slot', () => {
+    expect(buildTalentDiff(TIERED_4_POINTS, TIERED_4_POINTS, TALENTS)).toEqual([]);
+  });
+
+  it('lists a talent its slot reports under several entries once', () => {
+    expect(buildTalentDiff(TIERED_4_POINTS, BASELINE, TALENTS)).toEqual([
+      { kind: 'added', talent: TALENTS[55] },
+    ]);
+  });
+
+  it('reports an alike-named slot swapped at equal points as the added talent plus the dropped one', () => {
+    expect(buildTalentDiff('v3:11.1,22.2,67.1', 'v3:11.1,22.2,66.1', TALENTS)).toEqual([
+      { kind: 'added', talent: TALENTS[67] },
+      { kind: 'dropped', talent: TALENTS[66] },
     ]);
   });
 
