@@ -532,11 +532,15 @@ interface BoundedCasts {
   tail?: string;
 }
 
+function boundLimit(scale: Scale, bound: 'min' | 'max', threshold: RuleThreshold): number {
+  return scale.quantize(lenient(threshold, bound === 'min' ? 'down' : 'up'));
+}
+
 function evaluateBoundedPerCast(
   judged: BoundedCasts, threshold: RuleThreshold, severity: Severity, remedy?: string,
 ): AnalysisFinding | null {
   if (!judged.values.length) return null;
-  const limit = judged.scale.quantize(lenient(threshold, judged.bound === 'min' ? 'down' : 'up'));
+  const limit = boundLimit(judged.scale, judged.bound, threshold);
   const violations = judged.values.filter(({ value }) => judged.bound === 'min' ? value < limit : value > limit);
   if (!violations.length) return null;
   const phrase = judged.phrase(judged.scale.format(limit));
@@ -1055,8 +1059,15 @@ export function ruleThreshold(
   return { threshold: { value, band }, sample_count: measured.length };
 }
 
+/** A floor no cast can fall under would list every player on plan for a rule it never tested. */
+function benchCanFlag(cond: RuleCondition, threshold: RuleThreshold): boolean {
+  if (cond.kind !== 'spend_at_stacks' || cond.bound !== 'min') return true;
+  return boundLimit(WHOLE_STEPS, 'min', threshold) > 0;
+}
+
 export function benchedRules(benched: BenchedRule[]): BenchedRule[] {
-  return benched.filter(entry => entry.rule.condition != null && entry.threshold != null);
+  return benched.filter(entry => entry.rule.condition != null && entry.threshold != null
+    && benchCanFlag(entry.rule.condition, entry.threshold));
 }
 
 export function evaluateCondition(

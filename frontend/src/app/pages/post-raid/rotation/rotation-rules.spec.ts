@@ -725,6 +725,22 @@ describe('evaluateSpendAtStacks', () => {
     expect(measureRule(spendAtStacks, ruleCtx([], { buffs: climbing }))).toBeNull();
   });
 
+  it('benches a real floor from a parse that never spent cheap, and a floor of zero from one that did', () => {
+    const disciplined = ruleCtx([cast(LIGHTNING_BOLT, holding(8)), cast(LIGHTNING_BOLT, holding(9))], { buffs: climbing });
+    const BEFORE_FIRST_STACK_S = 0.5;
+    const oneCheapCast = ruleCtx([cast(LIGHTNING_BOLT, BEFORE_FIRST_STACK_S), cast(LIGHTNING_BOLT, holding(9))], { buffs: climbing });
+    expect(measureRule(spendAtStacks, disciplined)).toBe(8);
+    expect(measureRule(spendAtStacks, oneCheapCast)).toBe(0);
+  });
+
+  it('flags a spend below the benched floor and passes one exactly on it', () => {
+    const FLOOR = 5;
+    const onFloor = ruleCtx([cast(LIGHTNING_BOLT, holding(FLOOR))], { buffs: climbing });
+    const underFloor = ruleCtx([cast(LIGHTNING_BOLT, holding(FLOOR - 1))], { buffs: climbing });
+    expect(evaluateSpendAtStacks(spendAtStacks, onFloor, thr(FLOOR), 'warning')).toBeNull();
+    expect(evaluateSpendAtStacks(spendAtStacks, underFloor, thr(FLOOR), 'warning')).not.toBeNull();
+  });
+
   it('labels the rule as "<spender> at <buff>"', () => {
     expect(ruleLabel(spendAtStacks)).toBe('Lightning Bolt at Maelstrom Weapon');
   });
@@ -1136,6 +1152,33 @@ describe('benchedRules', () => {
   it('drops a rule with no condition before a magnitude is even considered', () => {
     const unconformed = { rule: { description: 'none' }, threshold: null, sample_count: 0 } as unknown as BenchedRule;
     expect(benchedRules([unconformed])).toEqual([]);
+  });
+
+  const SPEND_AT_STACKS: SpendAtStacksCondition = {
+    kind: 'spend_at_stacks',
+    spell_id: LIGHTNING_BOLT, spell_name: 'Lightning Bolt',
+    buff_spell_id: MAELSTROM_WEAPON, buff_spell_name: 'Maelstrom Weapon',
+    bound: 'min',
+  };
+  const spendRule = (condition: SpendAtStacksCondition): RulebookRule =>
+    ({ severity: 'warning', description: 'spend at stacks', condition });
+
+  it('drops a stack floor of zero, which no cast can fall under, and keeps a floor of one', () => {
+    expect(benchedRules([benched(spendRule(SPEND_AT_STACKS), thr(0))])).toEqual([]);
+    expect(benchedRules([benched(spendRule(SPEND_AT_STACKS), thr(1))])).toHaveLength(1);
+  });
+
+  it('keeps a zero bar on the max bound, where a cast can still generate past it', () => {
+    expect(benchedRules([benched(spendRule({ ...SPEND_AT_STACKS, bound: 'max' }), thr(0))])).toHaveLength(1);
+  });
+
+  it('keeps a stack floor of zero out of both the findings and the on-plan list', () => {
+    const ctx = ruleCtx([cast(LIGHTNING_BOLT, 3)], { buffs: [applyBuff(MAELSTROM_WEAPON, 1)] });
+    const vacuous = [benched(spendRule(SPEND_AT_STACKS), thr(0))];
+    // Unfiltered, a floor no cast can fall under reports the player on plan for a rule it never tested.
+    expect(rulesFollowed(vacuous, ctx)).toEqual(['spend at stacks']);
+    expect(evaluateRules(benchedRules(vacuous), ctx)).toEqual([]);
+    expect(rulesFollowed(benchedRules(vacuous), ctx)).toEqual([]);
   });
 });
 
