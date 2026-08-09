@@ -34,6 +34,7 @@ export class NorthernSkyExportComponent {
   private readonly excluded = signal<ReadonlySet<number>>(new Set(this.selection.loadNorthernSky()?.excludedSpellIds ?? []));
   protected readonly open = signal(false);
   protected readonly copied = signal(false);
+  protected readonly copyFailed = signal(false);
   protected readonly error = signal<RenderableLoadError | null>(null);
 
   protected readonly abilities = computed(() => this.bench()?.abilities ?? []);
@@ -82,12 +83,14 @@ export class NorthernSkyExportComponent {
   protected copyNote(): void {
     const bench = this.bench();
     if (!bench) return;
-    this.clipboard.copy(buildNorthernSkyNote(bench, selectedIds(this.abilities(), this.excluded())));
-    this.copied.set(true);
+    const succeeded = this.clipboard.copy(buildNorthernSkyNote(bench, selectedIds(this.abilities(), this.excluded())));
+    this.copied.set(succeeded);
+    this.copyFailed.set(!succeeded);
   }
 
   protected openPanel(): void {
     this.copied.set(false);
+    this.copyFailed.set(false);
     this.open.set(true);
   }
 
