@@ -372,7 +372,19 @@ describe('rotation finding partition and row builders', () => {
   it('builds offensive rows with resolved icon + chip per finding', () => {
     const rows = buildOffensiveRows({ 'Shadow Blades': { issues: [issueFinding], holds: [] } }, { 'Shadow Blades': SHADOW_BLADES }, abilities);
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ name: 'Shadow Blades', spellId: SHADOW_BLADES, icon: 'sb', chip: 'held' });
+    expect(rows[0]).toMatchObject({ name: 'Shadow Blades', spellId: SHADOW_BLADES, icon: 'sb', chip: 'held', severity: 'warning' });
+  });
+
+  it('keeps a critical issue finding critical in the offensive row', () => {
+    const criticalFinding: AnalysisFinding = { ...issueFinding, severity: 'critical', category: 'lost_cooldown' };
+    const rows = buildOffensiveRows({ 'Shadow Blades': { issues: [criticalFinding], holds: [] } }, { 'Shadow Blades': SHADOW_BLADES }, abilities);
+    expect(rows[0]).toMatchObject({ severity: 'critical', chip: 'lost cast' });
+  });
+
+  it('keeps an info-severity hold suggestion info in the offensive row, not warning', () => {
+    const rows = buildOffensiveRows({ 'Shadow Blades': { issues: [], holds: [holdFinding] } }, { 'Shadow Blades': SHADOW_BLADES }, abilities);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ severity: 'info', chip: 'hold' });
   });
 
   it('builds an offensive row with an empty icon and the raw cd name when its spell id is missing from the ability map', () => {
