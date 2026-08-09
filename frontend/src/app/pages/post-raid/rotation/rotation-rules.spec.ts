@@ -444,6 +444,27 @@ describe('evaluateResourceAtCast', () => {
     expect(finding?.message).toContain('Eviscerate cast below 5/5 combo points');
   });
 
+  it('quantizes the bench fraction back to the resource\'s own cap before it names the top parses\' mark', () => {
+    const TOP_FRAC = 0.8;  // a fraction other than 0 or 1, so quantizing must actually round it
+    const ctx = ruleCtx([atCombo(10, 3), atCombo(20, MAX_COMBO_POINTS)]);
+    const finding = evaluateResourceAtCast(finisherAtMax, ctx, thr(TOP_FRAC), 'warning');
+    expect(finding?.message).toBe('Eviscerate cast below 4/5 combo points, 1 of 2 cast(s). Top: 4/5.');
+  });
+
+  it('names the top parses\' mark as a percent for a large pool (mana), the other branch of the scale', () => {
+    const innervate: ResourceAtCastCondition = {
+      kind: 'resource_at_cast', spell_id: EVISCERATE, spell_name: 'Innervate',
+      resource_type: COMBO_POINT_TYPE, resource_name: 'mana', bound: 'min',
+    };
+    const MANA_MAX = 250_000;
+    const TOP_FRAC = 0.75;
+    const atMana = (atS: number, amount: number) =>
+      cast(EVISCERATE, atS, { resources: [{ amount, max: MANA_MAX, type: COMBO_POINT_TYPE }] });
+    const ctx = ruleCtx([atMana(10, MANA_MAX * 0.6), atMana(20, MANA_MAX)]);
+    const finding = evaluateResourceAtCast(innervate, ctx, thr(TOP_FRAC), 'warning');
+    expect(finding?.message).toBe('Innervate cast below 75% mana, 1 of 2 cast(s). Top: 75%.');
+  });
+
   it('is not applicable when the casts carry no resource snapshot', () => {
     expect(evaluateResourceAtCast(finisherAtMax, ruleCtx([cast(EVISCERATE, 10)]), thr(RESOURCE_FLOOR), 'warning')).toBeNull();
     expect(ruleApplicable(finisherAtMax, ruleCtx([cast(EVISCERATE, 10)]))).toBe(false);

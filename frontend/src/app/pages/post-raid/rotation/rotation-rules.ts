@@ -545,7 +545,7 @@ function evaluateBoundedPerCast(
     severity, category: 'rule_violation',
     timestamp_s: round(violations[0].timeS, 3),
     label: `${judged.subject} ${phrase}`,
-    message: `${judged.subject} cast ${phrase}${judged.tail ?? ''}, ${violations.length} of ${judged.values.length} cast(s). Top: ${judged.scale.format(threshold.value)}.`,
+    message: `${judged.subject} cast ${phrase}${judged.tail ?? ''}, ${violations.length} of ${judged.values.length} cast(s). Top: ${judged.scale.format(judged.scale.quantize(threshold.value))}.`,
     measured: { value: `${violations.length} / ${judged.values.length}`, unit: 'cast(s)' },
     details: remedy ? { remedy } : undefined,
     occurrences: sampleOccurrences(judged.values.map(({ timeS, value }): FindingOccurrence => {
