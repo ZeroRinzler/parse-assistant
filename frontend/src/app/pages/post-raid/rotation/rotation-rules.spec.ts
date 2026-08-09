@@ -1339,10 +1339,10 @@ describe('occurrence strips', () => {
     const ctx = ruleCtx([cast(MOONFIRE, 24), cast(MOONFIRE, 36)], { debuffs });
     const finding = evaluateAuraClipped(moonfireClipped, ctx, thr(12), 'warning');
     expect(finding?.occurrences).toEqual([
-      { atS: 24, ok: false, label: '4s', detail: 'Refreshed with 4s still remaining.' },
-      { atS: 36, ok: true, label: '12s', detail: 'Refreshed with 12s still remaining.' },
+      { atS: 24, ok: false, label: '4s', detail: 'Refreshed 4s into the aura.' },
+      { atS: 36, ok: true, label: '12s', detail: 'Refreshed 12s into the aura.' },
     ]);
-    expect(finding?.occurrenceTarget).toBe('field waits for 12s remaining');
+    expect(finding?.occurrenceTarget).toBe('field waits for 12s+');
   });
 
   it('filler_below_health: a chip per filler cast under the health gate, coached vs alternative as the label', () => {

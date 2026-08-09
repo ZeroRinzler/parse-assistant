@@ -828,9 +828,9 @@ export function evaluateAuraClipped(
     details: remedy ? { remedy } : undefined,
     occurrences: sampleOccurrences(judged.map(({ timeS, elapsedS }): FindingOccurrence => ({
       atS: round(timeS, 3), ok: elapsedS >= floor, label: `${round(elapsedS, 1)}s`,
-      detail: `Refreshed with ${round(elapsedS, 1)}s still remaining.`,
+      detail: `Refreshed ${round(elapsedS, 1)}s into the aura.`,
     }))),
-    occurrenceTarget: `field waits for ${floorLabel}s remaining`,
+    occurrenceTarget: `field waits for ${floorLabel}s+`,
   };
 }
 
