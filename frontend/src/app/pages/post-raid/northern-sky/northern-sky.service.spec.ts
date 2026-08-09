@@ -5,7 +5,7 @@ import { SHADOW_BLADES, SHADOW_DANCE, EVASION } from '../../../../testing/spell-
 import { NORTHERN_SKY_DATA_SOURCE, NorthernSkyBench, NorthernSkyAbility } from './northern-sky-data-source';
 import {
   NorthernSkyFeatureService, buildNorthernSkyNote, abilitiesByKind, selectedIds, isAllSelected,
-  toggleExclusion, toggleAllExclusion,
+  toggleExclusion, toggleAllExclusion, isPanelOpen,
 } from './northern-sky.service';
 
 const ENCOUNTER_ID = 3009;
@@ -118,6 +118,25 @@ describe('toggleAllExclusion', () => {
 
   it('clears all exclusions when some are currently deselected', () => {
     expect(toggleAllExclusion(abilities, new Set([SHADOW_BLADES]))).toEqual(new Set());
+  });
+
+  it('leaves persisted exclusions untouched over an empty ability list', () => {
+    const excluded = new Set([SHADOW_BLADES, EVASION]);
+    expect(toggleAllExclusion([], excluded)).toEqual(excluded);
+  });
+});
+
+describe('isPanelOpen', () => {
+  it('is open once requested while the bench has abilities to export', () => {
+    expect(isPanelOpen(true, true)).toBe(true);
+  });
+
+  it('closes an already-open panel once the bench has nothing to export', () => {
+    expect(isPanelOpen(true, false)).toBe(false);
+  });
+
+  it('stays closed when not requested even if the bench has abilities', () => {
+    expect(isPanelOpen(false, true)).toBe(false);
   });
 });
 

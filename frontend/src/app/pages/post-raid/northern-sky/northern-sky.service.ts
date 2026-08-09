@@ -42,8 +42,15 @@ export function toggleExclusion(excluded: ReadonlySet<number>, spellId: number, 
   return next;
 }
 
+// An empty ability list has nothing to select, so it must return the exclusions untouched rather than falling into isAllSelected's "not all selected" branch and clearing them.
 export function toggleAllExclusion(abilities: NorthernSkyAbility[], excluded: ReadonlySet<number>): Set<number> {
+  if (abilities.length === 0) return new Set(excluded);
   return isAllSelected(abilities, excluded) ? new Set(abilities.map(ability => ability.spell_id)) : new Set();
+}
+
+// The panel stays mounted across encounter switches, so a stale open request must not render once the bench has nothing to export.
+export function isPanelOpen(requestedOpen: boolean, available: boolean): boolean {
+  return requestedOpen && available;
 }
 
 @Injectable({ providedIn: 'root' })
