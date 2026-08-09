@@ -282,8 +282,10 @@ interface ResolvedCd { spellId: number | null; icon: string; rowName: string }
 
 function resolveCd(name: string, cdSpellIds: Record<string, number>, abilities: AbilityIcons): ResolvedCd {
   const spellId = cdSpellIds[name] ?? null;
+  const ability = spellId != null ? abilities[spellId] : undefined;
+  if (spellId != null && !ability) logWarn('resolveCd: ability id missing from ability map', spellId);
   return spellId != null
-    ? { spellId, icon: abilities[spellId].icon, rowName: abilities[spellId].name }
+    ? { spellId, icon: ability?.icon ?? '', rowName: ability?.name ?? name }
     : { spellId: null, icon: '', rowName: name };
 }
 

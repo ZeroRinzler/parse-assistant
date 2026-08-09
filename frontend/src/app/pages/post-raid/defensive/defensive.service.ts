@@ -269,15 +269,19 @@ export function defensiveDetailRows(
 ): RangeRow[] {
   const playerByAbility: Record<number, { damage: number }> = {};
   for (const ability of playerWindow?.ability_breakdown ?? []) playerByAbility[ability.spell_id] = ability;
-  return abilityBreakdown.map(ability => ({
-    spellId: ability.spell_id,
-    label: abilities[ability.spell_id].name,
-    icon: abilities[ability.spell_id].icon,
-    playerPct: playerByAbility[ability.spell_id]?.damage ?? null,
-    topAvg: ability.avg_damage,
-    topMin: ability.min_damage,
-    topMax: ability.max_damage,
-  }));
+  return abilityBreakdown.map(ability => {
+    const baked = abilities[ability.spell_id];
+    if (!baked) logWarn('defensiveDetailRows: ability id missing from ability map', ability.spell_id);
+    return {
+      spellId: ability.spell_id,
+      label: baked?.name ?? `Ability #${ability.spell_id}`,
+      icon: baked?.icon ?? '',
+      playerPct: playerByAbility[ability.spell_id]?.damage ?? null,
+      topAvg: ability.avg_damage,
+      topMin: ability.min_damage,
+      topMax: ability.max_damage,
+    };
+  });
 }
 
 export function defensiveMapAnchor(window: BurstWindow): DefensiveMapAnchor {
@@ -409,7 +413,9 @@ export class DefensiveFeatureService {
       const playerWindows = computePlayerDefensiveWindows(bench.value.defensive_windows, dtEventsTimed);
       const iconByName: Record<string, string> = {};
       for (const [name, spellId] of Object.entries(bench.value.cd_spell_ids)) {
-        iconByName[name] = bench.value.ability_icons[spellId].icon;
+        const ability = bench.value.ability_icons[spellId];
+        if (!ability) logWarn('loadAnalysisView: ability id missing from ability map', spellId);
+        iconByName[name] = ability?.icon ?? '';
       }
       const { windows, anchors, clipAnchors } = buildDefensiveWindows({
         topWindows: bench.value.defensive_windows, playerWindows, playerDefensives, fightDurationS, abilities: bench.value.ability_icons,

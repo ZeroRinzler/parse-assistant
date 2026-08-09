@@ -375,6 +375,14 @@ describe('rotation finding partition and row builders', () => {
     expect(rows[0]).toMatchObject({ name: 'Shadow Blades', spellId: SHADOW_BLADES, icon: 'sb', chip: 'held' });
   });
 
+  it('builds an offensive row with an empty icon and the raw cd name when its spell id is missing from the ability map', () => {
+    // SECRET_TECHNIQUE is deliberately absent from `abilities`, so the guarded lookup must not throw.
+    const missingIdFinding: AnalysisFinding = { ...issueFinding, cd_name: 'Secret Move' };
+    const rows = buildOffensiveRows({ 'Secret Move': { issues: [missingIdFinding], holds: [] } }, { 'Secret Move': SECRET_TECHNIQUE }, abilities);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ name: 'Secret Move', spellId: SECRET_TECHNIQUE, icon: '' });
+  });
+
   it('builds on-plan chips only for clean successes', () => {
     const clean = partitionRotationFindings([successFinding]);
     expect(buildOnPlanChips(clean, { 'Vanish': VANISH }, abilities)).toEqual([{ name: 'Vanish', spellId: VANISH, icon: 'vanish' }]);

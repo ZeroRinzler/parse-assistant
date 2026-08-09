@@ -218,6 +218,23 @@ describe('computePlayerDefensiveWindows', () => {
   });
 });
 
+describe('defensiveDetailRows', () => {
+  it('labels an ability whose spell id is missing from the ability map with a placeholder and empty icon', () => {
+    // 900 is intentionally absent from the ability map, so the guarded lookup must not throw.
+    const breakdown = [{ spell_id: 900, avg_damage: 600, min_damage: 400, max_damage: 800, count: 5 }];
+    const rows = defensiveDetailRows(breakdown, null, {});
+    expect(rows[0].label).toBe('Ability #900');
+    expect(rows[0].icon).toBe('');
+  });
+
+  it('resolves an ability present in the map to its baked name and icon', () => {
+    const breakdown = [{ spell_id: 700, avg_damage: 600, min_damage: 400, max_damage: 800, count: 5 }];
+    const rows = defensiveDetailRows(breakdown, null, { 700: { icon: 'hit', name: 'Boss Hit' } });
+    expect(rows[0].label).toBe('Boss Hit');
+    expect(rows[0].icon).toBe('hit');
+  });
+});
+
 describe('defensiveWindowStatus', () => {
   // Status is driven by damage TAKEN vs the band, not by coverage. Band edge = topMax + stddev.
   const TOP_MAX = 1200;
@@ -431,11 +448,27 @@ describe('DefensiveFeatureService.loadAnalysisView (post-raid)', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.spellIdsByName).toEqual({ 'Cloak of Shadows': CLOAK_OF_SHADOWS });
+    expect(result.value.iconByName).toEqual({ 'Cloak of Shadows': 'cloak' });
     expect(result.value.windows).toHaveLength(1);
     expect(result.value.windows[0].overview.playerPct).toBe(1150);
     expect(result.value.anchors[0]).toMatchObject({ refGameId: 6666 });
     // 1 use vs avg ~2, but only one buff window -> first cast at 30 (late) gives a warning finding.
     expect(result.value.findings.length).toBeGreaterThan(0);
+  });
+
+  it('does not throw and yields an empty icon when a cd spell id is missing from the ability map', async () => {
+    const report = {
+      title: 't',
+      fights: [{ id: 1, name: 'Boss', startTime: 0, endTime: 300_000, kill: true, encounterID: 1, friendlyPlayers: [] }],
+      masterData: { actors: [{ id: 10, name: 'P', subType: 'Rogue', server: '' }], abilities: [] },
+    };
+    const wcl = { getReport: async () => report, getAllEvents: async () => [] };
+    // ability_icons intentionally omits CLOAK_OF_SHADOWS even though cd_spell_ids still references it.
+    const bench = { ...fullBench(), ability_icons: {} };
+    const service = serviceWith(ok(bench), wcl);
+    const result = await service.loadAnalysisView('SubtletyRogue', 1, 'r1', 1, 10);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.iconByName).toEqual({ 'Cloak of Shadows': '' });
   });
 
   it('surfaces a WCL failure as an error instead of a silent bench-only view', async () => {
