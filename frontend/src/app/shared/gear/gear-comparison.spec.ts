@@ -5,6 +5,7 @@ import {
   buildEnchantRows,
   buildTrinketRows,
   buildTalentDiff,
+  talentStatusOf,
 } from './gear-comparison';
 import { SpecTalents } from '../../core/models/talent.models';
 import { EncounterGearStats } from '../../core/models/encounter.models';
@@ -357,5 +358,31 @@ describe('buildTalentDiff (an alt build vs the most common build)', () => {
     expect(buildTalentDiff('v3:12.1', BASELINE, null)).toEqual([]);
     expect(buildTalentDiff('', BASELINE, TALENTS)).toEqual([]);
     expect(buildTalentDiff('v2:1,2', BASELINE, TALENTS)).toEqual([]);
+  });
+});
+
+describe('talentStatusOf', () => {
+  const topBuilds = stats({
+    talent_builds: [
+      { key: BASELINE, pct: 62, report_code: 'abc', fight_id: 1, player_name: 'Top', source_id: 1, diff: [] },
+    ],
+  });
+
+  it('is unknown when the player has no talent key', () => {
+    expect(talentStatusOf(topBuilds, '')).toEqual({ status: 'unknown', note: 'No talent data.' });
+  });
+
+  it('is ok when the player key matches the standard build', () => {
+    expect(talentStatusOf(topBuilds, BASELINE)).toEqual({ status: 'ok', note: 'Standard build.' });
+  });
+
+  it('is unknown when the player key version prefix does not match the bench build key format', () => {
+    expect(talentStatusOf(topBuilds, 'v2:11,22')).toEqual({ status: 'unknown', note: 'No talent data.' });
+  });
+
+  it('is warn when the player key is a comparable version but off the standard build', () => {
+    expect(talentStatusOf(topBuilds, 'v3:11.1,33.1')).toEqual({
+      status: 'warn', note: 'Off-meta build. 62% run the standard one.',
+    });
   });
 });

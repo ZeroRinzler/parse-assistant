@@ -146,9 +146,8 @@ export function talentStatusOf(topStats: EncounterGearStats | null, playerKey: s
   const builds = topStats?.talent_builds ?? [];
   if (!builds.length) return { status: 'unknown', note: 'No talent data.' };
   const topPct = builds[0]?.pct ?? 0;
-  // No comparable player build (not ranked here, or format mismatch): present the consensus build positively rather than flagging it.
   if (!playerKey || playerKey.split(':')[0] !== (builds[0]?.key ?? '').split(':')[0]) {
-    return { status: 'ok', note: `${topPct}% run this build` };
+    return { status: 'unknown', note: 'No talent data.' };
   }
   if (builds.some(b => b.key === playerKey)) {
     return { status: 'ok', note: 'Standard build.' };
