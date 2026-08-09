@@ -31,6 +31,9 @@ function thr(value: number, band = 0): RuleThreshold {
   return { value, band };
 }
 
+// The share kinds bench a violation rate, so a field that never breaks the rule forgives nothing and every violation below is flagged.
+const FIELD_NEVER = thr(0);
+
 // A rule whose magnitude this encounter measured, so fixtures about something else are not gated on it.
 function benched(rule: RulebookRule, threshold: RuleThreshold | null = thr(PAIR_WINDOW_S)): BenchedRule {
   return { rule, threshold, sample_count: threshold == null ? 0 : 10 };
@@ -170,18 +173,18 @@ describe('evaluateCastOutsideBuff', () => {
 
   it('flags a cast made while the buff was down', () => {
     const ctx = ruleCtx([cast(SECRET_TECHNIQUE, DANCE_END_S + 5)], { buffs: dance });
-    expect(evaluateCastOutsideBuff(insideDance, ctx, 'warning')?.measured?.value).toBe('1 / 1');
+    expect(evaluateCastOutsideBuff(insideDance, ctx, FIELD_NEVER, 'warning')?.measured?.value).toBe('1 / 1');
   });
 
   it('passes a cast made inside the buff span', () => {
     const ctx = ruleCtx([cast(SECRET_TECHNIQUE, DANCE_START_S + 2)], { buffs: dance });
-    expect(evaluateCastOutsideBuff(insideDance, ctx, 'warning')).toBeNull();
+    expect(evaluateCastOutsideBuff(insideDance, ctx, FIELD_NEVER, 'warning')).toBeNull();
   });
 
   it('inverts for require "outside", flagging the cast made while the buff was up', () => {
     const outsideDance: CastOutsideBuffCondition = { ...insideDance, require: 'outside' };
     const ctx = ruleCtx([cast(SECRET_TECHNIQUE, DANCE_START_S + 2)], { buffs: dance });
-    expect(evaluateCastOutsideBuff(outsideDance, ctx, 'warning')?.measured?.value).toBe('1 / 1');
+    expect(evaluateCastOutsideBuff(outsideDance, ctx, FIELD_NEVER, 'warning')?.measured?.value).toBe('1 / 1');
   });
 
   it('is not applicable when the judged spell was never cast', () => {
@@ -246,7 +249,7 @@ describe('rule evaluator boundaries', () => {
       buff_spell_id: SHADOW_DANCE, buff_spell_name: 'Shadow Dance', require: 'inside',
     };
     const ctx = ruleCtx([cast(SECRET_TECHNIQUE, DANCE_END_S)], { buffs: dance });
-    expect(evaluateCastOutsideBuff(insideDance, ctx, 'warning')).toBeNull();
+    expect(evaluateCastOutsideBuff(insideDance, ctx, FIELD_NEVER, 'warning')).toBeNull();
   });
 
   it('reads that same cast as having consumed the proc', () => {
@@ -255,7 +258,7 @@ describe('rule evaluator boundaries', () => {
       spend_spell_ids: [SECRET_TECHNIQUE], spend_spell_names: ['Secret Technique'],
     };
     const ctx = ruleCtx([cast(SECRET_TECHNIQUE, DANCE_END_S)], { buffs: dance });
-    expect(evaluateProcWasted(spendDance, ctx, 'warning')).toBeNull();
+    expect(evaluateProcWasted(spendDance, ctx, FIELD_NEVER, 'warning')).toBeNull();
   });
 
   it('passes uptime exactly at the measured bar (strict below)', () => {
@@ -452,6 +455,53 @@ describe('evaluateResourceAtCast', () => {
     expect(evaluateResourceAtCast(finisherAtMax, ctx, thr(RESOURCE_FLOOR), 'warning')).toBeNull();
     expect(ruleApplicable(finisherAtMax, ctx)).toBe(false);
   });
+
+  // Only a cast that spends the pool reports it, so every overcap rule judges a cast carrying no snapshot of its own.
+  describe('a cast that spends nothing from the pool', () => {
+    const OVERCAP_CEILING_FRAC = 0.6;  // the field generates below three fifths of the cap, measured
+    const noOvercap: ResourceAtCastCondition = {
+      kind: 'resource_at_cast', spell_id: BLACK_POWDER, spell_name: 'Black Powder',
+      resource_type: COMBO_POINT_TYPE, resource_name: 'combo points', bound: 'max',
+    };
+    const SPENT_AT_S = 10;
+    const finisher = cast(EVISCERATE, SPENT_AT_S,
+      { resources: [{ amount: MAX_COMBO_POINTS, max: MAX_COMBO_POINTS, type: COMBO_POINT_TYPE, cost: MAX_COMBO_POINTS }] });
+
+    it('reads the pool a neighbouring cast left behind', () => {
+      const AT_CAP_S = 12;
+      const atCap = cast(EVISCERATE, AT_CAP_S,
+        { resources: [{ amount: MAX_COMBO_POINTS, max: MAX_COMBO_POINTS, type: COMBO_POINT_TYPE }] });
+      const ctx = ruleCtx([atCap, cast(BLACK_POWDER, AT_CAP_S + 1)]);
+      expect(evaluateResourceAtCast(noOvercap, ctx, thr(OVERCAP_CEILING_FRAC), 'warning')?.measured?.value).toBe('1 / 1');
+    });
+
+    it('subtracts the neighbour\'s cost, so the pool it emptied does not read as full', () => {
+      const ctx = ruleCtx([finisher, cast(BLACK_POWDER, SPENT_AT_S + 1)]);
+      expect(evaluateResourceAtCast(noOvercap, ctx, thr(OVERCAP_CEILING_FRAC), 'warning')).toBeNull();
+    });
+
+    it('reads nothing from a neighbour further back than the sample window', () => {
+      const PAST_WINDOW_S = 7;
+      const atCap = cast(EVISCERATE, SPENT_AT_S,
+        { resources: [{ amount: MAX_COMBO_POINTS, max: MAX_COMBO_POINTS, type: COMBO_POINT_TYPE }] });
+      const ctx = ruleCtx([atCap, cast(BLACK_POWDER, SPENT_AT_S + PAST_WINDOW_S)]);
+      expect(ruleApplicable(noOvercap, ctx)).toBe(false);
+    });
+
+    it('reads nothing from a neighbour that only follows it, which cannot describe the cast', () => {
+      const atCap = cast(EVISCERATE, SPENT_AT_S,
+        { resources: [{ amount: MAX_COMBO_POINTS, max: MAX_COMBO_POINTS, type: COMBO_POINT_TYPE }] });
+      const ctx = ruleCtx([cast(BLACK_POWDER, SPENT_AT_S - 1), atCap]);
+      expect(ruleApplicable(noOvercap, ctx)).toBe(false);
+    });
+
+    it('reads nothing from a neighbour reporting a different pool', () => {
+      const ENERGY_TYPE = 3;
+      const energyCast = cast(EVISCERATE, SPENT_AT_S, { resources: [{ amount: 100, max: 100, type: ENERGY_TYPE }] });
+      const ctx = ruleCtx([energyCast, cast(BLACK_POWDER, SPENT_AT_S + 1)]);
+      expect(ruleApplicable(noOvercap, ctx)).toBe(false);
+    });
+  });
 });
 
 describe('evaluateProcWasted', () => {
@@ -463,23 +513,23 @@ describe('evaluateProcWasted', () => {
 
   it('flags a proc that expired with nothing spent into it', () => {
     const ctx = ruleCtx([cast(SECRET_TECHNIQUE, DANCE_END_S + 5)], { buffs: dance });
-    expect(evaluateProcWasted(spendDance, ctx, 'warning')?.measured).toEqual({ value: '1 / 1', unit: 'proc(s)' });
+    expect(evaluateProcWasted(spendDance, ctx, FIELD_NEVER, 'warning')?.measured).toEqual({ value: '1 / 1', unit: 'proc(s)' });
   });
 
   it('passes a proc consumed inside its span', () => {
     const ctx = ruleCtx([cast(SECRET_TECHNIQUE, DANCE_START_S + 2)], { buffs: dance });
-    expect(evaluateProcWasted(spendDance, ctx, 'warning')).toBeNull();
+    expect(evaluateProcWasted(spendDance, ctx, FIELD_NEVER, 'warning')).toBeNull();
   });
 
   it('ignores a span still open at the end of the pull', () => {
     const ctx = ruleCtx([], { buffs: [applyBuff(SHADOW_DANCE, DANCE_START_S)] });
-    expect(evaluateProcWasted(spendDance, ctx, 'warning')).toBeNull();
+    expect(evaluateProcWasted(spendDance, ctx, FIELD_NEVER, 'warning')).toBeNull();
     expect(ruleApplicable(spendDance, ctx)).toBe(false);
   });
 
   it('ignores a span the log closes on the pull ending, which the kill took rather than the player wasting', () => {
     const ctx = ruleCtx([], { buffs: buffWindow(SHADOW_DANCE, 100, RULE_FIGHT_END_S) });
-    expect(evaluateProcWasted(spendDance, ctx, 'warning')).toBeNull();
+    expect(evaluateProcWasted(spendDance, ctx, FIELD_NEVER, 'warning')).toBeNull();
     expect(ruleApplicable(spendDance, ctx)).toBe(false);
   });
 });
@@ -892,12 +942,33 @@ describe('measureRule', () => {
     expect(measureRule(uptime, ctx)).toBe(50);
   });
 
-  it('measures nothing for the kinds that need no magnitude', () => {
+  it('measures the share of procs the parse let expire, so a lasting state is not read as a wasted proc', () => {
     const proc: ProcWastedCondition = {
       kind: 'proc_wasted', buff_spell_id: SHADOW_DANCE, buff_spell_name: 'Shadow Dance',
       spend_spell_ids: [SECRET_TECHNIQUE], spend_spell_names: ['Secret Technique'],
     };
-    expect(measureRule(proc, ruleCtx([], { buffs: buffWindow(SHADOW_DANCE, 10, 20) }))).toBeNull();
+    const buffs = [...buffWindow(SHADOW_DANCE, 10, 20), ...buffWindow(SHADOW_DANCE, 30, 40)];
+    const HALF_WASTED = 0.5;
+    expect(measureRule(proc, ruleCtx([cast(SECRET_TECHNIQUE, 12)], { buffs }))).toBe(HALF_WASTED);
+  });
+
+  it('measures nothing for a proc that never closed a span, so the parse abstains rather than voting zero', () => {
+    const proc: ProcWastedCondition = {
+      kind: 'proc_wasted', buff_spell_id: SHADOW_DANCE, buff_spell_name: 'Shadow Dance',
+      spend_spell_ids: [SECRET_TECHNIQUE], spend_spell_names: ['Secret Technique'],
+    };
+    expect(measureRule(proc, ruleCtx([]))).toBeNull();
+  });
+
+  it('measures the share of casts the parse put on the wrong side of a buff', () => {
+    const insideDance: CastOutsideBuffCondition = {
+      kind: 'cast_outside_buff', spell_id: SECRET_TECHNIQUE, spell_name: 'Secret Technique',
+      buff_spell_id: SHADOW_DANCE, buff_spell_name: 'Shadow Dance', require: 'inside',
+    };
+    const ctx = ruleCtx([cast(SECRET_TECHNIQUE, DANCE_START_S + 2), cast(SECRET_TECHNIQUE, DANCE_END_S + 5)],
+      { buffs: buffWindow(SHADOW_DANCE, DANCE_START_S, DANCE_END_S) });
+    const HALF_OFF_SIDE = 0.5;
+    expect(measureRule(insideDance, ctx)).toBe(HALF_OFF_SIDE);
   });
 });
 
@@ -949,6 +1020,30 @@ describe('threshold band', () => {
     expect(evaluateCastAtTargetCount(blackPowder, ctx, thr(TARGET_FLOOR), 'warning')).not.toBeNull();
   });
 
+  it('forgives off-buff casts up to the share the field itself puts there', () => {
+    const FIELD_OFF_SIDE_SHARE = 0.4, BAND = 0.1;  // one of the two casts below is off-side, so 50%
+    const insideDance: CastOutsideBuffCondition = {
+      kind: 'cast_outside_buff', spell_id: SECRET_TECHNIQUE, spell_name: 'Secret Technique',
+      buff_spell_id: SHADOW_DANCE, buff_spell_name: 'Shadow Dance', require: 'inside',
+    };
+    const ctx = ruleCtx([cast(SECRET_TECHNIQUE, DANCE_START_S + 2), cast(SECRET_TECHNIQUE, DANCE_END_S + 5)],
+      { buffs: buffWindow(SHADOW_DANCE, DANCE_START_S, DANCE_END_S) });
+    expect(evaluateCastOutsideBuff(insideDance, ctx, thr(FIELD_OFF_SIDE_SHARE, BAND), 'warning')).toBeNull();
+    expect(evaluateCastOutsideBuff(insideDance, ctx, thr(FIELD_OFF_SIDE_SHARE), 'warning')).not.toBeNull();
+  });
+
+  it('forgives wasted procs up to the share the field itself lets expire', () => {
+    const FIELD_WASTE_SHARE = 0.4, BAND = 0.1;  // one of the two spans below expires unspent, so 50%
+    const spendDance: ProcWastedCondition = {
+      kind: 'proc_wasted', buff_spell_id: SHADOW_DANCE, buff_spell_name: 'Shadow Dance',
+      spend_spell_ids: [SECRET_TECHNIQUE], spend_spell_names: ['Secret Technique'],
+    };
+    const buffs = [...buffWindow(SHADOW_DANCE, 20, 28), ...buffWindow(SHADOW_DANCE, 40, 50)];
+    const ctx = ruleCtx([cast(SECRET_TECHNIQUE, 22)], { buffs });
+    expect(evaluateProcWasted(spendDance, ctx, thr(FIELD_WASTE_SHARE, BAND), 'warning')).toBeNull();
+    expect(evaluateProcWasted(spendDance, ctx, thr(FIELD_WASTE_SHARE), 'warning')).not.toBeNull();
+  });
+
   it('lowers the resource floor', () => {
     const POOL_FLOOR_FRAC = 1, BAND_FRAC = 0.5, SPENT_POINTS = 3;
     const finisher: ResourceAtCastCondition = {
@@ -996,7 +1091,7 @@ describe('ruleThreshold', () => {
 
 describe('benchedRules', () => {
   const needsMagnitude: RulebookRule = { severity: 'warning', description: 'pair', condition: SECRET_TECH_NEEDS_DANCE };
-  const needsNone: RulebookRule = {
+  const procRule: RulebookRule = {
     severity: 'warning', description: 'proc',
     condition: {
       kind: 'proc_wasted', buff_spell_id: SHADOW_DANCE, buff_spell_name: 'Shadow Dance',
@@ -1012,8 +1107,9 @@ describe('benchedRules', () => {
     expect(benchedRules([benched(needsMagnitude, null)])).toEqual([]);
   });
 
-  it('keeps a rule that needs no magnitude, whatever the encounter measured', () => {
-    expect(benchedRules([benched(needsNone, null)]).map(entry => entry.rule)).toEqual([needsNone]);
+  it('drops an unbenched share rule too, since every kind is now judged against the field', () => {
+    expect(benchedRules([benched(procRule, null)])).toEqual([]);
+    expect(benchedRules([benched(procRule, FIELD_NEVER)]).map(entry => entry.rule)).toEqual([procRule]);
   });
 
   it('drops a rule with no condition before a magnitude is even considered', () => {
@@ -1073,7 +1169,7 @@ describe('occurrence strips', () => {
       buff_spell_id: SHADOW_DANCE, buff_spell_name: 'Shadow Dance', require: 'inside',
     };
     const ctx = ruleCtx([cast(SECRET_TECHNIQUE, 22), cast(SECRET_TECHNIQUE, 35)], { buffs: buffWindow(SHADOW_DANCE, 20, 28) });
-    const finding = evaluateCastOutsideBuff(outsideDance, ctx, 'warning');
+    const finding = evaluateCastOutsideBuff(outsideDance, ctx, FIELD_NEVER, 'warning');
     expect(finding?.occurrences).toEqual([
       { atS: 22, ok: true, label: 'up', detail: 'Shadow Dance was up at this cast.' },
       { atS: 35, ok: false, label: 'down', detail: 'Shadow Dance was down at this cast.' },
@@ -1191,7 +1287,7 @@ describe('occurrence strips', () => {
     };
     const buffs = [...buffWindow(SHADOW_DANCE, 20, 28), ...buffWindow(SHADOW_DANCE, 40, 50)];
     const ctx = ruleCtx([cast(SECRET_TECHNIQUE, 22)], { buffs });
-    const finding = evaluateProcWasted(spendDance, ctx, 'warning');
+    const finding = evaluateProcWasted(spendDance, ctx, FIELD_NEVER, 'warning');
     expect(finding?.occurrences).toEqual([
       { atS: 20, ok: true, label: 'used', detail: 'Shadow Dance was spent before it expired.' },
       { atS: 40, ok: false, label: 'wasted', detail: 'Shadow Dance expired unspent here.' },

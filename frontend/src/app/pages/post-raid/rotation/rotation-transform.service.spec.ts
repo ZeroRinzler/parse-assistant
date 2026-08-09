@@ -178,15 +178,19 @@ function reportFor(playerId: number, playerName: string, fightId: number) {
 // An id outside the rulebook cooldowns; exercises the cooldown-cast filter.
 const UNTRACKED_SPELL_ID = 99;
 
+// The floor the transform benches at (MIN_PARSE_COUNT in the service).
+const MIN_SAMPLE_COUNT = 3;
+
+const rankingsFor = (count: number) =>
+  Array.from({ length: count }, (_, i) => ({ name: `P${i + 1}`, report: { code: `r${i + 1}`, fightID: i + 1 } }));
+
 const wclFake = {
   // getRankings returns the raw WCL envelope ({ rankings }); the transform unwraps it.
-  getRankings: async () => ({
-    rankings: [
-      { name: 'P1', report: { code: 'r1', fightID: 1 } },
-      { name: 'P2', report: { code: 'r2', fightID: 2 } },
-    ],
-  }),
-  getReport: async (code: string) => (code === 'r1' ? reportFor(10, 'P1', 1) : reportFor(20, 'P2', 2)),
+  getRankings: async () => ({ rankings: rankingsFor(MIN_SAMPLE_COUNT) }),
+  getReport: async (code: string) => {
+    const index = Number(code.slice(1));
+    return reportFor(index * 10, `P${index}`, index);
+  },
   getAllEvents: async (_code: string, _fightId: number, dataType: string) =>
     dataType === 'Casts' ? [cast(SHADOW_BLADES, 5), cast(UNTRACKED_SPELL_ID, 8)] : [applyBuff(BLOODLUST, 6)],
   // Raw gameData.ability map (id-keyed { id, icon, name }); the transform projects it.
@@ -217,13 +221,26 @@ describe('RotationTransformService (live, in-browser)', () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       const bench = result.value;
-      expect(bench.sample_count).toBe(2);
+      expect(bench.sample_count).toBe(MIN_SAMPLE_COUNT);
       expect(bench.encounter_name).toBe('Boss');
       expect(bench.cd_spell_ids).toEqual({ 'Shadow Blades': SHADOW_BLADES });
-      expect(bench.per_cd_benchmarks['Shadow Blades'].sample_count).toBe(2);
+      expect(bench.per_cd_benchmarks['Shadow Blades'].sample_count).toBe(MIN_SAMPLE_COUNT);
       expect(bench.ability_icons[SHADOW_BLADES]).toEqual({ icon: 'sb', name: 'Shadow Blades' });
       expect(bench.major_cooldowns).toHaveLength(1);
     }
+  });
+
+  it('benches nothing from a pool one parse short of the floor, so one player\'s habit never sets the bar', async () => {
+    const thinWcl = { ...wclFake, getRankings: async () => ({ rankings: rankingsFor(MIN_SAMPLE_COUNT - 1) }) };
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: WclApiService, useValue: thinWcl as unknown as WclApiService },
+        { provide: DataFileApiService, useValue: filesFake as unknown as DataFileApiService },
+      ],
+    });
+    const result = await TestBed.inject(RotationTransformService).getBench('SubtletyRogue', 1);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.kind).toBe('missing');
   });
 
   it('backfills past a private (unfetchable) top parse to keep the sample count full', async () => {

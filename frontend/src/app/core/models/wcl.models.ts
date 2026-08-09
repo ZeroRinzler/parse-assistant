@@ -53,8 +53,8 @@ export interface WclEvent {
   hitPoints?: number;
   // Present on applybuffstack / removebuffstack / applydebuffstack / removedebuffstack: the new total, a bare apply being an implicit 1.
   stack?: number;
-  // Flattened onto the event by `includeResources: true`; `type` is WCL's power-type id (4 = combo points).
-  classResources?: { amount: number; max?: number; type: number }[];
+  // Flattened onto the event by `includeResources: true`; `type` is WCL's power-type id (4 = combo points) and `amount` is the pool BEFORE `cost` is deducted.
+  classResources?: { amount: number; max?: number; type: number; cost?: number }[];
 }
 
 export interface WclReport {

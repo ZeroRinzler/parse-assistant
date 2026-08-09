@@ -7,7 +7,7 @@ const MS_PER_SECOND = 1000;
 /** A player ability cast (`type: 'cast'`). `resources` mirrors what `includeResources: true` flattens onto the event. */
 export function cast(
   spellId: number, atS: number,
-  opts?: { source?: number; target?: number; resources?: { amount: number; max?: number; type: number }[] },
+  opts?: { source?: number; target?: number; resources?: { amount: number; max?: number; type: number; cost?: number }[] },
 ): WclEvent {
   return {
     type: 'cast',

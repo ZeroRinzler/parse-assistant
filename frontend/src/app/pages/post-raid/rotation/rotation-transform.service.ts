@@ -24,6 +24,8 @@ export { toParseRankings } from '../../../shared/analysis/wcl-projections';
 
 /** How many top parses to sample. */
 const TOP_PARSE_COUNT = 10;
+/** Under this a median is one player's habit rather than the field's, so the encounter benches nothing until its pool fills. */
+const MIN_PARSE_COUNT = 3;
 // Over-fetch so a private/unfetchable top parse can be backfilled by the next-best one.
 const CANDIDATE_POOL_COUNT = TOP_PARSE_COUNT * 2;
 /** Bloodlust / Heroism / Time Warp and equivalents. */
@@ -248,7 +250,9 @@ export class RotationTransformService implements DataSource<RotationBench> {
         encounterName ||= parse.encounterName;
         if (perParse.length >= TOP_PARSE_COUNT) break;
       }
-      if (!perParse.length) return missing('No usable top parses for this encounter.');
+      if (perParse.length < MIN_PARSE_COUNT) {
+        return missing(`Only ${perParse.length} usable top parse(s) for this encounter; ${MIN_PARSE_COUNT} are needed to bench it.`);
+      }
 
       const { downtimeThresholdS, topAvgEfficiency, topEfficiencyStddev } = computeEfficiencyThresholds(gapLists, durations);
 

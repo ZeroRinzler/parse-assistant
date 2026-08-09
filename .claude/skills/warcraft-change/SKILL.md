@@ -89,7 +89,7 @@ Before committing, verify:
 
 - [ ] Every new behavior has a spec at the lowest altitude that owns it
 - [ ] Each "triggers" case is paired with a "does not trigger at the boundary" case
-- [ ] No `INGEST_VERSION` change without a bench-shape change (and vice versa)
+- [ ] `INGEST_VERSION` bumped exactly when what ingestion bakes changes: bench shape, measured values, or a republished rulebook
 - [ ] Every finding populates `occurrences` (or explains why not)
 - [ ] All copy passes the terse-analyst voice rules in **warcraft-writing**
 - [ ] `npm test`, `npm run lint`, and `npm run build` pass
