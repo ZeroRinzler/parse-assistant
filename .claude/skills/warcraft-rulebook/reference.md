@@ -2,6 +2,12 @@
 
 Operational detail for the warcraft-rulebook skill. Read the section for the step you are executing; each section stands alone.
 
+## When a patch lands
+
+Regenerate once **both** the SimC profile and the rotation guide have caught up to the live patch. Either one alone leaves a gap: an APL without the guide gives conditions with no coaching copy, a guide without the APL gives prose with no thresholds.
+
+Then check the sampled encounter has real parse volume on the current partition. Ids come from parses (2d), so a reworked ability cannot earn a row until people have played it, and a spec prepped on a near-empty partition ships ids for the patch that just ended. If volume is thin, sample the previous tier's zone and note it, or wait.
+
 ## WCL token and spec universe (Step 1)
 
 Get one WCL client-credentials token up front and reuse it for the whole session - one OAuth handshake, never one per spec or per dispatch. Credentials: the embedded public pair in `frontend/src/environments/wcl-public-client.ts`. POST `grant_type=client_credentials` to `https://www.warcraftlogs.com/oauth/token`, then POST GraphQL to `https://www.warcraftlogs.com/api/v2/client` with `Authorization: ****** the spec universe live from WCL:
@@ -25,7 +31,7 @@ https://raw.githubusercontent.com/simulationcraft/simc/<branch>/profiles/<TIER>/
 Discover `<branch>` and `<TIER>` **once per session** and reuse them for every spec:
 
 - `<branch>` is SimC's **current-expansion branch** - `midnight` now. **Never use `main` or the repo default: they carry no current profiles (`.../simc/main/profiles/...` 404s).** If unsure, it is the current WoW expansion lowercased with no spaces; confirm it resolves before fetching.
-- `<TIER>` is the highest tier profile dir on that branch, e.g. **`MID1`**. Probe `MID1`, `MID2`, ... and take the highest that resolves. The path moves every tier; discover it, do not hard-trust it.
+- `<TIER>` is the profile dir for the tier **live right now**, e.g. **`MID1`**. Probe `MID1`, `MID2`, ... and take the highest one matching the live patch, checked against the patch the guide pages state. SimC opens the next tier during its PTR cycle, so a dir that resolves can describe a patch no sampled parse was played on. The path moves every tier; discover it, do not hard-trust it.
 - `<ClassName>_<SpecName>` are **underscore-separated words** (`Rogue_Subtlety`, `Hunter_Beast_Mastery`, `Death_Knight_Frost`). A wrong form 404s cleanly, so probe the underscore form first.
 
 `api.github.com` is blocked behind some egress proxies; probe `raw.githubusercontent.com` paths directly. When a base spec file 404s under every form, that spec has no profile this tier and the agent works from the guide and the table alone.
@@ -148,6 +154,8 @@ git branch -D <temp-branch>
 ```
 
 Open the PR with **base `gh-pages`** (push to `gh-pages` directly only when the user explicitly says so). Once merged, the hourly ingest overlays `data/specs` from `gh-pages` before each run and rebuilds that spec's benches over its next passes; the site reads the same tree directly. The gh-pages writers publish tree-based single commits, so the file content persists across their force-pushes.
+
+**A publish is two PRs.** The skip check keys on `INGEST_VERSION` plus the top-parse set, never on the rulebook, so on a settled encounter the new file is overlaid and then skipped and the benches keep serving the old rules. Open a second PR against `main` bumping `INGEST_VERSION` (`frontend/src/app/ingest/ingest-version.ts`); one bump covers every spec in the run. Order does not matter, but the publish is not done until both land.
 
 The worktree commits on a **temp branch pushed to the publish branch's remote ref** because the publish branch name is often already checked out on `main` history and `git worktree add -b` fails outright on the collision. Pushing a temp branch to `refs/heads/<publish-branch>` sidesteps it; the local pointer is irrelevant since the PR reads the remote. Verify with `git log origin/<publish-branch> -1`, not the local ref - it still sits on `main` history and makes history-checking tooling report the repo's merge commits as yours.
 

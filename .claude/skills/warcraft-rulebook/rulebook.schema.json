@@ -35,6 +35,7 @@
     },
     "source_summary": {
       "type": "string",
+      "not": { "pattern": "[\u2014\u2013\u2212\u00b7]" },
       "description": "2-3 sentences summarising the cooldown strategy these guides recommend."
     },
     "guide_count": {
@@ -81,10 +82,12 @@
         },
         "usage_rule": {
           "type": "string",
+          "not": { "pattern": "[\u2014\u2013\u2212\u00b7]" },
           "description": "One sentence: when and how to use this cooldown."
         },
         "id_note": {
           "type": "string",
+          "not": { "pattern": "[\u2014\u2013\u2212\u00b7]" },
           "description": "Optional. Internal maintainer note for any spell-ID uncertainty (e.g. 'best guess for the Midnight X cast, verify on Wowhead'). NEVER shown to users and not read by any analysis - put verification/best-guess notes here instead of in usage_rule."
         },
         "talent_gated": {
@@ -118,10 +121,12 @@
         },
         "usage_rule": {
           "type": "string",
+          "not": { "pattern": "[\u2014\u2013\u2212\u00b7]" },
           "description": "One sentence: when/why to press this button."
         },
         "id_note": {
           "type": "string",
+          "not": { "pattern": "[\u2014\u2013\u2212\u00b7]" },
           "description": "Optional. Internal maintainer note for any spell-ID uncertainty (e.g. 'best guess for the Midnight X cast, verify on Wowhead'). NEVER shown to users and not read by any analysis - put verification/best-guess notes here instead of in usage_rule."
         },
         "talent_gated": {
@@ -147,7 +152,9 @@
         },
         "description": {
           "type": "string",
-          "description": "Short rule title the player sees, <= 60 chars, naming the abilities rather than the check, e.g. 'Secret Technique always inside Shadow Dance'. It is shown both when the rule is broken and when it is followed, so write it as the rule itself, not as a complaint."
+          "not": { "pattern": "[\u2014\u2013\u2212\u00b7]" },
+          "maxLength": 60,
+          "description": "Short rule title the player sees, naming the abilities rather than the check, e.g. 'Secret Technique always inside Shadow Dance'. Shown both when the rule is broken and when it is followed, so write the rule itself, not a complaint. 60 characters is what the findings table renders untruncated."
         },
         "condition": {
           "description": "REQUIRED. How the app checks this rule against the player's log. Pick the kind that matches what the rule actually says rather than forcing it into a nearby one: a rule about a buff being up wants castOutsideBuff or auraUptimeBelow, a resource level wants resourceAtCast, a target count wants castAtTargetCount, an opener wants openingSequence, which of two fillers to press in a given state wants fillerInBuff, a stacking buff spent like a resource wants spendAtStacks, a damage-over-time effect refreshed too early wants auraClipped, and the ability that takes over in execute range wants fillerBelowHealth. A rule that fits none of them does not belong in the rulebook. Each kind takes ability identities and a direction only - never a number: the app measures every threshold a rule is judged against from the encounter's best logs, so a rule that carries no numbers adapts to a fight the field plays differently instead of failing the player against a guess. The source's concrete numbers belong in the rule's action text.",
@@ -168,6 +175,7 @@
         },
         "action": {
           "type": "string",
+          "not": { "pattern": "[\u2014\u2013\u2212\u00b7]" },
           "description": "Second-person instruction telling the player what to DO, not describing what the check found. This is where the sources' concrete numbers belong - thresholds, target counts, hold windows - since the condition itself carries none. Good: 'Always cast Secret Technique inside Shadow Dance, at 5+ combo points.' Bad: 'Shadow Dance was cast without Secret Technique beforehand.'"
         }
       }
@@ -349,8 +357,8 @@
     "fillerInBuff": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Use for the filler choice: a spec that builds with one spell while a state is up and a different one otherwise, 'Wrath in Solar Eclipse', 'Demonbolt on Demonic Core'. Judged as a share of the fillers cast inside the state, so prefer it over castOutsideBuff whenever the judged spell is a filler. Do not write a share.",
-      "required": ["kind", "spell_id", "spell_name", "alternative_spell_ids", "alternative_spell_names", "buff_spell_id", "buff_spell_name"],
+      "description": "Use for the filler choice: a spec that builds with one spell while a state is up and a different one otherwise, 'Wrath in Solar Eclipse', 'Demonbolt on Demonic Core'. Judged as a share of the fillers cast inside the state, so prefer it over castOutsideBuff whenever the judged spell is a filler. Do not write a share. Exclusions are required here, not optional: an omitted list cannot be told apart from a deliberate empty one, and a missed suspending state accuses correct play.",
+      "required": ["kind", "spell_id", "spell_name", "alternative_spell_ids", "alternative_spell_names", "buff_spell_id", "buff_spell_name", "except_buff_spell_ids", "except_buff_spell_names"],
       "properties": {
         "kind": { "const": "filler_in_buff" },
         "spell_id": { "type": "integer", "description": "The filler that should dominate while the buff is up." },
@@ -359,7 +367,7 @@
         "alternative_spell_names": { "type": "array", "items": { "type": "string" }, "description": "Exact in-game names, one per entry of alternative_spell_ids and in the same order." },
         "buff_spell_id": { "type": "integer", "description": "The buff or state that decides the choice. Use the aura's own id, which is often not the id of the ability that grants it." },
         "buff_spell_name": { "type": "string", "description": "The exact in-game ability name for the id above. Both come from the prepared ability table." },
-        "except_buff_spell_ids": { "type": "array", "items": { "type": "integer" }, "description": "Optional. Aura ids for the states that suspend the choice, whose casts are excluded from the share entirely. Name every burst window that grants both states at once and every proc the sources say to press the other filler under, or the rule reads correct play as a violation." },
+        "except_buff_spell_ids": { "type": "array", "items": { "type": "integer" }, "description": "REQUIRED; [] is a valid answer. Aura ids for the states that suspend the choice, whose casts drop out of the share entirely. Name every burst window granting both states at once and every proc the sources say to press the other filler under. Write [] only after replaying the rule against the sampled parses and finding none." },
         "except_buff_spell_names": { "type": "array", "items": { "type": "string" }, "description": "Exact in-game names, one per entry of except_buff_spell_ids and in the same order." }
       },
       "examples": [
