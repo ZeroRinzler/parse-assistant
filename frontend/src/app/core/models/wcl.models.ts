@@ -10,6 +10,8 @@ export interface WclFight {
   friendlyPlayers: number[];
   /** Boss health % remaining when the pull ended (WCL `fightPercentage`); ~0 on a kill. */
   fightPercentage: number;
+  /** WCL difficulty id: 3/4/5 are raid normal/heroic/mythic, 10 a Mythic+ dungeon boss. */
+  difficulty?: number | null;
 }
 
 export interface WclPlayer {

@@ -12,7 +12,7 @@ import { LiveCaptureFeatureService } from './live/live-capture.service';
 import {
   PostRaidComponent,
   specOf, extractCode, extractFightId, isValidReportCode, buildFights, buildPlayers, visiblePlayersOf, pickLivePlayerId,
-  livePollActionOf,
+  livePollActionOf, isKeystoneFight, unsupportedEncounterNotice,
 } from './post-raid';
 
 function fight(p: Partial<WclFight>): WclFight {
@@ -72,6 +72,26 @@ describe('isValidReportCode', () => {
 
   it('rejects a 16-character string containing non-alphanumeric characters', () => {
     expect(isValidReportCode('grBQ3vTHXAtPa4J-')).toBe(false);
+  });
+});
+
+describe('isKeystoneFight', () => {
+  const MYTHIC_PLUS = 10;
+  const RAID_MYTHIC = 5;
+  const RAID_HEROIC = 4;
+
+  it('reports a keystone dungeon boss', () => {
+    expect(isKeystoneFight(MYTHIC_PLUS)).toBe(true);
+  });
+
+  it('does not report a mythic raid pull, the difficulty right below it', () => {
+    expect(isKeystoneFight(RAID_MYTHIC)).toBe(false);
+    expect(isKeystoneFight(RAID_HEROIC)).toBe(false);
+  });
+
+  it('does not report a fight WCL sent no difficulty for', () => {
+    expect(isKeystoneFight(null)).toBe(false);
+    expect(isKeystoneFight(undefined)).toBe(false);
   });
 });
 
@@ -229,6 +249,7 @@ describe('specOf', () => {
 
 describe('PostRaidComponent sticky player name', () => {
   const REPORT_CODE = 'grBQ3vTHXAtPa4JK';                         // a valid 16-character report code
+  const BOSS_ENCOUNTER_ID = 3176;
   const ABSENT_STICKY_NAME = 'Ghost';                            // a sticky character not present in the loaded report
   const FALLBACK_PLAYER = { id: 1, name: 'Anya', spec: 'SubtletyRogue' }; // alphabetically first -> the auto-select fallback
   const PICKED_PLAYER = { id: 2, name: 'Bram', spec: 'FrostMage' };       // the player the user explicitly switches to
@@ -244,7 +265,7 @@ describe('PostRaidComponent sticky player name', () => {
     return {
       title: 'Test', startTime: 0,
       fights: [fight({
-        id: 10, name: 'Boss', encounterID: 100, startTime: 0, endTime: 10_000, kill: true,
+        id: 10, name: 'Boss', encounterID: BOSS_ENCOUNTER_ID, startTime: 0, endTime: 10_000, kill: true,
         friendlyPlayers: [FALLBACK_PLAYER.id, PICKED_PLAYER.id],
       })],
       masterData: {
@@ -314,6 +335,7 @@ describe('PostRaidComponent sticky player name', () => {
 
 describe('PostRaidComponent fight selection from URL', () => {
   const REPORT_CODE = 'grBQ3vTHXAtPa4JK';
+  const BOSS_ENCOUNTER_ID = 3176;
   const EARLIER_FIGHT_ID = 10;
   const LATEST_FIGHT_ID = 12;
   const PLAYER = { id: 1, name: 'Anya', spec: 'SubtletyRogue' };
@@ -326,8 +348,8 @@ describe('PostRaidComponent fight selection from URL', () => {
     return {
       title: 'Test', startTime: 0,
       fights: [
-        fight({ id: EARLIER_FIGHT_ID, name: 'Boss', encounterID: 100, startTime: 0, endTime: 10_000, friendlyPlayers: [PLAYER.id] }),
-        fight({ id: LATEST_FIGHT_ID, name: 'Boss', encounterID: 100, startTime: 20_000, endTime: 30_000, friendlyPlayers: [PLAYER.id] }),
+        fight({ id: EARLIER_FIGHT_ID, name: 'Boss', encounterID: BOSS_ENCOUNTER_ID, startTime: 0, endTime: 10_000, friendlyPlayers: [PLAYER.id] }),
+        fight({ id: LATEST_FIGHT_ID, name: 'Boss', encounterID: BOSS_ENCOUNTER_ID, startTime: 20_000, endTime: 30_000, friendlyPlayers: [PLAYER.id] }),
       ],
       masterData: { actors: [{ id: PLAYER.id, name: PLAYER.name, subType: PLAYER.spec, server: '' }], enemies: [], abilities: [] },
     };
@@ -380,6 +402,101 @@ describe('PostRaidComponent fight selection from URL', () => {
     const component = mount();
     await loadReport(component, `https://www.warcraftlogs.com/reports/${REPORT_CODE}#fight=999`);
     expect((component['selectedFightId'] as () => number | null)()).toBe(LATEST_FIGHT_ID);
+  });
+});
+
+describe('PostRaidComponent keystone fight', () => {
+  const REPORT_CODE = 'grBQ3vTHXAtPa4JK';
+  const RAID_MYTHIC_DIFFICULTY = 5;
+  const MYTHIC_PLUS_DIFFICULTY = 10;
+  const RAID_FIGHT = { id: 5, name: 'Vorasius', encounterID: 3176, difficulty: RAID_MYTHIC_DIFFICULTY };
+  const DUNGEON_FIGHT = { id: 2, name: 'Nexus-Point Xenas', encounterID: 112526, difficulty: MYTHIC_PLUS_DIFFICULTY };
+  const PLAYER = { id: 1, name: 'Anya', spec: 'Rogue' };
+  const EXPECTED_SPEC = 'SubtletyRogue';
+
+  const groups: PlayerDetailGroups = {
+    dps: [{ id: PLAYER.id, type: 'Rogue', name: PLAYER.name, specs: [{ spec: 'Subtlety' }] }],
+  };
+
+  function mixedReport(): WclReport {
+    return {
+      title: 'Mixed night', startTime: 0,
+      fights: [
+        fight({ ...DUNGEON_FIGHT, startTime: 0, endTime: 10_000, kill: true, friendlyPlayers: [PLAYER.id] }),
+        fight({ ...RAID_FIGHT, startTime: 20_000, endTime: 30_000, kill: true, friendlyPlayers: [PLAYER.id] }),
+      ],
+      masterData: {
+        actors: [{ id: PLAYER.id, name: PLAYER.name, subType: PLAYER.spec, server: '' }],
+        enemies: [], abilities: [],
+      },
+    };
+  }
+
+  function mount(): { vm: Record<string, unknown>; prepareMap: ReturnType<typeof vi.fn>; getPlayerDetails: ReturnType<typeof vi.fn> } {
+    const getPlayerDetails = vi.fn(() => Promise.resolve(groups));
+    const wclApi = { getReport: () => Promise.resolve(mixedReport()), getPlayerDetails } as unknown as WclApiService;
+    const prepareMap = vi.fn(() => Promise.resolve());
+    TestBed.configureTestingModule({
+      providers: [
+        provideZonelessChangeDetection(),
+        PostRaidComponent,
+        { provide: WclApiService, useValue: wclApi },
+        { provide: MapFeatureService, useValue: { clear: vi.fn(), prepare: prepareMap, ready: () => false, openAt: vi.fn() } },
+        { provide: LiveCaptureFeatureService, useValue: { liveEnabled: signal(false), clear: vi.fn(), prepare: vi.fn(), setStatus: vi.fn(), clipReady: () => false, openClip: vi.fn() } },
+        { provide: LiveReportSyncService, useValue: { pollTriggers: () => EMPTY } },
+        { provide: SelectionStore, useValue: { loadPostRaid: () => null, savePostRaid: vi.fn() } },
+      ],
+    });
+    return { vm: TestBed.inject(PostRaidComponent) as unknown as Record<string, unknown>, prepareMap, getPlayerDetails };
+  }
+
+  async function selectFight(vm: Record<string, unknown>, fightId: number): Promise<void> {
+    (vm['fightControl'] as FormControl<number | null>).setValue(fightId);
+    await (vm['onFightChange'] as () => Promise<void>)();
+  }
+
+  async function load(vm: Record<string, unknown>): Promise<void> {
+    (vm['reportControl'] as FormControl<string>).setValue(REPORT_CODE);
+    await (vm['loadReport'] as () => Promise<void>)();
+  }
+
+  it('lists the keystone fight and analyzes the raid pull the report also holds', async () => {
+    const { vm, prepareMap } = mount();
+
+    await load(vm);
+
+    expect((vm['fights'] as () => WclFight[])().map(f => f.id)).toEqual([DUNGEON_FIGHT.id, RAID_FIGHT.id]);
+    expect((vm['selectedFightId'] as () => number | null)()).toBe(RAID_FIGHT.id);
+    expect((vm['spec'] as () => string)()).toBe(EXPECTED_SPEC);
+    expect((vm['notice'] as () => string)()).toBe('');
+    expect(prepareMap).toHaveBeenCalled();
+  });
+
+  it('stops at the notice and fetches nothing when the keystone fight is selected', async () => {
+    const { vm, prepareMap, getPlayerDetails } = mount();
+    await load(vm);
+    prepareMap.mockClear();
+    getPlayerDetails.mockClear();
+
+    await selectFight(vm, DUNGEON_FIGHT.id);
+
+    expect((vm['notice'] as () => string)()).toBe(unsupportedEncounterNotice(DUNGEON_FIGHT.name));
+    expect((vm['spec'] as () => string)()).toBe('');
+    expect((vm['ready'] as () => boolean)()).toBe(false);
+    expect(getPlayerDetails).not.toHaveBeenCalled();
+    expect(prepareMap).not.toHaveBeenCalled();
+    expect((vm['loadingAnalysis'] as () => boolean)()).toBe(false);
+  });
+
+  it('clears the notice when the selection moves back to the raid pull', async () => {
+    const { vm } = mount();
+    await load(vm);
+    await selectFight(vm, DUNGEON_FIGHT.id);
+
+    await selectFight(vm, RAID_FIGHT.id);
+
+    expect((vm['notice'] as () => string)()).toBe('');
+    expect((vm['spec'] as () => string)()).toBe(EXPECTED_SPEC);
   });
 });
 

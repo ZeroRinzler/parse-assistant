@@ -56,6 +56,16 @@ export function isValidReportCode(code: string): boolean {
   return /^[a-zA-Z0-9]{16}$/.test(code);
 }
 
+const MYTHIC_PLUS_DIFFICULTY = 10;
+
+export function unsupportedEncounterNotice(fightName: string): string {
+  return `${fightName} is a Mythic+ boss. Pick a raid pull.`;
+}
+
+export function isKeystoneFight(difficulty: number | null | undefined): boolean {
+  return difficulty === MYTHIC_PLUS_DIFFICULTY;
+}
+
 export function buildFights(fights: WclReport['fights'] = []): WclFight[] {
   const bossAttempt: Record<number, number> = {};
   return (fights || [])
@@ -404,6 +414,10 @@ export class PostRaidComponent {
     this.mapFeature.clear();
     this.liveCapture.clear();
     if (!fightId || !playerId) return;
+    this.notice.set('');
+
+    const fight = this.fights().find(f => f.id === fightId);
+    if (isKeystoneFight(fight?.difficulty)) { this.notice.set(unsupportedEncounterNotice(fight?.name ?? '')); return; }
 
     this.loadingAnalysis.set(true);
     this.loadingMsg.set('Fetching player data from Warcraft Logs…');
@@ -423,7 +437,6 @@ export class PostRaidComponent {
       this.gearBusy.set(true);
       this.loadingMsg.set('Fetching analysis data from Warcraft Logs…');
 
-      const fight = this.fights().find(f => f.id === fightId);
       if (fight) {
         void this.mapFeature.prepare(this.reportCode(), fight, playerId, spec, this._enemies);
         this.liveCapture.prepare(this.reportCode(), this.reportStartTime(), fight);
