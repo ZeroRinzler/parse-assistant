@@ -229,10 +229,10 @@ function castWithoutPriorOccurrences(
     const ok = lead != null && lead <= win;
     return {
       atS: round(time, 3), ok,
-      label: lead == null ? 'none' : `${round(lead, 0)}s`,
+      label: lead == null ? 'none' : `${round(lead, 1)}s`,
       detail: lead == null
         ? `No ${cond.required_spell_name} paired with this cast.`
-        : `${cond.required_spell_name} landed ${round(lead, 0)}s from this cast.`,
+        : `${cond.required_spell_name} landed ${round(lead, 1)}s from this cast.`,
     };
   }));
 }
@@ -251,11 +251,11 @@ export function evaluateCastWithoutPrior(
     severity, category: 'rule_violation',
     timestamp_s: round(violations[0], 3),
     label: `${cond.spell_name} without ${cond.required_spell_name}`,
-    message: `${cond.spell_name} without ${cond.required_spell_name} inside ${Math.round(win)}s: ${violations.length} of ${primary.length} cast(s).`,
+    message: `${cond.spell_name} without ${cond.required_spell_name} inside ${round(win, 1)}s: ${violations.length} of ${primary.length} cast(s).`,
     measured: { value: `${violations.length} / ${primary.length}`, unit: 'cast(s)' },
     details: remedy ? { remedy } : undefined,
     occurrences: castWithoutPriorOccurrences(cond, castTimes, win),
-    occurrenceTarget: `field pairs inside ${round(win, 0)}s`,
+    occurrenceTarget: `field pairs inside ${round(win, 1)}s`,
   };
 }
 
@@ -279,10 +279,10 @@ function holdForAnchorOccurrences(
       const ok = gap == null || gap > holdWindowS;
       judged.push({
         atS: round(castTime, 3), ok,
-        label: gap == null ? 'clear' : `${round(gap, 0)}s`,
+        label: gap == null ? 'clear' : `${round(gap, 1)}s`,
         detail: gap == null
           ? `${spellName} cast with no ${cond.anchor_spell_name} ahead to hold for.`
-          : `${spellName} cast ${round(gap, 0)}s before ${cond.anchor_spell_name}.`,
+          : `${spellName} cast ${round(gap, 1)}s before ${cond.anchor_spell_name}.`,
       });
     }
   });
@@ -310,7 +310,7 @@ export function evaluateHoldForAnchor(
     severity, category: 'rule_violation',
     timestamp_s: round(firstCastS, 3),
     label: `${spellNames} held before ${cond.anchor_spell_name}`,
-    message: `${spellNames} used in the ${Math.round(holdWindowS)}s the field keeps clear before ${cond.anchor_spell_name}: ${violations.length} charge(s).`,
+    message: `${spellNames} used in the ${round(holdWindowS, 1)}s the field keeps clear before ${cond.anchor_spell_name}: ${violations.length} charge(s).`,
     measured: { value: `${violations.length}`, unit: 'charge(s)' },
     details: remedy ? { remedy } : undefined,
     occurrences: holdForAnchorOccurrences(cond, ctx, anchorTimes, holdWindowS),
@@ -484,7 +484,7 @@ export function evaluateOpeningSequence(
     severity, category: 'rule_violation',
     timestamp_s: round(progress.pullS, 3),
     label: `Opener: ${cond.spell_names.join(' > ')}`,
-    message: `Opener reached ${progress.matched} of ${cond.spell_ids.length} steps in the ${Math.round(windowS)}s the top parses take.`,
+    message: `Opener reached ${progress.matched} of ${cond.spell_ids.length} steps in the ${round(windowS, 1)}s the top parses take.`,
     measured: { value: `${progress.matched} / ${cond.spell_ids.length}`, unit: 'step(s)' },
     details: remedy ? { remedy } : undefined,
     occurrences: openingSequenceOccurrences(cond, ctx, progress.pullS, progress.pullS + windowS),

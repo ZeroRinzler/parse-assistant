@@ -304,6 +304,13 @@ describe('evaluateOpeningSequence', () => {
     expect(evaluateOpeningSequence(opener, ctx, thr(OPENER_WINDOW_S), 'warning')?.measured?.value).toBe('2 / 3');
   });
 
+  it('renders the window limit with one decimal, matching the pair and hold sentences', () => {
+    const WINDOW_LIMIT_S = 12.4;
+    const ctx = ruleCtx([cast(SHADOW_BLADES, 1), cast(SHADOW_DANCE, 3), cast(SECRET_TECHNIQUE, WINDOW_LIMIT_S + 5)]);
+    expect(evaluateOpeningSequence(opener, ctx, thr(WINDOW_LIMIT_S), 'warning')?.message)
+      .toBe('Opener reached 2 of 3 steps in the 12.4s the top parses take.');
+  });
+
   it('tolerates unrelated casts between the steps', () => {
     const ctx = ruleCtx([cast(SHADOW_BLADES, 1), cast(EVISCERATE, 2), cast(SHADOW_DANCE, 3), cast(SECRET_TECHNIQUE, 5)]);
     expect(evaluateOpeningSequence(opener, ctx, thr(OPENER_WINDOW_S), 'warning')).toBeNull();
@@ -1225,6 +1232,50 @@ describe('occurrence strips', () => {
       { atS: 120, ok: true, label: 'Shadow Blades', marker: true, detail: 'Shadow Blades cast here.' },
     ]);
     expect(finding?.occurrenceTarget).toBe('gap to Shadow Blades at cast');
+  });
+
+  it('cast_without_prior: the chip and the window limit both read one decimal, so a lead just past it reads visibly larger', () => {
+    const WINDOW_LIMIT_S = 12;
+    const OVER_LIMIT_LEAD_S = 12.4;
+    const ctx = ruleCtx([cast(SHADOW_DANCE, 0), cast(SECRET_TECHNIQUE, WINDOW_LIMIT_S), cast(SECRET_TECHNIQUE, OVER_LIMIT_LEAD_S)]);
+    const finding = evaluateCastWithoutPrior(SECRET_TECH_NEEDS_DANCE, ctx, thr(WINDOW_LIMIT_S), 'warning');
+    expect(finding?.measured).toEqual({ value: '1 / 2', unit: 'cast(s)' });
+    expect(finding?.message).toBe('Secret Technique without Shadow Dance inside 12s: 1 of 2 cast(s).');
+    expect(finding?.occurrenceTarget).toBe('field pairs inside 12s');
+    expect(finding?.occurrences).toEqual([
+      { atS: WINDOW_LIMIT_S, ok: true, label: '12s', detail: 'Shadow Dance landed 12s from this cast.' },
+      { atS: OVER_LIMIT_LEAD_S, ok: false, label: '12.4s', detail: 'Shadow Dance landed 12.4s from this cast.' },
+    ]);
+  });
+
+  it('hold_cooldown_for_anchor: the chip and the window limit both read one decimal, so a violation gap reads visibly smaller than the limit', () => {
+    const HOLD_LIMIT_S = 12;
+    const ANCHOR_S = 100;
+    const CLEARED_GAP_S = 12.4;
+    const VIOLATION_GAP_S = 11.6;
+    const ctx = ruleCtx([
+      cast(SHADOW_BLADES, 10), cast(SHADOW_BLADES, ANCHOR_S),
+      cast(SHADOW_DANCE, ANCHOR_S - CLEARED_GAP_S), cast(SHADOW_DANCE, ANCHOR_S - VIOLATION_GAP_S),
+    ]);
+    const finding = evaluateHoldForAnchor(HOLD_DANCE_FOR_BLADES, ctx, thr(HOLD_LIMIT_S), 'critical');
+    expect(finding?.measured).toEqual({ value: '1', unit: 'charge(s)' });
+    expect(finding?.message).toBe('Shadow Dance used in the 12s the field keeps clear before Shadow Blades: 1 charge(s).');
+    expect(finding?.occurrences).toEqual([
+      { atS: ANCHOR_S - CLEARED_GAP_S, ok: true, label: '12.4s', detail: 'Shadow Dance cast 12.4s before Shadow Blades.' },
+      { atS: ANCHOR_S - VIOLATION_GAP_S, ok: false, label: '11.6s', detail: 'Shadow Dance cast 11.6s before Shadow Blades.' },
+      { atS: ANCHOR_S, ok: true, label: 'Shadow Blades', marker: true, detail: 'Shadow Blades cast here.' },
+    ]);
+  });
+
+  it('hold_cooldown_for_anchor: a gap that clears the window by a fraction is ok; the window is inclusive at its own edge', () => {
+    const HOLD_LIMIT_S = 12;
+    const ANCHOR_S = 100;
+    const CLEARED_GAP_S = 12.4;
+    const AT_LIMIT_GAP_S = 12;
+    const clearedCtx = ruleCtx([cast(SHADOW_BLADES, 10), cast(SHADOW_BLADES, ANCHOR_S), cast(SHADOW_DANCE, ANCHOR_S - CLEARED_GAP_S)]);
+    const atLimitCtx = ruleCtx([cast(SHADOW_BLADES, 10), cast(SHADOW_BLADES, ANCHOR_S), cast(SHADOW_DANCE, ANCHOR_S - AT_LIMIT_GAP_S)]);
+    expect(evaluateHoldForAnchor(HOLD_DANCE_FOR_BLADES, clearedCtx, thr(HOLD_LIMIT_S), 'critical')).toBeNull();
+    expect(evaluateHoldForAnchor(HOLD_DANCE_FOR_BLADES, atLimitCtx, thr(HOLD_LIMIT_S), 'critical')).not.toBeNull();
   });
 
   it('cast_outside_buff: a chip per cast, the buff state as the label', () => {
