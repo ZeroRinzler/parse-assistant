@@ -755,13 +755,13 @@ function suspendedAt(exceptIds: number[] | undefined, ctx: RuleContext, timeS: n
   return (exceptIds ?? []).some(spellId => auraUpAt(ctx.selfAuras, spellId, timeS));
 }
 
-/** A stack count is only readable once the buff has been seen, so a pull on a build without it measures nothing. */
+/** Drops a cast whose count falls before the buff's first recorded trace, rather than scoring an unknowable count as zero. */
 function stackCountsPerCast(cond: SpendAtStacksCondition, ctx: RuleContext): { timeS: number; stacks: number }[] {
   const timeline = ctx.stacks(cond.buff_spell_id);
-  if (!timeline.length) return [];
   return [...(ctx.castTimes[cond.spell_id] ?? [])].sort((a, b) => a - b)
     .filter(timeS => !suspendedAt(cond.except_buff_spell_ids, ctx, timeS))
-    .map(timeS => ({ timeS, stacks: stacksAt(timeline, timeS) }));
+    .map(timeS => ({ timeS, stacks: stacksAt(timeline, timeS) }))
+    .filter((entry): entry is { timeS: number; stacks: number } => entry.stacks !== null);
 }
 
 export function evaluateSpendAtStacks(

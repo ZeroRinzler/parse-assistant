@@ -43,25 +43,35 @@ export function auraAlreadyUpAt(windows: AuraWindows, spellId: number, timeS: nu
   return (windows.get(spellId) ?? []).some(([start, end]) => timeS > start && (end == null || timeS <= end));
 }
 
-export type StackTimeline = [number, number][];
+/** groundedFromStart is false when the first entry is a bare remove or stack event rather than an apply, meaning nothing before it is known. */
+export interface StackTimeline {
+  readonly groundedFromStart: boolean;
+  readonly entries: readonly [number, number][];
+}
 
-/** A bare apply carries no count and means one; every stack event carries the new total. */
+/** A bare apply carries no count and means one; every stack event carries the new total, clamped so a reported drop below zero cannot leak through. */
 export function buildStackTimeline(events: TimedEvent[], spellId: number): StackTimeline {
-  const timeline: StackTimeline = [];
+  const entries: [number, number][] = [];
+  let groundedFromStart = false;
   for (const event of events) {
     if (event.abilityGameID !== spellId) continue;
     const timeS = event.atS;
-    if (event.type === 'applybuff' || event.type === 'applydebuff') timeline.push([timeS, event.stack ?? 1]);
-    else if (event.type.endsWith('buffstack') || event.type.endsWith('debuffstack')) timeline.push([timeS, event.stack ?? 0]);
-    else if (event.type === 'removebuff' || event.type === 'removedebuff') timeline.push([timeS, 0]);
+    if (event.type === 'applybuff' || event.type === 'applydebuff') {
+      if (!entries.length) groundedFromStart = true;
+      entries.push([timeS, Math.max(0, event.stack ?? 1)]);
+    } else if (event.type.endsWith('buffstack') || event.type.endsWith('debuffstack')) {
+      entries.push([timeS, Math.max(0, event.stack ?? 0)]);
+    } else if (event.type === 'removebuff' || event.type === 'removedebuff') {
+      entries.push([timeS, 0]);
+    }
   }
-  return timeline;
+  return { groundedFromStart, entries };
 }
 
-/** The count in force going INTO that moment: WCL logs a consuming cast and the stack it spends on one timestamp, so a same-instant change belongs to the cast rather than preceding it. */
-export function stacksAt(timeline: StackTimeline, timeS: number): number {
-  let count = 0;
-  for (const [at, value] of timeline) {
+/** The count in force going INTO that moment, or null when `groundedFromStart` is false and nothing earlier is known; WCL logs a consuming cast and the stack it spends on one timestamp, so a same-instant change belongs to the cast rather than preceding it. */
+export function stacksAt(timeline: StackTimeline, timeS: number): number | null {
+  let count: number | null = timeline.groundedFromStart ? 0 : null;
+  for (const [at, value] of timeline.entries) {
     if (at >= timeS) break;
     count = value;
   }

@@ -735,6 +735,30 @@ describe('evaluateSpendAtStacks', () => {
     expect(ruleApplicable(spendAtStacks, ruleCtx([cast(LIGHTNING_BOLT, 4)]))).toBe(false);
   });
 
+  it('is not applicable when every cast falls before the buff\'s first recorded trace, so nothing is measurable', () => {
+    const PRE_PULL_DROP_S = 5; // the buff was already up at pull; its first trace is this bare remove
+    const buffs = [removeBuff(MAELSTROM_WEAPON, PRE_PULL_DROP_S)];
+    const ctx = ruleCtx([cast(LIGHTNING_BOLT, PRE_PULL_DROP_S - 1)], { buffs });
+    const rule: RulebookRule = { severity: 'warning', description: 'spend at stacks', condition: spendAtStacks };
+    expect(ruleApplicable(spendAtStacks, ctx)).toBe(false);
+    expect(evaluateRules([benched(rule)], ctx)).toEqual([]);
+    expect(rulesFollowed([benched(rule)], ctx)).toEqual([]);
+  });
+
+  it('does not flag an opener spent under a buff already up at pull, but still flags a genuine low-stack spend later', () => {
+    const PRE_PULL_DROP_S = 2; // the buff was already up at pull; its first trace is this bare remove
+    const LATER_APPLY_S = 10, LATER_SPEND_S = 12; // a fresh application later in the pull, spent cheap
+    const buffs = [
+      removeBuff(MAELSTROM_WEAPON, PRE_PULL_DROP_S),
+      applyBuff(MAELSTROM_WEAPON, LATER_APPLY_S),
+      applyBuffStack(MAELSTROM_WEAPON, LATER_APPLY_S + 1, 2),
+    ];
+    const opener = ruleCtx([cast(LIGHTNING_BOLT, PRE_PULL_DROP_S - 1)], { buffs });
+    const laterCheapSpend = ruleCtx([cast(LIGHTNING_BOLT, LATER_SPEND_S)], { buffs });
+    expect(evaluateSpendAtStacks(spendAtStacks, opener, thr(FIELD_STACKS), 'warning')).toBeNull();
+    expect(evaluateSpendAtStacks(spendAtStacks, laterCheapSpend, thr(FIELD_STACKS), 'warning')).not.toBeNull();
+  });
+
   it('benches the cheapest spend the pull allowed, not its typical one', () => {
     const ctx = ruleCtx([cast(LIGHTNING_BOLT, holding(3)), cast(LIGHTNING_BOLT, holding(9))], { buffs: climbing });
     // A median would bench 6 here and put the parse's own 3-stack cast on the wrong side of the bar.

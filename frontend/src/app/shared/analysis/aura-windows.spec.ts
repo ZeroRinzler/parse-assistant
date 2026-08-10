@@ -96,7 +96,7 @@ describe('buildStackTimeline and stacksAt', () => {
   const stacks = buildStackTimeline(events, MAELSTROM_WEAPON);
 
   it('treats a bare apply as one stack and a stack event as the new total', () => {
-    expect(stacks).toEqual([[FIRST_S, 1], [SECOND_S, 2], [DROP_S, 0]]);
+    expect(stacks).toEqual({ groundedFromStart: true, entries: [[FIRST_S, 1], [SECOND_S, 2], [DROP_S, 0]] });
   });
 
   it('reads the count going INTO a moment, so a spend logged on the cast timestamp does not erase it', () => {
@@ -107,8 +107,32 @@ describe('buildStackTimeline and stacksAt', () => {
   });
 
   it('builds only the aura it was asked for, so a pull pays for what its rulebook names', () => {
-    expect(buildStackTimeline(events, RUPTURE)).toEqual([]);
-    expect(stacksAt(buildStackTimeline(events, RUPTURE), DROP_S)).toBe(0);
+    expect(buildStackTimeline(events, RUPTURE)).toEqual({ groundedFromStart: false, entries: [] });
+    expect(stacksAt(buildStackTimeline(events, RUPTURE), DROP_S)).toBeNull();
+  });
+
+  it('reads a bare apply as a real zero before it, since the aura genuinely was not up yet', () => {
+    expect(stacksAt(stacks, FIRST_S - 1)).toBe(0);
+  });
+
+  it('does not know the count before a bare remove opening the timeline, but knows it from that instant on', () => {
+    // The aura was already up at pull; its first trace inside the fight window is this bare remove.
+    const preExisting = buildStackTimeline(timed([removeBuff(MAELSTROM_WEAPON, DROP_S)], 0), MAELSTROM_WEAPON);
+    expect(stacksAt(preExisting, DROP_S - 1)).toBeNull();
+    expect(stacksAt(preExisting, DROP_S + 1)).toBe(0);
+  });
+
+  it('does not know the count before a bare stack event opening the timeline, but knows it from that instant on', () => {
+    const preExisting = buildStackTimeline(timed([applyBuffStack(MAELSTROM_WEAPON, SECOND_S, 4)], 0), MAELSTROM_WEAPON);
+    expect(stacksAt(preExisting, SECOND_S - 1)).toBeNull();
+    expect(stacksAt(preExisting, SECOND_S + 1)).toBe(4);
+  });
+
+  it('clamps a stack event reporting a negative total to zero', () => {
+    const negative = buildStackTimeline(timed([
+      applyBuff(MAELSTROM_WEAPON, FIRST_S), applyBuffStack(MAELSTROM_WEAPON, SECOND_S, -3),
+    ], 0), MAELSTROM_WEAPON);
+    expect(stacksAt(negative, SECOND_S + 1)).toBe(0);
   });
 
   it('reads zero stacks before the first known event, never inferring a count from a bare stack change', () => {
