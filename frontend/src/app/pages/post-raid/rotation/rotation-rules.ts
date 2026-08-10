@@ -769,10 +769,12 @@ export function evaluateSpendAtStacks(
 ): AnalysisFinding | null {
   // Over the bar is overcapping, which is what a player sees; under it is spending cheap.
   const wording = cond.bound === 'min' ? 'under' : 'over';
+  // Keep WHOLE_STEPS's own rounding: rawCountScale's quantize multiplies by max, which is only valid for a fractional threshold, not this measure's raw stack count.
+  const scale: Scale = { quantize: WHOLE_STEPS.quantize, format: rawCountScale(cond.max_stacks).format };
   return evaluateBoundedPerCast({
     values: stackCountsPerCast(cond, ctx).map(({ timeS, stacks }) => ({ timeS, value: stacks })),
     bound: cond.bound,
-    scale: WHOLE_STEPS,
+    scale,
     subject: cond.spell_name,
     phrase: limit => `at ${wording} ${limit} ${cond.buff_spell_name}`,
     tail: cond.bound === 'max' ? ', overcapping' : undefined,

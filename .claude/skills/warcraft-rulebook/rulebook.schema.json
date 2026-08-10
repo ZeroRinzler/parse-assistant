@@ -387,8 +387,8 @@
     "spendAtStacks": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Use when the sources gate an ability on a stacking buff rather than on a class resource: 'spend at 5 Maelstrom Weapon', 'never cap Arcane Charges'. Do not write a stack count, even when the guide names one - put that number in the rule's action text instead.",
-      "required": ["kind", "spell_id", "spell_name", "buff_spell_id", "buff_spell_name", "bound"],
+      "description": "Use when the sources gate an ability on a stacking buff rather than on a class resource: 'spend at 5 Maelstrom Weapon', 'never cap Arcane Charges'. Do not write the stack count the guide waits for - put that number in the rule's action text instead. Write max_stacks separately: that is the buff's own cap, not the field's wait-for count.",
+      "required": ["kind", "spell_id", "spell_name", "buff_spell_id", "buff_spell_name", "bound", "max_stacks"],
       "properties": {
         "kind": { "const": "spend_at_stacks" },
         "spell_id": { "type": "integer", "description": "The spender for bound min, or the generator for bound max." },
@@ -396,6 +396,7 @@
         "buff_spell_id": { "type": "integer", "description": "The stacking buff that acts as the resource. Use the aura's own id, which is often not the id of the ability that grants it." },
         "buff_spell_name": { "type": "string", "description": "The exact in-game ability name for the id above. Both come from the prepared ability table." },
         "bound": { "enum": ["min", "max"], "description": "min flags spending below the count the field waits for; max flags generating while the buff is already near its cap." },
+        "max_stacks": { "type": "number", "exclusiveMinimum": 0, "maximum": 100, "description": "The buff's own stack cap, a game constant like a cooldown rather than a field behaviour. Read it from the tooltip; it lets the coaching copy show a spend against its ceiling." },
         "except_buff_spell_ids": { "type": "array", "items": { "type": "integer" }, "description": "Optional. Aura ids for the states that suspend the rule, whose casts are excluded entirely. Name the procs the sources say license a cheap cast, or the rule reads correct play as a violation." },
         "except_buff_spell_names": { "type": "array", "items": { "type": "string" }, "description": "Exact in-game names, one per entry of except_buff_spell_ids and in the same order." }
       },
@@ -406,7 +407,8 @@
           "spell_name": "Lightning Bolt",
           "buff_spell_id": 344179,
           "buff_spell_name": "Maelstrom Weapon",
-          "bound": "min"
+          "bound": "min",
+          "max_stacks": 10
         }
       ]
     },

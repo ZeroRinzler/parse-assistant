@@ -675,11 +675,13 @@ describe('evaluateFillerInBuff', () => {
 describe('evaluateSpendAtStacks', () => {
   // What the top parses hold before spending, supplied as a measured threshold.
   const FIELD_STACKS = 8;
+  // Top of the `climbing` fixture below, standing in for the buff's own cap.
+  const MAELSTROM_WEAPON_MAX_STACKS = 10;
   const spendAtStacks: SpendAtStacksCondition = {
     kind: 'spend_at_stacks',
     spell_id: LIGHTNING_BOLT, spell_name: 'Lightning Bolt',
     buff_spell_id: MAELSTROM_WEAPON, buff_spell_name: 'Maelstrom Weapon',
-    bound: 'min',
+    bound: 'min', max_stacks: MAELSTROM_WEAPON_MAX_STACKS,
   };
   // One stack lands each second from t=1.
   const climbing = [applyBuff(MAELSTROM_WEAPON, 1), ...Array.from({ length: 9 }, (_, i) => applyBuffStack(MAELSTROM_WEAPON, i + 2, i + 2))];
@@ -1206,7 +1208,7 @@ describe('benchedRules', () => {
     kind: 'spend_at_stacks',
     spell_id: LIGHTNING_BOLT, spell_name: 'Lightning Bolt',
     buff_spell_id: MAELSTROM_WEAPON, buff_spell_name: 'Maelstrom Weapon',
-    bound: 'min',
+    bound: 'min', max_stacks: 10,
   };
   const spendRule = (condition: SpendAtStacksCondition): RulebookRule =>
     ({ severity: 'warning', description: 'spend at stacks', condition });
@@ -1479,21 +1481,22 @@ describe('occurrence strips', () => {
     expect(finding?.occurrenceTarget).toBe('filler choice inside Eclipse (Solar)');
   });
 
-  it('spend_at_stacks: a chip per cast, the stack count as the label', () => {
+  it('spend_at_stacks: a chip per cast, the count against the cap as the label', () => {
     const spendAtStacks: SpendAtStacksCondition = {
       kind: 'spend_at_stacks',
       spell_id: LIGHTNING_BOLT, spell_name: 'Lightning Bolt',
       buff_spell_id: MAELSTROM_WEAPON, buff_spell_name: 'Maelstrom Weapon',
-      bound: 'min',
+      bound: 'min', max_stacks: 10,
     };
     const buffs = [applyBuff(MAELSTROM_WEAPON, 1), applyBuffStack(MAELSTROM_WEAPON, 5, 5), applyBuffStack(MAELSTROM_WEAPON, 9, 9)];
     const ctx = ruleCtx([cast(LIGHTNING_BOLT, 6), cast(LIGHTNING_BOLT, 10)], { buffs });
     const finding = evaluateSpendAtStacks(spendAtStacks, ctx, thr(8), 'warning');
     expect(finding?.occurrences).toEqual([
-      { atS: 6, ok: false, label: '5', detail: 'Lightning Bolt cast at 5.' },
-      { atS: 10, ok: true, label: '9', detail: 'Lightning Bolt cast at 9.' },
+      { atS: 6, ok: false, label: '5/10', detail: 'Lightning Bolt cast at 5/10.' },
+      { atS: 10, ok: true, label: '9/10', detail: 'Lightning Bolt cast at 9/10.' },
     ]);
-    expect(finding?.occurrenceTarget).toBe('field waits for 8+');
+    expect(finding?.occurrenceTarget).toBe('field waits for 8/10+');
+    expect(finding?.message).toBe('Lightning Bolt cast at under 8/10 Maelstrom Weapon, 1 of 2 cast(s). Top: 8/10.');
   });
 
   it('aura_clipped: a chip per hard-cast refresh, the elapsed time as the label', () => {
