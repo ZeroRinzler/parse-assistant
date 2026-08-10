@@ -20,6 +20,9 @@ data/tmp/
 # bound. See CLAUDE.md and the ingest/deploy workflows.
 frontend/public/data/specs/
 
+# Scratch checkouts an agent works in; the branch it commits to carries the work.
+.claude/worktrees/
+
 # Logs
 *.log
 logs/
