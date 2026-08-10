@@ -434,7 +434,7 @@ export class RotationFeatureService {
 
       const rules = benchedRules(bench.value.rules);
       const conditions = rules.map(entry => entry.rule);
-      const [casts, buffs, enemyAuras, damage, raidDeaths] = await Promise.all([
+      const [casts, buffs, enemyAuras, damage] = await Promise.all([
         this.wclApi.getAllEvents(reportCode, fightId, 'Casts', fight.startTime, fight.endTime, playerId, true),
         this.wclApi.getAllEvents(reportCode, fightId, 'Buffs', fight.startTime, fight.endTime, playerId),
         // Unnarrowable, so it costs several raid-wide pages: `Enemies` plus a sourceID returns nothing, and WCL offers no other source filter here.
@@ -446,23 +446,18 @@ export class RotationFeatureService {
           ? this.wclApi.getAllEvents(reportCode, fightId, 'DamageDone', fight.startTime, fight.endTime, playerId,
             rulesNeed(conditions, 'targetHealth'))
           : Promise.resolve([]),
-        // Deaths target the player rather than come from them, so a sourceID filter would drop every one.
-        rulesNeed(conditions, 'deaths')
-          ? this.wclApi.getAllEvents(reportCode, fightId, 'Deaths', fight.startTime, fight.endTime)
-          : Promise.resolve([]),
       ]);
       const fightDurationS = relativeS(fight.endTime, fight.startTime);
       const castsTimed = withRelativeS(casts, fight.startTime);
       const buffsTimed = withRelativeS(buffs, fight.startTime);
       const debuffsTimed = withRelativeS(enemyAuras.filter(event => event.sourceID === playerId), fight.startTime);
-      const deathsTimed = withRelativeS(raidDeaths.filter(event => event.targetID === playerId), fight.startTime);
 
       const offensiveFindings = analyzeRotationFindings({
         fightDurationS, castEvents: castsTimed, buffEvents: buffsTimed,
         cooldowns: bench.value.major_cooldowns, bench: bench.value,
       });
       const ruleCtx = buildRuleContext({
-        casts: castsTimed, buffs: buffsTimed, debuffs: debuffsTimed, damage: withRelativeS(damage, fight.startTime), deaths: deathsTimed,
+        casts: castsTimed, buffs: buffsTimed, debuffs: debuffsTimed, damage: withRelativeS(damage, fight.startTime),
         fightDurationS,
       });
       const ruleFindings = evaluateRules(rules, ruleCtx);

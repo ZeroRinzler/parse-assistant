@@ -13,7 +13,7 @@ import {
   SHADOW_BLADES_DAMAGE,
 } from '../../../../testing/spell-ids';
 import {
-  cast, applyBuff, removeBuff, buffWindow, applyDebuff, removeDebuff, refreshDebuff, applyBuffStack, damage, death,
+  cast, applyBuff, removeBuff, buffWindow, applyDebuff, removeDebuff, refreshDebuff, applyBuffStack, damage,
 } from '../../../../testing/builders/events';
 import {
   BenchedRule, RuleContext, RuleStream, RuleThreshold,
@@ -41,14 +41,13 @@ function benched(rule: RulebookRule, threshold: RuleThreshold | null = thr(PAIR_
 
 // Build a RuleContext for a 0..120s fight from just the casts - keeps the rule call sites terse.
 const RULE_FIGHT_END_S = 120;
-interface RuleCtxOverrides { buffs: WclEvent[]; debuffs: WclEvent[]; damage: WclEvent[]; deaths: WclEvent[]; fightDurationS: number }
+interface RuleCtxOverrides { buffs: WclEvent[]; debuffs: WclEvent[]; damage: WclEvent[]; fightDurationS: number }
 function ruleCtx(casts: WclEvent[], over: Partial<RuleCtxOverrides> = {}): RuleContext {
   return buildRuleContext({
     casts: withRelativeS(casts, 0),
     buffs: withRelativeS(over.buffs ?? [], 0),
     debuffs: withRelativeS(over.debuffs ?? [], 0),
     damage: withRelativeS(over.damage ?? [], 0),
-    deaths: withRelativeS(over.deaths ?? [], 0),
     fightDurationS: over.fightDurationS ?? RULE_FIGHT_END_S,
   });
 }
@@ -221,15 +220,12 @@ describe('evaluateAuraUptimeBelow', () => {
     expect(evaluateAuraUptimeBelow(selfAura, ctx, thr(RUPTURE_MIN_PCT), 'warning')?.measured?.value).toBe(`50 / ${RUPTURE_MIN_PCT}`);
   });
 
-  it('denominates on alive time, so the same 60s of dot reads as full uptime for a player who died at 60s', () => {
-    const DEATH_S = 60;
-    const ctx = ruleCtx([], { debuffs: halfUptime, deaths: [death(DEATH_S)] });
-    expect(evaluateAuraUptimeBelow(ruptureUptime, ctx, thr(RUPTURE_MIN_PCT), 'warning')).toBeNull();
-  });
-
-  it('clamps the dot to alive time, so a dot outliving the player cannot read past 100%', () => {
-    const ctx = ruleCtx([], { debuffs: [applyDebuff(RUPTURE, 0), removeDebuff(RUPTURE, 115)], deaths: [death(60)] });
-    expect(measureRule(ruptureUptime, ctx)).toBe(100);
+  it('measures uptime over the whole fight, so a 30s dot on a 120s pull reads 25%', () => {
+    // 30 / 120 = 25%.
+    const DOT_END_S = 30;
+    const ctx = ruleCtx([], { debuffs: [applyDebuff(RUPTURE, 0), removeDebuff(RUPTURE, DOT_END_S)] });
+    const finding = evaluateAuraUptimeBelow(ruptureUptime, ctx, thr(RUPTURE_MIN_PCT), 'warning');
+    expect(finding?.measured).toEqual({ value: `25 / ${RUPTURE_MIN_PCT}`, unit: '% uptime' });
   });
 
   it('stays silent on a debuff applied before the pull, which arrives as a lone remove', () => {
@@ -1200,12 +1196,9 @@ describe('rulesNeed', () => {
   const cases: { name: string; rules: RulebookRule[]; stream: RuleStream; needed: boolean }[] = [
     { name: 'an on-target uptime rule reads enemy auras', rules: [uptime('target')], stream: 'enemyAuras', needed: true },
     { name: 'an on-self uptime rule leaves them unfetched', rules: [uptime('self')], stream: 'enemyAuras', needed: false },
-    { name: 'an on-self uptime rule still reads deaths, which bound its denominator', rules: [uptime('self')], stream: 'deaths', needed: true },
     { name: 'a target-count rule reads damage', rules: [targetCount], stream: 'damage', needed: true },
-    { name: 'a target-count rule leaves deaths unfetched', rules: [targetCount], stream: 'deaths', needed: false },
     { name: 'a rulebook with no rules leaves damage unfetched', rules: [], stream: 'damage', needed: false },
     { name: 'a rulebook with no rules leaves enemy auras unfetched', rules: [], stream: 'enemyAuras', needed: false },
-    { name: 'a rulebook with no rules leaves deaths unfetched', rules: [], stream: 'deaths', needed: false },
   ];
 
   it.each(cases)('$name', ({ rules, stream, needed }) => {
@@ -1324,6 +1317,20 @@ describe('occurrence strips', () => {
     expect(finding?.timeline).toEqual({ segmentsS: [[0.3, 10], [15, 20]], fightDurationS: FIGHT_END_S });
     expect(finding?.occurrences).toEqual([
       { atS: 10, ok: false, label: '5s', detail: 'Rupture was down here for 5s.' },
+    ]);
+  });
+
+  it('aura_uptime_below: draws the timeline against the full fight, so a dead stretch still reads as a downtime gap', () => {
+    const uptime: AuraUptimeBelowCondition = {
+      kind: 'aura_uptime_below', aura_spell_id: RUPTURE, aura_spell_name: 'Rupture', on: 'target',
+    };
+    // Up 0-40s and 90-120s of the 120s fight: one 50s gap.
+    const debuffs = [applyDebuff(RUPTURE, 0), removeDebuff(RUPTURE, 40), applyDebuff(RUPTURE, 90)];
+    const ctx = ruleCtx([], { debuffs });
+    const finding = evaluateAuraUptimeBelow(uptime, ctx, thr(90), 'warning');
+    expect(finding?.timeline).toEqual({ segmentsS: [[0, 40], [90, 120]], fightDurationS: RULE_FIGHT_END_S });
+    expect(finding?.occurrences).toEqual([
+      { atS: 40, ok: false, label: '50s', detail: 'Rupture was down here for 50s.' },
     ]);
   });
 

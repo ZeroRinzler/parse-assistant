@@ -100,8 +100,6 @@ export interface RuleContext {
   castTimes: CastTimes;
   castEvents: TimedEvent[];
   fightDurationS: number;
-  /** Fight start to the player's first death, so a corpse is never coached for what it could not maintain. */
-  aliveDurationS: number;
   selfAuras: AuraWindows;
   targetAuras: AuraWindows;
   /** Called rather than read: each builds on first use, and only for the one aura the rule names. */
@@ -167,20 +165,16 @@ export interface RuleInputs {
   buffs: TimedEvent[];
   debuffs: TimedEvent[];
   damage: TimedEvent[];
-  /** The player's own, not the raid's. */
-  deaths: TimedEvent[];
   fightDurationS: number;
 }
 
 export function buildRuleContext(input: RuleInputs): RuleContext {
-  const { casts, buffs, debuffs, damage, deaths, fightDurationS } = input;
-  const deathTimes = deaths.map(event => event.atS);
+  const { casts, buffs, debuffs, damage, fightDurationS } = input;
   const health = lazy(() => buildHealthIndex(damage));
   return {
     castTimes: buildCastTimes(casts),
     castEvents: casts,
     fightDurationS,
-    aliveDurationS: deathTimes.length ? Math.min(...deathTimes) : fightDurationS,
     selfAuras: buildAuraWindows(buffs),
     targetAuras: buildAuraWindows(debuffs),
     stacks: perId(spellId => buildStackTimeline(buffs, spellId)),
@@ -364,8 +358,7 @@ export function evaluateCastOutsideBuff(
 
 function uptimePct(cond: AuraUptimeBelowCondition, ctx: RuleContext): number {
   const windows = cond.on === 'target' ? ctx.targetAuras : ctx.selfAuras;
-  // Alive time, since the top parses this is measured against do not die and so give no relief for the dead stretch.
-  return auraUptimePct(windows, cond.aura_spell_id, ctx.aliveDurationS);
+  return auraUptimePct(windows, cond.aura_spell_id, ctx.fightDurationS);
 }
 
 /** Overlapping spans merged (a multi-target debuff reads as "up somewhere"), clipped to `[0, boundS]`. */
@@ -410,8 +403,8 @@ export function evaluateAuraUptimeBelow(
   // Zero uptime reads as a build that skips the aura rather than a mistake, which the app does not guess at.
   if (pct <= 0 || pct >= minPct) return null;
   const windows = cond.on === 'target' ? ctx.targetAuras : ctx.selfAuras;
-  const merged = mergedUpSpans(windows, cond.aura_spell_id, ctx.aliveDurationS);
-  const gaps = uptimeGaps(merged, ctx.aliveDurationS);
+  const merged = mergedUpSpans(windows, cond.aura_spell_id, ctx.fightDurationS);
+  const gaps = uptimeGaps(merged, ctx.fightDurationS);
   return {
     severity, category: 'rule_violation',
     label: `${cond.aura_spell_name} uptime`,
@@ -422,7 +415,7 @@ export function evaluateAuraUptimeBelow(
       atS: round(start, 3), ok: false, label: `${round(end - start, 0)}s`,
       detail: `${cond.aura_spell_name} was down here for ${round(end - start, 0)}s.`,
     })),
-    timeline: { segmentsS: merged, fightDurationS: ctx.aliveDurationS },
+    timeline: { segmentsS: merged, fightDurationS: ctx.fightDurationS },
   };
 }
 
@@ -889,7 +882,7 @@ export const RULE_TYPE_LABEL: Record<string, string> = {
 };
 
 /** The optional event streams a rule reads beyond the always-fetched casts and buffs. `targetHealth` rides on `damage`, asking for its heavier resource-bearing form. */
-export type RuleStream = 'enemyAuras' | 'damage' | 'deaths' | 'targetHealth';
+export type RuleStream = 'enemyAuras' | 'damage' | 'targetHealth';
 
 /** One kind's facts in one block, so adding a kind is one edit rather than one per dispatch site. */
 interface KindSpec<C extends RuleCondition> {
@@ -947,7 +940,7 @@ const RULE_KINDS: { [K in RuleCondition['kind']]: KindSpec<Extract<RuleCondition
     label: cond => `${cond.spell_name} ${cond.require} ${cond.buff_spell_name}`,
   },
   aura_uptime_below: {
-    streams: cond => cond.on === 'target' ? ['enemyAuras', 'deaths'] : ['deaths'],
+    streams: cond => cond.on === 'target' ? ['enemyAuras'] : [],
     measure: (cond, ctx) => uptimePct(cond, ctx) || null,
     evaluate: withThreshold(evaluateAuraUptimeBelow),
     applicable: (cond, ctx) => uptimePct(cond, ctx) > 0,

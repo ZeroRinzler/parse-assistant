@@ -81,17 +81,6 @@ export function buffWindow(spellId: number, fromS: number, toS: number, opts?: {
   return [applyBuff(spellId, fromS, opts), removeBuff(spellId, toS, opts)];
 }
 
-/** A player dying (`type: 'death'`): `target` is who died, so a spec filters these by target and not by source. */
-export function death(atS: number, opts?: { target?: number; killingAbility?: number }): WclEvent {
-  return {
-    type: 'death',
-    timestamp: atS * MS_PER_SECOND,
-    abilityGameID: 0,
-    ...(opts?.target !== undefined && { targetID: opts.target }),
-    ...(opts?.killingAbility !== undefined && { killingAbilityGameID: opts.killingAbility }),
-  };
-}
-
 export function damage(
   spellId: number,
   atS: number,

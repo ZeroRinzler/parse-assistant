@@ -9,7 +9,7 @@ import { RulebookRule, RulebookCooldown, CastWithoutPriorCondition } from '../..
 import {
   SHADOW_BLADES, SHADOW_DANCE, SECRET_TECHNIQUE, VANISH, BLOODLUST, RUPTURE, BLACK_POWDER,
 } from '../../../../testing/spell-ids';
-import { cast, applyBuff, applyDebuff, removeDebuff, death } from '../../../../testing/builders/events';
+import { cast, applyBuff, applyDebuff, removeDebuff } from '../../../../testing/builders/events';
 import { WclEvent } from '../../../core/models/wcl.models';
 import { withRelativeS } from '../../../shared/analysis/wcl-projections';
 import { ROTATION_DATA_SOURCE, RotationBench } from './rotation-data-source';
@@ -604,21 +604,6 @@ describe('RotationFeatureService fetch shape', () => {
   }
 
   const UPTIME_BAR_PCT = 90;
-  const DOT_END_S = 60;
-
-  /** Rupture held over the first half of the pull, plus whatever deaths the raid took. */
-  function dotThenDeath(deaths: WclEvent[]) {
-    return {
-      getReport: async () => REPORT,
-      getAllEvents: async (_c: string, _f: number, dataType: string) => {
-        if (dataType === 'Debuffs') return [
-          { ...applyDebuff(RUPTURE, 0), sourceID: PLAYER_ID },
-          { ...removeDebuff(RUPTURE, DOT_END_S), sourceID: PLAYER_ID },
-        ];
-        return dataType === 'Deaths' ? deaths : [];
-      },
-    };
-  }
 
   it('requests player casts with resources on, which resource_at_cast depends on', async () => {
     const { calls, api } = recording();
@@ -626,12 +611,11 @@ describe('RotationFeatureService fetch shape', () => {
     expect(calls).toContainEqual({ dataType: 'Casts', sourceId: PLAYER_ID, includeResources: true, hostilityType: undefined });
   });
 
-  it('skips the enemy-aura, damage and death fetches when no rule reads them', async () => {
+  it('skips the enemy-aura and damage fetches when no rule reads them', async () => {
     const { calls, api } = recording();
     await withSource(ok(bench()), api).loadPlayerView('SubtletyRogue', 1, 'rX', 1, PLAYER_ID);
     expect(calls.some(call => call.dataType === 'Debuffs')).toBe(false);
     expect(calls.some(call => call.dataType === 'DamageDone')).toBe(false);
-    expect(calls.some(call => call.dataType === 'Deaths')).toBe(false);
   });
 
   it('fetches enemy auras with Enemies hostility and no source, the only shape WCL answers', async () => {
@@ -652,28 +636,6 @@ describe('RotationFeatureService fetch shape', () => {
       .loadPlayerView('SubtletyRogue', 1, 'rX', 1, PLAYER_ID);
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.value.ruleRows.some(row => row.what?.includes('Rupture'))).toBe(false);
-  });
-
-  it('fetches deaths without a source filter, since a death targets the player rather than coming from them', async () => {
-    const { calls, api } = recording();
-    await withSource(ok(bench({ rules: [benched(dotUptime)] })), api).loadPlayerView('SubtletyRogue', 1, 'rX', 1, PLAYER_ID);
-    expect(calls).toContainEqual({ dataType: 'Deaths', sourceId: undefined, includeResources: false, hostilityType: undefined });
-  });
-
-  it('judges dot uptime against the time the player was alive', async () => {
-    const DEATH_S = 60;
-    const result = await withSource(ok(bench({ rules: [benched(dotUptime, thr(UPTIME_BAR_PCT))] })),
-      dotThenDeath([death(DEATH_S, { target: PLAYER_ID })])).loadPlayerView('SubtletyRogue', 1, 'rX', 1, PLAYER_ID);
-    expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value.ruleRows.some(row => row.what?.includes('Rupture'))).toBe(false);
-  });
-
-  it('keeps another raider death out of the alive window, so the same dot still reads as dropped', async () => {
-    const OTHER_RAIDER = 99;
-    const result = await withSource(ok(bench({ rules: [benched(dotUptime, thr(UPTIME_BAR_PCT))] })),
-      dotThenDeath([death(10, { target: OTHER_RAIDER })])).loadPlayerView('SubtletyRogue', 1, 'rX', 1, PLAYER_ID);
-    expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value.ruleRows.some(row => row.what?.includes('Rupture'))).toBe(true);
   });
 
   it('fetches the player damage only when a target-count rule needs it', async () => {

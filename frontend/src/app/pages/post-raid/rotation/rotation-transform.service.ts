@@ -288,7 +288,7 @@ export class RotationTransformService implements DataSource<RotationBench> {
       const player = findParseActor(report.masterData?.actors, ranking);
       if (!fight || !player) return null;
 
-      const [casts, buffs, enemyAuras, damage, raidDeaths] = await Promise.all([
+      const [casts, buffs, enemyAuras, damage] = await Promise.all([
         this.wclApi.getAllEvents(ranking.report_code, fight.id, 'Casts', fight.startTime, fight.endTime, player.id, true),
         this.wclApi.getAllEvents(ranking.report_code, fight.id, 'Buffs', fight.startTime, fight.endTime, player.id),
         // Same shape and cost as the runtime fetch: raid-wide, so only for a spec that reads enemy auras.
@@ -300,9 +300,6 @@ export class RotationTransformService implements DataSource<RotationBench> {
           ? this.wclApi.getAllEvents(ranking.report_code, fight.id, 'DamageDone', fight.startTime, fight.endTime, player.id,
             rulesNeed(rules, 'targetHealth'))
           : Promise.resolve([]),
-        rulesNeed(rules, 'deaths')
-          ? this.wclApi.getAllEvents(ranking.report_code, fight.id, 'Deaths', fight.startTime, fight.endTime)
-          : Promise.resolve([]),
       ]);
 
       const fightDurS = relativeS(fight.endTime, fight.startTime);
@@ -312,7 +309,6 @@ export class RotationTransformService implements DataSource<RotationBench> {
       const ruleCtx = buildRuleContext({
         casts: castsTimed, buffs: buffsTimed, damage: withRelativeS(damage, fight.startTime),
         debuffs: withRelativeS(enemyAuras.filter(event => event.sourceID === player.id), fight.startTime),
-        deaths: withRelativeS(raidDeaths.filter(event => event.targetID === player.id), fight.startTime),
         fightDurationS: fightDurS,
       });
       return {
