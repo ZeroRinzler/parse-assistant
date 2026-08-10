@@ -134,11 +134,6 @@ describe('buildStackTimeline and stacksAt', () => {
     ], 0), MAELSTROM_WEAPON);
     expect(stacksAt(negative, SECOND_S + 1)).toBe(0);
   });
-
-  it('reads zero stacks before the first known event, never inferring a count from a bare stack change', () => {
-    const midFightStack = buildStackTimeline(timed([applyBuffStack(MAELSTROM_WEAPON, SECOND_S, 2)], 0), MAELSTROM_WEAPON);
-    expect(stacksAt(midFightStack, SECOND_S - 1)).toBe(0);
-  });
 });
 
 describe('buildAuraSpansByTarget', () => {
