@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, input, linkedSignal, output } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { GameIconComponent } from '../game-icon/game-icon';
@@ -32,7 +32,11 @@ export class FindingTableComponent {
   readonly openMap = output<FindingRow>();
   readonly openClip = output<FindingRow>();
 
-  readonly openIndex = signal<number | null>(null);
+  // The table is reused across pull/player switches, so a stale open row must not survive a rows swap.
+  readonly openIndex = linkedSignal<FindingRow[], number | null>({
+    source: this.rows,
+    computation: () => null,
+  });
 
   toggle(index: number): void {
     this.openIndex.update(current => current === index ? null : index);

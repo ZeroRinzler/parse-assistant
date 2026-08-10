@@ -44,4 +44,18 @@ describe('FindingOccurrencesComponent', () => {
       { leftPercentage: 75, widthPercentage: 25 },
     ]);
   });
+
+  it('drops a stale manual pick when occurrences swaps to a different finding, falling back to the new first-bad index', () => {
+    const occurrences = [occ({ ok: false, label: 'a' }), occ({ label: 'b' }), occ({ ok: false, label: 'c' })];
+    const { vm, setInput } = mountVm(FindingOccurrencesComponent, { occurrences });
+    vm.select(2);
+    expect(vm.activeIndex()).toBe(2);
+
+    const nextOccurrences = [occ({ ok: false, label: 'd' }), occ({ label: 'e' })];
+    const NEW_FIRST_BAD_INDEX = 0;
+    setInput('occurrences', nextOccurrences);
+
+    expect(vm.activeIndex()).toBe(NEW_FIRST_BAD_INDEX);
+    expect(vm.active()).toEqual(nextOccurrences[NEW_FIRST_BAD_INDEX]);
+  });
 });

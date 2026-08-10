@@ -32,4 +32,15 @@ describe('FindingTableComponent', () => {
     vm.toggle(1);
     expect(vm.openIndex()).toBe(1);
   });
+
+  it('closes the open row when rows swaps to a different pull or player', () => {
+    const { vm, setInput } = mountVm(FindingTableComponent, { heading: 'Rules', rows });
+    vm.toggle(1);
+    expect(vm.openIndex()).toBe(1);
+
+    const otherRows = [{ severity: 'critical' as const, icon: '', measured: { value: '5 / 6' }, occurrences: [] }];
+    setInput('rows', otherRows);
+
+    expect(vm.openIndex()).toBeNull();
+  });
 });
