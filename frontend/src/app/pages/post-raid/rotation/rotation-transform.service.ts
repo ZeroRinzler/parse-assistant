@@ -5,7 +5,7 @@ import { ParseRanking } from '../../../core/models/wcl.models';
 import { RulebookCooldown, RulebookDefensive, RulebookRule } from '../../../core/models/rulebook.models';
 import { PerCdBenchmark, UsesPerMin } from '../../../core/models/encounter.models';
 import { logWarn } from '../../../core/log';
-import { mean, deviation, quantile } from 'd3-array';
+import { mean, median, deviation, quantile } from 'd3-array';
 import { round, getOrInsert } from '../../../shared/analysis/analysis-math';
 import {
   HoldWindow, HOLD_CONSENSUS_FRAC, buildHoldTargets, detectHoldWindows,
@@ -130,6 +130,7 @@ export function buildCdBenchmark(entries: CdSummary[], effectiveCd: number): Per
     .filter(entry => entry.fight_duration_s > 0)
     .map(entry => entry.total_uses / (entry.fight_duration_s / 60));
   const usesPerMin = benchUsesPerMin(entries);
+  const usedUses = entries.map(entry => entry.total_uses).filter(uses => uses > 0);
 
   return {
     sample_count: entries.length,
@@ -141,6 +142,7 @@ export function buildCdBenchmark(entries: CdSummary[], effectiveCd: number): Per
     avg_bl_offset_s: blOffsets.length ? round((mean(blOffsets) ?? 0)) : null,
     stddev_bl_offset_s: blOffsets.length ? round((deviation(blOffsets) ?? 0)) : null,
     avg_uses: entries.length ? round(mean(entries.map(entry => entry.total_uses)) ?? 0) : 0,
+    median_uses: usedUses.length ? round(median(usedUses) ?? 0) : 0,
     avg_uses_per_min: upmList.length ? round((mean(upmList) ?? 0), 2) : 0,
     uses_per_min: usesPerMin,
     bl_pct: entries.length ? Math.round((blCount / entries.length) * 100) : 0,

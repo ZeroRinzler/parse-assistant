@@ -67,12 +67,12 @@ test('gear shows the top-parse talent, trinket, and enchant consensus, and how t
   await expect(enchants).toContainText(PERCENT);
 });
 
-test('the cooldown plan lists first use, average uses, and the holds', async () => {
+test('the cooldown plan lists first use, typical uses, and the holds', async () => {
   const cooldownPlan = page.locator('wl-rotation-cd-plan');
   await shows(cooldownPlan, 'Cooldown plan');
   await showsEntity(cooldownPlan);
   await shows(cooldownPlan, 'First use');
-  await shows(cooldownPlan, 'Avg uses');
+  await shows(cooldownPlan, 'Typical uses');
   await shows(cooldownPlan, DECIMAL);
   await shows(cooldownPlan, 'Holds');
   await shows(cooldownPlan, CLOCK);
@@ -84,7 +84,7 @@ test('the defensive plan lists the consensus defensives', async () => {
   await showsEntity(defensivePlan);
   await shows(defensivePlan, 'First use');
   await shows(defensivePlan, CLOCK);
-  await shows(defensivePlan, 'Avg uses');
+  await shows(defensivePlan, 'Typical uses');
   await shows(defensivePlan, DECIMAL);
 });
 

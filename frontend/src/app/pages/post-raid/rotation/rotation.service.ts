@@ -47,7 +47,10 @@ export interface CdPlanRow {
   spellId: number | null;
   icon: string;
   firstCastS: number | null;
-  uses: number | null;
+  /** Median casts among the parses that used it at least once; null when none did. */
+  typicalUses: number | null;
+  usedSampleCount: number;
+  sampleCount: number;
   usesPerMin: number | null;
   bloodlust: boolean;
   bloodlustPct: number | null;
@@ -400,7 +403,10 @@ export function buildCdPlan(
       spellId,
       icon: ability?.icon ?? '',
       firstCastS: usedByMajority ? cdBench!.avg_first_cast_s : null,
-      uses: cdBench?.avg_uses ?? null,
+      // Typical uses is the median over the parses that pressed it at all, so any adoption (not just a majority) yields a number.
+      typicalUses: cdBench && cdBench.used_sample_count > 0 ? cdBench.median_uses : null,
+      usedSampleCount: cdBench?.used_sample_count ?? 0,
+      sampleCount: cdBench?.sample_count ?? 0,
       usesPerMin: usedByMajority ? cdBench!.uses_per_min.avg : null,
       bloodlust: (cdBench?.bl_pct ?? 0) >= BL_CONSENSUS_PCT,
       bloodlustPct: (cdBench?.bl_pct ?? 0) >= BL_CONSENSUS_PCT ? cdBench!.bl_pct : null,

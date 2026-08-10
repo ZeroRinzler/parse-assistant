@@ -33,9 +33,14 @@
               <span class="font-mono text-[10px] uppercase tracking-[0.5px] text-[var(--muted)]">First use</span>
               <span class="font-mono text-[13px] text-[var(--accent)] tabular-nums">{{ cd.firstCastS | formatDuration }}</span>
             </span>
-            <span class="flex items-baseline gap-1.5">
-              <span class="font-mono text-[10px] uppercase tracking-[0.5px] text-[var(--muted)]">Avg uses</span>
-              <span class="font-mono text-[12.5px] text-[var(--text)] tabular-nums">{{ cd.uses != null ? (cd.uses | number:'1.0-1') : '-' }}</span>
+            <span class="flex flex-wrap items-baseline gap-1.5">
+              <span class="font-mono text-[10px] uppercase tracking-[0.5px] text-[var(--muted)]">Typical uses</span>
+              @if (cd.sampleCount) {
+                <span class="font-mono text-[12.5px] text-[var(--text)] tabular-nums">{{ cd.typicalUses != null ? (cd.typicalUses | number:'1.0-1') : 'None' }}</span>
+                <span class="font-mono text-[10px] text-[var(--muted)] tabular-nums">{{ cd.usedSampleCount }}/{{ cd.sampleCount }} parses</span>
+              } @else {
+                <span class="font-mono text-[12.5px] text-[var(--muted)]">-</span>
+              }
             </span>
           </div>
           <div class="flex flex-wrap items-baseline gap-1.5 md:justify-end">

@@ -241,6 +241,18 @@ describe('buildDefensiveBenchmark', () => {
     // uses/min per parse: 2/300*60 = 0.4 and 3/300*60 = 0.6 -> mean 0.5, min 0.4, max 0.6.
     expect(benchmark.uses_per_min).toMatchObject({ avg: 0.5, min: 0.4, max: 0.6 });
   });
+
+  const userSummary = (uses: number): ParseDefensiveSummary =>
+    ({ name: 'C', cast_times_s: [10], first_cast_s: 10, uses, fight_duration_s: FIGHT_DUR_S, hold_windows: [], cast_pattern: 'on_cooldown' });
+
+  it('keeps median_uses steady against a single outlier that would drag avg_uses up', () => {
+    const TYPICAL_USES = 3;
+    const OUTLIER_USES = 20;  // one parse spiking far above the rest
+    const summaries = [userSummary(TYPICAL_USES), userSummary(TYPICAL_USES), userSummary(TYPICAL_USES), userSummary(OUTLIER_USES)];
+    const benchmark = buildDefensiveBenchmark(summaries, CLOAK.cooldown, summaries.length);
+    expect(benchmark.median_uses).toBe(TYPICAL_USES);
+    expect(benchmark.avg_uses).toBeGreaterThan(TYPICAL_USES);  // the mean the outlier does skew, for contrast
+  });
 });
 
 describe('aggregateDefensiveBenchmarks', () => {

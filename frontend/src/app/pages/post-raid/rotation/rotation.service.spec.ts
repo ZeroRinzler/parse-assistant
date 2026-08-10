@@ -52,7 +52,7 @@ function cdBench(over: Partial<PerCdBenchmark> = {}): PerCdBenchmark {
     avg_first_cast_s: 5, stddev_first_cast_s: 2,
     avg_gap_s: 90, stddev_gap_s: 5,
     avg_bl_offset_s: 0, stddev_bl_offset_s: 2,
-    avg_uses: 2, avg_uses_per_min: 1,
+    avg_uses: 2, median_uses: 2, avg_uses_per_min: 1,
     uses_per_min: { avg: 1, stddev: 0.1, min: 0.9, max: 1.1 },
     bl_pct: 100, majority_hold: false, hold_targets: {}, sample_count: 5, used_sample_count: 5,
     ...over,
@@ -487,24 +487,36 @@ describe('buildCdPlan', () => {
     expect(plan[0].icon).toBe('');
   });
 
-  it('nulls the per-use first-cast and uses/min for a cd no top parse used (use-share gate)', () => {
+  it('renders the empty state for typical uses when no top parse ever used the cd', () => {
     // used_sample_count 0 -> the transform emits avg_first_cast_s 0, a no-data sentinel, not a 0:00 open.
-    const unused = cdBench({ used_sample_count: 0, avg_first_cast_s: 0, avg_uses: 0, uses_per_min: { avg: 0, stddev: 0, min: 0, max: 0 } });
+    const TOTAL_SAMPLED = 5;
+    const unused = cdBench({
+      sample_count: TOTAL_SAMPLED, used_sample_count: 0, avg_first_cast_s: 0, avg_uses: 0, median_uses: 0,
+      uses_per_min: { avg: 0, stddev: 0, min: 0, max: 0 },
+    });
     const plan = buildCdPlan([{ name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 90 }], { 'Shadow Blades': unused }, abilities);
     expect(plan[0].firstCastS).toBeNull();
     expect(plan[0].usesPerMin).toBeNull();
-    // avg_uses is a population average over all parses, so it stays truthful and is not gated.
-    expect(plan[0].uses).toBe(0);
+    // No sampled parse ever used it, so the row renders the honest empty state rather than a 0.
+    expect(plan[0].typicalUses).toBeNull();
+    // The adoption counts reaching the template are the raw sample counts, not a precomputed "0/5" string.
+    expect(plan[0].usedSampleCount).toBe(0);
+    expect(plan[0].sampleCount).toBe(TOTAL_SAMPLED);
   });
 
   it('nulls the per-use fields when only a minority of top parses use the cd (use-share gate)', () => {
     // 2/10 = 20%, below the majority gate, so even a real avg_first_cast_s is unrepresentative of the plan.
     const TOTAL_SAMPLED = 10;
     const MINORITY_USERS = 2;
-    const rare = cdBench({ sample_count: TOTAL_SAMPLED, used_sample_count: MINORITY_USERS, avg_first_cast_s: 20 });
+    const MEDIAN_USES = 3;
+    const rare = cdBench({ sample_count: TOTAL_SAMPLED, used_sample_count: MINORITY_USERS, avg_first_cast_s: 20, median_uses: MEDIAN_USES });
     const plan = buildCdPlan([{ name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 90 }], { 'Shadow Blades': rare }, abilities);
     expect(plan[0].firstCastS).toBeNull();
     expect(plan[0].usesPerMin).toBeNull();
+    // Typical uses only gates on any adoption at all, not the majority share, so a minority still surfaces it.
+    expect(plan[0].typicalUses).toBe(MEDIAN_USES);
+    expect(plan[0].usedSampleCount).toBe(MINORITY_USERS);
+    expect(plan[0].sampleCount).toBe(TOTAL_SAMPLED);
   });
 
   it('keeps the per-use fields when a majority of top parses use the cd', () => {

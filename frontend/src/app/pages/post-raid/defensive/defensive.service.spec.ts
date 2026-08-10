@@ -28,7 +28,7 @@ const CLOAK_META = { name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS, coold
 function defBench(overrides: Partial<PerDefensiveBenchmark> = {}): PerDefensiveBenchmark {
   return {
     sample_count: 5, used_sample_count: 5, avg_first_cast_s: 10, stddev_first_cast_s: 2, avg_gap_s: 60, stddev_gap_s: 5,
-    hold_targets: {}, avg_uses: 2, avg_uses_per_min: 0.4, uses_per_min: { avg: 0.4, stddev: 0.05, min: 0.3, max: 0.5 },
+    hold_targets: {}, avg_uses: 2, median_uses: 2, avg_uses_per_min: 0.4, uses_per_min: { avg: 0.4, stddev: 0.05, min: 0.3, max: 0.5 },
     majority_hold: false,
     ...overrides,
   };
@@ -381,18 +381,23 @@ describe('buildDefensivePlanRows', () => {
     expect(buildDefensivePlanRows(benchWith({}))).toEqual([]);
   });
 
-  it('builds plan rows with window times and avg uses', () => {
+  it('builds plan rows with window times, typical uses and the adoption counts', () => {
     const bench = benchWith({
       defensives: [{ name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS, cooldown: 120, duration: 5, usage_rule: 'Use it', talent_gated: false }],
       ability_icons: { [CLOAK_OF_SHADOWS]: { icon: 'cloak', name: 'Cloak of Shadows' } },
       per_defensive_benchmarks: {
-        'Cloak of Shadows': defBench({ avg_first_cast_s: 12, avg_gap_s: null, stddev_gap_s: null }),
+        'Cloak of Shadows': defBench({ avg_first_cast_s: 12, avg_gap_s: null, stddev_gap_s: null, median_uses: 2, sample_count: 5, used_sample_count: 5 }),
       },
       defensive_windows: [{ time_s: 30, window_length_s: 5, dmg_avg: 0, dmg_min: 0, dmg_max: 0, dmg_stddev: 0, defensive_name: 'Cloak of Shadows', common_cds: ['Cloak of Shadows'], ability_breakdown: [] }],
     });
     const rows = buildDefensivePlanRows(bench);
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ name: 'Cloak of Shadows', spellId: CLOAK_OF_SHADOWS, icon: 'cloak', uses: 2, firstCastS: 12, windowsS: [30], rule: 'Use it' });
+    expect(rows[0]).toMatchObject({
+      name: 'Cloak of Shadows', spellId: CLOAK_OF_SHADOWS, icon: 'cloak',
+      // The adoption counts reaching the row are the raw sample counts, not a precomputed "5/5" string.
+      typicalUses: 2, usedSampleCount: 5, sampleCount: 5,
+      firstCastS: 12, windowsS: [30], rule: 'Use it',
+    });
   });
 
   it('falls back to an empty icon for a defensive whose spell id is not in the ability map', () => {
@@ -404,6 +409,59 @@ describe('buildDefensivePlanRows', () => {
     const rows = buildDefensivePlanRows(bench);
     expect(rows[0].spellId).toBe(CLOAK_OF_SHADOWS);
     expect(rows[0].icon).toBe('');
+  });
+
+  it('renders the empty state for typical uses when no top parse ever used the defensive', () => {
+    const TOTAL_SAMPLED = 5;
+    const bench = benchWith({
+      defensives: [CLOAK_META],
+      ability_icons: { [CLOAK_OF_SHADOWS]: { icon: 'cloak', name: 'Cloak of Shadows' } },
+      per_defensive_benchmarks: {
+        'Cloak of Shadows': defBench({ sample_count: TOTAL_SAMPLED, used_sample_count: 0, avg_first_cast_s: 0, avg_uses: 0, median_uses: 0 }),
+      },
+    });
+    const rows = buildDefensivePlanRows(bench);
+    // No sampled parse ever used it, so the row renders the honest empty state rather than a 0.
+    expect(rows[0].typicalUses).toBeNull();
+    expect(rows[0].firstCastS).toBeNull();
+    expect(rows[0].usedSampleCount).toBe(0);
+    expect(rows[0].sampleCount).toBe(TOTAL_SAMPLED);
+  });
+
+  it('withholds first-cast when only a minority of top parses used the defensive (use-share gate)', () => {
+    // 4/10 = 40%, below the 50% majority gate, so a real avg_first_cast_s is unrepresentative of the plan.
+    const TOTAL_SAMPLED = 10;
+    const MINORITY_USERS = 4;
+    const MEDIAN_USES = 3;
+    const bench = benchWith({
+      defensives: [CLOAK_META],
+      ability_icons: { [CLOAK_OF_SHADOWS]: { icon: 'cloak', name: 'Cloak of Shadows' } },
+      per_defensive_benchmarks: {
+        'Cloak of Shadows': defBench({ sample_count: TOTAL_SAMPLED, used_sample_count: MINORITY_USERS, avg_first_cast_s: 12, median_uses: MEDIAN_USES }),
+      },
+    });
+    const rows = buildDefensivePlanRows(bench);
+    expect(rows[0].firstCastS).toBeNull();
+    // Typical uses only gates on any adoption at all, not the majority share, so a minority still surfaces it.
+    expect(rows[0].typicalUses).toBe(MEDIAN_USES);
+    expect(rows[0].usedSampleCount).toBe(MINORITY_USERS);
+    expect(rows[0].sampleCount).toBe(TOTAL_SAMPLED);
+  });
+
+  it('shows first-cast exactly at the majority-share boundary', () => {
+    // 5/10 = 50%, the inclusive boundary - matches the >= majority gate the rotation plan uses.
+    const TOTAL_SAMPLED = 10;
+    const MAJORITY_USERS = 5;
+    const FIRST_CAST_S = 12;
+    const bench = benchWith({
+      defensives: [CLOAK_META],
+      ability_icons: { [CLOAK_OF_SHADOWS]: { icon: 'cloak', name: 'Cloak of Shadows' } },
+      per_defensive_benchmarks: {
+        'Cloak of Shadows': defBench({ sample_count: TOTAL_SAMPLED, used_sample_count: MAJORITY_USERS, avg_first_cast_s: FIRST_CAST_S }),
+      },
+    });
+    const rows = buildDefensivePlanRows(bench);
+    expect(rows[0].firstCastS).toBe(FIRST_CAST_S);
   });
 });
 
@@ -507,7 +565,7 @@ describe('DefensiveFeatureService.loadPlan (pre-fight)', () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.value.rows).toHaveLength(1);
-      expect(result.value.rows[0]).toMatchObject({ name: 'Cloak of Shadows', spellId: CLOAK_OF_SHADOWS, uses: 2, firstCastS: 10, windowsS: [30] });
+      expect(result.value.rows[0]).toMatchObject({ name: 'Cloak of Shadows', spellId: CLOAK_OF_SHADOWS, typicalUses: 2, firstCastS: 10, windowsS: [30] });
     }
   });
 

@@ -41,7 +41,10 @@ export interface DefensivePlanRow {
   name: string;
   spellId: number | null;
   icon: string;
-  uses: number | null;
+  /** Median casts among the parses that used it at least once; null when none did. */
+  typicalUses: number | null;
+  usedSampleCount: number;
+  sampleCount: number;
   firstCastS: number | null;
   windowsS: number[];
   holds: { castIndex: number; targetS: number }[];
@@ -351,17 +354,22 @@ export function buildDefensivePlanRows(bench: DefensiveBench | null): DefensiveP
     const spellId = defensive.spell_id ?? null;
     const ability = spellId != null ? bench.ability_icons[spellId] : undefined;
     if (spellId != null && !ability) logWarn('buildDefensivePlanRows: ability id missing from ability map', spellId);
+    // First cast is a user-only stat; gate it on the same use-share majority the analysis uses.
+    const usedByMajority = benchmark != null && defensiveUsedShare(benchmark) >= MIN_USE_SHARE_FRAC;
     return {
       name: defensive.name,
       spellId,
       icon: ability?.icon ?? '',
-      uses: benchmark?.avg_uses ?? null,
-      firstCastS: benchmark?.avg_first_cast_s ?? null,
+      // Typical uses is the median over the parses that pressed it at all, so any adoption (not just a majority) yields a number.
+      typicalUses: benchmark && benchmark.used_sample_count > 0 ? benchmark.median_uses : null,
+      usedSampleCount: benchmark?.used_sample_count ?? 0,
+      sampleCount: benchmark?.sample_count ?? 0,
+      firstCastS: usedByMajority ? benchmark!.avg_first_cast_s : null,
       windowsS,
       holds,
       rule: defensive.usage_rule ?? null,
     };
-  }).filter(row => row.uses != null || row.firstCastS != null || row.windowsS.length || row.holds.length || row.rule);
+  }).filter(row => row.typicalUses != null || row.firstCastS != null || row.windowsS.length || row.holds.length || row.rule);
 }
 
 @Injectable({ providedIn: 'root' })

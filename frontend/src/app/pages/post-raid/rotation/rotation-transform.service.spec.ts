@@ -105,6 +105,34 @@ describe('buildCdBenchmark', () => {
     expect(bench.used_sample_count).toBe(USERS);
   });
 
+  it('computes median_uses over only the parses that used it (mixed sample)', () => {
+    const usedCounts = [1, 3, 5];  // sorted -> median 3
+    const usedEntries = usedCounts.map(uses => entry(5, uses, 120, null, false, Array.from({ length: uses }, (_, i) => 5 + i * 10)));
+    const unused: CdSummary = {
+      name: 'Shadow Blades', total_uses: 0, first_cast_s: null, bl_aligned: false, bl_offset_s: null,
+      cast_times_s: [], hold_windows: [], cast_pattern: 'on_cooldown', fight_duration_s: 120,
+    };
+    // Folding the two unused parses in would drag the median from 3 down to 1 ([0, 0, 1, 3, 5]).
+    const bench = buildCdBenchmark([...usedEntries, unused, { ...unused }], 90);
+    expect(bench.median_uses).toBe(3);
+  });
+
+  it('equals the plain median when every sampled parse used it (boundary)', () => {
+    const usedCounts = [2, 4, 6];  // sorted -> median 4, and no unused parse to filter out
+    const entries = usedCounts.map(uses => entry(5, uses, 120, null, false, Array.from({ length: uses }, (_, i) => 5 + i * 10)));
+    expect(buildCdBenchmark(entries, 90).median_uses).toBe(4);
+  });
+
+  it('sentinels median_uses at 0 when no sampled parse ever used it (empty case)', () => {
+    const unused: CdSummary = {
+      name: 'Shadow Blades', total_uses: 0, first_cast_s: null, bl_aligned: false, bl_offset_s: null,
+      cast_times_s: [], hold_windows: [], cast_pattern: 'on_cooldown', fight_duration_s: 120,
+    };
+    const bench = buildCdBenchmark([unused, { ...unused }], 90);
+    expect(bench.used_sample_count).toBe(0);
+    expect(bench.median_uses).toBe(0);
+  });
+
   it('leaves gap + BL fields null when not applicable', () => {
     const bench = buildCdBenchmark([entry(5, 1, 120, null, false, [5])], 90);
     expect(bench.avg_gap_s).toBeNull();

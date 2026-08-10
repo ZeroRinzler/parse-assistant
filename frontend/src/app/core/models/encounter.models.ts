@@ -48,6 +48,8 @@ export interface PerCdBenchmark {
   avg_bl_offset_s: number | null;
   stddev_bl_offset_s: number | null;
   avg_uses: number;
+  // A median, unlike avg_uses: one outlier parse cannot move it.
+  median_uses: number;
   avg_uses_per_min: number;
   uses_per_min: UsesPerMin;
   bl_pct: number;
@@ -69,6 +71,8 @@ export interface PerDefensiveBenchmark {
   stddev_gap_s: number | null;
   hold_targets: CdHoldTargets;
   avg_uses: number;
+  // A median, unlike avg_uses: one outlier parse cannot move it.
+  median_uses: number;
   avg_uses_per_min: number;
   uses_per_min: UsesPerMin;
   majority_hold: boolean;
