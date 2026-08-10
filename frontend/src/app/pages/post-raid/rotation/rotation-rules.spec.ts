@@ -189,6 +189,19 @@ describe('evaluateCastOutsideBuff', () => {
   it('is not applicable when the judged spell was never cast', () => {
     expect(ruleApplicable(insideDance, ruleCtx([], { buffs: dance }))).toBe(false);
   });
+
+  it('reads an opener cast inside a buff pre-cast before the pull as inside it', () => {
+    const OPENER_S = 2;  // well before DANCE_END_S, inside the back-filled pre-pull window
+    const preCastDance = [removeBuff(SHADOW_DANCE, DANCE_END_S)];
+    const ctx = ruleCtx([cast(SECRET_TECHNIQUE, OPENER_S)], { buffs: preCastDance });
+    expect(evaluateCastOutsideBuff(insideDance, ctx, FIELD_NEVER, 'warning')).toBeNull();
+  });
+
+  it('still flags a cast made after that pre-cast buff has already fallen', () => {
+    const preCastDance = [removeBuff(SHADOW_DANCE, DANCE_END_S)];
+    const ctx = ruleCtx([cast(SECRET_TECHNIQUE, DANCE_END_S + 5)], { buffs: preCastDance });
+    expect(evaluateCastOutsideBuff(insideDance, ctx, FIELD_NEVER, 'warning')?.measured?.value).toBe('1 / 1');
+  });
 });
 
 describe('evaluateAuraUptimeBelow', () => {
@@ -228,10 +241,12 @@ describe('evaluateAuraUptimeBelow', () => {
     expect(finding?.measured).toEqual({ value: `25 / ${RUPTURE_MIN_PCT}`, unit: '% uptime' });
   });
 
-  it('stays silent on a debuff applied before the pull, which arrives as a lone remove', () => {
-    const ctx = ruleCtx([], { debuffs: [removeDebuff(RUPTURE, 20)] });
-    expect(evaluateAuraUptimeBelow(ruptureUptime, ctx, thr(RUPTURE_MIN_PCT), 'warning')).toBeNull();
-    expect(ruleApplicable(ruptureUptime, ctx)).toBe(false);
+  it('reads a debuff applied before the pull as up from fight start, since it arrives as a lone remove', () => {
+    const PRE_PULL_REMOVE_S = 20;  // fight runs 0..120s, so this back-fills to 20/120 = 17% uptime
+    const ctx = ruleCtx([], { debuffs: [removeDebuff(RUPTURE, PRE_PULL_REMOVE_S)] });
+    expect(evaluateAuraUptimeBelow(ruptureUptime, ctx, thr(RUPTURE_MIN_PCT), 'warning')?.measured?.value)
+      .toBe(`17 / ${RUPTURE_MIN_PCT}`);
+    expect(ruleApplicable(ruptureUptime, ctx)).toBe(true);
   });
 });
 
@@ -775,6 +790,12 @@ describe('evaluateAuraClipped', () => {
 
   it('ignores a refresh no cast produced, since most refreshes in a log are procs', () => {
     const ctx = ruleCtx([], { debuffs: reapplied(CLIPPED_ELAPSED_S) });
+    expect(evaluateAuraClipped(moonfireClipped, ctx, thr(FIELD_ELAPSED_S), 'warning')).toBeNull();
+    expect(ruleApplicable(moonfireClipped, ctx)).toBe(false);
+  });
+
+  it('ignores a bare refresh with no known prior application, since the true elapsed time is unknown', () => {
+    const ctx = ruleCtx([cast(MOONFIRE, APPLY_AT_S)], { debuffs: [refreshDebuff(MOONFIRE_DOT, APPLY_AT_S)] });
     expect(evaluateAuraClipped(moonfireClipped, ctx, thr(FIELD_ELAPSED_S), 'warning')).toBeNull();
     expect(ruleApplicable(moonfireClipped, ctx)).toBe(false);
   });

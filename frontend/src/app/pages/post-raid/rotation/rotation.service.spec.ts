@@ -15,6 +15,7 @@ import { withRelativeS } from '../../../shared/analysis/wcl-projections';
 import { ROTATION_DATA_SOURCE, RotationBench } from './rotation-data-source';
 import { DataSource } from '../../../core/data-source/data-source';
 import { BenchedRule, RuleThreshold } from './rotation-rules';
+import { detectBloodlust } from './rotation-bloodlust';
 import {
   RotationFeatureService,
   analyzeRotationFindings, RotationScanInput, bucketRotationFindings, buildCdPlan,
@@ -112,6 +113,44 @@ describe('analyzeRotationFindings', () => {
     expect(efficiency).toBeDefined();
     expect(efficiency!.label).toBeTruthy();
     expect(efficiency!.details?.remedy).toBeTruthy();
+  });
+});
+
+describe('analyzeRotationFindings Bloodlust detection', () => {
+  // Aligned window [blTimeS-30, blTimeS+55]; offset from blTimeS must stay within 4s (2*stddev) to avoid an alignment warning.
+  const LOW_UPM = { avg: 0.5, stddev: 0.1, min: 0.4, max: 0.6 };
+  const single = bench({ per_cd_benchmarks: { 'Shadow Blades': cdBench({ uses_per_min: LOW_UPM }) } });
+  // Casts stay >= 0 (still bounded by fight start), so it opens right on the pull.
+  const OPEN_CAST_S = 0;
+
+  it('drives BL-aligned coaching from a Bloodlust popped before the pull (negative atS)', () => {
+    // WCL's fight start is the first damage event, so a pre-cast Lust lands at a negative atS.
+    const PRE_PULL_BL_S = -2;
+    const casts = [cast(SHADOW_BLADES, OPEN_CAST_S)];
+    const buffs = [applyBuff(BLOODLUST, PRE_PULL_BL_S)];
+    const findings = analyzeRotationFindings(scan({ castEvents: casts, buffEvents: buffs, bench: single }));
+    const success = findings.find(f => f.category === 'cooldown_usage' && f.severity === 'success');
+    expect(success?.message).toContain('BL-aligned');
+  });
+
+  it('drives BL-aligned coaching from a Bloodlust popped exactly at fight start (boundary)', () => {
+    const FIGHT_START_S = 0;
+    const casts = [cast(SHADOW_BLADES, OPEN_CAST_S)];
+    const buffs = [applyBuff(BLOODLUST, FIGHT_START_S)];
+    const findings = analyzeRotationFindings(scan({ castEvents: casts, buffEvents: buffs, bench: single }));
+    const success = findings.find(f => f.category === 'cooldown_usage' && f.severity === 'success');
+    expect(success?.message).toContain('BL-aligned');
+  });
+
+  it('agrees with the ingest bench on the same buff stream, so neither path can diverge', () => {
+    const PRE_PULL_BL_S = -2;
+    const buffs = [applyBuff(BLOODLUST, PRE_PULL_BL_S)];
+    // RotationTransformService's ingest bench calls this same function on the same buff stream.
+    expect(detectBloodlust(withRelativeS(buffs, 0))).toBe(PRE_PULL_BL_S);
+    const casts = [cast(SHADOW_BLADES, OPEN_CAST_S)];
+    const findings = analyzeRotationFindings(scan({ castEvents: casts, buffEvents: buffs, bench: single }));
+    const success = findings.find(f => f.category === 'cooldown_usage' && f.severity === 'success');
+    expect(success?.message).toContain('BL-aligned');
   });
 });
 

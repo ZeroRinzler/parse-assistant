@@ -17,6 +17,7 @@ import { toLoadError } from '../../../core/http-load-error';
 import {
   BenchedRule, buildRuleContext, measureRule, ruleThreshold, judgeableRules, rulesNeed,
 } from './rotation-rules';
+import { detectBloodlust } from './rotation-bloodlust';
 import { RotationBench } from './rotation-data-source';
 
 // Re-exported so call sites and specs can import it from this service.
@@ -28,8 +29,6 @@ const TOP_PARSE_COUNT = 10;
 const MIN_PARSE_COUNT = 3;
 // Over-fetch so a private/unfetchable top parse can be backfilled by the next-best one.
 const CANDIDATE_POOL_COUNT = TOP_PARSE_COUNT * 2;
-/** Bloodlust / Heroism / Time Warp and equivalents. */
-const BLOODLUST_IDS = new Set([2825, 32182, 80353, 90355, 264667, 390386]);
 /** BL window: a CD counts as aligned if cast 30s before to 55s after BL start. */
 const BL_WINDOW_BEFORE_S = 30;
 const BL_WINDOW_AFTER_S = 55;
@@ -42,15 +41,6 @@ export function rotationCdSpellIds(cooldowns: RulebookCooldown[], defensives: Ru
   for (const cooldown of cooldowns) if (cooldown.spell_id) map[cooldown.name] = cooldown.spell_id;
   for (const defensive of defensives) if (defensive.spell_id) map[defensive.name] = defensive.spell_id;
   return map;
-}
-
-export function detectBloodlust(buffEvents: TimedEvent[]): number | null {
-  for (const event of buffEvents) {
-    if (event.type === 'applybuff' && BLOODLUST_IDS.has(event.abilityGameID)) {
-      return event.atS;
-    }
-  }
-  return null;
 }
 
 export interface CdSummary {

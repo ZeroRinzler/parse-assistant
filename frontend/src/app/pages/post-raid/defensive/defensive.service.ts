@@ -11,6 +11,7 @@ import { logWarn } from '../../../core/log';
 import { Result, LoadError, ok } from '../../../core/result';
 import { toLoadError } from '../../../core/http-load-error';
 import { holdSuggestionFindings } from '../../../shared/analysis/hold-targets';
+import { buildAuraWindows } from '../../../shared/analysis/aura-windows';
 import {
   benchExpectedUses, fmtClock, isOutlierAbove, sortBySeverity,
 } from '../../../shared/analysis/analysis-math';
@@ -91,17 +92,7 @@ export function analyzeDefensives(
 ): PlayerDefensive[] {
   if (!defensives.length) return [];
   const dmgTaken = dtEvents.filter(event => event.type === 'damage');
-  const buffWin: Record<number, [number, number | null][]> = {};
-  for (const event of buffEvents) {
-    const spellId = event.abilityGameID;
-    const timeS = event.atS;
-    if (event.type === 'applybuff') (buffWin[spellId] ??= []).push([timeS, null]);
-    else if (event.type === 'removebuff') {
-      for (let i = (buffWin[spellId]?.length ?? 0) - 1; i >= 0; i--) {
-        if (buffWin[spellId][i][1] === null) { buffWin[spellId][i][1] = timeS; break; }
-      }
-    }
-  }
+  const buffWin = buildAuraWindows(buffEvents);
   const dmgInWindow = (windowStartS: number, windowEndS: number): number =>
     dmgTaken.reduce((sum, event) => {
       const timeS = event.atS;
@@ -110,7 +101,7 @@ export function analyzeDefensives(
 
   return defensives.map(defensive => {
     const spellId = defensive.spell_id;
-    const windows = buildDefensiveUsageWindows(spellId, buffWin[spellId] || [], castEvents, dmgInWindow, fightEndS);
+    const windows = buildDefensiveUsageWindows(spellId, buffWin.get(spellId) ?? [], castEvents, dmgInWindow, fightEndS);
     const cast_times_s = windows.map(window => window.start_s).sort((a, b) => a - b);
     const entry: PlayerDefensive = { name: defensive.name, spell_id: spellId, cooldown: defensive.cooldown, uses: windows.length, cast_times_s, windows };
     if (defensive.talent_gated) entry.talent_gated = true;

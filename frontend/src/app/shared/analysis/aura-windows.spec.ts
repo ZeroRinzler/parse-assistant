@@ -30,6 +30,21 @@ describe('buildAuraWindows', () => {
     const windows = buildAuraWindows(timed([applyDebuff(RUPTURE, APPLY_S), removeDebuff(RUPTURE, REMOVE_S)], 0));
     expect(windows.get(RUPTURE)).toEqual([[APPLY_S, REMOVE_S]]);
   });
+
+  it('back-fills a bare remove to fight start, since a pre-pull aura leaves only its remove in the log', () => {
+    const windows = buildAuraWindows(timed([removeDebuff(RUPTURE, REMOVE_S)], 0));
+    expect(windows.get(RUPTURE)).toEqual([[0, REMOVE_S]]);
+  });
+
+  it('back-fills a bare refresh to an open window at fight start, since a refresh means the aura was already up', () => {
+    const windows = buildAuraWindows(timed([refreshDebuff(RUPTURE, REMOVE_S)], 0));
+    expect(windows.get(RUPTURE)).toEqual([[0, null]]);
+  });
+
+  it('leaves an already-open window alone on a refresh, since the aura is continuous', () => {
+    const windows = buildAuraWindows(timed([applyDebuff(RUPTURE, APPLY_S), refreshDebuff(RUPTURE, APPLY_S + 2)], 0));
+    expect(windows.get(RUPTURE)).toEqual([[APPLY_S, null]]);
+  });
 });
 
 describe('auraUpAt', () => {
@@ -45,6 +60,12 @@ describe('auraUpAt', () => {
     expect(auraUpAt(windows, CLOAK_OF_SHADOWS, APPLY_S - 1)).toBe(false);
     expect(auraUpAt(windows, RUPTURE, APPLY_S)).toBe(false);
   });
+
+  it('reads a back-filled remove as up before it and down after', () => {
+    const preCast = buildAuraWindows(timed([removeDebuff(RUPTURE, REMOVE_S)], 0));
+    expect(auraUpAt(preCast, RUPTURE, REMOVE_S - 1)).toBe(true);
+    expect(auraUpAt(preCast, RUPTURE, REMOVE_S + 1)).toBe(false);
+  });
 });
 
 describe('auraAlreadyUpAt', () => {
@@ -54,6 +75,14 @@ describe('auraAlreadyUpAt', () => {
     expect(auraAlreadyUpAt(windows, CLOAK_OF_SHADOWS, APPLY_S)).toBe(false);
     expect(auraAlreadyUpAt(windows, CLOAK_OF_SHADOWS, REMOVE_S)).toBe(true);
     expect(auraAlreadyUpAt(windows, CLOAK_OF_SHADOWS, APPLY_S + 1)).toBe(true);
+  });
+
+  it('reads a back-filled remove as already up before it, with no apply instant to exclude', () => {
+    const preCast = buildAuraWindows(timed([removeDebuff(RUPTURE, REMOVE_S)], 0));
+    expect(auraAlreadyUpAt(preCast, RUPTURE, REMOVE_S - 1)).toBe(true);
+    // A cast logged at exactly fight start is not credited: 0 is the span's own start instant, excluded like any apply.
+    expect(auraAlreadyUpAt(preCast, RUPTURE, 0)).toBe(false);
+    expect(auraAlreadyUpAt(preCast, RUPTURE, REMOVE_S + 1)).toBe(false);
   });
 });
 
@@ -81,6 +110,11 @@ describe('buildStackTimeline and stacksAt', () => {
     expect(buildStackTimeline(events, RUPTURE)).toEqual([]);
     expect(stacksAt(buildStackTimeline(events, RUPTURE), DROP_S)).toBe(0);
   });
+
+  it('reads zero stacks before the first known event, never inferring a count from a bare stack change', () => {
+    const midFightStack = buildStackTimeline(timed([applyBuffStack(MAELSTROM_WEAPON, SECOND_S, 2)], 0), MAELSTROM_WEAPON);
+    expect(stacksAt(midFightStack, SECOND_S - 1)).toBe(0);
+  });
 });
 
 describe('buildAuraSpansByTarget', () => {
@@ -107,6 +141,11 @@ describe('buildAuraSpansByTarget', () => {
   it('ignores every other aura in the stream', () => {
     const spans = buildAuraSpansByTarget(timed([applyDebuff(RUPTURE, APPLY_S), applyDebuff(CLOAK_OF_SHADOWS, APPLY_S)], 0), CLOAK_OF_SHADOWS);
     expect([...spans.values()].flat()).toHaveLength(1);
+  });
+
+  it('does not back-fill a bare refresh, since the true pre-pull start is unknown', () => {
+    const spans = buildAuraSpansByTarget(timed([refreshDebuff(RUPTURE, REFRESH_S)], 0), RUPTURE);
+    expect(spans.get('0:0')).toEqual([{ startS: REFRESH_S, endS: null, endedByRefresh: false }]);
   });
 });
 
@@ -143,9 +182,10 @@ describe('auraUptimePct', () => {
     expect(auraUptimePct(interleaved, RUPTURE, FIGHT_DUR_S)).toBe(30);
   });
 
-  it('drops a lone remove, so a dot applied before the pull reads as no uptime rather than a full fight of it', () => {
-    const windows = buildAuraWindows(timed([removeDebuff(RUPTURE, 20)], 0));
-    expect(auraUptimePct(windows, RUPTURE, FIGHT_DUR_S)).toBe(0);
+  it('counts a lone remove as uptime from fight start, since a pre-pull aura leaves no apply', () => {
+    const PREPULL_REMOVE_S = 20; // the back-filled [0, 20] span is 20/100 of FIGHT_DUR_S -> 20% uptime
+    const windows = buildAuraWindows(timed([removeDebuff(RUPTURE, PREPULL_REMOVE_S)], 0));
+    expect(auraUptimePct(windows, RUPTURE, FIGHT_DUR_S)).toBe(PREPULL_REMOVE_S);
   });
 
   it('is zero for an aura that never went up', () => {

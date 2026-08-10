@@ -46,6 +46,18 @@ describe('analyzeDefensives', () => {
     expect(out[0]).toMatchObject({ name: 'Cloak of Shadows', uses: 1, cast_times_s: [10] });
     expect(out[0].windows[0]).toMatchObject({ start_s: 10, end_s: 15, dmg_during: 500 });
   });
+
+  // Composition only: back-fill semantics are specced on buildAuraWindows.
+  it('reads a bare removeBuff with no preceding apply as one use starting at 0:00', () => {
+    const REMOVE_S = 15;
+    const out = analyzeDefensives(
+      [CLOAK_META],
+      [], timed([removeBuff(CLOAK_OF_SHADOWS, REMOVE_S)], 0), timed([damageTaken(700, 12, 500)], 0),
+      300,
+    );
+    expect(out[0]).toMatchObject({ uses: 1, cast_times_s: [0] });
+    expect(out[0].windows[0]).toMatchObject({ start_s: 0, end_s: REMOVE_S });
+  });
 });
 
 describe('buildDefensiveUsageWindows', () => {

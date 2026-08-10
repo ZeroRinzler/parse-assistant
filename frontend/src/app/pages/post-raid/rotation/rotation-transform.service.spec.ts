@@ -4,7 +4,7 @@ import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
 import {
   RotationTransformService,
-  detectBloodlust, summarizeCooldownCasts, castGapListS,
+  summarizeCooldownCasts, castGapListS,
   buildCdBenchmark, computeEfficiencyThresholds, aggregateCdBenchmarks, rotationCdSpellIds,
   CdSummary,
 } from './rotation-transform.service';
@@ -23,15 +23,6 @@ describe('rotationCdSpellIds', () => {
       [{ name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 90 }, { name: 'NoId', spell_id: 0, cooldown: 60 }],
       [{ name: 'Cloak', spell_id: CLOAK_OF_SHADOWS, cooldown: 120 }],
     )).toEqual({ 'Shadow Blades': SHADOW_BLADES, 'Cloak': CLOAK_OF_SHADOWS });
-  });
-});
-
-describe('detectBloodlust', () => {
-  it('returns the first BL apply time in seconds', () => {
-    expect(detectBloodlust(timed([applyBuff(999, 5), applyBuff(BLOODLUST, 30)], 0))).toBe(30);
-  });
-  it('returns null when no BL buff present', () => {
-    expect(detectBloodlust(timed([applyBuff(999, 5)], 0))).toBeNull();
   });
 });
 

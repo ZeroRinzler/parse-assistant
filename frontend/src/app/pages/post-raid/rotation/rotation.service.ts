@@ -15,6 +15,7 @@ import { TimedEvent, relativeS, withRelativeS } from '../../../shared/analysis/w
 import {
   buildRuleContext, evaluateRules, rulesFollowed, rulesNeed, benchedRules, RULE_TYPE_LABEL,
 } from './rotation-rules';
+import { detectBloodlust } from './rotation-bloodlust';
 import { ROTATION_DATA_SOURCE, RotationBench } from './rotation-data-source';
 
 export type AbilityIcons = Record<number, { icon: string; name: string }>;
@@ -67,7 +68,6 @@ export interface RotationPlanView {
   rows: CdPlanRow[];
 }
 
-const BLOODLUST_IDS = new Set([2825, 32182, 80353, 90355, 264667, 390386]);
 const BLOODLUST_DURATION_S = 40;
 // A cast from BL_WINDOW_LEAD_S before BL through BL_WINDOW_TRAIL_S after it expires counts as aligned.
 const BL_WINDOW_LEAD_S = 30;
@@ -241,13 +241,7 @@ export function analyzeRotationFindings(input: RotationScanInput): AnalysisFindi
 
   const findings: AnalysisFinding[] = [];
 
-  let blTimeS: number | null = null;
-  for (const event of buffEvents) {
-    if (event.type === 'applybuff' && BLOODLUST_IDS.has(event.abilityGameID) && inFight(event)) {
-      blTimeS = event.atS;
-      break;
-    }
-  }
+  const blTimeS = detectBloodlust(buffEvents);
 
   const perCdBench = bench.per_cd_benchmarks ?? {};
   for (const cd of cooldowns) {
