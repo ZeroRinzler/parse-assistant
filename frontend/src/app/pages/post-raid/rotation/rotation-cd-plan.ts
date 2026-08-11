@@ -22,6 +22,7 @@ export class RotationCdPlanComponent {
   readonly title = input('Cooldown plan');
   readonly subtitle = input('Offensive cooldown usage across top parses.');
 
+  readonly busyChange = output<boolean>();
   readonly availableChange = output<boolean>();
 
   protected readonly available = signal(true);
@@ -50,6 +51,7 @@ export class RotationCdPlanComponent {
             this.items.set([]);
           }
         },
+        settled: () => this.busyChange.emit(false),
       });
     });
   }

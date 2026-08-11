@@ -77,6 +77,15 @@ export class PreFightComponent implements OnInit {
     this.gearAvailable() || this.cdPlanAvailable() || this.defensivePlanAvailable()
     || this.burstAvailable() || this.northernSkyAvailable());
 
+  protected readonly gearBusy = signal(true);
+  protected readonly cdPlanBusy = signal(true);
+  protected readonly defensivePlanBusy = signal(true);
+  protected readonly burstBusy = signal(true);
+  protected readonly northernSkyBusy = signal(true);
+  protected readonly cardsBusy = computed(() =>
+    this.gearBusy() || this.cdPlanBusy() || this.defensivePlanBusy()
+    || this.burstBusy() || this.northernSkyBusy());
+
   protected readonly mapReady = this.mapFeature.ready;
 
   protected onOpenMap(anchor: MapAnchor): void {
@@ -161,6 +170,11 @@ export class PreFightComponent implements OnInit {
     const encId = this.encControl.value;
     const spec = this.specControl.value;
     this.mapFeature.clear();
+    this.gearBusy.set(true);
+    this.cdPlanBusy.set(true);
+    this.defensivePlanBusy.set(true);
+    this.burstBusy.set(true);
+    this.northernSkyBusy.set(true);
     if (!encId || !spec) return;
     void this.mapFeature.loadBench(spec, encId);
   }

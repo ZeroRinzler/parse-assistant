@@ -23,6 +23,7 @@ export class DefensivePlanComponent {
   readonly title = input('Defensive plan');
   readonly subtitle = input('Defensive usage across top parses.');
 
+  readonly busyChange = output<boolean>();
   readonly availableChange = output<boolean>();
 
   protected readonly available = signal(true);
@@ -52,6 +53,7 @@ export class DefensivePlanComponent {
             this._items.set([]);
           }
         },
+        settled: () => this.busyChange.emit(false),
       });
     });
   }

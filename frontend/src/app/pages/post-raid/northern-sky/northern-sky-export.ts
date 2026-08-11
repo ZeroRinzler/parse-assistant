@@ -28,6 +28,7 @@ export class NorthernSkyExportComponent {
 
   readonly spec = input.required<string>();
   readonly encounterId = input.required<number>();
+  readonly busyChange = output<boolean>();
   readonly availableChange = output<boolean>();
 
   private readonly bench = signal<NorthernSkyBench | null>(null);
@@ -64,6 +65,7 @@ export class NorthernSkyExportComponent {
           }
           this.availableChange.emit(this.available());
         },
+        settled: () => this.busyChange.emit(false),
       });
     });
   }
