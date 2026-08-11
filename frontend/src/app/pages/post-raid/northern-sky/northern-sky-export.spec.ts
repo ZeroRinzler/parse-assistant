@@ -5,15 +5,23 @@ import { mountVm } from '../../../../testing/component-harness';
 import { SelectionStore } from '../../../core/services/selection-store';
 import { NorthernSkyExportComponent } from './northern-sky-export';
 import { NorthernSkyFeatureService } from './northern-sky.service';
-import { NorthernSkyBench } from './northern-sky-data-source';
+import { NorthernSkyAbility, NorthernSkyBench } from './northern-sky-data-source';
+import { SHADOW_BLADES, EVASION } from '../../../../testing/spell-ids';
 
 const SPEC = 'SubtletyRogue';
 const ENCOUNTER_ID = 3009;
 const OUTAGE_MESSAGE = 'WCL is unreachable right now.';
 const NOT_INGESTED_MESSAGE = 'Not yet ingested.';
+const CAST_TIMES_S = [10, 30];
 
-function bench(): NorthernSkyBench {
-  return { spec: SPEC, encounter_id: ENCOUNTER_ID, encounter_name: 'Boss', abilities: [] };
+function ability(spellId: number, kind: NorthernSkyAbility['kind']): NorthernSkyAbility {
+  return { spell_id: spellId, name: `name_${spellId}`, icon: `icon_${spellId}`, kind, cast_times_s: CAST_TIMES_S };
+}
+
+const POPULATED_ABILITIES = [ability(SHADOW_BLADES, 'cooldown'), ability(EVASION, 'defensive')];
+
+function bench(over: Partial<NorthernSkyBench> = {}): NorthernSkyBench {
+  return { spec: SPEC, encounter_id: ENCOUNTER_ID, encounter_name: 'Boss', abilities: [], ...over };
 }
 
 // The constructor effect fires an async load; a macrotask flush lets its `.then` land before assertions run.
@@ -30,7 +38,7 @@ function mount(getExport: () => Promise<Result<NorthernSkyBench, LoadError>>, co
   ]);
 }
 
-describe('NorthernSkyExportComponent load error handling', () => {
+describe('NorthernSkyExportComponent load states', () => {
   it('surfaces a retry error when the bench load hits a transient outage', async () => {
     const { vm } = mount(async () => transient(OUTAGE_MESSAGE));
 
@@ -40,7 +48,7 @@ describe('NorthernSkyExportComponent load error handling', () => {
     expect((vm['available'] as () => boolean)()).toBe(false);
   });
 
-  it('stays the silent empty state, with no error, when the bench is simply not ingested yet', async () => {
+  it('waits without an error when the encounter has no bench yet', async () => {
     const { vm } = mount(async () => missing(NOT_INGESTED_MESSAGE));
 
     await settle();
@@ -49,8 +57,26 @@ describe('NorthernSkyExportComponent load error handling', () => {
     expect((vm['available'] as () => boolean)()).toBe(false);
   });
 
-  it('clears a previous error once the bench loads successfully', async () => {
+  it('waits without an error when the bench carries no abilities', async () => {
     const { vm } = mount(async () => ok(bench()));
+
+    await settle();
+
+    expect((vm['error'] as () => LoadError | null)()).toBeNull();
+    expect((vm['available'] as () => boolean)()).toBe(false);
+  });
+
+  it('offers the export once the bench carries at least one ability', async () => {
+    const { vm } = mount(async () => ok(bench({ abilities: POPULATED_ABILITIES })));
+
+    await settle();
+
+    expect((vm['error'] as () => LoadError | null)()).toBeNull();
+    expect((vm['available'] as () => boolean)()).toBe(true);
+  });
+
+  it('clears a previous error once the bench loads successfully', async () => {
+    const { vm } = mount(async () => ok(bench({ abilities: POPULATED_ABILITIES })));
 
     await settle();
 
@@ -60,7 +86,7 @@ describe('NorthernSkyExportComponent load error handling', () => {
 
 describe('NorthernSkyExportComponent copyNote', () => {
   it('shows the confirmation and not the failure state on a successful copy', async () => {
-    const { vm } = mount(async () => ok(bench()), true);
+    const { vm } = mount(async () => ok(bench({ abilities: POPULATED_ABILITIES })), true);
 
     await settle();
     (vm['copyNote'] as () => void)();
@@ -70,7 +96,7 @@ describe('NorthernSkyExportComponent copyNote', () => {
   });
 
   it('shows the failure state and not the confirmation when the clipboard write fails', async () => {
-    const { vm } = mount(async () => ok(bench()), false);
+    const { vm } = mount(async () => ok(bench({ abilities: POPULATED_ABILITIES })), false);
 
     await settle();
     (vm['copyNote'] as () => void)();
