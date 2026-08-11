@@ -1,5 +1,7 @@
 import { expect, test, Page } from '@playwright/test';
-import { shows, showsEntity, CLOCK, DAMAGE, PERCENT, RATIO } from './support';
+import {
+  findingRows, shows, showsEntity, showsFindingRows, showsOnPlan, CD_CHIP, CLOCK, DAMAGE, PERCENT, RATIO,
+} from './support';
 
 const REPORT_URL = 'https://www.warcraftlogs.com/reports/YkVMTyfmFLtXZ1NQ?fight=last';
 const PLAYER_NAME = 'Elsahr';
@@ -94,37 +96,18 @@ test('pull overview reports the DPS, the death, and the kill', async () => {
   await expect(outcomeRow.locator('span.font-mono')).toHaveText(CLOCK);
 });
 
-test('rotation rules count the casts that broke each rulebook rule', async () => {
+test('rotation rules count the casts that broke each rulebook rule, and name the ones followed', async () => {
   const rotationRules = page.locator('wl-finding-table').filter({ hasText: 'Rotation rules vs top parses.' });
   await shows(rotationRules, 'Rotation Rules');
-  await shows(rotationRules, 'Low cast efficiency');
-  await shows(rotationRules, PERCENT);
-  await shows(rotationRules, /top \d+%/);
-  // Each category chip is a fixed label; the ability behind it is bench-ranked, so only the row's shape is pinned.
-  const rotationRow = rotationRules.locator('div.border-t').filter({ hasText: 'rotation' }).first();
-  await expect(rotationRow).toBeVisible();
-  await expect(rotationRow).toHaveText(RATIO);
-  const aoeRow = rotationRules.locator('div.border-t').filter({ hasText: 'aoe' }).first();
-  await expect(aoeRow).toBeVisible();
-  await expect(aoeRow).toHaveText(RATIO);
-  const cdHoldRow = rotationRules.locator('div.border-t').filter({ hasText: 'cd hold' }).first();
-  await expect(cdHoldRow).toBeVisible();
-  await expect(cdHoldRow).toHaveText(/\d/);
-});
-
-test('a broken rule renders the rulebook remedy, and a followed one only its name', async () => {
-  const rotationRules = page.locator('wl-finding-table').filter({ hasText: 'Rotation rules vs top parses.' });
-  // The Fix column is the rule's authored action, carried through the bench file untouched.
-  const firstRow = rotationRules.locator('div.border-t').first();
-  await expect(firstRow.locator('wl-collapsible-text')).not.toHaveText('');
-  await shows(rotationRules, 'On plan');
-  await expect(rotationRules.locator('.chip-onplan').first()).toBeVisible();
+  await showsFindingRows(rotationRules);
+  // A rule the pull followed shows as a chip rather than a row, so only both together cover the rulebook.
+  await showsOnPlan(rotationRules);
 });
 
 test('a rule row expands into a chip strip of the instances behind its count', async () => {
   const rotationRules = page.locator('wl-finding-table').filter({ hasText: 'Rotation rules vs top parses.' });
   // The button's accessible name flips to "Hide instances" once clicked, so the filter matches either name.
-  const row = rotationRules.locator('div.border-t')
+  const row = findingRows(rotationRules)
     .filter({ has: page.getByRole('button', { name: /instances/i }) }).first();
   await row.getByRole('button', { name: 'Show instances' }).click();
   const strip = row.locator('wl-finding-occurrences');
@@ -137,14 +120,10 @@ test('a rule row expands into a chip strip of the instances behind its count', a
   await expect(strip).not.toBeVisible();
 });
 
-test('offensives flag the lost cooldown casts and the holds', async () => {
+test('offensives flag the cooldown casts that missed the top-parse plan', async () => {
   const offensives = page.locator('wl-finding-table').filter({ hasText: 'Offensive cooldowns vs top parses.' });
-  const lostCastRow = offensives.locator('div.border-t').filter({ hasText: 'lost cast' }).first();
-  await expect(lostCastRow).toBeVisible();
-  await expect(lostCastRow).toHaveText(RATIO);
-  const heldRow = offensives.locator('div.border-t').filter({ hasText: 'held' }).first();
-  await expect(heldRow).toBeVisible();
-  await expect(heldRow).toHaveText(/[+]?\d+s/);
+  await showsEntity(offensives);
+  await showsFindingRows(offensives, CD_CHIP);
 });
 
 test('burst windows compare the player damage against the top-parse windows', async () => {
@@ -156,18 +135,21 @@ test('burst windows compare the player damage against the top-parse windows', as
   await shows(burstWindows, DAMAGE);
   await shows(burstWindows, PERCENT);
   await showsEntity(burstWindows);
-  await shows(burstWindows, 'missed');
-  await shows(burstWindows, RATIO);
+  // A pull can land every top-parse ability, so a row is pinned to the cast count it carries either way.
+  const abilities = burstWindows.locator('wl-compact-ability-row');
+  const count = await abilities.count();
+  expect(count).toBeGreaterThan(0);
+  for (let i = 0; i < count; i++) {
+    await expect(abilities.nth(i)).toHaveText(new RegExp(`${RATIO.source}|passive`));
+  }
 });
 
-test('defensives flag a held cooldown and benchmark the damage taken', async () => {
+test('defensives flag the mistimed cooldowns and benchmark the damage taken', async () => {
   const defensives = page.locator('wl-defensive');
   await shows(defensives, 'Defensive cooldowns vs top parses.');
-  const heldRow = defensives.locator('div.border-t').filter({ hasText: 'held' }).first();
-  await expect(heldRow).toBeVisible();
-  await expect(heldRow).toHaveText(/[+]?\d+s/);
-  await shows(defensives, 'On plan');
-  await expect(defensives.locator('.chip-onplan').first()).toBeVisible();
+  const table = defensives.locator('wl-finding-table');
+  await showsFindingRows(table, CD_CHIP);
+  await showsOnPlan(table);
   await shows(defensives, 'Damage taken in top-parse defensive windows vs top parses.');
   await shows(defensives, /\d+:\d{2} - \d+:\d{2}/);
   await shows(defensives, DAMAGE);
