@@ -147,11 +147,11 @@ export function aggregateParseGear(parses: ParseGear[]): EncounterGearStats {
 }
 
 export function withTalentDiffs(
-  builds: EncounterGearStats['talent_builds'], talents: SpecTalents | null,
+  builds: EncounterGearStats['talent_builds'], talents: Result<SpecTalents, LoadError>,
 ): EncounterGearStats['talent_builds'] {
-  if (!talents || builds.length < 2) return builds;
+  if (!talents.ok || builds.length < 2) return builds;
   const baselineKey = builds[0].key;
-  return builds.map((build, i) => i === 0 ? build : { ...build, diff: buildTalentDiff(build.key, baselineKey, talents) });
+  return builds.map((build, i) => i === 0 ? build : { ...build, diff: buildTalentDiff(build.key, baselineKey, talents.value) });
 }
 
 @Injectable({ providedIn: 'root' })

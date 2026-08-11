@@ -2,6 +2,8 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { SpecTalents } from '../models/talent.models';
+import { Result, LoadError, ok, missing } from '../result';
+import { toLoadError } from '../http-load-error';
 import { logWarn } from '../log';
 
 const DUMP_URL = 'https://www.raidbots.com/static/data/live/talents.json';
@@ -38,13 +40,14 @@ export function indexTalentTrees(trees: RaidbotsTree[]): Map<string, SpecTalents
 export class TalentDataService {
   private readonly http = inject(HttpClient);
 
-  async getTalents(spec: string): Promise<SpecTalents | null> {
+  async getTalents(spec: string): Promise<Result<SpecTalents, LoadError>> {
     try {
       const trees = await firstValueFrom(this.http.get<RaidbotsTree[]>(DUMP_URL));
-      return indexTalentTrees(trees).get(spec) ?? null;
-    } catch (err) {
-      logWarn('TalentDataService dump fetch', err);
-      return null;
+      const talents = indexTalentTrees(trees).get(spec);
+      return talents ? ok(talents) : missing('No talent data for this spec.');
+    } catch (cause) {
+      logWarn('TalentDataService dump fetch', cause);
+      return toLoadError(cause, 'talent-data.dump');
     }
   }
 }

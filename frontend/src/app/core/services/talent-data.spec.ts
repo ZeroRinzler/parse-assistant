@@ -2,9 +2,12 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { missing, transient } from '../result';
 import { TalentDataService, indexTalentTrees } from './talent-data';
 
 const DUMP_URL = 'https://www.raidbots.com/static/data/live/talents.json';
+const DUMP_REPRO_ID = 'talent-data.dump';
+const HTTP_FORBIDDEN = 403;
 
 const SUBTLETY_TREE = {
   className: 'Rogue', specName: 'Subtlety',
@@ -49,20 +52,40 @@ describe('TalentDataService', () => {
     const { service, httpMock } = setup();
     const pending = service.getTalents('SubtletyRogue');
     httpMock.expectOne(DUMP_URL).flush([SUBTLETY_TREE]);
-    expect((await pending)![11]).toEqual({ name: 'Blind', icon: 'spell_blind', spellId: 2094 });
+    const result = await pending;
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value[11]).toEqual({ name: 'Blind', icon: 'spell_blind', spellId: 2094 });
   });
 
-  it('returns null for a spec the dump does not carry', async () => {
+  it('is missing for a spec the dump does not carry, the load itself having succeeded', async () => {
     const { service, httpMock } = setup();
     const pending = service.getTalents('BalanceDruid');
     httpMock.expectOne(DUMP_URL).flush([SUBTLETY_TREE]);
-    expect(await pending).toBeNull();
+    expect(await pending).toEqual(missing('No talent data for this spec.'));
   });
 
-  it('returns null when the dump is unreachable', async () => {
+  it('is transient when the dump is unreachable', async () => {
     const { service, httpMock } = setup();
     const failed = service.getTalents('SubtletyRogue');
     httpMock.expectOne(DUMP_URL).error(new ProgressEvent('error'));
-    expect(await failed).toBeNull();
+    expect(await failed).toEqual(transient('WCL is unreachable right now.'));
+  });
+
+  it('is permanent when Raidbots refuses the dump', async () => {
+    const { service, httpMock } = setup();
+    const failed = service.getTalents('SubtletyRogue');
+    httpMock.expectOne(DUMP_URL).flush('nope', { status: HTTP_FORBIDDEN, statusText: 'Forbidden' });
+    const result = await failed;
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatchObject({ kind: 'permanent', id: DUMP_REPRO_ID });
+  });
+
+  it('is permanent when the dump answers 200 with a body that is not a tree list', async () => {
+    const { service, httpMock } = setup();
+    const failed = service.getTalents('SubtletyRogue');
+    httpMock.expectOne(DUMP_URL).flush({ error: 'maintenance' });
+    const result = await failed;
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatchObject({ kind: 'permanent', id: DUMP_REPRO_ID });
   });
 });

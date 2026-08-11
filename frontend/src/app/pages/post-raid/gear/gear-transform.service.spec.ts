@@ -5,7 +5,7 @@ import { DataFileApiService } from '../../../core/services/data-file-api';
 import { TalentDataService } from '../../../core/services/talent-data';
 import { SpecTalents } from '../../../core/models/talent.models';
 import { CharacterGear, WclCombatantInfo, WclGearItem } from '../../../core/models/wcl.models';
-import { missing } from '../../../core/result';
+import { ok, missing, transient } from '../../../core/result';
 import {
   GearTransformService, toParseGear, aggregateParseGear, ParseGear, withTalentDiffs,
   aggregateTalents, aggregateTrinkets, aggregateEnchants,
@@ -205,7 +205,7 @@ describe('withTalentDiffs', () => {
   ];
 
   it('bakes each alt build\'s diff against the most common build, leaving the most common one empty', () => {
-    const out = withTalentDiffs(builds(), talents);
+    const out = withTalentDiffs(builds(), ok(talents));
     expect(out[0].diff).toEqual([]);
     expect(out[1].diff).toEqual([
       { kind: 'added', talent: talents[11] },
@@ -213,8 +213,9 @@ describe('withTalentDiffs', () => {
     ]);
   });
 
-  it('leaves builds untouched when the talent names are unavailable', () => {
-    expect(withTalentDiffs(builds(), null)).toEqual(builds());
+  it('leaves builds untouched whether the spec has no dump entry or the dump failed to load', () => {
+    expect(withTalentDiffs(builds(), missing('No talent data for this spec.'))).toEqual(builds());
+    expect(withTalentDiffs(builds(), transient('WCL is unreachable right now.'))).toEqual(builds());
   });
 });
 
@@ -247,13 +248,17 @@ const wclFake = {
   getGameNames: async () => ({ e8041: { id: 8041, name: 'Soph' } }),
 };
 
+const talentDataFake = {
+  getTalents: async () => missing('No talent data for this spec.'),
+} as unknown as TalentDataService;
+
 describe('GearTransformService (live, in-browser)', () => {
   it('computes a gear bench aggregated from the top parses', async () => {
     TestBed.configureTestingModule({
       providers: [
         { provide: WclApiService, useValue: wclFake as unknown as WclApiService },
         { provide: DataFileApiService, useValue: {} as unknown as DataFileApiService },
-        { provide: TalentDataService, useValue: { getTalents: async () => null } as unknown as TalentDataService },
+        { provide: TalentDataService, useValue: talentDataFake },
       ],
     });
     const bench = await TestBed.inject(GearTransformService).getBench('SubtletyRogue', 1);
@@ -266,6 +271,49 @@ describe('GearTransformService (live, in-browser)', () => {
     });
     expect(bench.value.trinkets[12]).toEqual([{ id: 100, name: 'A', icon: 't', pct: 100 }]);
     expect(bench.value.enchants[15]).toEqual([{ id: 8041, name: 'Soph', pct: 100 }]);
+  });
+
+  it('bakes talent diffs into the bench when the dump carries the spec', async () => {
+    const BASELINE_ENTRY = 650;
+    const ALT_ENTRY = 651;
+    const talents: SpecTalents = {
+      [BASELINE_ENTRY]: { name: 'A', icon: 'a' },
+      [ALT_ENTRY]: { name: 'B', icon: 'b' },
+    };
+    const splitBuildWcl = {
+      ...wclFake,
+      getCombatantInfo: async (code: string) => [{
+        ...combatantInfo(code === 'r1' ? 10 : 20),
+        talentTree: [{ nodeID: 65, id: code === 'r1' ? BASELINE_ENTRY : ALT_ENTRY, rank: 1 }],
+      }],
+    };
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: WclApiService, useValue: splitBuildWcl as unknown as WclApiService },
+        { provide: DataFileApiService, useValue: {} as unknown as DataFileApiService },
+        { provide: TalentDataService, useValue: { getTalents: async () => ok(talents) } as unknown as TalentDataService },
+      ],
+    });
+    const bench = await TestBed.inject(GearTransformService).getBench('SubtletyRogue', 1);
+    expect(bench.ok).toBe(true);
+    if (!bench.ok) return;
+    expect(bench.value.talent_builds[1].diff).toEqual([
+      { kind: 'added', talent: talents[ALT_ENTRY] },
+      { kind: 'dropped', talent: talents[BASELINE_ENTRY] },
+    ]);
+  });
+
+  it('leaves the bench talent builds diff-free when the dump carries no entry for the spec', async () => {
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: WclApiService, useValue: wclFake as unknown as WclApiService },
+        { provide: DataFileApiService, useValue: {} as unknown as DataFileApiService },
+        { provide: TalentDataService, useValue: talentDataFake },
+      ],
+    });
+    const bench = await TestBed.inject(GearTransformService).getBench('SubtletyRogue', 1);
+    expect(bench.ok).toBe(true);
+    if (bench.ok) expect(bench.value.talent_builds.every(build => build.diff.length === 0)).toBe(true);
   });
 
   it('backfills past a private (unfetchable) top parse to keep the sample count full', async () => {
@@ -284,7 +332,7 @@ describe('GearTransformService (live, in-browser)', () => {
       providers: [
         { provide: WclApiService, useValue: backfillWcl as unknown as WclApiService },
         { provide: DataFileApiService, useValue: {} as unknown as DataFileApiService },
-        { provide: TalentDataService, useValue: { getTalents: async () => null } as unknown as TalentDataService },
+        { provide: TalentDataService, useValue: talentDataFake },
       ],
     });
     const bench = await TestBed.inject(GearTransformService).getBench('SubtletyRogue', 1);
@@ -322,7 +370,7 @@ describe('GearTransformService (live, in-browser)', () => {
       providers: [
         { provide: WclApiService, useValue: twinWcl as unknown as WclApiService },
         { provide: DataFileApiService, useValue: {} as unknown as DataFileApiService },
-        { provide: TalentDataService, useValue: { getTalents: async () => null } as unknown as TalentDataService },
+        { provide: TalentDataService, useValue: talentDataFake },
       ],
     });
     const bench = await TestBed.inject(GearTransformService).getBench('SubtletyRogue', 1);
@@ -336,7 +384,7 @@ describe('GearTransformService (live, in-browser)', () => {
       providers: [
         { provide: WclApiService, useValue: { getRankings: async () => ({ rankings: [] }) } as unknown as WclApiService },
         { provide: DataFileApiService, useValue: {} as unknown as DataFileApiService },
-        { provide: TalentDataService, useValue: { getTalents: async () => null } as unknown as TalentDataService },
+        { provide: TalentDataService, useValue: talentDataFake },
       ],
     });
     expect(await TestBed.inject(GearTransformService).getBench('SubtletyRogue', 1))
