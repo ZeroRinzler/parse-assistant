@@ -13,6 +13,7 @@ import { DomSanitizer } from '@angular/platform-browser';
 import { NavStateStore } from '../../../core/services/nav-state-store';
 
 const GITHUB_URL = 'https://github.com/gpolcode/warcraft-learner';
+const NEW_ISSUE_URL = `${GITHUB_URL}/issues/new`;
 const MOBILE_QUERY = '(max-width: 600px)';
 
 const GITHUB_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
@@ -38,6 +39,7 @@ const GITHUB_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" 
 })
 export class PageNavComponent {
   protected readonly githubUrl = GITHUB_URL;
+  protected readonly newIssueUrl = NEW_ISSUE_URL;
   private readonly breakpoints = inject(BreakpointObserver);
   private readonly navState = inject(NavStateStore);
 

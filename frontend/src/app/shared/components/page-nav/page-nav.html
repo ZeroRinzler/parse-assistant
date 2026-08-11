@@ -58,6 +58,14 @@
               <span matListItemTitle>View on GitHub</span>
             }
           </a>
+          <a mat-list-item [href]="newIssueUrl" target="_blank" rel="noopener noreferrer"
+             aria-label="Report an issue on GitHub"
+             [matTooltip]="railCollapsed() ? 'Report an issue' : ''" matTooltipPosition="right">
+            <mat-icon matListItemIcon>bug_report</mat-icon>
+            @if (!railCollapsed()) {
+              <span matListItemTitle>Report an issue</span>
+            }
+          </a>
         </mat-nav-list>
       </div>
     </div>
