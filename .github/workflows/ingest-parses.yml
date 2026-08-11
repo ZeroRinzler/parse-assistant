@@ -58,8 +58,11 @@ jobs:
         run: npm ci
 
       # Ingestion self-selects the live raids from WCL and prunes what falls outside; no per-patch edits.
+      # PRIORITY_SPECS (repo variable) is optional: unset or malformed falls back safely (see ordering.ts parsePrioritySpecs).
       - name: Run parse ingestion
         working-directory: frontend
+        env:
+          PRIORITY_SPECS: ${{ vars.PRIORITY_SPECS }}
         run: npm run ingest
 
       # Pruning never removes whole spec dirs, so this trips only on an overlay catastrophe, not a quiet hour.

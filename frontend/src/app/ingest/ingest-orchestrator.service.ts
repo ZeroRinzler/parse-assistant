@@ -21,7 +21,7 @@ import { getEncounters, rankingsFromPartition, type CurrentContent } from './wcl
 import { mapClassesToSpecMeta, specWclFromMetas, type SpecWclMap } from './wcl-mappers';
 import { type WclQueryClient, BudgetExceededError } from './wcl-client';
 import { INGEST_VERSION } from './ingest-version';
-import { specsForRun, orderEncountersByMissingFirst, type SpecOrderEntry } from './ordering';
+import { specsForRun, orderEncountersByMissingFirst, parsePrioritySpecs, type SpecOrderEntry } from './ordering';
 import {
   encounterSkipKey, signatureAfterFetch, readStoredSignature, readStoredVersion, signatureMatches,
   stampSignature, stampBurstFile, readInaccessibleParses,
@@ -214,7 +214,8 @@ export class IngestOrchestratorService {
       const displayVersion = storedVersions.length ? Math.min(...storedVersions) : null;
       return { spec, entry, displayVersion };
     }));
-    const specs = specsForRun(orderInputs.map(input => input.entry));
+    const prioritySpecs = parsePrioritySpecs(new URLSearchParams(globalThis.location.search).get('prioritySpecs'));
+    const specs = specsForRun(orderInputs.map(input => input.entry), Math.random, prioritySpecs);
     const displayBySpec = new Map(orderInputs.map(input => [input.spec, input] as const));
     const versionLines = specs.map(spec => {
       const info = displayBySpec.get(spec);
