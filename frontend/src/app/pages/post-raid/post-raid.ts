@@ -34,6 +34,7 @@ import { SpecIconPipe } from '../../shared/pipes/spec-icon-pipe';
 import { ClassIconPipe } from '../../shared/pipes/class-icon-pipe';
 import { BossIconPipe } from '../../shared/pipes/boss-icon-pipe';
 import { ArtIconComponent } from '../../shared/components/art-icon/art-icon';
+import { LatestRun } from '../../shared/latest-run';
 import { SelectionStore } from '../../core/services/selection-store';
 import { logWarn } from '../../core/log';
 import { Result, LoadError, permanent } from '../../core/result';
@@ -218,8 +219,9 @@ export class PostRaidComponent {
 
   private _enemies: { id: number; name: string; gameID: number }[] = [];
 
-  /** Monotonic load tag: a slow earlier loadReport must not overwrite a newer one's state. */
-  private _loadSeq = 0;
+  private readonly reportRun = new LatestRun();
+
+  private readonly selectionRun = new LatestRun();
 
   protected readonly visiblePlayers = computed(() =>
     visiblePlayersOf(this.fights(), this.players(), this.selectedFightId()));
@@ -305,7 +307,7 @@ export class PostRaidComponent {
       if (code) this.notice.set('Enter a valid Warcraft Logs report URL or 16-character report code.');
       return;
     }
-    const seq = ++this._loadSeq;
+    const run = this.reportRun.begin();
     // Setting reportCode to '' stops any active poll before the fetch completes.
     this.reportCode.set('');
 
@@ -314,13 +316,14 @@ export class PostRaidComponent {
     this.players.set([]);
     this.spec.set('');
     this.playerDetailGroups.set({});
+    this.selectionRun.cancel();
     this.mapFeature.clear();
     this.liveCapture.clear();
 
     try {
       this.loadingMsg.set('Fetching report from Warcraft Logs…');
       const report = await this.wclApi.getReport(code);
-      if (seq !== this._loadSeq) return;
+      if (!this.reportRun.isCurrent(run)) return;
       this._applyReport(report);
 
       const requestedId = extractFightId(rawInput);
@@ -335,9 +338,9 @@ export class PostRaidComponent {
       await this.resolveSelection();
     } catch (err) {
       logWarn('PostRaidComponent.loadReport', err);
-      if (seq === this._loadSeq) this._showError(toLoadError(err, 'post-raid.load-report'));
+      if (this.reportRun.isCurrent(run)) this._showError(toLoadError(err, 'post-raid.load-report'));
     } finally {
-      if (seq === this._loadSeq) this.loadingReport.set(false);
+      if (this.reportRun.isCurrent(run)) this.loadingReport.set(false);
     }
   }
 
@@ -407,10 +410,12 @@ export class PostRaidComponent {
 
   // The feature cards self-load from their spec/encounterId/selection inputs; this only does the cross-cutting work a shell owns.
   protected async resolveSelection(): Promise<void> {
+    const run = this.selectionRun.begin();
     this.loadError.set(null);
     const fightId = this.selectedFightId();
     const playerId = this.selectedPlayerId();
     this.spec.set('');
+    this.loadingAnalysis.set(false);
     this.mapFeature.clear();
     this.liveCapture.clear();
     if (!fightId || !playerId) return;
@@ -423,6 +428,7 @@ export class PostRaidComponent {
     this.loadingMsg.set('Fetching player data from Warcraft Logs…');
     try {
       const groups = await this.wclApi.getPlayerDetails(this.reportCode(), fightId);
+      if (!this.selectionRun.isCurrent(run)) return;
       this.playerDetailGroups.set(groups);
       const spec = specOf(groups, playerId);
       // Unmappable spec is a semantic dead end, not retriable: permanent, not transient.
@@ -443,9 +449,9 @@ export class PostRaidComponent {
       }
     } catch (err) {
       logWarn('PostRaidComponent.resolveSelection', err);
-      this._showError(toLoadError(err, 'post-raid.resolve-selection'));
+      if (this.selectionRun.isCurrent(run)) this._showError(toLoadError(err, 'post-raid.resolve-selection'));
     } finally {
-      this.loadingAnalysis.set(false);
+      if (this.selectionRun.isCurrent(run)) this.loadingAnalysis.set(false);
     }
   }
 

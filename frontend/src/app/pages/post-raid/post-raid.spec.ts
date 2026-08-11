@@ -22,6 +22,20 @@ function player(p: Partial<WclPlayer>): WclPlayer {
   return { id: 0, name: '', spec: '', server: '', ...p };
 }
 
+const settle = (): Promise<void> => new Promise(resolve => setTimeout(resolve, 0));
+
+function postRaidProviders(wclApi: unknown, prepareMap = vi.fn(() => Promise.resolve())): unknown[] {
+  return [
+    provideZonelessChangeDetection(),
+    PostRaidComponent,
+    { provide: WclApiService, useValue: wclApi },
+    { provide: MapFeatureService, useValue: { clear: vi.fn(), prepare: prepareMap, ready: () => false, openAt: vi.fn() } },
+    { provide: LiveCaptureFeatureService, useValue: { liveEnabled: signal(false), clear: vi.fn(), prepare: vi.fn(), setStatus: vi.fn(), clipReady: () => false, openClip: vi.fn() } },
+    { provide: LiveReportSyncService, useValue: { pollTriggers: () => EMPTY } },
+    { provide: SelectionStore, useValue: { loadPostRaid: () => null, savePostRaid: vi.fn() } },
+  ];
+}
+
 describe('extractCode', () => {
   it('pulls the report code out of a WCL report URL', () => {
     expect(extractCode('https://www.warcraftlogs.com/reports/grBQ3vTHXAtPa4JK#fight=1')).toBe('grBQ3vTHXAtPa4JK');
@@ -438,13 +452,7 @@ describe('PostRaidComponent keystone fight', () => {
     const prepareMap = vi.fn(() => Promise.resolve());
     TestBed.configureTestingModule({
       providers: [
-        provideZonelessChangeDetection(),
-        PostRaidComponent,
-        { provide: WclApiService, useValue: wclApi },
-        { provide: MapFeatureService, useValue: { clear: vi.fn(), prepare: prepareMap, ready: () => false, openAt: vi.fn() } },
-        { provide: LiveCaptureFeatureService, useValue: { liveEnabled: signal(false), clear: vi.fn(), prepare: vi.fn(), setStatus: vi.fn(), clipReady: () => false, openClip: vi.fn() } },
-        { provide: LiveReportSyncService, useValue: { pollTriggers: () => EMPTY } },
-        { provide: SelectionStore, useValue: { loadPostRaid: () => null, savePostRaid: vi.fn() } },
+        ...postRaidProviders(wclApi, prepareMap),
       ],
     });
     return { vm: TestBed.inject(PostRaidComponent) as unknown as Record<string, unknown>, prepareMap, getPlayerDetails };
@@ -629,6 +637,150 @@ describe('PostRaidComponent live-sync poll', () => {
   });
 });
 
+interface SelectionHandle {
+  onFightChange(): Promise<void>;
+  loadReport(): Promise<void>;
+  reportControl: FormControl<string>;
+  reportCode: WritableSignal<string>;
+  fights: WritableSignal<WclFight[]>;
+  players: WritableSignal<WclPlayer[]>;
+  fightControl: FormControl<number | null>;
+  spec: Signal<string>;
+  notice: Signal<string>;
+  loadingAnalysis: Signal<boolean>;
+}
+
+describe('PostRaidComponent selection latest-wins', () => {
+  const REPORT_CODE = 'grBQ3vTHXAtPa4JK';
+  const BOSS_ENCOUNTER_ID = 3176;
+  const KEYSTONE_ENCOUNTER_ID = 112526;
+  const RAID_MYTHIC_DIFFICULTY = 5;
+  const MYTHIC_PLUS_DIFFICULTY = 10;
+  const KEYSTONE_PULL = { id: 9, name: 'Nexus-Point Xenas' };
+  const EARLIER_PULL_ID = 11;
+  const LATER_PULL_ID = 12;
+  const PLAYER_ID = 7;
+  const PLAYER_NAME = 'Anya';
+  const CLASS_NAME = 'Rogue';
+  const EARLIER_SPEC_NAME = 'Subtlety';
+  const LATER_SPEC_NAME = 'Assassination';
+  const LATER_SPEC = LATER_SPEC_NAME + CLASS_NAME;
+
+  const detailsFor = (spec: string): PlayerDetailGroups => ({
+    dps: [{ id: PLAYER_ID, type: CLASS_NAME, name: PLAYER_NAME, specs: [{ spec }] }],
+  });
+  const EARLIER_DETAILS = detailsFor(EARLIER_SPEC_NAME);
+  const LATER_DETAILS = detailsFor(LATER_SPEC_NAME);
+
+  const pulls = (): WclFight[] => [
+    fight({ ...KEYSTONE_PULL, encounterID: KEYSTONE_ENCOUNTER_ID, difficulty: MYTHIC_PLUS_DIFFICULTY, startTime: 0, endTime: 5_000, friendlyPlayers: [PLAYER_ID] }),
+    fight({ id: EARLIER_PULL_ID, name: 'Boss', encounterID: BOSS_ENCOUNTER_ID, difficulty: RAID_MYTHIC_DIFFICULTY, startTime: 10_000, endTime: 20_000, friendlyPlayers: [PLAYER_ID] }),
+    fight({ id: LATER_PULL_ID, name: 'Boss', encounterID: BOSS_ENCOUNTER_ID, difficulty: RAID_MYTHIC_DIFFICULTY, startTime: 30_000, endTime: 40_000, friendlyPlayers: [PLAYER_ID] }),
+  ];
+
+  class FakeWclApi {
+    private readonly detailResolvers = new Map<number, (groups: PlayerDetailGroups) => void>();
+    private reportResolver: ((report: WclReport) => void) | null = null;
+    getReport(): Promise<WclReport> {
+      return new Promise(resolve => { this.reportResolver = resolve; });
+    }
+    getPlayerDetails(_code: string, fightId: number): Promise<PlayerDetailGroups> {
+      return new Promise(resolve => this.detailResolvers.set(fightId, resolve));
+    }
+    settleReport(): void {
+      this.reportResolver!({
+        title: '', startTime: 0, fights: pulls(),
+        masterData: { actors: [{ id: PLAYER_ID, name: PLAYER_NAME, subType: CLASS_NAME, server: '' }], enemies: [], abilities: [] },
+      });
+    }
+    settleDetails(fightId: number, groups: PlayerDetailGroups): void { this.detailResolvers.get(fightId)!(groups); }
+  }
+
+  function setup(): { api: FakeWclApi; vm: SelectionHandle } {
+    const api = new FakeWclApi();
+    TestBed.configureTestingModule({
+      providers: [
+        ...postRaidProviders(api),
+      ],
+    });
+    const vm = TestBed.inject(PostRaidComponent) as unknown as SelectionHandle;
+    vm.reportCode.set(REPORT_CODE);
+    vm.fights.set(pulls());
+    vm.players.set([player({ id: PLAYER_ID, name: PLAYER_NAME })]);
+    return { api, vm };
+  }
+
+  function selectFight(vm: SelectionHandle, fightId: number): Promise<void> {
+    vm.fightControl.setValue(fightId);
+    return vm.onFightChange();
+  }
+
+  it('lands the resolved spec when the only selection settles in order', async () => {
+    const { api, vm } = setup();
+
+    const resolving = selectFight(vm, LATER_PULL_ID);
+    expect(vm.loadingAnalysis()).toBe(true);
+    api.settleDetails(LATER_PULL_ID, LATER_DETAILS);
+    await resolving;
+
+    expect(vm.spec()).toBe(LATER_SPEC);
+    expect(vm.loadingAnalysis()).toBe(false);
+  });
+
+  it('keeps the newer selection\'s spec when the earlier resolve settles late', async () => {
+    const { api, vm } = setup();
+
+    const earlier = selectFight(vm, EARLIER_PULL_ID);
+    const later = selectFight(vm, LATER_PULL_ID);
+
+    api.settleDetails(LATER_PULL_ID, LATER_DETAILS);
+    await settle();
+    expect(vm.spec()).toBe(LATER_SPEC);
+
+    api.settleDetails(EARLIER_PULL_ID, EARLIER_DETAILS);
+    await Promise.all([earlier, later]);
+
+    expect(vm.spec()).toBe(LATER_SPEC);
+    expect(vm.loadingAnalysis()).toBe(false);
+  });
+
+  it('clears the spinner when the selection that supersedes a resolve stops at the keystone notice', async () => {
+    const { api, vm } = setup();
+
+    const earlier = selectFight(vm, EARLIER_PULL_ID);
+    expect(vm.loadingAnalysis()).toBe(true);
+
+    await selectFight(vm, KEYSTONE_PULL.id);
+    expect(vm.loadingAnalysis()).toBe(false);
+
+    api.settleDetails(EARLIER_PULL_ID, EARLIER_DETAILS);
+    await earlier;
+
+    expect(vm.notice()).toBe(unsupportedEncounterNotice(KEYSTONE_PULL.name));
+    expect(vm.spec()).toBe('');
+    expect(vm.loadingAnalysis()).toBe(false);
+  });
+
+  it('drops a resolve left in flight by a report load that has not fetched yet', async () => {
+    const { api, vm } = setup();
+
+    const earlier = selectFight(vm, EARLIER_PULL_ID);
+    vm.reportControl.setValue(REPORT_CODE);
+    const loading = vm.loadReport();
+
+    api.settleDetails(EARLIER_PULL_ID, EARLIER_DETAILS);
+    await settle();
+    expect(vm.spec()).toBe('');
+
+    api.settleReport();
+    await settle();
+    api.settleDetails(LATER_PULL_ID, LATER_DETAILS);
+    await Promise.all([earlier, loading]);
+
+    expect(vm.spec()).toBe(LATER_SPEC);
+  });
+});
+
 describe('PostRaidComponent loadReport latest-wins', () => {
   const CODE_A = 'aaaaaaaaaaaaaaaa'; // 16-char valid code for the slow, superseded load
   const CODE_B = 'bbbbbbbbbbbbbbbb'; // 16-char valid code for the newer, winning load
@@ -663,21 +815,12 @@ describe('PostRaidComponent loadReport latest-wins', () => {
     settlePlayerDetails(groups: PlayerDetailGroups): void { this.playerDetailResolvers.shift()!(groups); }
   }
 
-  // setTimeout, not just a microtask flush, so each awaited loadReport step settles.
-  const settle = (): Promise<void> => new Promise(resolve => setTimeout(resolve, 0));
-
   // Constructs the shell directly (no view attached) so loadReport runs without rendering the card templates.
   function setup(): { api: FakeWclApi; vm: Record<string, unknown> } {
     const api = new FakeWclApi();
     TestBed.configureTestingModule({
       providers: [
-        provideZonelessChangeDetection(),
-        PostRaidComponent,
-        { provide: WclApiService, useValue: api },
-        { provide: MapFeatureService, useValue: { clear: vi.fn(), prepare: vi.fn(() => Promise.resolve()), ready: () => false, openAt: vi.fn() } },
-        { provide: LiveCaptureFeatureService, useValue: { liveEnabled: signal(false), clear: vi.fn(), prepare: vi.fn(), setStatus: vi.fn(), clipReady: () => false, openClip: vi.fn() } },
-        { provide: LiveReportSyncService, useValue: { pollTriggers: () => EMPTY } },
-        { provide: SelectionStore, useValue: { loadPostRaid: () => null, savePostRaid: vi.fn() } },
+        ...postRaidProviders(api),
       ],
     });
     return { api, vm: TestBed.inject(PostRaidComponent) as unknown as Record<string, unknown> };
