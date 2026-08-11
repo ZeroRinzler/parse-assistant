@@ -6,9 +6,13 @@ const PLAYER_NAME = 'Elsahr';
 // Mirrors POST_RAID_KEY in core/services/selection-store.ts.
 const STICKY_PLAYER_KEY = 'wl.sel.postRaid';
 
+// Mirrors POLL_INTERVAL_S in core/services/live-report-sync.ts.
+const POLL_INTERVAL_S = 12;
+
 const ANALYZE_TIMEOUT_MS = 120_000;
 // The map trails load unawaited after the cards reveal.
 const MAP_READY_TIMEOUT_MS = 60_000;
+const LIVE_TIMEOUT_MS = 15_000;
 const SLACK_MS = 30_000;
 
 // One shared page: the report is analyzed once, so a run costs one WCL analysis.
@@ -43,6 +47,38 @@ test('analyzing the report selects the last pull and the sticky player', async (
   const player = page.getByRole('combobox', { name: 'Player' });
   await expect(player).toContainText(PLAYER_NAME);
   await expect(player.getByAltText('Subtlety Rogue')).toBeVisible();
+});
+
+test('following the latest pull hands the fight selection to the live poll', async () => {
+  const controls = page.locator('wl-live-controls');
+  const follow = controls.getByRole('switch', { name: 'Follow latest pull' });
+  const fight = page.getByRole('combobox', { name: 'Fight' });
+
+  await follow.click();
+  await expect(follow).toBeChecked();
+  await expect(fight).toHaveAttribute('aria-disabled', 'true');
+  // The poll stamps its own clock time, so only the interval beside it is pinned.
+  const settled = new RegExp(`Last updated .+, polling every ${POLL_INTERVAL_S}s`);
+  await expect(controls.getByText(settled)).toBeVisible({ timeout: LIVE_TIMEOUT_MS });
+
+  // Left on, the poll keeps hitting Warcraft Logs under every later test.
+  await follow.click();
+  await expect(fight).toHaveAttribute('aria-disabled', 'false');
+  await expect(controls.getByText(settled)).toHaveCount(0);
+});
+
+test('recording the game client captures a named display source', async () => {
+  const controls = page.locator('wl-live-controls');
+  const record = controls.getByRole('switch', { name: 'Record game client' });
+
+  await record.click();
+  await expect(record).toBeChecked();
+  // The picked display source names itself, so only the copy around the name is pinned.
+  await expect(controls.getByText(/^Recording ".+" in the background$/)).toBeVisible({ timeout: LIVE_TIMEOUT_MS });
+
+  await record.click();
+  await expect(record).not.toBeChecked();
+  await shows(controls, 'stays in this browser session, nothing is uploaded');
 });
 
 test('pull overview reports the DPS, the death, and the kill', async () => {

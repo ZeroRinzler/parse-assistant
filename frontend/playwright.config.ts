@@ -25,7 +25,14 @@ export default defineConfig({
     baseURL: APP_URL,
     trace: 'retain-on-failure',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [{
+    name: 'chromium',
+    use: {
+      ...devices['Desktop Chrome'],
+      // Without both, getDisplayMedia blocks on the picker and then has no video source, so the live-capture test can never record.
+      launchOptions: { args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] },
+    },
+  }],
   webServer: {
     // Production reads the pulled bench files, so the post-raid analysis is the run's only WCL traffic.
     command: 'npm start -- --configuration production',
