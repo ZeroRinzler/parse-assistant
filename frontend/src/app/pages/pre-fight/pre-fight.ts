@@ -13,6 +13,7 @@ import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner
 import { BenchEmptyBannerComponent } from '../../shared/components/bench-empty-banner/bench-empty-banner';
 import { LoadStateComponent, RenderableLoadError } from '../../shared/components/load-state/load-state';
 import { ArtIconComponent } from '../../shared/components/art-icon/art-icon';
+import { LatestLoad } from '../../shared/latest-load';
 import { FormatSpecPipe } from '../../shared/pipes/format-spec-pipe';
 import { ClassIconPipe } from '../../shared/pipes/class-icon-pipe';
 import { SpecIconPipe } from '../../shared/pipes/spec-icon-pipe';
@@ -65,7 +66,10 @@ export class PreFightComponent implements OnInit {
   protected readonly selectedEncounter = computed(() =>
     this.encounters().find(entry => entry.id === this.selectedEncId()));
   protected readonly loading = signal(false);
+  protected readonly loadingEncounters = signal(false);
   protected readonly error = signal<RenderableLoadError | null>(null);
+
+  private readonly encounterLoader = new LatestLoad();
 
   // Init true avoids a one-frame banner flash on a benched encounter (pre-fight cards render with no reveal gate).
   protected readonly gearAvailable = signal(true);
@@ -112,7 +116,7 @@ export class PreFightComponent implements OnInit {
       this.classControl.setValue(meta.className);
       this.specControl.enable({ emitEvent: false });
       this.specControl.setValue(autoSpec);
-      await this._onSpecSelected(autoSpec);
+      this._onSpecSelected(autoSpec);
     }
   }
 
@@ -133,7 +137,7 @@ export class PreFightComponent implements OnInit {
     }
   }
 
-  protected async onSpecChange(): Promise<void> {
+  protected onSpecChange(): void {
     const spec = this.specControl.value;
     this.selectionStore.savePreFight({ spec: spec || null });
     this.mapFeature.clear();
@@ -142,23 +146,29 @@ export class PreFightComponent implements OnInit {
     this.encControl.disable({ emitEvent: false });
     this.encounters.set([]);
     if (!spec) return;
-    await this._onSpecSelected(spec);
+    this._onSpecSelected(spec);
   }
 
-  private async _onSpecSelected(spec: string): Promise<void> {
+  private _onSpecSelected(spec: string): void {
     this.error.set(null);
-    const encounters = await this.encounterSelection.getEncounters(spec);
-    if (!encounters.ok) {
-      this.surfaceLoadError(encounters.error);
-      this.encControl.disable({ emitEvent: false });
-      return;
-    }
-    this.encounters.set(encounters.value);
-    if (this.encounters().length) {
-      this.encControl.enable({ emitEvent: false });
-    } else {
-      this.encControl.disable({ emitEvent: false });
-    }
+    this.loadingEncounters.set(true);
+    this.encounterLoader.run(this.encounterSelection.getEncounters(spec), {
+      context: 'encounterSelection.getEncounters',
+      apply: encounters => {
+        if (!encounters.ok) {
+          this.surfaceLoadError(encounters.error);
+          this.encControl.disable({ emitEvent: false });
+          return;
+        }
+        this.encounters.set(encounters.value);
+        if (encounters.value.length) {
+          this.encControl.enable({ emitEvent: false });
+        } else {
+          this.encControl.disable({ emitEvent: false });
+        }
+      },
+      settled: () => this.loadingEncounters.set(false),
+    });
   }
 
   private surfaceLoadError(error: LoadError): void {
