@@ -9,7 +9,7 @@ description: Generate or refresh warcraft-learner spec rulebooks on demand (no s
 
 **Division of labor:** the **orchestrator** (you) does everything mechanical - source fetching, stripping, spell-id grounding, schema validation, publishing. The **`rulebook-author` subagent** (`.claude/agents/rulebook-author.md`) does exactly one thing: transform a spec's prepped local files into its rulebook JSON. Its `tools` allowlist is `Read` + `Edit` only, so it has no network access and never sees credentials as a property of the agent definition; every byte it reads comes from the scratchpad files you prepared.
 
-**The contract:** `.claude/skills/warcraft-rulebook/rulebook.schema.json` is the authoritative shape - ingestion consumes rulebooks directly with no code-side validation, so the schema plus the validation pass below is the only gate. Field meanings live in the schema's `description` strings (`usage_rule` is user-facing coaching copy and must never carry spell-id uncertainty - that goes in `id_note`).
+**The contract:** `.claude/skills/warcraft-rulebook/rulebook.schema.json` is the authoritative shape - ingestion consumes rulebooks directly with no code-side validation, so the schema plus the validation pass below is the only gate. Field meanings live in the schema's `description` strings (`usage_rule` is user-facing coaching copy and must never carry spell-id uncertainty - that goes in `id_note`). A rule's `action` says how to fix the mistake, never the target: the finding carries that from the bench.
 
 ## The five steps - outcome contract
 

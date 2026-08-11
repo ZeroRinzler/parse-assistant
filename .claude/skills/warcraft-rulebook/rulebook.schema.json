@@ -176,7 +176,7 @@
         "action": {
           "type": "string",
           "not": { "pattern": "[\u2014\u2013\u2212\u00b7]" },
-          "description": "Second-person instruction telling the player what to DO, not describing what the check found. This is where the sources' concrete numbers belong - thresholds, target counts, hold windows - since the condition itself carries none. Good: 'Always cast Secret Technique inside Shadow Dance, at 5+ combo points.' Bad: 'Shadow Dance was cast without Secret Technique beforehand.'"
+          "description": "One short second-person sentence saying HOW to fix it: when to press it, what to press instead, what to line it up with. The finding already states the count and the target, so never restate the target and never describe what the check found. Good: 'Refresh Rupture inside its last 30%.' Bad: 'Get Rupture to 90% uptime.' or 'Rupture uptime was low.'"
         }
       }
     },

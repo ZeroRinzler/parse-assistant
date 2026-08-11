@@ -48,9 +48,11 @@ sources called for that your table did not contain. No prose narration.
 The rulebook's entire value is the optimization detail the sources carry; a schema-valid file that
 flattens it is a failed run.
 
-- **`usage_rule` and rule `action` carry the sources' concrete conditions**: combo-point / resource
-  thresholds, target counts, charge handling, hold windows, hero-talent variants, macro and timing
-  notes. "Use on cooldown" with no condition fails the bar whenever the source states one.
+- **`usage_rule` and rule `action` carry the sources' concrete mechanics**: charge handling, hold
+  windows, hero-talent variants, what to press instead, macro and timing notes. "Use on cooldown"
+  with no condition fails the bar whenever the source states one. A rule's `action` names the
+  mechanic, not the threshold: the judged number is measured from top parses and already appears in
+  the finding, so an authored one only disagrees with it.
 - **`major_cooldowns` is every ability over 30s that meaningfully affects output**, including an on-use
   trinket when a source gives it timing. **`defensives` >= 15s is inclusive** - an ability with exactly a
   15s cooldown belongs in the list. No passives, no stance toggles.
@@ -81,7 +83,8 @@ flattens it is a failed run.
 - **Never author a magnitude.** A condition names identity and direction only - which spell, aura,
   resource, and which way the rule runs (`position`, `require`, `on`, `bound`). Every threshold is
   measured from the encounter's own top parses, so the rule adapts to a fight the field plays
-  differently. Put the source's concrete numbers in the rule's `action` as coaching copy.
+  differently. Keep the source's numbers out of `action` unless the number IS the mechanic (a
+  hero-talent breakpoint, a fixed macro window).
 - **Cover the filler choice.** The terminal unconditioned action at the bottom of each APL sub-list
   plus the gates just above it - and the guide's "build resource with X when in Y" line - define
   which builder the spec presses per state. Write one `filler_in_buff` rule per state, never
@@ -138,5 +141,6 @@ condition.
 
 - Never use em-dashes (U+2014), en-dashes (U+2013), or the Unicode minus (U+2212) anywhere in the file.
   Use a plain ASCII hyphen.
-- `usage_rule` and `action` are user-facing coaching copy in a terse expert-analyst voice. Never put
-  spell-id uncertainty in them; that belongs in `id_note`.
+- `usage_rule` and `action` are user-facing coaching copy: second person, plain words, one short
+  sentence, no hedging ("consider", "try to", "~"). Never put spell-id uncertainty in them; that
+  belongs in `id_note`.

@@ -124,7 +124,7 @@ export function gapDelayFindings(
       findings.push({ severity: 'warning', category: 'cooldown_delay', cd_name: name,
         timestamp_s: castTimesS[i],
         measured: { value: `${gap.toFixed(0)}s`, unit: `avg ${avgGapS.toFixed(0)}s` },
-        message: `${name} at ${fmtClock(castTimesS[i])}: ${gap.toFixed(0)}s gap, top ${avgGapS.toFixed(0)}s.`,
+        message: `${name} sat ${gap.toFixed(0)}s between uses at ${fmtClock(castTimesS[i])}. Top raiders average ${avgGapS.toFixed(0)}s.`,
         details: { remedy: `Use ${name} sooner after it resets.` }, occurrences: [] });
     }
   }
@@ -143,7 +143,7 @@ export function analyzeOneDefensive(
 
   if (!defBench) {
     return uses > 0
-      ? [{ severity: 'success', category: 'cooldown_usage', cd_name: name, message: `${name}: ${uses} uses (no bench data).`, occurrences: [] }]
+      ? [{ severity: 'success', category: 'cooldown_usage', cd_name: name, message: `${name} was used ${uses} times. No top-parse data to compare against.`, occurrences: [] }]
       : [];
   }
 
@@ -156,12 +156,12 @@ export function analyzeOneDefensive(
   if (majorityUse && uses === 0 && expected >= 1) {
     issues.push({ severity: 'critical', category: 'lost_cooldown', cd_name: name, timestamp_s: undefined,
       measured: { value: `0 / ${expected}`, unit: 'use(s)' },
-      message: `${name} unused. Expected ${expected} on a ${fmtClock(fightDurS)} fight.`,
+      message: `${name} was never used. Top raiders get ${expected} on a ${fmtClock(fightDurS)} fight.`,
       details: { remedy: `Use ${name} ${expected}x this fight.` }, occurrences: [] });
   } else if (majorityUse && uses > 0 && uses < floor) {
     issues.push({ severity: 'critical', category: 'lost_cooldown', cd_name: name, timestamp_s: undefined,
       measured: { value: `${uses} / ${expected}`, unit: 'use(s)' },
-      message: `${name}: ${uses} uses, expected ${expected}. ${floor - uses} lost.`,
+      message: `${name} was used ${uses} times. Top raiders get ${expected}.`,
       details: { remedy: `Use ${name} ${floor - uses}x more.` }, occurrences: [] });
   }
 
@@ -172,7 +172,7 @@ export function analyzeOneDefensive(
       issues.push({ severity: 'warning', category: 'cooldown_delay', cd_name: name,
         timestamp_s: firstS,
         measured: { value: `+${(firstS - defBench.avg_first_cast_s).toFixed(0)}s`, unit: `top ${fmtClock(defBench.avg_first_cast_s)}` },
-        message: `${name} first used at ${fmtClock(firstS)}, ${(firstS - defBench.avg_first_cast_s).toFixed(0)}s late. Top: ${fmtClock(defBench.avg_first_cast_s)}.`,
+        message: `${name} was first used at ${fmtClock(firstS)}, ${(firstS - defBench.avg_first_cast_s).toFixed(0)}s later than top raiders. Aim for ${fmtClock(defBench.avg_first_cast_s)}.`,
         details: { remedy: `Use ${name} earlier.` }, occurrences: [] });
     }
     issues.push(...gapDelayFindings(name, cast_times_s, defBench));

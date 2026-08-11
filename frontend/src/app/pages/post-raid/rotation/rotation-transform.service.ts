@@ -15,7 +15,7 @@ import { DataSource } from '../../../core/data-source/data-source';
 import { Result, LoadError, ok, missing } from '../../../core/result';
 import { toLoadError } from '../../../core/http-load-error';
 import {
-  BenchedRule, buildRuleContext, measureRule, ruleThreshold, judgeableRules, rulesNeed,
+  BenchedRule, RuleSample, MIN_MEASURED_PARSES, buildRuleContext, sampleRule, ruleBand, judgeableRules, rulesNeed,
 } from './rotation-rules';
 import { detectBloodlust } from './rotation-bloodlust';
 import { RotationBench } from './rotation-data-source';
@@ -25,8 +25,8 @@ export { toParseRankings } from '../../../shared/analysis/wcl-projections';
 
 /** How many top parses to sample. */
 const TOP_PARSE_COUNT = 10;
-/** Under this a median is one player's habit rather than the field's, so the encounter benches nothing until its pool fills. */
-const MIN_PARSE_COUNT = 3;
+/** The rule engine's own floor, so an encounter never benches a parse count every rule band would then reject. */
+const MIN_PARSE_COUNT = MIN_MEASURED_PARSES;
 // Over-fetch so a private/unfetchable top parse can be backfilled by the next-best one.
 const CANDIDATE_POOL_COUNT = TOP_PARSE_COUNT * 2;
 /** BL window: a CD counts as aligned if cast 30s before to 55s after BL start. */
@@ -192,20 +192,21 @@ export function aggregateCdBenchmarks(
   return result;
 }
 
+/** One parse's contribution for each judged rule, index-aligned with the rules. */
+export type ParseRuleSamples = RuleSample[];
+
 interface ParseRotation {
   summaries: CdSummary[];
   gapListS: number[];
   durationS: number;
   encounterName: string;
-  /** Index-aligned with the rules passed in, so the caller can aggregate per rule. */
-  ruleSamples: (number | null)[];
+  ruleSamples: ParseRuleSamples;
 }
 
-/** Pairs each rule with the magnitude its encounter measured, so nothing has to key rules across two arrays. */
-export function benchRules(rules: RulebookRule[], perParse: (number | null)[][]): BenchedRule[] {
+export function benchRules(rules: RulebookRule[], perParse: ParseRuleSamples[]): BenchedRule[] {
   return rules.map((rule, i) => ({
     rule,
-    ...ruleThreshold(perParse.map(samples => samples[i]), perParse.length),
+    ...ruleBand(rule.condition, perParse.map(samples => samples[i] ?? { values: [], unmeasuredOut: 0 })),
   }));
 }
 
@@ -228,7 +229,7 @@ export class RotationTransformService implements DataSource<RotationBench> {
       if (!rankings.length) return missing('No top parses for this encounter.');
 
       const perParse: CdSummary[][] = [];
-      const ruleSamples: (number | null)[][] = [];
+      const ruleSamples: ParseRuleSamples[] = [];
       const gapLists: number[][] = [];
       const durations: number[] = [];
       let encounterName = '';
@@ -308,7 +309,7 @@ export class RotationTransformService implements DataSource<RotationBench> {
         gapListS: castGapListS(castsTimed),
         durationS: fightDurS,
         encounterName: fight.name ?? '',
-        ruleSamples: rules.map(rule => measureRule(rule.condition, ruleCtx)),
+        ruleSamples: rules.map(rule => sampleRule(rule.condition, ruleCtx)),
       };
     } catch (err) {
       logWarn(`RotationTransformService parse ${ranking.report_code}:${ranking.fight_id}`, err);

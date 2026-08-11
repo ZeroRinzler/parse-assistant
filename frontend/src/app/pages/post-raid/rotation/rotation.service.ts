@@ -100,13 +100,13 @@ export function checkLostUses(
   if (actual === 0 && expected >= 1) return {
     severity: 'critical', category: 'lost_cooldown', cd_name: cdName,
     measured: { value: `0 / ${expected}`, unit: 'cast(s)' },
-    message: `${cdName} unused. Expected ${expected} on a ${fmtClock(fightDurS)} fight.`,
+    message: `${cdName} was never used. Top raiders get ${expected} on a ${fmtClock(fightDurS)} fight.`,
     details: { remedy: `Use ${cdName} ${expected}x this fight.` }, occurrences: [] };
   if (actual > 0 && actual < floor) return {
     severity: 'critical', category: 'lost_cooldown', cd_name: cdName,
     measured: { value: `${actual} / ${expected}`, unit: 'cast(s)' },
-    message: `${cdName}: ${actual} casts, expected ${expected}. ${floor - actual} lost.`,
-    details: { remedy: `Press ${cdName} ${floor - actual}x more - sooner off cooldown.` }, occurrences: [] };
+    message: `${cdName} was used ${actual} times. Top raiders get ${expected}.`,
+    details: { remedy: `Press ${cdName} ${floor - actual}x more, sooner off cooldown.` }, occurrences: [] };
   return null;
 }
 
@@ -121,7 +121,7 @@ export function checkFirstCastDelay(
     severity: 'warning', category: 'cooldown_delay', cd_name: cdName,
     timestamp_s: castTimesS[0],
     measured: { value: `+${lateS}s`, unit: `top ${fmtClock(cdBench.avg_first_cast_s)}` },
-    message: `${cdName} opened at ${fmtClock(firstS)}, ${lateS}s late. Top: ${fmtClock(cdBench.avg_first_cast_s)}.`,
+    message: `${cdName} opened at ${fmtClock(firstS)}, ${lateS}s later than top raiders. Aim for ${fmtClock(cdBench.avg_first_cast_s)}.`,
     details: { remedy: `Open with ${cdName} earlier.` }, occurrences: [] };
 }
 
@@ -137,7 +137,7 @@ export function checkBloodlustAlignment(
     findings.push({ severity: 'critical', category: 'cooldown_alignment', cd_name: cdName,
       timestamp_s: castTimesS[0],
       measured: { value: 'missed', unit: 'BL' },
-      message: `${cdName} missed Bloodlust (BL at ${fmtClock(blTimeS)}, first cast at ${fmtClock(castTimesS[0])}).`,
+      message: `${cdName} missed Bloodlust. Bloodlust started at ${fmtClock(blTimeS)}, ${cdName} at ${fmtClock(castTimesS[0])}.`,
       details: { remedy: `Align ${cdName} with Bloodlust.` }, occurrences: [] });
   } else if (blAligned && cdBench.avg_bl_offset_s != null && cdBench.stddev_bl_offset_s != null) {
     const offsets = inWindow.map(timeS => timeS - blTimeS);
@@ -149,7 +149,7 @@ export function checkBloodlustAlignment(
       findings.push({ severity: 'warning', category: 'cooldown_alignment', cd_name: cdName,
         timestamp_s: judgedCastS,
         measured: { value: dir, unit: 'in BL' },
-        message: `${cdName} ${dir} in the Bloodlust window.`,
+        message: `${cdName} was ${dir} inside the Bloodlust window.`,
         details: { remedy: `Tighten ${cdName} to the Bloodlust window.` }, occurrences: [] });
     }
   }
@@ -165,8 +165,8 @@ export function checkGaps(cdName: string, castTimesS: number[], cdBench: PerCdBe
       severity: 'warning', category: 'cooldown_delay', cd_name: cdName,
       timestamp_s: castTimesS[i],
       measured: { value: `${gap.toFixed(0)}s`, unit: `avg ${cdBench.avg_gap_s.toFixed(0)}s` },
-      message: `${cdName} at ${fmtClock(castTimesS[i])}: ${gap.toFixed(0)}s gap, top ${cdBench.avg_gap_s.toFixed(0)}s.`,
-      details: { remedy: `Press ${cdName} sooner - top gap ${cdBench.avg_gap_s.toFixed(0)}s.` }, occurrences: [] });
+      message: `${cdName} sat ${gap.toFixed(0)}s between casts at ${fmtClock(castTimesS[i])}. Top raiders average ${cdBench.avg_gap_s.toFixed(0)}s.`,
+      details: { remedy: `Press ${cdName} sooner, about every ${cdBench.avg_gap_s.toFixed(0)}s.` }, occurrences: [] });
   }
   return findings;
 }
@@ -191,8 +191,8 @@ export function checkCastEfficiency(
     severity: 'warning', category: 'cast_efficiency',
     label: 'Low cast efficiency',
     measured: { value: `${effPct.toFixed(1)}%`, unit: `top ${topE.toFixed(0)}%` },
-    message: `${effPct.toFixed(1)}% cast efficiency, ${totalDtS.toFixed(1)}s idle. Top: ${topE.toFixed(0)}%.`,
-    details: { remedy: `Fill ${totalDtS.toFixed(1)}s of gaps. Top: ${topE.toFixed(0)}%.` }, occurrences: [] };
+    message: `You were casting ${effPct.toFixed(1)}% of the fight, idle for ${totalDtS.toFixed(1)}s. Aim for ${topE.toFixed(0)}% or more.`,
+    details: { remedy: `Fill ${totalDtS.toFixed(1)}s of gaps.` }, occurrences: [] };
 }
 
 /** `castTimesS` are fight-relative seconds, ascending. Null when the cooldown is talent-gated and unused. */

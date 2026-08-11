@@ -15,7 +15,7 @@ export interface RotationBench {
   top_efficiency_stddev: number;
   per_cd_benchmarks: Record<string, PerCdBenchmark>;
   major_cooldowns: RulebookCooldown[];
-  /** Rulebook rules with the magnitude this encounter measured, so the runtime never re-measures the field. */
+  /** Rulebook rules with the band this encounter measured, so the runtime never re-measures the field. */
   rules: BenchedRule[];
   cd_spell_ids: Record<string, number>;
   ability_icons: Record<number, { icon: string; name: string }>;

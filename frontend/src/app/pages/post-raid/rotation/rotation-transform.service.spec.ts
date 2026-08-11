@@ -5,14 +5,16 @@ import { DataFileApiService } from '../../../core/services/data-file-api';
 import {
   RotationTransformService,
   summarizeCooldownCasts, castGapListS,
-  buildCdBenchmark, computeEfficiencyThresholds, aggregateCdBenchmarks, rotationCdSpellIds,
-  CdSummary,
+  buildCdBenchmark, computeEfficiencyThresholds, aggregateCdBenchmarks, rotationCdSpellIds, benchRules,
+  CdSummary, ParseRuleSamples,
 } from './rotation-transform.service';
-import { SHADOW_BLADES, BLOODLUST, CLOAK_OF_SHADOWS } from '../../../../testing/spell-ids';
+import { SHADOW_BLADES, BLOODLUST, CLOAK_OF_SHADOWS, RUPTURE } from '../../../../testing/spell-ids';
 import { cast, applyBuff } from '../../../../testing/builders/events';
 import { rulebook } from '../../../../testing/builders/rulebook';
 import { ok, missing } from '../../../core/result';
 import { withRelativeS } from '../../../shared/analysis/wcl-projections';
+import { RulebookRule } from '../../../core/models/rulebook.models';
+import { RuleSample } from './rotation-rules';
 
 /** Fixture events build against a fight-start of 0, so stamping is a pass-through to seconds. */
 const timed = withRelativeS;
@@ -183,6 +185,46 @@ describe('aggregateCdBenchmarks', () => {
   });
 });
 
+describe('benchRules', () => {
+  const sample = (values: number[], unmeasuredOut = 0): RuleSample => ({ values, unmeasuredOut });
+  const dotUptime = (): RulebookRule => ({
+    severity: 'warning',
+    condition: { kind: 'aura_uptime_below', aura_spell_id: RUPTURE, aura_spell_name: 'Rupture', on: 'target' },
+  });
+  const ruleA = dotUptime(), ruleB = dotUptime(), ruleC = dotUptime();
+
+  it('pools each rule\'s instances across parses at its own index; an empty sample leaves that parse out of the rule\'s pool and count while other rules still see its other samples', () => {
+    const perParse: ParseRuleSamples[] = [
+      [sample([10]), sample([]), sample([1])],
+      [sample([20]), sample([30]), sample([])],
+      [sample([30]), sample([]), sample([])],
+      [sample([40]), sample([]), sample([])],
+      [sample([50]), sample([]), sample([])],
+    ];
+    const benched = benchRules([ruleA, ruleB, ruleC], perParse);
+
+    // Rule A: every one of the 5 parses contributed its own instance.
+    expect(benched[0].rule).toBe(ruleA);
+    expect(benched[0].sample_count).toBe(5);
+    expect(benched[0].band).not.toBeNull();
+
+    // Rule B: only the second parse's sample was non-empty, below the parse floor.
+    expect(benched[1].sample_count).toBe(1);
+    expect(benched[1].band).toBeNull();
+
+    // Rule C: only the first parse's sample was non-empty.
+    expect(benched[2].sample_count).toBe(1);
+    expect(benched[2].band).toBeNull();
+  });
+
+  it('returns a null band, with no contributing parses, for a rule index with no samples anywhere', () => {
+    const perParse: ParseRuleSamples[] = [[sample([])], [sample([])], [sample([])], [sample([])], [sample([])]];
+    const [entry] = benchRules([ruleA], perParse);
+    expect(entry.band).toBeNull();
+    expect(entry.sample_count).toBe(0);
+  });
+});
+
 function reportFor(playerId: number, playerName: string, fightId: number) {
   return {
     title: 't',
@@ -197,8 +239,8 @@ function reportFor(playerId: number, playerName: string, fightId: number) {
 // An id outside the rulebook cooldowns; exercises the cooldown-cast filter.
 const UNTRACKED_SPELL_ID = 99;
 
-// The floor the transform benches at (MIN_PARSE_COUNT in the service).
-const MIN_SAMPLE_COUNT = 3;
+// The floor the transform benches at (MIN_PARSE_COUNT in the service, which tracks the rule engine's own MIN_MEASURED_PARSES).
+const MIN_SAMPLE_COUNT = 5;
 
 const rankingsFor = (count: number) =>
   Array.from({ length: count }, (_, i) => ({ name: `P${i + 1}`, report: { code: `r${i + 1}`, fightID: i + 1 } }));

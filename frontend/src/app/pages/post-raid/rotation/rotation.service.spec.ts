@@ -14,7 +14,7 @@ import { WclEvent } from '../../../core/models/wcl.models';
 import { withRelativeS } from '../../../shared/analysis/wcl-projections';
 import { ROTATION_DATA_SOURCE, RotationBench } from './rotation-data-source';
 import { DataSource } from '../../../core/data-source/data-source';
-import { BenchedRule, RuleThreshold } from './rotation-rules';
+import { BenchedRule, RuleBand } from './rotation-rules';
 import { detectBloodlust } from './rotation-bloodlust';
 import {
   RotationFeatureService,
@@ -24,15 +24,15 @@ import {
   partitionRotationFindings, buildRuleRows, buildOffensiveRows, buildOnPlanChips,
 } from './rotation.service';
 
-// A zero band keeps the fixture arithmetic exact.
+// A zero tolerance keeps the fixture arithmetic exact.
 const PAIR_WINDOW_S = 5;
-function thr(value: number, band = 0): RuleThreshold {
-  return { value, band };
+function band(lo: number, hi = lo, tolerance = 0): RuleBand {
+  return { lo, hi, tolerance };
 }
 
-// A rule whose magnitude this encounter measured, so fixtures about something else are not gated on it.
-function benched(rule: RulebookRule, threshold: RuleThreshold | null = thr(PAIR_WINDOW_S)): BenchedRule {
-  return { rule, threshold, sample_count: threshold == null ? 0 : 10 };
+// A rule whose band this encounter measured, so fixtures about something else are not gated on it.
+function benched(rule: RulebookRule, ruleBand: RuleBand | null = band(PAIR_WINDOW_S)): BenchedRule {
+  return { rule, band: ruleBand, sample_count: ruleBand == null ? 0 : 10 };
 }
 // Build a RotationScanInput for a 0..120s fight - keeps the call sites terse.
 function scan(over: {
@@ -683,7 +683,7 @@ describe('RotationFeatureService fetch shape', () => {
       { ...removeDebuff(RUPTURE, 40), sourceID: OTHER_RAIDER },
     ];
     const { api } = recording(raidWide);
-    const result = await withSource(ok(bench({ rules: [benched(dotUptime, thr(UPTIME_BAR_PCT))] })), api)
+    const result = await withSource(ok(bench({ rules: [benched(dotUptime, band(UPTIME_BAR_PCT))] })), api)
       .loadPlayerView('SubtletyRogue', 1, 'rX', 1, PLAYER_ID);
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.value.ruleRows.some(row => row.what?.includes('Rupture'))).toBe(false);
