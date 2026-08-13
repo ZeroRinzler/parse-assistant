@@ -2,7 +2,8 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { DataFileTransport, HttpDataFileTransport } from './data-file-transport';
+import { DataFileTransport } from './data-file-transport';
+import { HttpDataFileTransport } from './http-data-file-transport';
 import { ok, missing, transient } from '../result';
 
 const REL_PATH = 'SubtletyRogue/burst/3176.json';

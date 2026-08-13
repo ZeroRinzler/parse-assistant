@@ -12,7 +12,8 @@ import { routes } from './app.routes';
 import { WCL_TRANSPORT } from './core/services/wcl-transport';
 import { HttpWclTransport } from './core/services/http-wcl-transport';
 import { provideWclCaching } from './core/services/wcl-caching';
-import { DATA_FILE_TRANSPORT, HttpDataFileTransport } from './core/services/data-file-transport';
+import { DATA_FILE_TRANSPORT } from './core/services/data-file-transport';
+import { HttpDataFileTransport } from './core/services/http-data-file-transport';
 import { retryTransientInterceptor } from './core/interceptors/retry-transient.interceptor';
 import { environmentProviders } from '../environments/environment';
 
