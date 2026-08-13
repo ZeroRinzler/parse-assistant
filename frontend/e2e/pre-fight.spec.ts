@@ -1,5 +1,5 @@
 import { expect, test, Page } from '@playwright/test';
-import { shows, showsEntity, CLOCK, DAMAGE, DECIMAL, PERCENT } from './support';
+import { shows, showsEntity, showsTypicalUses, CLOCK, DAMAGE, PERCENT } from './support';
 
 // Bench-only page (no WCL budget spent): one shared page, spec and encounter picked once, every card asserts against it.
 test.describe.configure({ mode: 'serial' });
@@ -72,8 +72,7 @@ test('the cooldown plan lists first use, typical uses, and the holds', async () 
   await shows(cooldownPlan, 'Cooldown plan');
   await showsEntity(cooldownPlan);
   await shows(cooldownPlan, 'First use');
-  await shows(cooldownPlan, 'Typical uses');
-  await shows(cooldownPlan, DECIMAL);
+  await showsTypicalUses(cooldownPlan);
   await shows(cooldownPlan, 'Holds');
   await shows(cooldownPlan, CLOCK);
 });
@@ -84,8 +83,7 @@ test('the defensive plan lists the consensus defensives', async () => {
   await showsEntity(defensivePlan);
   await shows(defensivePlan, 'First use');
   await shows(defensivePlan, CLOCK);
-  await shows(defensivePlan, 'Typical uses');
-  await shows(defensivePlan, DECIMAL);
+  await showsTypicalUses(defensivePlan);
 });
 
 test('burst windows show the top-parse windows with their bench damage', async () => {

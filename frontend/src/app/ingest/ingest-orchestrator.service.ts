@@ -5,7 +5,7 @@ import { NgHttpCachingService } from 'ng-http-caching';
 import { WclApiService } from '../core/services/wcl-api';
 import { DataFileApiService } from '../core/services/data-file-api';
 import { HttpWclTransport } from '../core/services/http-wcl-transport';
-import { hydrateSpecMeta } from '../core/spec-meta';
+import { SpecMetaService } from '../core/services/spec-meta';
 import { logWarn } from '../core/log';
 import { type LoadError } from '../core/result';
 import { toParseRankings, unwrapRankings } from '../shared/analysis/wcl-projections';
@@ -83,6 +83,7 @@ class ApiWclClient implements WclQueryClient {
 export class IngestOrchestratorService {
   private readonly wclApi = inject(WclApiService);
   private readonly dataFile = inject(DataFileApiService);
+  private readonly specMeta = inject(SpecMetaService);
   // The orchestrator needs the transport's inaccessible-code drain, which is ingest-only surface.
   private readonly wclTransport = inject(HttpWclTransport);
   private readonly wclCache = inject(NgHttpCachingService);
@@ -128,7 +129,7 @@ export class IngestOrchestratorService {
       }
     }
     const specWcl: SpecWclMap = specWclFromMetas(metas);
-    hydrateSpecMeta(metas);
+    this.specMeta.hydrate(metas);
     await this.dataFile.writeSpecMeta(metas);
     console.log(`Resolved ${metas.length} specs from WCL`);
 

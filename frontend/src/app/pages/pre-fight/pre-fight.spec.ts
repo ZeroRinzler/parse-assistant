@@ -9,6 +9,7 @@ import { PreFightComponent } from './pre-fight';
 import { EncounterSelectionService } from './encounter-selection.service';
 import { MapFeatureService } from '../post-raid/map/map.service';
 import { SelectionStore } from '../../core/services/selection-store';
+import { DataFileApiService } from '../../core/services/data-file-api';
 
 // The template gates every feature card on `@if (selectedEncId())`, so 0 closes it.
 const NO_ENCOUNTER = 0;
@@ -31,6 +32,8 @@ function providers(encounterSelection: Partial<EncounterSelectionService>): unkn
     { provide: EncounterSelectionService, useValue: encounterSelection as EncounterSelectionService },
     { provide: MapFeatureService, useValue: mapFeature },
     { provide: SelectionStore, useValue: selectionStore },
+    // Satisfies the SpecMetaService constructor fetch behind the class/spec dropdowns.
+    { provide: DataFileApiService, useValue: { getSpecMeta: async () => ok([]) } },
   ];
 }
 

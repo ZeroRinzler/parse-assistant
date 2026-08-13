@@ -1,9 +1,11 @@
 import { Routes } from '@angular/router';
+import { PostRaidComponent } from './pages/post-raid/post-raid';
 
 export const routes: Routes = [
   {
+    // Lazy-loading the first-paint route would chain one more round trip behind main.js.
     path: '',
-    loadComponent: () => import('./pages/post-raid/post-raid').then(m => m.PostRaidComponent),
+    component: PostRaidComponent,
   },
   {
     path: 'pre',

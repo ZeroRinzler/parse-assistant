@@ -153,7 +153,7 @@ export function specOf(groups: PlayerDetailGroups, playerId: number): string {
     DefensiveComponent, GearComponent, MapPanelComponent, LiveControlsComponent, ClipPanelComponent,
     FormatDurationPipe, FormatSpecPipe, SpecIconPipe, ClassIconPipe, BossIconPipe,
   ],
-  // Provided here (not app.config) so the form-field import stays out of the initial bundle - this page is lazy.
+  // Provided here, not app.config: only this page's form fields want dynamic subscript sizing.
   providers: [{ provide: MAT_FORM_FIELD_DEFAULT_OPTIONS, useValue: { subscriptSizing: 'dynamic' } }],
   templateUrl: './post-raid.html',
 })

@@ -1,13 +1,21 @@
 import { describe, it, expect, beforeAll } from 'vitest';
+import { TestBed } from '@angular/core/testing';
 import { SpecIconPipe } from './spec-icon-pipe';
-import { hydrateSpecMeta } from '../../core/spec-meta';
+import { SpecMetaService } from '../../core/services/spec-meta';
+import { DataFileApiService } from '../../core/services/data-file-api';
 
-const pipe = new SpecIconPipe();
+let pipe: SpecIconPipe;
 
 // The spec icon comes from the hydrated spec universe; seed the spec this row uses.
-beforeAll(() => hydrateSpecMeta([
-  { spec: 'SubtletyRogue', className: 'Rogue', specName: 'Subtlety', classLabel: 'Rogue', specLabel: 'Subtlety', classIcon: 'class_rogue', specIcon: 'ability_stealth' },
-]));
+beforeAll(() => {
+  TestBed.configureTestingModule({
+    providers: [{ provide: DataFileApiService, useValue: { getSpecMeta: () => new Promise(() => undefined) } }],
+  });
+  TestBed.inject(SpecMetaService).hydrate([
+    { spec: 'SubtletyRogue', className: 'Rogue', specName: 'Subtlety', classLabel: 'Rogue', specLabel: 'Subtlety', classIcon: 'class_rogue', specIcon: 'ability_stealth' },
+  ]);
+  pipe = TestBed.runInInjectionContext(() => new SpecIconPipe());
+});
 
 describe('SpecIconPipe', () => {
   it.each([

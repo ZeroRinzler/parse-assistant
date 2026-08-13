@@ -12,6 +12,12 @@ export const CLOCK = /-?\d+:\d{2}/;
 export const PERCENT = /[+-]?\d+(\.\d+)?%/;
 export const RATIO = /\d+ \/ \d+/;
 export const DECIMAL = /\d+\.\d+/;
+
+/** Asserts the "Typical uses" cell (shared by defensive-plan and rotation-cd-plan) renders a value: number:'1.0-1' drops the fraction on a whole number, so a bare integer is a valid render, not a miss. */
+export async function showsTypicalUses(scope: Locator): Promise<void> {
+  const cell = scope.locator('span').filter({ hasText: 'Typical uses' }).first();
+  await expect(cell.getByText(/^\d+(\.\d+)?$/).first()).toBeVisible();
+}
 export const SECONDS = /[+-]?\d+(\.\d+)?s/;
 
 export const MEASURE = new RegExp([RATIO, PERCENT, CLOCK, SECONDS].map(r => r.source).join('|'));
@@ -33,7 +39,11 @@ export function findingRows(table: Locator): Locator {
 export async function showsFindingRows(table: Locator, chip?: RegExp): Promise<void> {
   const rows = findingRows(table);
   const count = await rows.count();
-  expect(count).toBeGreaterThan(0);
+  // A refresh can put every verdict on plan; zero rows is a valid card state, an empty strip is not.
+  if (count === 0) {
+    await showsOnPlan(table);
+    return;
+  }
   for (let i = 0; i < count; i++) {
     const row = rows.nth(i);
     if (chip) await expect(row.locator('span.rounded-sm')).toHaveText(chip);

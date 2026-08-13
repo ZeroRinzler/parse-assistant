@@ -1,9 +1,12 @@
-@if (map.open()) {
-  <wl-flyover-panel
-    heading="Positioning"
-    [loadingText]="map.overlayLoading() ? 'Loading your trail...' : ''"
-    closeLabel="Close map"
-    (closed)="map.close()">
-    <wl-map-canvas />
-  </wl-flyover-panel>
+<!-- @defer only splits the bundle; it never un-renders, so the @if owns visibility. -->
+@defer (on idle) {
+  @if (map.open()) {
+    <wl-flyover-panel
+      heading="Positioning"
+      [loadingText]="map.overlayLoading() ? 'Loading your trail...' : ''"
+      closeLabel="Close map"
+      (closed)="map.close()">
+      <wl-map-canvas />
+    </wl-flyover-panel>
+  }
 }

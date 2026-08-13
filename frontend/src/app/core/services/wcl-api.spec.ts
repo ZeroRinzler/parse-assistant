@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { WclApiService } from './wcl-api';
 import { WclAuthService } from './wcl-auth';
+import { DataFileApiService } from './data-file-api';
+import { ok } from '../result';
 import { WclCombatantInfo } from '../models/wcl.models';
 import { WCL_TRANSPORT, WclTransport, WclTransportError, WCL_UNUSABLE_STATUS } from './wcl-transport';
 
@@ -39,6 +41,8 @@ function setup(): { api: WclApiService; transport: RecordingTransport; tokens: s
       WclApiService,
       { provide: WclAuthService, useValue: authStub as unknown as WclAuthService },
       { provide: WCL_TRANSPORT, useValue: transport },
+      // Satisfies the SpecMetaService constructor fetch behind getRankings' spec resolution.
+      { provide: DataFileApiService, useValue: { getSpecMeta: async () => ok([]) } },
     ],
   });
   return { api: TestBed.inject(WclApiService), transport, tokens };

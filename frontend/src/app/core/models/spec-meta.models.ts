@@ -1,4 +1,4 @@
-// Derived from WCL `gameData.classes` at ingest and baked to `spec-meta.json`; the runtime hydrates it from that file (see `core/spec-meta.ts`).
+// Derived from WCL `gameData.classes` at ingest and baked to `spec-meta.json`; `SpecMetaService` hydrates itself from that file.
 export interface SpecMeta {
   spec: string;
   /** No-space class form, e.g. 'DeathKnight' (WCL className for the rankings query). */

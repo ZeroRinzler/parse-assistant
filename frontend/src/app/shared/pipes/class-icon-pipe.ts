@@ -1,10 +1,13 @@
-import { Pipe, PipeTransform } from '@angular/core';
-import { classIconUrl } from '../../core/spec-meta';
+import { Pipe, PipeTransform, inject } from '@angular/core';
+import { SpecMetaService } from '../../core/services/spec-meta';
 
 /** No-space class name (e.g. 'DeathKnight') -> zamimg class-icon URL, or '' when empty. */
-@Pipe({ name: 'classIcon' })
+// A pure pipe would cache the pre-hydration ''.
+@Pipe({ name: 'classIcon', pure: false })
 export class ClassIconPipe implements PipeTransform {
+  private readonly specMeta = inject(SpecMetaService);
+
   transform(className: string | null | undefined): string {
-    return classIconUrl(className ?? '');
+    return this.specMeta.classIconUrl(className ?? '');
   }
 }

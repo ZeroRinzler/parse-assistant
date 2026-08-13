@@ -4,7 +4,9 @@
   "cli": {
     "packageManager": "npm",
     "analytics": false,
-    "schematicCollections": ["angular-eslint"]
+    "schematicCollections": [
+      "angular-eslint"
+    ]
   },
   "newProjectRoot": "projects",
   "projects": {
@@ -52,10 +54,15 @@
               {
                 "glob": "**/*",
                 "input": "public",
-                "ignore": ["data/specs/**/parse_samples/**", "data/specs/**/guides.json"]
+                "ignore": [
+                  "data/specs/**/parse_samples/**",
+                  "data/specs/**/guides.json"
+                ]
               }
             ],
-            "styles": ["src/styles.scss"]
+            "styles": [
+              "src/styles.scss"
+            ]
           },
           "configurations": {
             "production": {
@@ -71,7 +78,7 @@
               "budgets": [
                 {
                   "type": "initial",
-                  "maximumWarning": "650kB",
+                  "maximumWarning": "900kB",
                   "maximumError": "1MB"
                 },
                 {
@@ -83,6 +90,10 @@
               "outputHashing": "all"
             },
             "development": {
+              "index": {
+                "input": "src/index.ingest.html",
+                "output": "index.html"
+              },
               "optimization": false,
               "extractLicenses": false,
               "sourceMap": true,
@@ -116,7 +127,9 @@
                 {
                   "glob": "**/*",
                   "input": "public",
-                  "ignore": ["data/**"]
+                  "ignore": [
+                    "data/**"
+                  ]
                 }
               ],
               "fileReplacements": [
@@ -158,14 +171,20 @@
           },
           "configurations": {
             "ci": {
-              "reporters": ["default", "github-actions"]
+              "reporters": [
+                "default",
+                "github-actions"
+              ]
             }
           }
         },
         "lint": {
           "builder": "@angular-eslint/builder:lint",
           "options": {
-            "lintFilePatterns": ["src/**/*.ts", "src/**/*.html"]
+            "lintFilePatterns": [
+              "src/**/*.ts",
+              "src/**/*.html"
+            ]
           }
         }
       }

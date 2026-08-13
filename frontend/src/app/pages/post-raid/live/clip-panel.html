@@ -1,5 +1,8 @@
-@if (clip.open()) {
-  <wl-flyover-panel heading="Replay" closeLabel="Close replay" (closed)="clip.close()">
-    <wl-clip-player />
-  </wl-flyover-panel>
+<!-- @defer only splits the bundle; it never un-renders, so the @if owns visibility. -->
+@defer (on idle) {
+  @if (clip.open()) {
+    <wl-flyover-panel heading="Replay" closeLabel="Close replay" (closed)="clip.close()">
+      <wl-clip-player />
+    </wl-flyover-panel>
+  }
 }

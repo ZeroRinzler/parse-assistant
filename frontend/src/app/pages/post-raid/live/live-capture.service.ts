@@ -1,8 +1,6 @@
 /** Clips are session-scoped: a resolved clip is memoized in memory and nothing is written to disk. */
 import { Injectable, computed, signal } from '@angular/core';
-import {
-  BlobSource, BufferTarget, EncodedPacketSink, EncodedVideoPacketSource, Input, Output, WEBM, WebMOutputFormat,
-} from 'mediabunny';
+import type { EncodedVideoPacketSource as PacketSource } from 'mediabunny';
 import { WclFight } from '../../../core/models/wcl.models';
 import { ClipAnchor } from '../../../core/models/capture.models';
 import { logWarn } from '../../../core/log';
@@ -360,10 +358,14 @@ export async function pipeIntoElement(video: HTMLVideoElement, blobs: Blob[], mi
 
 /** Each segment is a self-contained WebM whose clusters restart at 0, so a plain blob concat repeats the header and timeline and players read only the first segment's ~SEG_MS. */
 export async function remuxSegments(blobs: Blob[]): Promise<Blob> {
+  // A module-scope import would put the muxer in the landing bundle.
+  const {
+    BlobSource, BufferTarget, EncodedPacketSink, EncodedVideoPacketSource, Input, Output, WEBM, WebMOutputFormat,
+  } = await import('mediabunny');
   const output = new Output({ format: new WebMOutputFormat(), target: new BufferTarget() });
-  let source: EncodedVideoPacketSource | null = null;
+  let source: PacketSource | null = null;
   // The decoder config only needs to ride the first packet; every segment shares one codec.
-  let firstMeta: Parameters<EncodedVideoPacketSource['add']>[1];
+  let firstMeta: Parameters<PacketSource['add']>[1];
   let timeOffset = 0;
   for (const blob of blobs) {
     const track = await new Input({ formats: [WEBM], source: new BlobSource(blob) }).getPrimaryVideoTrack();

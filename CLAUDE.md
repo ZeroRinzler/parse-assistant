@@ -10,7 +10,7 @@ This file is the always-on **router**: the few rules that apply on every turn, t
 
 - **Never use em-dashes (U+2014), en-dashes (U+2013), the Unicode minus (U+2212), or the middle dot (U+00B7)** anywhere - docs, code comments, commit messages, UI copy, generated output. Use a plain ASCII hyphen (`-`) or rephrase.
 - **Describe only current behavior, never past behavior.** Docs, skill files, and code comments state what the code does now - never "previously...", "was removed", "no longer...", or a contrast against a prior approach. Change history lives in git, not in the source.
-- **Comment the why, not the what - one terse line, or none.** The default is NO comment. The one gate: a comment may exist only if you can name the specific, concrete mistake a competent reader makes *without* it (feeds this id to a spell lookup; deletes this branch not knowing it handles case Y). If you cannot name that mistake, delete the comment. At most one line, never restating the code, JSDoc included. Self-audit every comment your diff adds before committing. When in doubt, delete it.
+- **Comment the why, not the what - one terse line, or none.** The default is NO comment. The one gate: a comment may exist only if you can name the specific, concrete mistake a competent reader makes *without* it (feeds this id to a spell lookup; deletes this branch not knowing it handles case Y). If you cannot name that mistake, delete the comment. At most one line, never restating the code, JSDoc included; a why that takes two clauses keeps only the clause naming the mistake. Self-audit every comment your diff adds before committing. When in doubt, delete it.
 
 ## Architecture at a glance
 
