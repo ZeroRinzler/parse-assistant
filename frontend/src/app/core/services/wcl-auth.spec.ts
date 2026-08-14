@@ -97,7 +97,7 @@ describe('WclAuthService', () => {
     const first = service.getToken();
     const second = service.getToken();
 
-    const requests = httpMock.match(WCL_TOKEN_URL);
+    const requests = httpMock.match(req => req.url === WCL_TOKEN_URL);
     expect(requests.length).toBe(1);
     requests[0].flush({ access_token: FIRST_TOKEN, expires_in: TOKEN_LIFETIME_S });
 

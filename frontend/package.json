@@ -51,6 +51,7 @@
     "cors": "^2.8.6",
     "eslint": "^10.3.0",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.6.2",
     "playwright": "^1.61.1",
     "prettier": "^3.8.1",
     "sass": "^1.99.0",

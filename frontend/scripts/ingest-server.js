@@ -1,6 +1,7 @@
 // All ingestion logic (signatures, versioning, ordering, transforms) lives in the Angular app; this server must never grow any.
 import express from 'express';
 import cors from 'cors';
+import { rateLimit } from 'express-rate-limit';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -14,6 +15,8 @@ const BODY_LIMIT = '200mb';
 const ALLOWED_ORIGINS = ['http://localhost:4200', 'http://127.0.0.1:4200'];
 // Reject any other Host so a rebound DNS name resolving to loopback cannot reach the store.
 const ALLOWED_HOSTS = new Set([`localhost:${PORT}`, `127.0.0.1:${PORT}`]);
+
+const REQUESTS_PER_MINUTE = 5_000;
 
 // Monotonic suffix so two concurrent writes to the same path never collide on the temp name.
 let tempWriteCounter = 0;
@@ -32,6 +35,7 @@ app.use((req, res, next) => {
   if (!ALLOWED_HOSTS.has(req.headers.host)) return res.status(403).end();
   next();
 });
+app.use(rateLimit({ windowMs: 60_000, limit: REQUESTS_PER_MINUTE, standardHeaders: 'draft-8', legacyHeaders: false }));
 app.use(cors({ origin: ALLOWED_ORIGINS }));
 app.use(express.text({ type: 'application/json', limit: BODY_LIMIT }));
 

@@ -39,6 +39,11 @@ describe('decodeHtmlEntities', () => {
   it('leaves a string with no entities unchanged', () => {
     expect(decodeHtmlEntities('Sophic Devotion')).toBe('Sophic Devotion');
   });
+
+  it('decodes each entity once, so an escaped entity survives as text', () => {
+    expect(decodeHtmlEntities('&amp;lt;')).toBe('&lt;');
+    expect(decodeHtmlEntities('&amp;amp;')).toBe('&amp;');
+  });
 });
 
 describe('extractGear', () => {
