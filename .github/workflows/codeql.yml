@@ -1,0 +1,49 @@
+name: CodeQL
+
+# Code scanning default setup skips Dependabot pull requests, leaving their CodeQL check unresolved.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '31 4 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+
+    # Dependabot-triggered runs get a read-only token unless the job asks for more, and the
+    # analysis cannot upload without security-events: write.
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: actions
+            build-mode: none
+          - language: javascript-typescript
+            build-mode: none
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@faaa5d804fc648d0fdb28822a8e36cf7d0a6132c # v4.37.7
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@faaa5d804fc648d0fdb28822a8e36cf7d0a6132c # v4.37.7
+        with:
+          category: /language:${{ matrix.language }}
