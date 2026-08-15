@@ -20,8 +20,9 @@ export class DefensivePlanComponent {
 
   readonly spec = input.required<string>();
   readonly encounterId = input.required<number>();
-  readonly title = input('Defensive plan');
-  readonly subtitle = input('Defensive usage across top parses.');
+
+  protected readonly title = 'Defensive plan';
+  protected readonly subtitle = 'Defensive usage across top parses.';
 
   readonly busyChange = output<boolean>();
   readonly availableChange = output<boolean>();
