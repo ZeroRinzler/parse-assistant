@@ -3,7 +3,7 @@ import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
 import { ParseRanking } from '../../../core/models/wcl.models';
 import { logWarn } from '../../../core/log';
-import { Result, LoadError, ok, missing } from '../../../core/result';
+import { Result, ok, missing } from '../../../core/result';
 import { toLoadError } from '../../../core/http-load-error';
 import { round } from '../../../shared/analysis/analysis-math';
 import { TimedEvent, abilityIcons, findParseActor, toParseRankings, unwrapRankings, withRelativeS } from '../../../shared/analysis/wcl-projections';
@@ -27,7 +27,7 @@ export class NorthernSkyTransformService implements DataSource<NorthernSkyBench>
   private readonly wclApi = inject(WclApiService);
   private readonly dataFiles = inject(DataFileApiService);
 
-  async getBench(spec: string, encounterId: number, partition?: number | null): Promise<Result<NorthernSkyBench, LoadError>> {
+  async getBench(spec: string, encounterId: number, partition?: number | null): Promise<Result<NorthernSkyBench>> {
     const rulebook = await this.dataFiles.getRulebook(spec);
     if (!rulebook.ok) return rulebook;
     const abilities: ExportAbility[] = [

@@ -27,7 +27,7 @@ function bench(over: Partial<NorthernSkyBench> = {}): NorthernSkyBench {
 // The constructor effect fires an async load; a macrotask flush lets its `.then` land before assertions run.
 const settle = (): Promise<void> => new Promise(resolve => setTimeout(resolve, 0));
 
-function mount(getExport: () => Promise<Result<NorthernSkyBench, LoadError>>, copySucceeds = true) {
+function mount(getExport: () => Promise<Result<NorthernSkyBench>>, copySucceeds = true) {
   const feature = { getExport } as unknown as NorthernSkyFeatureService;
   const selection = { loadNorthernSky: () => null, saveNorthernSky: () => undefined } as unknown as SelectionStore;
   const clipboard = { copy: () => copySucceeds } as unknown as Clipboard;
@@ -89,7 +89,7 @@ describe('NorthernSkyExportComponent copyNote', () => {
     const { vm } = mount(async () => ok(bench({ abilities: POPULATED_ABILITIES })), true);
 
     await settle();
-    (vm['copyNote'] as () => void)();
+    (vm['copyNote'])();
 
     expect((vm['copied'] as () => boolean)()).toBe(true);
     expect((vm['copyFailed'] as () => boolean)()).toBe(false);
@@ -99,7 +99,7 @@ describe('NorthernSkyExportComponent copyNote', () => {
     const { vm } = mount(async () => ok(bench({ abilities: POPULATED_ABILITIES })), false);
 
     await settle();
-    (vm['copyNote'] as () => void)();
+    (vm['copyNote'])();
 
     expect((vm['copied'] as () => boolean)()).toBe(false);
     expect((vm['copyFailed'] as () => boolean)()).toBe(true);

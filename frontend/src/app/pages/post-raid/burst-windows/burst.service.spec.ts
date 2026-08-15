@@ -3,7 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
 import { BurstWindow, PlayerBurstWindow } from '../../../core/models/analysis.models';
 import { WclApiService } from '../../../core/services/wcl-api';
-import { Result, LoadError, ok, missing, transient } from '../../../core/result';
+import { Result, ok, missing, transient } from '../../../core/result';
 import { BURST_DATA_SOURCE, BurstBench } from './burst-data-source';
 import { DataSource } from '../../../core/data-source/data-source';
 import {
@@ -29,7 +29,7 @@ const ENVIRONMENTAL_ID = -7;
 describe('burstWindowStatus', () => {
   // topAvg 1000, topMin 800, stddev 100 -> bad below 700, warn below 900.
   it.each([
-    { name: 'not reached -> muted', player: 950 as number | null, notReached: true, status: 'muted', icon: 'schedule' },
+    { name: 'not reached -> muted', player: 950, notReached: true, status: 'muted', icon: 'schedule' },
     { name: 'missing player data -> muted', player: null, notReached: false, status: 'muted', icon: 'help_outline' },
     { name: 'far below min -> bad', player: 650, notReached: false, status: 'bad', icon: 'error' },
     { name: 'below avg band -> warn', player: 850, notReached: false, status: 'warn', icon: 'warning_amber' },
@@ -233,7 +233,7 @@ const wclFake = {
     dataType === 'Casts' ? [cast(SHADOW_BLADES, 11)] : [damage(SHADOW_BLADES_DAMAGE, 12, 950)],
 };
 
-function withBench(bench: Result<BurstBench, LoadError>, wcl: unknown = wclFake): BurstFeatureService {
+function withBench(bench: Result<BurstBench>, wcl: unknown = wclFake): BurstFeatureService {
   const source: DataSource<BurstBench> = { getBench: () => Promise.resolve(bench) };
   TestBed.configureTestingModule({
     providers: [

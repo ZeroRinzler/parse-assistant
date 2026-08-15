@@ -8,7 +8,7 @@ import { PerDefensiveBenchmark } from '../../../core/models/encounter.models';
 import { ComparisonWindow, WindowStatus, RangeRow } from '../../../core/models/window-comparison.models';
 import { ClipAnchor } from '../../../core/models/capture.models';
 import { logWarn } from '../../../core/log';
-import { Result, LoadError, ok } from '../../../core/result';
+import { Result, ok } from '../../../core/result';
 import { toLoadError } from '../../../core/http-load-error';
 import { holdSuggestionFindings } from '../../../shared/analysis/hold-targets';
 import { buildAuraWindows } from '../../../shared/analysis/aura-windows';
@@ -55,7 +55,7 @@ export interface DefensivePlanView {
   rows: DefensivePlanRow[];
 }
 
-const dmgOf = (event: WclEvent): number => (event.amount || 0) + (event.absorbed || 0);
+const dmgOf = (event: WclEvent): number => (event.amount ?? 0) + (event.absorbed ?? 0);
 
 const MIN_USE_SHARE_FRAC = 0.5;
 
@@ -364,7 +364,7 @@ export function buildDefensivePlanRows(bench: DefensiveBench | null): DefensiveP
       typicalUses: benchmark && benchmark.used_sample_count > 0 ? benchmark.median_uses : null,
       usedSampleCount: benchmark?.used_sample_count ?? 0,
       sampleCount: benchmark?.sample_count ?? 0,
-      firstCastS: usedByMajority ? benchmark!.avg_first_cast_s : null,
+      firstCastS: usedByMajority ? benchmark.avg_first_cast_s : null,
       windowsS,
       holds,
       rule: defensive.usage_rule ?? null,
@@ -384,7 +384,7 @@ export class DefensiveFeatureService {
     reportCode: string,
     fightId: number,
     playerId: number,
-  ): Promise<Result<DefensiveView, LoadError>> {
+  ): Promise<Result<DefensiveView>> {
     const bench = await this.source.getBench(spec, encounterId);
     if (!bench.ok) return bench;
 
@@ -426,7 +426,7 @@ export class DefensiveFeatureService {
     }
   }
 
-  async loadPlan(spec: string, encounterId: number): Promise<Result<DefensivePlanView, LoadError>> {
+  async loadPlan(spec: string, encounterId: number): Promise<Result<DefensivePlanView>> {
     const bench = await this.source.getBench(spec, encounterId);
     if (!bench.ok) return bench;
     return ok({ rows: buildDefensivePlanRows(bench.value) });

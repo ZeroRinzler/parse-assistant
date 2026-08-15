@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { Result, LoadError } from '../../../core/result';
+import { Result } from '../../../core/result';
 import { NORTHERN_SKY_DATA_SOURCE, NorthernSkyBench, NorthernSkyAbility } from './northern-sky-data-source';
 
 const MYTHIC_DIFFICULTY = 'Mythic';
@@ -57,7 +57,7 @@ export function isPanelOpen(requestedOpen: boolean, available: boolean): boolean
 export class NorthernSkyFeatureService {
   private readonly source = inject(NORTHERN_SKY_DATA_SOURCE);
 
-  getExport(spec: string, encounterId: number): Promise<Result<NorthernSkyBench, LoadError>> {
+  getExport(spec: string, encounterId: number): Promise<Result<NorthernSkyBench>> {
     return this.source.getBench(spec, encounterId);
   }
 }

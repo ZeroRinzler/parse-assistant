@@ -4,7 +4,7 @@ import { CharacterGear, WclCombatantInfo } from '../../../core/models/wcl.models
 import { EncounterGearStats } from '../../../core/models/encounter.models';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { logWarn } from '../../../core/log';
-import { Result, LoadError, ok, permanent } from '../../../core/result';
+import { Result, ok, permanent } from '../../../core/result';
 import { toLoadError } from '../../../core/http-load-error';
 import { decodeHtmlEntities, extractGear, selectCombatantInfo } from './gear-extract';
 import { talentKeyFromTree } from '../../../shared/gear/talent-key';
@@ -48,7 +48,7 @@ export function buildCharacterGear(
   names: Record<string, { id: number; name: string }>,
   code: string,
   spec?: string,
-): Result<CharacterGear, LoadError> {
+): Result<CharacterGear> {
   if (!event?.gear?.length) {
     return permanent('No combatant info in this log.', 'gear.combatant-info');
   }
@@ -112,7 +112,7 @@ export class GearFeatureService {
   async loadComparisonView(
     spec: string, encounterId: number,
     reportCode: string, fightId: number, playerId: number,
-  ): Promise<Result<GearComparisonView, LoadError>> {
+  ): Promise<Result<GearComparisonView>> {
     const bench = await this.source.getBench(spec, encounterId);
     if (!bench.ok) return bench;
     const playerGear = await this.fetchPlayerGear(reportCode, fightId, playerId, spec);
@@ -120,7 +120,7 @@ export class GearFeatureService {
     return ok(buildGearView(playerGear.value, benchToStats(bench.value)));
   }
 
-  async loadBenchView(spec: string, encounterId: number): Promise<Result<GearComparisonView, LoadError>> {
+  async loadBenchView(spec: string, encounterId: number): Promise<Result<GearComparisonView>> {
     const bench = await this.source.getBench(spec, encounterId);
     if (!bench.ok) return bench;
     return ok(buildBenchGearView(benchToStats(bench.value)));
@@ -129,7 +129,7 @@ export class GearFeatureService {
   // A WCL fetch failure becomes a mapped LoadError, never a silent fallback.
   private async fetchPlayerGear(
     reportCode: string, fightId: number, playerId: number, spec: string,
-  ): Promise<Result<CharacterGear, LoadError>> {
+  ): Promise<Result<CharacterGear>> {
     try {
       const event = selectCombatantInfo(await this.wclApi.getCombatantInfo(reportCode, fightId, playerId), playerId);
       let names: Record<string, { id: number; name: string }> = {};

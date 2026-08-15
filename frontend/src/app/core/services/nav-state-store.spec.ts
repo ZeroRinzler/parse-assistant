@@ -48,7 +48,7 @@ describe('NavStateStore', () => {
       throw new Error(STORAGE_FAILURE);
     });
 
-    expect(() => new NavStateStore().saveCollapsed(true)).not.toThrow();
+    expect(() => { new NavStateStore().saveCollapsed(true); }).not.toThrow();
     expect(warn).toHaveBeenCalled();
   });
 

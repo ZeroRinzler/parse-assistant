@@ -23,7 +23,7 @@ function scanWindows(
 ): ParseWindow[] {
   return findParseWindows({
     damage: timed(damageEvents, 0), fightLenS,
-    timings: overrides.timings ?? [], casts: timed(overrides.casts ?? [], 0), abilityNames: overrides.abilityNames ?? new Map(),
+    timings: overrides.timings ?? [], casts: timed(overrides.casts ?? [], 0), abilityNames: overrides.abilityNames ?? new Map<number, string>(),
   });
 }
 function uniformDamage(spellId: number, seconds: number, amount: number): WclEvent[] {

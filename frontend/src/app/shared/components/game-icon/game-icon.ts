@@ -10,21 +10,7 @@ export type GameIconKind = 'spell' | 'item';
   selector: 'wl-game-icon',
   host: { class: 'inline-flex items-center' },
   imports: [NgOptimizedImage],
-  template: `
-    <a
-      [href]="wowheadUrl()"
-      target="_blank"
-      rel="noopener"
-      class="inline-flex items-center gap-1.5 no-underline hover:brightness-125">
-      @if (iconUrl(); as src) {
-        @if (failedSrc() !== src) {
-          <img [ngSrc]="src" [width]="18" [height]="18" alt="" class="rounded-sm" (error)="failedSrc.set(src)" />
-        }
-      }
-      <!-- text-sm keeps names the same size as the no-icon fallback names next to this component. -->
-      <span class="text-sm">{{ name() }}</span>
-    </a>
-  `,
+  templateUrl: './game-icon.html',
 })
 export class GameIconComponent {
   constructor() {

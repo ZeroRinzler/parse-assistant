@@ -17,14 +17,14 @@ function err<E>(error: E): Result<never, E> {
   return { ok: false, error };
 }
 
-export function missing(message: string): Result<never, LoadError> {
+export function missing(message: string): Result<never> {
   return err({ kind: 'missing', message });
 }
 
-export function transient(message: string): Result<never, LoadError> {
+export function transient(message: string): Result<never> {
   return err({ kind: 'transient', message });
 }
 
-export function permanent(message: string, id: string, context?: unknown): Result<never, LoadError> {
+export function permanent(message: string, id: string, context?: unknown): Result<never> {
   return err({ kind: 'permanent', message, id, context });
 }

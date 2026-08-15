@@ -4,7 +4,7 @@ import { AnalysisFinding, FindingOccurrence, FindingTimeline } from '../../../co
 import { PerCdBenchmark } from '../../../core/models/encounter.models';
 import { RulebookCooldown } from '../../../core/models/rulebook.models';
 import { logWarn } from '../../../core/log';
-import { Result, LoadError, ok, permanent } from '../../../core/result';
+import { Result, ok, permanent } from '../../../core/result';
 import { toLoadError } from '../../../core/http-load-error';
 import { holdSuggestionFindings } from '../../../shared/analysis/hold-targets';
 import {
@@ -402,14 +402,14 @@ export function buildCdPlan(
       name: cd.name,
       spellId,
       icon: ability?.icon ?? '',
-      firstCastS: usedByMajority ? cdBench!.avg_first_cast_s : null,
+      firstCastS: usedByMajority ? cdBench.avg_first_cast_s : null,
       // Typical uses is the median over the parses that pressed it at all, so any adoption (not just a majority) yields a number.
       typicalUses: cdBench && cdBench.used_sample_count > 0 ? cdBench.median_uses : null,
       usedSampleCount: cdBench?.used_sample_count ?? 0,
       sampleCount: cdBench?.sample_count ?? 0,
-      usesPerMin: usedByMajority ? cdBench!.uses_per_min.avg : null,
+      usesPerMin: usedByMajority ? cdBench.uses_per_min.avg : null,
       bloodlust: (cdBench?.bl_pct ?? 0) >= BL_CONSENSUS_PCT,
-      bloodlustPct: (cdBench?.bl_pct ?? 0) >= BL_CONSENSUS_PCT ? cdBench!.bl_pct : null,
+      bloodlustPct: (cdBench?.bl_pct ?? 0) >= BL_CONSENSUS_PCT ? cdBench.bl_pct : null,
       holds,
       rule: cd.usage_rule ?? null,
     };
@@ -423,7 +423,7 @@ export class RotationFeatureService {
 
   async loadPlayerView(
     spec: string, encounterId: number, reportCode: string, fightId: number, playerId: number,
-  ): Promise<Result<RotationPlayerView, LoadError>> {
+  ): Promise<Result<RotationPlayerView>> {
     const bench = await this.source.getBench(spec, encounterId);
     if (!bench.ok) return bench;
 
@@ -473,7 +473,7 @@ export class RotationFeatureService {
     }
   }
 
-  async loadPlanView(spec: string, encounterId: number): Promise<Result<RotationPlanView, LoadError>> {
+  async loadPlanView(spec: string, encounterId: number): Promise<Result<RotationPlanView>> {
     const bench = await this.source.getBench(spec, encounterId);
     if (!bench.ok) return bench;
     return ok({ rows: buildCdPlan(bench.value.major_cooldowns, bench.value.per_cd_benchmarks, bench.value.ability_icons) });

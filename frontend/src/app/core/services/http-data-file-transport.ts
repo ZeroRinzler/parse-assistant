@@ -3,7 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { DataFileTransport } from './data-file-transport';
 import { logWarn } from '../log';
-import { Result, LoadError, ok } from '../result';
+import { Result, ok } from '../result';
 import { toLoadError } from '../http-load-error';
 import { environment } from '../../../environments/environment';
 
@@ -15,7 +15,7 @@ export class HttpDataFileTransport implements DataFileTransport {
   // Deployed builds set an absolute `dataBaseHref` pointing at the single shared gh-pages-root data copy; empty (development) resolves relative to `document.baseURI`.
   private readonly base = new URL(environment.dataBaseHref || 'data/specs/', document.baseURI).href;
 
-  async readJson<T>(relPath: string): Promise<Result<T, LoadError>> {
+  async readJson<T>(relPath: string): Promise<Result<T>> {
     try {
       return ok(await firstValueFrom(this.http.get<T>(`${this.base}${relPath}`)));
     } catch (cause) {

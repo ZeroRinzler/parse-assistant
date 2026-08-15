@@ -1,7 +1,7 @@
 // A tailored file is fresh when the ingest version AND the exact top-parse set that produced it are unchanged, folded into one short hash.
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils.js';
-import { type Result, type LoadError } from '../core/result';
+import { type Result } from '../core/result';
 
 /** Satisfied by the shared `toParseRankings` selection's rows, so the signature keys on exactly the parses that feed the transforms. */
 export interface SignatureRanking {
@@ -82,7 +82,7 @@ export function stampSignature<T extends object>(data: T, signature: string, ver
 /** Burst stamp: writes `source_signature` only when no slice failed (a `missing` slice is legitimate empty data), so a transient/permanent failure leaves it unstamped and the next run redoes the encounter. */
 export function stampBurstFile<T extends object>(
   data: T, signature: string, version: number, inaccessibleParses: string[],
-  sliceResults: readonly Result<unknown, LoadError>[],
+  sliceResults: readonly Result<unknown>[],
 ): T & SignedFile {
   const complete = sliceResults.every(result => result.ok || result.error.kind === 'missing');
   const versioned: T & SignedFile = { ...data, ingest_version: version, inaccessible_parses: inaccessibleParses };

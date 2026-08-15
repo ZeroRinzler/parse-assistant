@@ -169,12 +169,12 @@ export class LiveCaptureFeatureService {
       this.mimeType = mimeFor(profile);
       this.sourceLabel.set(track.label || 'your screen');
       // Sharing stopped from the browser UI (or the window closed) ends capture cleanly.
-      track.addEventListener('ended', () => this.stopRecording());
+      track.addEventListener('ended', () => { this.stopRecording(); });
       this.isCapturing.set(true);
       this.cycleSegment();
     } catch (err) {
       // Tear down any half-started capture (an unsupported recorder throws after the stream opens) so the toggle never sticks on "Recording".
-      stream?.getTracks().forEach(track => track.stop());
+      stream?.getTracks().forEach(track => { track.stop(); });
       this.stream = null;
       this.isCapturing.set(false);
       this.sourceLabel.set('');
@@ -189,7 +189,7 @@ export class LiveCaptureFeatureService {
   /** Stop recording and release the display stream; the buffer is kept so covered fights stay clip-able. */
   stopRecording(): void {
     this.isCapturing.set(false);
-    this.stream?.getTracks().forEach(track => track.stop());
+    this.stream?.getTracks().forEach(track => { track.stop(); });
     this.stream = null;
     this.sourceLabel.set('');
   }
@@ -244,7 +244,7 @@ export class LiveCaptureFeatureService {
       logWarn(`LiveCaptureFeatureService.openClip ${anchor.key}`, 'no correlation context (report not resolved)');
       return;
     }
-    this.handle.set(this.resolveHandle(ctx.reportCode, ctx.fight.id, this.clipWindowFor(anchor)));
+    this.handle.set(this.resolveHandle(ctx.reportCode, ctx.fight.id, this.clipWindowFor(anchor, ctx)));
   }
 
   download(): void {
@@ -295,8 +295,8 @@ export class LiveCaptureFeatureService {
     this.playbackFailed.set(false);
   }
 
-  private clipWindowFor(anchor: ClipAnchor): ClipWindow {
-    const { reportStartTime, fight } = this.ctx()!;
+  private clipWindowFor(anchor: ClipAnchor, ctx: { reportStartTime: number; fight: WclFight }): ClipWindow {
+    const { reportStartTime, fight } = ctx;
     // A window plays its exact span; a point-in-time cast gets pre/post roll for context.
     const roll: ClipRoll = anchor.windowLengthS > 0 ? NO_CLIP_ROLL : POINT_CLIP_ROLL;
     const [window] = buildClipWindows(reportStartTime, fight.startTime, [anchor], roll);
@@ -333,7 +333,7 @@ export class LiveCaptureFeatureService {
     anchor.download = filename;
     anchor.click();
     // Revoking synchronously can invalidate the URL before the browser reads the blob.
-    setTimeout(() => URL.revokeObjectURL(url), DOWNLOAD_URL_TTL_MS);
+    setTimeout(() => { URL.revokeObjectURL(url); }, DOWNLOAD_URL_TTL_MS);
   }
 }
 
@@ -371,7 +371,7 @@ export async function remuxSegments(blobs: Blob[]): Promise<Blob> {
     const track = await new Input({ formats: [WEBM], source: new BlobSource(blob) }).getPrimaryVideoTrack();
     if (!track) continue;
     if (!source) {
-      source = new EncodedVideoPacketSource(track.codec ?? 'vp8');
+      source = new EncodedVideoPacketSource((await track.getCodec()) ?? 'vp8');
       output.addVideoTrack(source);
       await output.start();
       const config = await track.getDecoderConfig();
@@ -397,14 +397,14 @@ export function releaseElement(video: HTMLVideoElement): void {
 }
 
 function onceOpen(source: MediaSource): Promise<void> {
-  return new Promise(resolve => source.addEventListener('sourceopen', () => resolve(), { once: true }));
+  return new Promise(resolve => { source.addEventListener('sourceopen', () => { resolve(); }, { once: true }); });
 }
 
 /** Append one buffer and resolve on `updateend` (SourceBuffer appends are async). */
 function appendAndWait(buffer: SourceBuffer, data: ArrayBuffer): Promise<void> {
   return new Promise((resolve, reject) => {
-    buffer.addEventListener('updateend', () => resolve(), { once: true });
-    buffer.addEventListener('error', () => reject(new Error('append failed')), { once: true });
+    buffer.addEventListener('updateend', () => { resolve(); }, { once: true });
+    buffer.addEventListener('error', () => { reject(new Error('append failed')); }, { once: true });
     buffer.appendBuffer(data);
   });
 }

@@ -39,7 +39,7 @@ export function orderSpecsByVersion(
       (a, b) =>
         group(a) - group(b) ||
         priority(a) - priority(b) ||
-        shuffleKey.get(a)! - shuffleKey.get(b)!,
+        (shuffleKey.get(a) ?? 0) - (shuffleKey.get(b) ?? 0),
     )
     .map(entry => entry.spec);
 }

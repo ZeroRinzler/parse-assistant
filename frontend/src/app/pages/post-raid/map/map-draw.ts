@@ -35,7 +35,7 @@ function sameMap(a: PosSample, b: PosSample): boolean {
 /** Returns null when `t` is more than `tolerance` seconds past either end of the timeline. */
 export function positionAt(timeline: ActorTimeline | undefined, t: number, tolerance = 3): PosSample | null {
   const samples = timeline?.samples;
-  if (!samples || !samples.length) return null;
+  if (!samples?.length) return null;
   if (t <= samples[0].t) return t < samples[0].t - tolerance ? null : { ...samples[0], t };
   const last = samples[samples.length - 1];
   if (t >= last.t) return t > last.t + tolerance ? null : { ...last, t };
@@ -85,7 +85,7 @@ export function rowsToTimeline(id: number, rows: PosRow[]): ActorTimeline {
     x: x * RAW_TO_YARDS,
     y: y * RAW_TO_YARDS,
     facing: facing == null ? undefined : facing * FACING_TO_RAD,
-    mapID: mapID == null ? undefined : mapID,
+    mapID: mapID ?? undefined,
   }));
   return { id, samples };
 }
@@ -96,7 +96,7 @@ export function playerRowsToTimeline(id: number, rows: PlayerPosRow[]): ActorTim
     t,
     x: x * RAW_TO_YARDS,
     y: y * RAW_TO_YARDS,
-    mapID: mapID == null ? undefined : mapID,
+    mapID: mapID ?? undefined,
   }));
   return { id, samples };
 }

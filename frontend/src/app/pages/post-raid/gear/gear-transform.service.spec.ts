@@ -228,7 +228,7 @@ function reportFor(playerId: number, playerName: string, fightId: number) {
 }
 
 const combatantInfo = (playerId: number): WclCombatantInfo => {
-  const gear: WclGearItem[] = Array(16).fill({});
+  const gear = Array<WclGearItem>(16).fill({});
   gear[12] = { id: 100, name: 'A', icon: 't.jpg' };
   gear[15] = { id: 1, name: 'Wep', permanentEnchant: '8041' };
   return { sourceID: playerId, gear, talentTree: [{ nodeID: 65, id: 650, rank: 1 }] };

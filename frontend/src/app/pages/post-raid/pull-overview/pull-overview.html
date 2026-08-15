@@ -22,12 +22,6 @@
         <!-- Indented past the 20px icon column (+ gap) so it aligns with the row text, like the gear card's Talents heading. -->
         <div class="text-[10px] uppercase tracking-widest text-[var(--muted)] mb-2 pl-[31px]">Deaths &amp; wipe</div>
 
-        @if (!v.deaths.length) {
-          <div class="flex items-center gap-2.5 py-2.5 border-t border-[var(--border)]">
-            <mat-icon class="icon-18 badge-success">check_circle</mat-icon>
-            <span class="text-[13px] text-[var(--text)]">No deaths - {{ v.result === 'kill' ? 'clean pull' : 'you survived' }}</span>
-          </div>
-        }
 
         @for (d of v.deaths; track d.index) {
           <div class="grid grid-cols-[20px_minmax(0,1fr)_auto_auto] gap-[11px] items-center py-2.5 border-t border-[var(--border)]">
@@ -51,6 +45,11 @@
                 </button>
               }
             </div>
+          </div>
+        } @empty {
+          <div class="flex items-center gap-2.5 py-2.5 border-t border-[var(--border)]">
+            <mat-icon class="icon-18 badge-success">check_circle</mat-icon>
+            <span class="text-[13px] text-[var(--text)]">No deaths - {{ v.result === 'kill' ? 'clean pull' : 'you survived' }}</span>
           </div>
         }
 

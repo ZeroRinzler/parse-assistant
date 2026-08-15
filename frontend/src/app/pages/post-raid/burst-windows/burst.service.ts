@@ -5,7 +5,7 @@ import { WclEvent } from '../../../core/models/wcl.models';
 import { ComparisonWindow, WindowStatus, RangeRow } from '../../../core/models/window-comparison.models';
 import { ClipAnchor } from '../../../core/models/capture.models';
 import { logWarn } from '../../../core/log';
-import { Result, LoadError, ok } from '../../../core/result';
+import { Result, ok } from '../../../core/result';
 import { toLoadError } from '../../../core/http-load-error';
 import { TimedEvent, normalizeAbilityId, relativeS, windowSpells, withRelativeS } from '../../../shared/analysis/wcl-projections';
 import { BURST_DATA_SOURCE } from './burst-data-source';
@@ -123,7 +123,7 @@ export function buildBurstView(
 }
 
 function eventDamage(event: WclEvent): number {
-  return (event.amount || 0) + (event.absorbed || 0);
+  return (event.amount ?? 0) + (event.absorbed ?? 0);
 }
 
 // Casts are attributed by ability NAME, not spell id, because a damage event's abilityGameID often differs.
@@ -146,7 +146,7 @@ function playerWindowAggregate(
   const castsByName = new Map<string, number>();
   for (const event of casts) {
     if (inWindow(event.atS)) {
-      const name = nameOf(event.abilityGameID!);
+      const name = nameOf(event.abilityGameID);
       castsByName.set(name, (castsByName.get(name) ?? 0) + 1);
     }
   }
@@ -180,7 +180,7 @@ export class BurstFeatureService {
 
   async loadPlayerView(
     spec: string, encounterId: number, reportCode: string, fightId: number, playerId: number,
-  ): Promise<Result<BurstView, LoadError>> {
+  ): Promise<Result<BurstView>> {
     const bench = await this.source.getBench(spec, encounterId);
     if (!bench.ok) return bench;
 
@@ -209,7 +209,7 @@ export class BurstFeatureService {
     }
   }
 
-  async loadBenchView(spec: string, encounterId: number): Promise<Result<BurstView, LoadError>> {
+  async loadBenchView(spec: string, encounterId: number): Promise<Result<BurstView>> {
     const bench = await this.source.getBench(spec, encounterId);
     if (!bench.ok) return bench;
     return ok(buildBurstView(bench.value.windows, [], Number.POSITIVE_INFINITY, bench.value.cd_spell_ids, bench.value.ability_icons, true));

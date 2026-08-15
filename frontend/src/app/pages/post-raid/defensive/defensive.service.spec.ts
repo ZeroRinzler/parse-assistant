@@ -18,7 +18,7 @@ import { CLOAK_OF_SHADOWS } from '../../../../testing/spell-ids';
 import {
   WCL_MELEE_EVENT_ABILITY_ID, WOW_AUTO_ATTACK_SPELL_ID, WCL_SYNTHETIC_SOURCE_FALLBACK_ID, withRelativeS,
 } from '../../../shared/analysis/wcl-projections';
-import { Result, LoadError, ok, missing, transient } from '../../../core/result';
+import { Result, ok, missing, transient } from '../../../core/result';
 
 /** Fixture events build against a fight-start of 0, so stamping is a pass-through to seconds. */
 const timed = withRelativeS;
@@ -257,7 +257,7 @@ describe('defensiveWindowStatus', () => {
 
   it.each([
     // Not reached / no player data -> muted, no annotation (coverage irrelevant).
-    { name: 'not reached -> muted', player: 950 as number | null, notReached: true, covered: true, status: 'muted', icon: 'schedule', note: '' },
+    { name: 'not reached -> muted', player: 950, notReached: true, covered: true, status: 'muted', icon: 'schedule', note: '' },
     { name: 'missing -> muted', player: null, notReached: false, covered: true, status: 'muted', icon: 'help_outline', note: '' },
     // Within/below the band -> good, whether or not the defensive was pressed.
     { name: 'within band, covered -> good (covered)', player: WITHIN_BAND, notReached: false, covered: true, status: 'good', icon: 'check_circle', note: 'covered' },
@@ -481,7 +481,7 @@ function fullBench(): DefensiveBench {
   };
 }
 
-function serviceWith(bench: Result<DefensiveBench, LoadError>, wcl: Record<string, unknown> = {}): DefensiveFeatureService {
+function serviceWith(bench: Result<DefensiveBench>, wcl: Record<string, unknown> = {}): DefensiveFeatureService {
   const source: DataSource<DefensiveBench> = { getBench: () => Promise.resolve(bench) };
   TestBed.configureTestingModule({
     providers: [

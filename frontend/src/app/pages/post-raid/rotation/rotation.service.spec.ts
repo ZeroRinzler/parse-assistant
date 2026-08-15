@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { WclTransportError } from '../../../core/services/wcl-transport';
-import { Result, LoadError, ok, missing, transient } from '../../../core/result';
+import { Result, ok, missing, transient } from '../../../core/result';
 import { AnalysisFinding } from '../../../core/models/analysis.models';
 import { PerCdBenchmark } from '../../../core/models/encounter.models';
 import { RulebookRule, RulebookCooldown, CastWithoutPriorCondition } from '../../../core/models/rulebook.models';
@@ -542,7 +542,7 @@ const WORKING_WCL = {
 // Status a 5xx WCL outage raises; `toLoadError` maps it to a transient error.
 const WCL_UNAVAILABLE_STATUS = 503;
 
-function withSource(bench: Result<RotationBench, LoadError>, wcl: unknown = WORKING_WCL): RotationFeatureService {
+function withSource(bench: Result<RotationBench>, wcl: unknown = WORKING_WCL): RotationFeatureService {
   const source: DataSource<RotationBench> = { getBench: () => Promise.resolve(bench) };
   TestBed.configureTestingModule({
     providers: [

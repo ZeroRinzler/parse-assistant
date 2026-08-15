@@ -5,8 +5,7 @@ import {
   inject,
 } from '@angular/core';
 import { provideRouter, withComponentInputBinding } from '@angular/router';
-import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
-import { provideHttpClient, withFetch, withInterceptors, withInterceptorsFromDi } from '@angular/common/http';
+import { provideHttpClient, withInterceptors, withInterceptorsFromDi } from '@angular/common/http';
 import { MatIconRegistry } from '@angular/material/icon';
 import { routes } from './app.routes';
 import { WCL_TRANSPORT } from './core/services/wcl-transport';
@@ -21,9 +20,8 @@ export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
     provideRouter(routes, withComponentInputBinding()),
-    provideAnimationsAsync(),
     // withInterceptorsFromDi() admits the DI-registered ng-http-caching interceptor into the same chain.
-    provideHttpClient(withFetch(), withInterceptors([retryTransientInterceptor]), withInterceptorsFromDi()),
+    provideHttpClient(withInterceptors([retryTransientInterceptor]), withInterceptorsFromDi()),
     provideWclCaching(),
     provideEnvironmentInitializer(() => {
       inject(MatIconRegistry).setDefaultFontSetClass('material-symbols-outlined');

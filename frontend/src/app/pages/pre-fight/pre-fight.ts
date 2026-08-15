@@ -104,7 +104,11 @@ export class PreFightComponent implements OnInit {
     });
   }
 
-  async ngOnInit(): Promise<void> {
+  ngOnInit(): void {
+    void this._init();
+  }
+
+  private async _init(): Promise<void> {
     this.loading.set(true);
     try {
       const specs = await this.encounterSelection.getSpecs();
@@ -174,7 +178,7 @@ export class PreFightComponent implements OnInit {
           this.encControl.disable({ emitEvent: false });
         }
       },
-      settled: () => this.loadingEncounters.set(false),
+      settled: () => { this.loadingEncounters.set(false); },
     });
   }
 
@@ -183,7 +187,7 @@ export class PreFightComponent implements OnInit {
     this.error.set(error.kind === 'missing' ? null : error);
   }
 
-  protected async onEncChange(): Promise<void> {
+  protected onEncChange(): void {
     const encId = this.encControl.value;
     const spec = this.specControl.value;
     this.mapFeature.clear();

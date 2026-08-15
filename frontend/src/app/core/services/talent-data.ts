@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { SpecTalents } from '../models/talent.models';
-import { Result, LoadError, ok, missing } from '../result';
+import { Result, ok, missing } from '../result';
 import { toLoadError } from '../http-load-error';
 import { logWarn } from '../log';
 
@@ -40,7 +40,7 @@ export function indexTalentTrees(trees: RaidbotsTree[]): Map<string, SpecTalents
 export class TalentDataService {
   private readonly http = inject(HttpClient);
 
-  async getTalents(spec: string): Promise<Result<SpecTalents, LoadError>> {
+  async getTalents(spec: string): Promise<Result<SpecTalents>> {
     try {
       const trees = await firstValueFrom(this.http.get<RaidbotsTree[]>(DUMP_URL));
       const talents = indexTalentTrees(trees).get(spec);

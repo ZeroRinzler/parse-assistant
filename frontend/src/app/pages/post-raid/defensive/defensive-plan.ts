@@ -53,7 +53,7 @@ export class DefensivePlanComponent {
             this._items.set([]);
           }
         },
-        settled: () => this.busyChange.emit(false),
+        settled: () => { this.busyChange.emit(false); },
       });
     });
   }

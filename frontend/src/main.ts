@@ -4,4 +4,4 @@ import { App } from './app/app';
 import { logWarn } from './app/core/log';
 
 bootstrapApplication(App, appConfig)
-  .catch((err) => logWarn('bootstrapApplication', err));
+  .catch((err: unknown) => { logWarn('bootstrapApplication', err); });

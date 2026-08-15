@@ -580,12 +580,14 @@ function evaluateBoundedPerCast(
   if (!exceedsTolerance(violations.length, judged.values.length, band)) return null;
   const past = (value: number) => judging.primary === 'below' ? value > hi : value < lo;
   // A pull with both a near-side and a far-side violation keeps the primary phrasing (and its remedy) live, since the authored action still answers those casts.
-  const farSide = judging.twoSided && judged.farPhrase != null && violations.every(({ value }) => past(value));
+  const { farPhrase, farAdvice, farLabel } = judged;
+  const farSide = judging.twoSided && farPhrase != null && farAdvice != null && farLabel != null
+    && violations.every(({ value }) => past(value));
   const phrase = farSide
-    ? judged.farPhrase!(judged.scale.format(farLimit))
+    ? farPhrase(judged.scale.format(farLimit))
     : judged.phrase(judged.scale.format(nearLimit));
-  const advice = farSide ? judged.farAdvice! : judged.advice(judged.scale.format(nearLimit));
-  const label = farSide ? judged.farLabel!(judged.scale.format(farLimit)) : judged.label(judged.scale.format(nearLimit));
+  const advice = farSide ? farAdvice : judged.advice(judged.scale.format(nearLimit));
+  const label = farSide ? farLabel(judged.scale.format(farLimit)) : judged.label(judged.scale.format(nearLimit));
   return {
     severity, category: 'rule_violation',
     timestamp_s: round(violations[0].timeS, 3),

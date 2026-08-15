@@ -81,7 +81,7 @@ export async function getRankingsLite(
   const { rows } = await rankingsFromPartition(partitionIds, async partition => {
     const variables: RankingsQueryVars = { encounterID: encounterId, className, specName };
     if (partition != null) variables.partition = partition;
-    const data = await client.query<{ worldData: { encounter: { characterRankings: WclRankingsBlob } } }, RankingsQueryVars>(RANKINGS_Q, variables);
+    const data = await client.query<{ worldData: { encounter: { characterRankings: WclRankingsBlob } } }>(RANKINGS_Q, variables);
     return toParseRankings(unwrapRankings(data.worldData.encounter.characterRankings), count);
   });
   return rows;

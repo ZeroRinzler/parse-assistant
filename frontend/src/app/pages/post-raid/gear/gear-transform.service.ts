@@ -3,7 +3,7 @@ import { WclApiService } from '../../../core/services/wcl-api';
 import { CharacterGear, ParseRanking } from '../../../core/models/wcl.models';
 import { EncounterGearStats } from '../../../core/models/encounter.models';
 import { logWarn } from '../../../core/log';
-import { Result, LoadError, ok, missing } from '../../../core/result';
+import { Result, ok, missing } from '../../../core/result';
 import { toLoadError } from '../../../core/http-load-error';
 import { TRINKET_SLOTS, decodeHtmlEntities, extractGear, selectCombatantInfo } from './gear-extract';
 import { talentKeyFromTree } from '../../../shared/gear/talent-key';
@@ -147,7 +147,7 @@ export function aggregateParseGear(parses: ParseGear[]): EncounterGearStats {
 }
 
 export function withTalentDiffs(
-  builds: EncounterGearStats['talent_builds'], talents: Result<SpecTalents, LoadError>,
+  builds: EncounterGearStats['talent_builds'], talents: Result<SpecTalents>,
 ): EncounterGearStats['talent_builds'] {
   if (!talents.ok || builds.length < 2) return builds;
   const baselineKey = builds[0].key;
@@ -159,7 +159,7 @@ export class GearTransformService implements DataSource<GearBench> {
   private readonly wclApi = inject(WclApiService);
   private readonly talentData = inject(TalentDataService);
 
-  async getBench(spec: string, encounterId: number, partition?: number | null): Promise<Result<GearBench, LoadError>> {
+  async getBench(spec: string, encounterId: number, partition?: number | null): Promise<Result<GearBench>> {
     try {
       const rankings = toParseRankings(unwrapRankings(await this.wclApi.getRankings(spec, encounterId, partition)), CANDIDATE_POOL_COUNT);
       if (!rankings.length) return missing('Not yet ingested.');

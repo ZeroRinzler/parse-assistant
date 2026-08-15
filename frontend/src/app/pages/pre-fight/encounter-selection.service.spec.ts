@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { DataFileApiService } from '../../core/services/data-file-api';
 import { EncounterEntry, SpecEntry } from '../../core/models/encounter.models';
-import { Result, LoadError, ok, transient } from '../../core/result';
+import { Result, ok, transient } from '../../core/result';
 import { EncounterSelectionService, benchedEncounters } from './encounter-selection.service';
 
 const SPEC = 'SubtletyRogue';
@@ -30,12 +30,12 @@ describe('benchedEncounters', () => {
 
 /** Partial `DataFileApiService` fake: the service only calls `getSpecs` / `getEncounters`. */
 function fakeFiles(
-  specs: Result<SpecEntry[], LoadError>, encounters: Result<EncounterEntry[], LoadError>,
+  specs: Result<SpecEntry[]>, encounters: Result<EncounterEntry[]>,
 ): { files: DataFileApiService; encounterCalls: string[] } {
   const encounterCalls: string[] = [];
   const files = {
-    getSpecs: (): Promise<Result<SpecEntry[], LoadError>> => Promise.resolve(specs),
-    getEncounters: (spec: string): Promise<Result<EncounterEntry[], LoadError>> => {
+    getSpecs: (): Promise<Result<SpecEntry[]>> => Promise.resolve(specs),
+    getEncounters: (spec: string): Promise<Result<EncounterEntry[]>> => {
       encounterCalls.push(spec);
       return Promise.resolve(encounters);
     },
@@ -43,7 +43,7 @@ function fakeFiles(
   return { files, encounterCalls };
 }
 
-function withFiles(specs: Result<SpecEntry[], LoadError>, encounters: Result<EncounterEntry[], LoadError>): {
+function withFiles(specs: Result<SpecEntry[]>, encounters: Result<EncounterEntry[]>): {
   service: EncounterSelectionService; encounterCalls: string[];
 } {
   const { files, encounterCalls } = fakeFiles(specs, encounters);

@@ -27,7 +27,7 @@ export class SelectionStore {
   }
 
   loadPostRaid(): PostRaidSelection | null {
-    return this._load<PostRaidSelection>(POST_RAID_KEY, 'SelectionStore.loadPostRaid');
+    return this._load(POST_RAID_KEY, 'SelectionStore.loadPostRaid') as PostRaidSelection | null;
   }
 
   savePreFight(value: PreFightSelection): void {
@@ -35,7 +35,7 @@ export class SelectionStore {
   }
 
   loadPreFight(): PreFightSelection | null {
-    return this._load<PreFightSelection>(PRE_FIGHT_KEY, 'SelectionStore.loadPreFight');
+    return this._load(PRE_FIGHT_KEY, 'SelectionStore.loadPreFight') as PreFightSelection | null;
   }
 
   saveNorthernSky(value: NorthernSkyExportSelection): void {
@@ -43,7 +43,7 @@ export class SelectionStore {
   }
 
   loadNorthernSky(): NorthernSkyExportSelection | null {
-    return this._load<NorthernSkyExportSelection>(NORTHERN_SKY_KEY, 'SelectionStore.loadNorthernSky');
+    return this._load(NORTHERN_SKY_KEY, 'SelectionStore.loadNorthernSky') as NorthernSkyExportSelection | null;
   }
 
   private _save(key: string, value: unknown, context: string): void {
@@ -54,11 +54,11 @@ export class SelectionStore {
     }
   }
 
-  private _load<TValue>(key: string, context: string): TValue | null {
+  private _load(key: string, context: string): unknown {
     try {
       const stored = localStorage.getItem(key);
       if (!stored) return null;
-      return JSON.parse(stored) as TValue;
+      return JSON.parse(stored) as unknown;
     } catch (err) {
       logWarn(context, err);
       return null;

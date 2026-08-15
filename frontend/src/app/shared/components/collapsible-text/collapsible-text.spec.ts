@@ -10,9 +10,9 @@ describe('CollapsibleTextComponent', () => {
 
   it('toggle() flips the expanded state', () => {
     const { vm } = mountVm(CollapsibleTextComponent);
-    (vm['toggle'] as () => void)();
+    (vm['toggle'])();
     expect((vm['expanded'] as () => boolean)()).toBe(true);
-    (vm['toggle'] as () => void)();
+    (vm['toggle'])();
     expect((vm['expanded'] as () => boolean)()).toBe(false);
   });
 });

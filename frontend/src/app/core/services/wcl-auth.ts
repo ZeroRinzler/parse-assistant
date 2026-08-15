@@ -53,7 +53,8 @@ export class WclAuthService {
       throw new WclTransportError('WCL token response carried no access_token.', 0);
     }
     this._token = accessToken;
-    this._expiry = Date.now() + (data.expires_in || 3600) * 1000;
+    const expiresInS = data.expires_in && data.expires_in > 0 ? data.expires_in : 3600;
+    this._expiry = Date.now() + expiresInS * 1000;
     return this._token;
   }
 

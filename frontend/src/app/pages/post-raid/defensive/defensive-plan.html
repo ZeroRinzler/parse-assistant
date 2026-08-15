@@ -46,11 +46,10 @@
           </div>
           <div class="flex flex-wrap items-baseline gap-1.5 md:justify-end">
             <span class="font-mono text-[10px] uppercase tracking-[0.5px] text-[var(--muted)]">Holds</span>
-            @if (defensive.holds.length) {
               @for (hold of defensive.holds; track hold.castIndex) {
                 <span class="font-mono text-[13px] text-[var(--accent)] bg-[var(--surface-alt)] border border-[var(--border)] rounded-[4px] px-1.5 py-px whitespace-nowrap tabular-nums">{{ hold.targetS | formatDuration }}</span>
               }
-            } @else {
+            @empty {
               <span class="font-mono text-[12.5px] text-[var(--muted)]">None</span>
             }
           </div>

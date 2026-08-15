@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { DataFileTransport } from '../core/services/data-file-transport';
-import { Result, LoadError, ok, permanent } from '../core/result';
+import { Result, ok, permanent } from '../core/result';
 import { logWarn } from '../core/log';
 import { toLoadError } from '../core/http-load-error';
 import { INGEST_VERSION } from './ingest-version';
@@ -23,7 +23,7 @@ function fileUrl(relPath: string): string {
 export class IngestHttpDataFileTransport implements DataFileTransport {
   private readonly http = inject(HttpClient);
 
-  async readJson<T>(relPath: string): Promise<Result<T, LoadError>> {
+  async readJson<T>(relPath: string): Promise<Result<T>> {
     let parsed: unknown;
     try {
       parsed = await firstValueFrom(this.http.get<unknown>(fileUrl(relPath)));

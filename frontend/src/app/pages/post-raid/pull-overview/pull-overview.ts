@@ -58,7 +58,7 @@ export class PullOverviewComponent {
             this._view.set(null);
           }
         },
-        settled: () => this.busyChange.emit(false),
+        settled: () => { this.busyChange.emit(false); },
       });
     });
   }

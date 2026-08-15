@@ -94,7 +94,7 @@ describe('WindowComparisonComponent selection', () => {
   it('activates a muted window on select so its top-parse breakdown is visible', () => {
     const windows = [win({ playerPct: 80, topAvg: 100 }), win({}, 'muted')];
     const { vm } = mountVm(WindowComparisonComponent, { windows });
-    (vm['select'] as (i: number) => void)(1);
+    (vm['select'])(1);
     expect((vm['activeIndex'] as () => number)()).toBe(1);
   });
 
@@ -102,7 +102,7 @@ describe('WindowComparisonComponent selection', () => {
     const windows = [win({ playerPct: 40, topAvg: 100 }), win({ playerPct: 95, topAvg: 100 })];
     const { vm } = mountVm(WindowComparisonComponent, { windows });
     expect((vm['activeIndex'] as () => number)()).toBe(0);
-    (vm['select'] as (i: number) => void)(1);
+    (vm['select'])(1);
     expect((vm['activeIndex'] as () => number)()).toBe(1);
   });
 });
@@ -118,29 +118,29 @@ describe('WindowComparisonComponent keyboard navigation', () => {
   it('moves the active window one chip to the right on ArrowRight', () => {
     const { vm } = mountVm(WindowComparisonComponent, { windows: threeWindows(), higherIsBetter: true });
     expect((vm['activeIndex'] as () => number)()).toBe(1);
-    (vm['onKeydown'] as (e: KeyboardEvent) => void)(press('ArrowRight'));
+    (vm['onKeydown'])(press('ArrowRight'));
     expect((vm['activeIndex'] as () => number)()).toBe(2);
   });
 
   it('moves the active window one chip to the left on ArrowLeft', () => {
     const { vm } = mountVm(WindowComparisonComponent, { windows: threeWindows(), higherIsBetter: true });
-    (vm['onKeydown'] as (e: KeyboardEvent) => void)(press('ArrowLeft'));
+    (vm['onKeydown'])(press('ArrowLeft'));
     expect((vm['activeIndex'] as () => number)()).toBe(0);
   });
 
   it('clamps at the ends instead of wrapping', () => {
     const { vm } = mountVm(WindowComparisonComponent, { windows: threeWindows(), higherIsBetter: true });
-    (vm['onKeydown'] as (e: KeyboardEvent) => void)(press('ArrowLeft'));
-    (vm['onKeydown'] as (e: KeyboardEvent) => void)(press('ArrowLeft'));
+    (vm['onKeydown'])(press('ArrowLeft'));
+    (vm['onKeydown'])(press('ArrowLeft'));
     expect((vm['activeIndex'] as () => number)()).toBe(0);
   });
 
   it('exposes exactly one active chip via aria-activedescendant, tracking the active index', () => {
     const { vm } = mountVm(WindowComparisonComponent, { windows: threeWindows(), higherIsBetter: true });
     const activeOptionId = vm['activeOptionId'] as () => string;
-    const optionId = (vm['optionId'] as (i: number) => string).bind(vm);
+    const optionId = (vm['optionId']).bind(vm);
     expect(activeOptionId()).toBe(optionId(1));
-    (vm['onKeydown'] as (e: KeyboardEvent) => void)(press('ArrowRight'));
+    (vm['onKeydown'])(press('ArrowRight'));
     expect(activeOptionId()).toBe(optionId(2));
   });
 });
@@ -156,7 +156,7 @@ describe('WindowComparisonComponent selection reset on windows swap', () => {
     ];
     const MANUAL_PICK = 3;
     const { vm, setInput } = mountVm(WindowComparisonComponent, { windows: listA, higherIsBetter: true });
-    (vm['select'] as (i: number) => void)(MANUAL_PICK);
+    (vm['select'])(MANUAL_PICK);
     expect((vm['activeIndex'] as () => number)()).toBe(MANUAL_PICK);
 
     // A shorter List B lacks index 3, so the stale pick would blank the detail pane.
@@ -211,7 +211,7 @@ describe('WindowComparisonComponent activeDetailRows', () => {
       { label: 'C', icon: '', playerPct: 120, topAvg: 100, topMin: null, topMax: null },
     ];
     const { vm } = mountVm(WindowComparisonComponent, { windows: [winWithRows(rows)], higherIsBetter: true });
-    (vm['select'] as (i: number) => void)(0);
+    (vm['select'])(0);
     const sorted = (vm['activeDetailRows'] as () => RangeRow[])();
     expect(sorted.map(r => r.label)).toEqual(['B', 'A', 'C']);
   });
@@ -223,21 +223,21 @@ describe('WindowComparisonComponent activeDetailRows', () => {
       { label: 'C', icon: '', playerPct: 80, topAvg: 100, topMin: null, topMax: null },  // loss = 20 (best)
     ];
     const { vm } = mountVm(WindowComparisonComponent, { windows: [winWithRows(rows)], higherIsBetter: false });
-    (vm['select'] as (i: number) => void)(0);
+    (vm['select'])(0);
     const sorted = (vm['activeDetailRows'] as () => RangeRow[])();
     expect(sorted.map(r => r.label)).toEqual(['B', 'A', 'C']);
   });
 
   it('ranks null-player rows (muted window) by top damage biggest-first when lower is better', () => {
     const { vm } = mountVm(WindowComparisonComponent, { windows: [winWithRows(mutedNullRows(), 'muted')], higherIsBetter: false });
-    (vm['select'] as (i: number) => void)(0);
+    (vm['select'])(0);
     const sorted = (vm['activeDetailRows'] as () => RangeRow[])();
     expect(sorted.map(r => r.label)).toEqual(['large', 'small']);
   });
 
   it('ranks null-player rows by top damage biggest-first when higher is better too', () => {
     const { vm } = mountVm(WindowComparisonComponent, { windows: [winWithRows(mutedNullRows(), 'muted')], higherIsBetter: true });
-    (vm['select'] as (i: number) => void)(0);
+    (vm['select'])(0);
     const sorted = (vm['activeDetailRows'] as () => RangeRow[])();
     expect(sorted.map(r => r.label)).toEqual(['large', 'small']);
   });
@@ -246,7 +246,7 @@ describe('WindowComparisonComponent activeDetailRows', () => {
 describe('WindowComparisonComponent showCasts', () => {
   it('defaults showCasts to true', () => {
     const { vm } = mountVm(WindowComparisonComponent, { windows: [] });
-    expect((vm['showCasts'] as () => boolean)()).toBe(true);
+    expect((vm.showCasts as () => boolean)()).toBe(true);
   });
 });
 

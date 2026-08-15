@@ -12,7 +12,7 @@ import {
 } from '../../../shared/analysis/hold-targets';
 import { TimedEvent, abilityIcons, findParseActor, relativeS, toParseRankings, unwrapRankings, withRelativeS } from '../../../shared/analysis/wcl-projections';
 import { DataSource } from '../../../core/data-source/data-source';
-import { Result, LoadError, ok, missing } from '../../../core/result';
+import { Result, ok, missing } from '../../../core/result';
 import { toLoadError } from '../../../core/http-load-error';
 import {
   BenchedRule, RuleSample, MIN_MEASURED_PARSES, buildRuleContext, sampleRule, ruleBand, judgeableRules, rulesNeed,
@@ -215,7 +215,7 @@ export class RotationTransformService implements DataSource<RotationBench> {
   private readonly wclApi = inject(WclApiService);
   private readonly dataFiles = inject(DataFileApiService);
 
-  async getBench(spec: string, encounterId: number, partition?: number | null): Promise<Result<RotationBench, LoadError>> {
+  async getBench(spec: string, encounterId: number, partition?: number | null): Promise<Result<RotationBench>> {
     const rulebookResult = await this.dataFiles.getRulebook(spec);
     if (!rulebookResult.ok) return rulebookResult;
     const rulebook = rulebookResult.value;

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { DataFileApiService } from '../services/data-file-api';
 import { FileDataSource } from './file-data-source';
-import { Result, LoadError, ok, missing } from '../result';
+import { Result, ok, missing } from '../result';
 
 interface DummyBench { encounter_id: number; }
 
@@ -11,13 +11,13 @@ const SLICE = 'rotation';
 
 /** A partial `DataFileApiService` fake - `FileDataSource` only ever calls `getSlice`. */
 function fakeFiles(
-  result: Result<DummyBench, LoadError>,
+  result: Result<DummyBench>,
 ): { files: DataFileApiService; calls: [string, number, string][] } {
   const calls: [string, number, string][] = [];
   const files = {
-    getSlice: <T>(spec: string, encounterId: number, slice: string): Promise<Result<T, LoadError>> => {
+    getSlice: <T>(spec: string, encounterId: number, slice: string): Promise<Result<T>> => {
       calls.push([spec, encounterId, slice]);
-      return Promise.resolve(result as Result<T, LoadError>);
+      return Promise.resolve(result as Result<T>);
     },
   } as DataFileApiService;
   return { files, calls };

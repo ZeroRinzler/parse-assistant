@@ -3,7 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { WclEvent, WclFight } from '../../../core/models/wcl.models';
 import { EncounterPositions } from '../../../core/models/positioning.models';
 import { WclApiService } from '../../../core/services/wcl-api';
-import { Result, LoadError, ok, missing, transient } from '../../../core/result';
+import { Result, ok, missing, transient } from '../../../core/result';
 import { MAP_DATA_SOURCE, MapData } from './map-data-source';
 import { DataSource } from '../../../core/data-source/data-source';
 import {
@@ -139,7 +139,7 @@ describe('FACING_OFFSET_RAD', () => {
   });
 });
 
-function withResult(result: Result<MapData, LoadError>): { service: MapFeatureService; calls: [string, number][] } {
+function withResult(result: Result<MapData>): { service: MapFeatureService; calls: [string, number][] } {
   const calls: [string, number][] = [];
   const source: DataSource<MapData> = {
     getBench: (spec, enc) => { calls.push([spec, enc]); return Promise.resolve(result); },
@@ -332,13 +332,13 @@ describe('MapFeatureService deferred overlay', () => {
     let resolveStale: (() => void) | null = null;
     const source: DataSource<MapData> = {
       getBench: (_spec, enc) => enc === STALE_ENCOUNTER
-        ? new Promise<Result<MapData, LoadError>>(res => { resolveStale = () => res(ok(staleData)); })
+        ? new Promise<Result<MapData>>(res => { resolveStale = () => { res(ok(staleData)); }; })
         : Promise.resolve(ok(latestData)),
     };
     TestBed.configureTestingModule({ providers: [{ provide: MAP_DATA_SOURCE, useValue: source }] });
     const service = TestBed.inject(MapFeatureService);
-    const staleFight = { ...sampleFight, encounterID: STALE_ENCOUNTER } as WclFight;
-    const latestFight = { ...sampleFight, encounterID: LATEST_ENCOUNTER } as WclFight;
+    const staleFight = { ...sampleFight, encounterID: STALE_ENCOUNTER };
+    const latestFight = { ...sampleFight, encounterID: LATEST_ENCOUNTER };
 
     const stalePrepare = service.prepare('code', staleFight, 5, 'SubtletyRogue', []); // bench never resolves yet
     await service.prepare('code', latestFight, 5, 'SubtletyRogue', []); // supersedes, resolves now

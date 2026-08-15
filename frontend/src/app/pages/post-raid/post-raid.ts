@@ -37,17 +37,17 @@ import { ArtIconComponent } from '../../shared/components/art-icon/art-icon';
 import { LatestRun } from '../../shared/latest-run';
 import { SelectionStore } from '../../core/services/selection-store';
 import { logWarn } from '../../core/log';
-import { Result, LoadError, permanent } from '../../core/result';
+import { Result, permanent } from '../../core/result';
 import { toLoadError } from '../../core/http-load-error';
 import { LoadStateComponent, RenderableLoadError } from '../../shared/components/load-state/load-state';
 
 export function extractCode(url: string): string {
-  const m = url.match(/\/reports\/([a-zA-Z0-9]+)/);
+  const m = /\/reports\/([a-zA-Z0-9]+)/.exec(url);
   return m ? m[1] : url.trim();
 }
 
 export function extractFightId(url: string): number | null {
-  const m = url.match(/[#?&]fight=(\d+)/);
+  const m = /[#?&]fight=(\d+)/.exec(url);
   const id = m ? Number(m[1]) : NaN;
   return Number.isInteger(id) && id > 0 ? id : null;
 }
@@ -278,7 +278,7 @@ export class PostRaidComponent {
     distinctUntilChanged(),
     switchMap(active =>
       active
-        ? merge(of(undefined as void), this.liveSync.pollTriggers())
+        ? merge(of(undefined), this.liveSync.pollTriggers())
         : EMPTY,
     ),
     exhaustMap(() => from(this._pollOnce())),
@@ -291,7 +291,7 @@ export class PostRaidComponent {
   }
 
   // Folding `missing` to the notice keeps the shell exhaustive over the taxonomy without leaking a raw string.
-  private _showError(result: Result<never, LoadError>): void {
+  private _showError(result: Result<never>): void {
     if (result.ok) return; // toLoadError / permanent never return ok; this narrows the union
     if (result.error.kind === 'missing') this.notice.set(result.error.message);
     else this.loadError.set(result.error);

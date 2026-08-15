@@ -79,7 +79,7 @@ export function buildEnchantRows(gear: CharacterGear, stats: EncounterGearStats 
     }
     const playerName = player.name || `Enchant #${player.id}`;
     const playerUsagePct = topEnch[slot]?.find(e => e.id === player.id)?.pct ?? null;
-    if (top && player.id === top.id) {
+    if (player.id === top?.id) {
       rows.push({ slotName: name, status: 'ok', name: playerName, topPct: top.pct,
         note: `${top.pct}% run this` });
     } else if (top) {
@@ -176,7 +176,7 @@ export function talentStatusOf(topStats: EncounterGearStats | null, playerKey: s
   const builds = topStats?.talent_builds ?? [];
   if (!builds.length) return { status: 'unknown', note: 'No talent data.' };
   const topPct = builds[0]?.pct ?? 0;
-  if (!playerKey || playerKey.split(':')[0] !== (builds[0]?.key ?? '').split(':')[0]) {
+  if (playerKey?.split(':')[0] !== (builds[0]?.key ?? '').split(':')[0]) {
     return { status: 'unknown', note: 'No talent data.' };
   }
   if (builds[0]?.key === playerKey) {

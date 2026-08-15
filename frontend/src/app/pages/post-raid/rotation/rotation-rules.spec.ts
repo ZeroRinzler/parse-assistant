@@ -1678,7 +1678,7 @@ describe('occurrence strips', () => {
     const casts = Array.from({ length: OVER_CAP_CASTS }, (_, i) => cast(BLACK_POWDER, i + 1));
     const dmg = Array.from({ length: OVER_CAP_CASTS }, (_, i) => damage(BLACK_POWDER, i + 1.5, 100, { target: 1 }));
     const finding = evaluateCastAtTargetCount(blackPowder, ruleCtx(casts, { damage: dmg }), band(3), 'warning');
-    const occurrences = finding!.occurrences!;
+    const occurrences = finding!.occurrences;
     expect(occurrences.length).toBe(24);
     expect(occurrences[0].atS).toBe(1);
     const timestamps = occurrences.map(o => o.atS);
@@ -1697,7 +1697,7 @@ describe('occurrence strips', () => {
     const PASSING_CASTS = 30; // clears MAX_OCCURRENCES (24) so sampling kicks in
     const passes = Array.from({ length: PASSING_CASTS }, (_, i) => atCombo(100 + i, MAX_COMBO_POINTS));
     const finding = evaluateResourceAtCast(finisher, ruleCtx([...fails, ...passes]), band(1), 'warning');
-    const occurrences = finding!.occurrences!;
+    const occurrences = finding!.occurrences;
     expect(occurrences.length).toBe(24);
     const failingAtS = occurrences.filter(occ => !occ.ok).map(occ => occ.atS);
     expect(failingAtS).toEqual(FAIL_AT_S);

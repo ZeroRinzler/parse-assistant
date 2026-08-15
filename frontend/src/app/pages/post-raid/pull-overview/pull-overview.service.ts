@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { WclFight, WclReport, WclTableBlob } from '../../../core/models/wcl.models';
 import { logWarn } from '../../../core/log';
-import { Result, LoadError, ok, permanent } from '../../../core/result';
+import { Result, ok, permanent } from '../../../core/result';
 import { toLoadError } from '../../../core/http-load-error';
 import { TimedEvent, withRelativeS } from '../../../shared/analysis/wcl-projections';
 
@@ -53,7 +53,7 @@ function tableEntries(blob: WclTableBlob | null): { id: number; total: number }[
 
 function safeJson(raw: string): { data?: { entries?: { id: number; total: number }[] } } | null {
   try {
-    return JSON.parse(raw);
+    return JSON.parse(raw) as { data?: { entries?: { id: number; total: number }[] } };
   } catch (err) {
     logWarn('pull-overview.tableEntries', err);
     return null;
@@ -63,7 +63,7 @@ function safeJson(raw: string): { data?: { entries?: { id: number; total: number
 // An unusable table is a permanent load failure (a played pull would show a bogus 0); a player absent from a valid table (a healer) is a real 0.
 export function dpsFromTable(
   blob: WclTableBlob | null, playerId: number, durationS: number,
-): Result<number, LoadError> {
+): Result<number> {
   if (durationS <= 0) return ok(0);
   const entries = tableEntries(blob);
   if (!entries) return permanent('Damage table missing for this pull.', 'pull-overview.damage-table');
@@ -101,7 +101,7 @@ export class PullOverviewFeatureService {
 
   async loadView(
     reportCode: string, playerId: number, fight: WclFight,
-  ): Promise<Result<PullOverviewView, LoadError>> {
+  ): Promise<Result<PullOverviewView>> {
     const result: PullResult = fight.kill ? 'kill' : 'wipe';
 
     try {

@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Result, LoadError, missing, transient, permanent } from './result';
+import { Result, missing, transient, permanent } from './result';
 import { WclTransportError } from './services/wcl-transport';
 
 // Status 0 is a network/CORS drop or the status-0 WclTransportError a GraphQL-level failure raises.
@@ -21,7 +21,7 @@ function statusOf(cause: unknown): number {
 }
 
 // The single place an HTTP/transport status becomes a taxonomy variant, so slices never re-derive the mapping.
-export function toLoadError(cause: unknown, id: string): Result<never, LoadError> {
+export function toLoadError(cause: unknown, id: string): Result<never> {
   const status = statusOf(cause);
 
   if (status === HTTP_NOT_FOUND) return missing('Not yet ingested.');

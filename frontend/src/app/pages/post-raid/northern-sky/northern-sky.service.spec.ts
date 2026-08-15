@@ -88,9 +88,9 @@ describe('selectedIds', () => {
 
 describe('isAllSelected', () => {
   const abilities = [ability(SHADOW_BLADES, 'cooldown', [10]), ability(SHADOW_DANCE, 'cooldown', [20])];
-  it('is true when nothing is excluded', () => expect(isAllSelected(abilities, new Set())).toBe(true));
-  it('is false when any ability is excluded', () => expect(isAllSelected(abilities, new Set([SHADOW_DANCE]))).toBe(false));
-  it('is false for an empty list', () => expect(isAllSelected([], new Set())).toBe(false));
+  it('is true when nothing is excluded', () => { expect(isAllSelected(abilities, new Set())).toBe(true); });
+  it('is false when any ability is excluded', () => { expect(isAllSelected(abilities, new Set([SHADOW_DANCE]))).toBe(false); });
+  it('is false for an empty list', () => { expect(isAllSelected([], new Set())).toBe(false); });
 });
 
 describe('toggleExclusion', () => {

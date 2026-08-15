@@ -65,7 +65,7 @@ export class NorthernSkyExportComponent {
           }
           this.availableChange.emit(this.available());
         },
-        settled: () => this.busyChange.emit(false),
+        settled: () => { this.busyChange.emit(false); },
       });
     });
   }

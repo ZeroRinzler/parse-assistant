@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { TestBed } from '@angular/core/testing';
-import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse, provideHttpClient, withInterceptors } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { firstValueFrom } from 'rxjs';
 import { retryTransientInterceptor } from './retry-transient.interceptor';
@@ -56,7 +56,7 @@ describe('retryTransientInterceptor', () => {
 
   it('gives up after a single retry when the transient failure persists', async () => {
     const { http, httpMock } = setup();
-    const pending = firstValueFrom(http.get(URL)).catch((e) => e.status);
+    const pending = firstValueFrom(http.get(URL)).catch((e: unknown) => (e as HttpErrorResponse).status);
 
     httpMock.expectOne(URL).flush(null, { status: HTTP_SERVICE_UNAVAILABLE, statusText: 'Service Unavailable' });
     await vi.advanceTimersByTimeAsync(BACKOFF_MS);
@@ -67,7 +67,7 @@ describe('retryTransientInterceptor', () => {
 
   it('does not retry a 404 (the missing-data signal passes straight through)', async () => {
     const { http, httpMock } = setup();
-    const pending = firstValueFrom(http.get(URL)).catch((e) => e.status);
+    const pending = firstValueFrom(http.get(URL)).catch((e: unknown) => (e as HttpErrorResponse).status);
 
     httpMock.expectOne(URL).flush(null, { status: HTTP_NOT_FOUND, statusText: 'Not Found' });
 
@@ -76,7 +76,7 @@ describe('retryTransientInterceptor', () => {
 
   it('does not retry a 403 (a permanent failure passes straight through)', async () => {
     const { http, httpMock } = setup();
-    const pending = firstValueFrom(http.get(URL)).catch((e) => e.status);
+    const pending = firstValueFrom(http.get(URL)).catch((e: unknown) => (e as HttpErrorResponse).status);
 
     httpMock.expectOne(URL).flush(null, { status: HTTP_FORBIDDEN, statusText: 'Forbidden' });
 

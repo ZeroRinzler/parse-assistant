@@ -4,7 +4,7 @@ import { DataFileApiService } from './data-file-api';
 import { DATA_FILE_TRANSPORT, DataFileTransport } from './data-file-transport';
 import { EncounterEntry, SpecEntry } from '../models/encounter.models';
 import { SpecMeta } from '../models/spec-meta.models';
-import { Result, LoadError, ok, missing, transient } from '../result';
+import { Result, ok, missing, transient } from '../result';
 
 // These tests pin the exact relative paths the service owns: a drift silently 404s every runtime read or writes ingested data to the wrong place.
 const SPEC = 'SubtletyRogue';
@@ -19,13 +19,13 @@ class RecordingTransport implements DataFileTransport {
   readonly lists: string[] = [];
 
   constructor(
-    private readonly readResult: Result<unknown, LoadError> = ok(null),
+    private readonly readResult: Result<unknown> = ok(null),
     private readonly listValue: string[] = [],
   ) {}
 
-  readJson<T>(relPath: string): Promise<Result<T, LoadError>> {
+  readJson<T>(relPath: string): Promise<Result<T>> {
     this.reads.push(relPath);
-    return Promise.resolve(this.readResult as Result<T, LoadError>);
+    return Promise.resolve(this.readResult as Result<T>);
   }
 
   writeJson(relPath: string, data: unknown): Promise<void> {

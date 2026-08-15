@@ -5,7 +5,7 @@ import { DataFileApiService } from '../../../core/services/data-file-api';
 import { WclEvent, WclFight, ParseRanking } from '../../../core/models/wcl.models';
 import { ParsePositions, PlayerPosRow, PosRow } from '../../../core/models/positioning.models';
 import { logWarn } from '../../../core/log';
-import { Result, LoadError, ok, missing } from '../../../core/result';
+import { Result, ok, missing } from '../../../core/result';
 import { toLoadError } from '../../../core/http-load-error';
 import { TimedEvent, findParseActor, relativeS, toParseRankings, unwrapRankings, withRelativeS } from '../../../shared/analysis/wcl-projections';
 import { posActorId } from './map-positions';
@@ -45,12 +45,12 @@ export function collectPositionSamples(events: TimedEvent[]): Map<number, RawPos
   const byActor = new Map<number, RawPosSample[]>();
   for (const event of events) {
     const actorId = posActorId(event);
-    if (actorId == null) continue;
+    if (actorId == null || event.x == null || event.y == null) continue;
     let samples = byActor.get(actorId);
     if (!samples) { samples = []; byActor.set(actorId, samples); }
     samples.push({
       t: event.atS,
-      x: event.x!, y: event.y!,
+      x: event.x, y: event.y,
       facing: typeof event.facing === 'number' ? event.facing : null,
       mapID: typeof event.mapID === 'number' ? event.mapID : null,
       maxHp: eventMaxHp(event),
@@ -179,7 +179,7 @@ export class MapTransformService implements DataSource<MapData> {
   private readonly wclApi = inject(WclApiService);
   private readonly dataFiles = inject(DataFileApiService);
 
-  async getBench(spec: string, encounterId: number, partition?: number | null): Promise<Result<MapData, LoadError>> {
+  async getBench(spec: string, encounterId: number, partition?: number | null): Promise<Result<MapData>> {
     try {
       const rankings = toParseRankings(unwrapRankings(await this.wclApi.getRankings(spec, encounterId, partition)), CANDIDATE_POOL_COUNT);
       if (!rankings.length) return missing('No top parses for this encounter.');

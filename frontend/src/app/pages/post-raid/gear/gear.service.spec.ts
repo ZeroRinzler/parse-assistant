@@ -4,7 +4,7 @@ import { CharacterGear, WclCombatantInfo, WclGearItem } from '../../../core/mode
 import { WclApiService } from '../../../core/services/wcl-api';
 import { GEAR_DATA_SOURCE, GearBench } from './gear-data-source';
 import { DataSource } from '../../../core/data-source/data-source';
-import { Result, LoadError, ok, permanent, missing } from '../../../core/result';
+import { Result, ok, permanent, missing } from '../../../core/result';
 import {
   GearFeatureService, benchToStats, buildGearView, buildBenchGearView,
   buildCharacterGear, emptyGearView,
@@ -120,7 +120,7 @@ describe('emptyGearView', () => {
   });
 });
 
-function configure(bench: Result<GearBench, LoadError>, gear: CharacterGear | null): GearFeatureService {
+function configure(bench: Result<GearBench>, gear: CharacterGear | null): GearFeatureService {
   const source: DataSource<GearBench> = { getBench: () => Promise.resolve(bench) };
   const wclFake = {
     getCombatantInfo: async (): Promise<WclCombatantInfo[]> => (gear?.found ? [toRawEvent(gear)] : []),

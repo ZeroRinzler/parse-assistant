@@ -51,7 +51,7 @@ export class RotationCdPlanComponent {
             this.items.set([]);
           }
         },
-        settled: () => this.busyChange.emit(false),
+        settled: () => { this.busyChange.emit(false); },
       });
     });
   }

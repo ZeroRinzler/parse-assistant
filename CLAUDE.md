@@ -53,7 +53,7 @@ frontend/        # the entire Angular 22 app
 
 ## Development workflow router
 
-Load the matching skill(s) **before** you start that step. The `warcraft-*` skills are this project's rules; `angular-developer` is the generic Angular reference (project rules win on conflict). A skill loads automatically once its `description` matches the task, or you can name it explicitly - either way, load it before starting the row's work, not from memory.
+Load the matching skill(s) **before** you start that step. The `warcraft-*` skills are this project's rules; Angular/TypeScript conventions are enforced by ESLint (`frontend/eslint.config.js`), not by a skill. A skill loads automatically once its `description` matches the task, or you can name it explicitly - either way, load it before starting the row's work, not from memory.
 
 | When you are... | Load |
 |---|---|
@@ -64,4 +64,4 @@ Load the matching skill(s) **before** you start that step. The `warcraft-*` skil
 | Reviewing code, a diff, or a PR | **warcraft-change** (the self-review checklist applies) |
 | Verifying a change runs / manual end-to-end check | run the relevant command from the Commands table above |
 
-On any conflict between a skill and this file, or between the generic skill (`angular-developer`) and a `warcraft-*` project skill, the **project skill / this file wins**.
+On any conflict between a skill and this file, **this file wins**.

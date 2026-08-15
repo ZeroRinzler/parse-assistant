@@ -64,7 +64,7 @@ describe('SelectionStore', () => {
       throw new Error(STORAGE_FAILURE);
     });
 
-    expect(() => new SelectionStore().savePostRaid(POST_RAID_SELECTION)).not.toThrow();
+    expect(() => { new SelectionStore().savePostRaid(POST_RAID_SELECTION); }).not.toThrow();
     expect(warn).toHaveBeenCalled();
   });
 

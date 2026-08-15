@@ -2,7 +2,7 @@
 import { Injectable, inject } from '@angular/core';
 import { DataFileApiService } from '../../core/services/data-file-api';
 import { EncounterEntry, SpecEntry } from '../../core/models/encounter.models';
-import { Result, LoadError, ok } from '../../core/result';
+import { Result, ok } from '../../core/result';
 
 /** Order-preserving, so the dropdown keeps the ingested order. */
 export function benchedEncounters(entries: EncounterEntry[]): EncounterEntry[] {
@@ -13,11 +13,11 @@ export function benchedEncounters(entries: EncounterEntry[]): EncounterEntry[] {
 export class EncounterSelectionService {
   private readonly files = inject(DataFileApiService);
 
-  getSpecs(): Promise<Result<SpecEntry[], LoadError>> {
+  getSpecs(): Promise<Result<SpecEntry[]>> {
     return this.files.getSpecs();
   }
 
-  async getEncounters(spec: string): Promise<Result<EncounterEntry[], LoadError>> {
+  async getEncounters(spec: string): Promise<Result<EncounterEntry[]>> {
     const result = await this.files.getEncounters(spec);
     return result.ok ? ok(benchedEncounters(result.value)) : result;
   }

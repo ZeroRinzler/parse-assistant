@@ -321,7 +321,7 @@ describe('PostRaidComponent sticky player name', () => {
     await (component['loadReport'] as () => Promise<void>)();
   }
 
-  beforeEach(() => localStorage.clear());
+  beforeEach(() => { localStorage.clear(); });
 
   it('keeps the sticky name when a loaded report auto-selects a fallback player instead', async () => {
     const { component, store } = mount();
@@ -340,8 +340,8 @@ describe('PostRaidComponent sticky player name', () => {
     store.savePostRaid({ playerName: ABSENT_STICKY_NAME });
     await loadReport(component);
 
-    (component['playerControl'] as FormControl<number | null>).setValue(PICKED_PLAYER.id);
-    await (component['onPlayerChange'] as () => Promise<void>)();
+    (component['playerControl']).setValue(PICKED_PLAYER.id);
+    await (component['onPlayerChange'])();
 
     expect(store.loadPostRaid()?.playerName).toBe(PICKED_PLAYER.name);
   });
@@ -398,7 +398,7 @@ describe('PostRaidComponent fight selection from URL', () => {
     await (component['loadReport'] as () => Promise<void>)();
   }
 
-  beforeEach(() => localStorage.clear());
+  beforeEach(() => { localStorage.clear(); });
 
   it('selects the fight named in the pasted URL instead of the latest pull', async () => {
     const component = mount();

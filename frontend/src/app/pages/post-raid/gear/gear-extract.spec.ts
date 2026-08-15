@@ -48,7 +48,7 @@ describe('decodeHtmlEntities', () => {
 
 describe('extractGear', () => {
   it('extracts trinkets from slots 12/13 (stripping .jpg, coercing string ids) and enchants from any slot', () => {
-    const gear: WclGearItem[] = Array(16).fill(null);
+    const gear = Array<WclGearItem>(16).fill({});
     gear[TRINKET_1_SLOT] = { id: TRINKET_A_ID, name: 'Trinket A', icon: 'a.jpg' };
     gear[TRINKET_2_SLOT] = { id: String(TRINKET_B_ID), name: 'Trinket B', icon: 'b.jpg' };
     gear[ENCHANTED_SLOT] = { id: 1, name: 'Wep', permanentEnchant: String(ENCHANT_ID) };
@@ -63,14 +63,14 @@ describe('extractGear', () => {
   });
 
   it('ignores items in non-trinket slots for the trinket list', () => {
-    const gear: WclGearItem[] = Array(16).fill(null);
+    const gear = Array<WclGearItem>(16).fill({});
     gear[NON_TRINKET_SLOT] = { id: TRINKET_A_ID, name: 'Ring', icon: 'r.jpg' };
 
     expect(extractGear(gear).trinkets).toEqual([]);
   });
 
   it('skips items with no id and returns empty for an absent gear array', () => {
-    const gear: WclGearItem[] = Array(16).fill(null);
+    const gear = Array<WclGearItem>(16).fill({});
     gear[TRINKET_1_SLOT] = { name: 'No id', icon: 'x.jpg' };
 
     expect(extractGear(gear).trinkets).toEqual([]);
@@ -78,7 +78,7 @@ describe('extractGear', () => {
   });
 
   it('skips an empty trinket slot (WCL id 0) so the downstream !player branch fires', () => {
-    const gear: WclGearItem[] = Array(16).fill(null);
+    const gear = Array<WclGearItem>(16).fill({});
     gear[TRINKET_1_SLOT] = { id: EMPTY_SLOT_ID, name: '', icon: '' };
 
     expect(extractGear(gear).trinkets).toEqual([]);

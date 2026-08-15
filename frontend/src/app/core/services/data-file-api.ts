@@ -4,10 +4,10 @@ import { EncounterEntry, SpecEntry } from '../models/encounter.models';
 import { SpecMeta } from '../models/spec-meta.models';
 import { EncounterPositions } from '../models/positioning.models';
 import { DATA_FILE_TRANSPORT } from './data-file-transport';
-import { Result, LoadError, ok } from '../result';
+import { Result, ok } from '../result';
 
 // A manifest with no file yet is the legitimate empty fresh-tier state; a real read failure must propagate so the UI surfaces it instead of a silently empty list.
-function foldMissingToEmpty<T>(result: Result<T[], LoadError>): Result<T[], LoadError> {
+function foldMissingToEmpty<T>(result: Result<T[]>): Result<T[]> {
   if (result.ok) return result;
   return result.error.kind === 'missing' ? ok([]) : result;
 }
@@ -17,27 +17,27 @@ function foldMissingToEmpty<T>(result: Result<T[], LoadError>): Result<T[], Load
 export class DataFileApiService {
   private readonly io = inject(DATA_FILE_TRANSPORT);
 
-  getSlice<T>(spec: string, encounterId: number, slice: string): Promise<Result<T, LoadError>> {
+  getSlice<T>(spec: string, encounterId: number, slice: string): Promise<Result<T>> {
     return this.io.readJson<T>(`${spec}/${slice}/${encounterId}.json`);
   }
 
-  getRulebook(spec: string): Promise<Result<Rulebook, LoadError>> {
+  getRulebook(spec: string): Promise<Result<Rulebook>> {
     return this.io.readJson<Rulebook>(`${spec}/rulebook.json`);
   }
 
-  async getSpecs(): Promise<Result<SpecEntry[], LoadError>> {
+  async getSpecs(): Promise<Result<SpecEntry[]>> {
     return foldMissingToEmpty(await this.io.readJson<SpecEntry[]>('index.json'));
   }
 
-  async getSpecMeta(): Promise<Result<SpecMeta[], LoadError>> {
+  async getSpecMeta(): Promise<Result<SpecMeta[]>> {
     return foldMissingToEmpty(await this.io.readJson<SpecMeta[]>('spec-meta.json'));
   }
 
-  async getEncounters(spec: string): Promise<Result<EncounterEntry[], LoadError>> {
+  async getEncounters(spec: string): Promise<Result<EncounterEntry[]>> {
     return foldMissingToEmpty(await this.io.readJson<EncounterEntry[]>(`${spec}/encounters.json`));
   }
 
-  getPositions(spec: string, encounterId: number): Promise<Result<EncounterPositions, LoadError>> {
+  getPositions(spec: string, encounterId: number): Promise<Result<EncounterPositions>> {
     return this.io.readJson<EncounterPositions>(`${spec}/positions/${encounterId}.json`);
   }
 

@@ -5,7 +5,7 @@ import { TestBed } from '@angular/core/testing';
 export interface MountedVm<T> {
   /** The component instance, typed loosely so protected computeds are readable. */
   vm: T & Record<string, unknown>;
-  setInput(name: string, value: unknown): void;
+  setInput: (name: string, value: unknown) => void;
 }
 
 export function mountVm<T>(
@@ -21,6 +21,6 @@ export function mountVm<T>(
   for (const [name, value] of Object.entries(inputs)) fixture.componentRef.setInput(name, value);
   return {
     vm: fixture.componentInstance as T & Record<string, unknown>,
-    setInput: (name, value) => fixture.componentRef.setInput(name, value),
+    setInput: (name, value) => { fixture.componentRef.setInput(name, value); },
   };
 }

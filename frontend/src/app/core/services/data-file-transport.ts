@@ -1,9 +1,9 @@
 import { InjectionToken } from '@angular/core';
-import { Result, LoadError } from '../result';
+import { Result } from '../result';
 
 // Paths are relative to the `data/specs/` root (e.g. `SubtletyRogue/burst/3176.json`).
 export interface DataFileTransport {
-  readJson<T>(relPath: string): Promise<Result<T, LoadError>>;
+  readJson<T>(relPath: string): Promise<Result<T>>;
   // The write side is Node-ingestion only; the browser transport throws.
   writeJson(relPath: string, data: unknown): Promise<void>;
   remove(relPath: string): Promise<void>;

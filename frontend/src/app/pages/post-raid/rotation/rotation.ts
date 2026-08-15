@@ -66,7 +66,7 @@ export class RotationComponent {
             this.onPlan.set([]);
           }
         },
-        settled: () => this.busyChange.emit(false),
+        settled: () => { this.busyChange.emit(false); },
       });
     });
   }

@@ -1,6 +1,6 @@
 ---
 name: warcraft-wcl-data
-description: warcraft-learner Warcraft Logs (WCL) integration quirks, auth model, and position data. Covers the intentional embedded client-credentials secret (a deliberate trade-off, NOT a leak to fix), the non-obvious WCL API quirks that have caused bugs (Midnight actor.subType / playerDetails spec resolution, positionally-indexed gear array, weapon/trinket slot indices, v1 vs v2 talent formats, permanentEnchant string, server.region string, removed gameData.spell(), event positions via includeResources and their flattened x/y/facing/mapID units), and the external-API auth table. Load this before touching WCL queries, gear/spec/talent/enchant extraction, wcl-auth, the embedded secret, or anything reading event positions.
+description: warcraft-learner Warcraft Logs (WCL) integration quirks, auth model, and position data. Covers the intentional embedded client-credentials secret (a deliberate trade-off, NOT a leak to fix), the non-obvious WCL API quirks that have caused bugs (Midnight actor.subType / playerDetails spec resolution, positionally-indexed gear array, weapon/trinket slot indices, v1 vs v2 talent formats, permanentEnchant string, server.region string, no gameData.spell(), event positions via includeResources and their flattened x/y/facing/mapID units), and the external-API auth table. Load this before touching WCL queries, gear/spec/talent/enchant extraction, wcl-auth, the embedded secret, or anything reading event positions.
 ---
 
 # warcraft-learner WCL integration
@@ -22,11 +22,11 @@ Non-obvious things that have caused bugs - read before touching gear extraction 
 
 | Quirk | Detail |
 |---|---|
-| **`actor.subType` changed in Midnight** | Now returns class-only (`Rogue`). Use `playerDetails(fightIDs:[...])` to get full spec info. `WclApiService.getPlayerDetails` (via `buildSpecMap`) handles the conversion; the post-raid shell resolves spec from it. |
+| **`actor.subType` is class-only (since Midnight)** | Returns the class (`Rogue`), never the spec. Use `playerDetails(fightIDs:[...])` to get full spec info. `WclApiService.getPlayerDetails` (via `buildSpecMap`) handles the conversion; the post-raid shell resolves spec from it. |
 | **`Debuffs` tables do not narrow by caster** | `table(dataType:Debuffs fightIDs:[F] sourceID:S)` can return auras sitting **on** that actor rather than the ones it applied to enemies. Treat a row as an aura id and confirm the direction from another source before reading it as "this player's dot". |
 | **A single parse's `Casts` table can be partial** | A top log routinely lists a dozen cast entries and omits core buttons, and some abilities (resource-gated form entries) are never logged as a cast at all. Sample several parses before concluding an ability is unused. |
 | **Gear array is positionally indexed** | WCL returns gear as a bare array; the array index (0-based) IS the slot number. No `slot` field. |
-| **Weapon slots shifted in Midnight** | Gear array has 17 entries (0-16). Weapons at index 15 (MH) and 16 (OH). Index 14 is Back/Cloak. |
+| **Weapon slots are 15/16 (since Midnight)** | Gear array has 17 entries (0-16). Weapons at index 15 (MH) and 16 (OH). Index 14 is Back/Cloak. |
 | **Trinket slots are 12 and 13** | Confirmed from `encounterRankings` responses. |
 | **`permanentEnchant` is a string** | Numeric ID returned as string. `permanentEnchantName` is never populated. Enchant names resolved via `gameData.enchant(id)` in the gear transform service. |
 | **Two incompatible talent formats** | `characterRankings` -> old format (`{talentID, points}` list) -> `v1:` key. `encounterRankings` -> Midnight format (nested `nodeId` dict) -> `v2:` key. ID spaces are incompatible; cannot compare directly. |

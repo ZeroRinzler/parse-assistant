@@ -163,26 +163,26 @@ export class WindowComparisonComponent {
   // Overview bar geometry as plain percentages, bound via [style.left.%]/[style.width.%] in the template.
   protected readonly overviewPlayerWidthPct = computed<number | null>(() => {
     const w = this.activeWindow();
-    if (!w || w.overview.playerPct == null) return null;
+    if (w?.overview.playerPct == null) return null;
     return this.barPct(w.overview.playerPct, this.overviewMax());
   });
 
   protected readonly overviewRangeLeftPct = computed<number | null>(() => {
     const w = this.activeWindow();
-    if (!w || w.overview.topMin == null || w.overview.topMax == null) return null;
+    if (w?.overview.topMin == null || w.overview.topMax == null) return null;
     return this.barPct(w.overview.topMin, this.overviewMax());
   });
 
   protected readonly overviewRangeWidthPct = computed<number | null>(() => {
     const w = this.activeWindow();
-    if (!w || w.overview.topMin == null || w.overview.topMax == null) return null;
+    if (w?.overview.topMin == null || w.overview.topMax == null) return null;
     const max = this.overviewMax();
     return Math.max(0, this.barPct(w.overview.topMax, max) - this.barPct(w.overview.topMin, max));
   });
 
   protected readonly overviewAvgLeftPct = computed<number | null>(() => {
     const w = this.activeWindow();
-    if (!w || w.overview.topAvg == null) return null;
+    if (w?.overview.topAvg == null) return null;
     return this.barPct(w.overview.topAvg, this.overviewMax());
   });
 }

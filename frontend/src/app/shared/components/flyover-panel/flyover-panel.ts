@@ -14,5 +14,5 @@ export class FlyoverPanelComponent {
   /** Muted status text beside the heading; empty renders nothing. */
   readonly loadingText = input<string>('');
   readonly closeLabel = input.required<string>();
-  readonly closed = output<void>();
+  readonly closed = output();
 }

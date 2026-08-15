@@ -46,7 +46,7 @@ describe('indexTalentTrees', () => {
 });
 
 describe('TalentDataService', () => {
-  afterEach(() => TestBed.inject(HttpTestingController).verify());
+  afterEach(() => { TestBed.inject(HttpTestingController).verify(); });
 
   it('resolves a spec from the dump', async () => {
     const { service, httpMock } = setup();

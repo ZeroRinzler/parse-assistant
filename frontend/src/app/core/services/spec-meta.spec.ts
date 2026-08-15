@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { computed } from '@angular/core';
 import { DataFileApiService } from './data-file-api';
-import { Result, LoadError, ok, transient } from '../result';
+import { Result, ok, transient } from '../result';
 import {
   SpecMetaService, SpecMeta,
   buildUniverse, classList, specsForClass, specMetaOf, classIconUrl, specIconUrl,
@@ -21,7 +21,7 @@ const FROST_MAGE = {
 
 const UNIVERSE = buildUniverse([SUBTLETY]);
 
-function serviceWith(getSpecMeta: () => Promise<Result<SpecMeta[], LoadError>>): SpecMetaService {
+function serviceWith(getSpecMeta: () => Promise<Result<SpecMeta[]>>): SpecMetaService {
   TestBed.resetTestingModule();
   TestBed.configureTestingModule({
     providers: [{ provide: DataFileApiService, useValue: { getSpecMeta } }],

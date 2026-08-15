@@ -8,7 +8,7 @@ export class LatestLoad {
     const token = ++this.token;
     void load
       .then(value => { if (token === this.token) handlers.apply(value); })
-      .catch(err => logWarn(handlers.context, err))
+      .catch((err: unknown) => { logWarn(handlers.context, err); })
       .finally(() => { if (token === this.token) handlers.settled?.(); });
   }
 }

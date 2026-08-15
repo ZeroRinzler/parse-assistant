@@ -56,7 +56,7 @@ export function classIconUrl(universe: SpecUniverse, className: string): string 
 /** zamimg spec-icon URL for a spec folder key, or '' when the spec is unknown or has no baked stem. */
 export function specIconUrl(universe: SpecUniverse, spec: string): string {
   const meta = universe.metas[spec];
-  return meta && meta.specIcon ? `${ZAM}/${meta.specIcon}.jpg` : '';
+  return meta?.specIcon ? `${ZAM}/${meta.specIcon}.jpg` : '';
 }
 
 /** The hydrated spec universe; loads itself on first injection. */
@@ -69,7 +69,7 @@ export class SpecMetaService {
   constructor() {
     const dataFile = inject(DataFileApiService);
     // Not awaited - nothing rendered at boot reads spec-meta, so the fetch must not gate anything.
-    void dataFile.getSpecMeta().then(result => this.hydrate(result.ok ? result.value : []));
+    void dataFile.getSpecMeta().then(result => { this.hydrate(result.ok ? result.value : []); });
   }
 
   // Idempotent - a later call replaces the cache.

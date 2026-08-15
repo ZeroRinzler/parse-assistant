@@ -98,7 +98,7 @@ export class MapCanvasComponent {
   });
 
   constructor() {
-    inject(DestroyRef).onDestroy(() => this.stopTimer());
+    inject(DestroyRef).onDestroy(() => { this.stopTimer(); });
     effect(() => {
       this.anchorTime();
       this.selector.set(this.map.reference());

@@ -68,7 +68,7 @@ export class BurstWindowsComponent {
             this._clipAnchors.set([]);
           }
         },
-        settled: () => this.busyChange.emit(false),
+        settled: () => { this.busyChange.emit(false); },
       });
     });
   }

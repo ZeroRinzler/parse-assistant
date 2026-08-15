@@ -65,13 +65,13 @@ export function buildActorTimelines(events: TimedEvent[]): Map<number, ActorTime
   const byActor = new Map<number, PosSample[]>();
   for (const event of events) {
     const id = posActorId(event);
-    if (id == null) continue;
+    if (id == null || event.x == null || event.y == null) continue;
     let samples = byActor.get(id);
     if (!samples) { samples = []; byActor.set(id, samples); }
     samples.push({
       t: event.atS,
-      x: event.x! * RAW_TO_YARDS,
-      y: event.y! * RAW_TO_YARDS,
+      x: event.x * RAW_TO_YARDS,
+      y: event.y * RAW_TO_YARDS,
       facing: typeof event.facing === 'number' ? event.facing * FACING_TO_RAD : undefined,
       mapID: typeof event.mapID === 'number' ? event.mapID : undefined,
     });
@@ -153,14 +153,14 @@ export class MapFeatureService {
   readonly ready = computed(() => !!this.positions());
 
   /** Load the top-parse bench (the /pre and initial post-raid path). Clears any stale live overlay. */
-  async loadBench(spec: string, encounterId: number): Promise<Result<MapData, LoadError>> {
+  async loadBench(spec: string, encounterId: number): Promise<Result<MapData>> {
     const result = await this.source.getBench(spec, encounterId);
     this._applyBench(result);
     return result;
   }
 
   /** Push a bench result to the `positions`/`error` signals and clear any stale live overlay. */
-  private _applyBench(result: Result<MapData, LoadError>): void {
+  private _applyBench(result: Result<MapData>): void {
     this.live.set(null);
     if (result.ok) {
       this.positions.set(result.value);
@@ -192,9 +192,10 @@ export class MapFeatureService {
     this.anchorTime.set(anchor.timeS);
     this.reference.set(anchor.reference ?? { kind: 'boss' });
     // A window scrubs its exact span (0 before, its length after); a point-in-time cast gets symmetric padding.
-    const isWindow = (anchor.windowLengthS ?? 0) > 0;
+    const windowLengthS = anchor.windowLengthS ?? 0;
+    const isWindow = windowLengthS > 0;
     this.preS.set(isWindow ? 0 : MAP_POINT_PAD_S);
-    this.postS.set(isWindow ? anchor.windowLengthS! : MAP_POINT_PAD_S);
+    this.postS.set(isWindow ? windowLengthS : MAP_POINT_PAD_S);
     this.open.set(true);
     // First open triggers the deferred fetch; a no-op once loaded or with no pending pull.
     void this.ensureLiveOverlay();

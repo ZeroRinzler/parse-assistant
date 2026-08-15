@@ -69,7 +69,7 @@ export class GearComponent {
             this.availableChange.emit(false);
           }
         },
-        settled: () => this.busyChange.emit(false),
+        settled: () => { this.busyChange.emit(false); },
       });
     });
   }

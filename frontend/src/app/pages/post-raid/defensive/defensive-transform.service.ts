@@ -6,7 +6,7 @@ import { RulebookDefensive } from '../../../core/models/rulebook.models';
 import { BurstWindow, TopDefensiveSummary } from '../../../core/models/analysis.models';
 import { PerDefensiveBenchmark } from '../../../core/models/encounter.models';
 import { logWarn } from '../../../core/log';
-import { Result, LoadError, ok, missing } from '../../../core/result';
+import { Result, ok, missing } from '../../../core/result';
 import { toLoadError } from '../../../core/http-load-error';
 import { mean, median, deviation } from 'd3-array';
 import { round, groupByTime, getOrInsert } from '../../../shared/analysis/analysis-math';
@@ -146,7 +146,7 @@ export function findParseDefensiveWindows(
 
     for (const buffWindow of (buffWindows.get(spellId) ?? [])) {
       const startS = buffWindow[0];
-      const endS = buffWindow[1] != null ? buffWindow[1] : fightDurationS;
+      const endS = buffWindow[1] ?? fightDurationS;
       const windowHits = hits.filter(hit => hit[0] >= startS && hit[0] <= endS);
       const windowDmg = windowHits.reduce((sum, hit) => sum + hit[1], 0);
 
@@ -327,7 +327,7 @@ export class DefensiveTransformService implements DataSource<DefensiveBench> {
   private readonly wclApi = inject(WclApiService);
   private readonly dataFiles = inject(DataFileApiService);
 
-  async getBench(spec: string, encounterId: number, partition?: number | null): Promise<Result<DefensiveBench, LoadError>> {
+  async getBench(spec: string, encounterId: number, partition?: number | null): Promise<Result<DefensiveBench>> {
     const rulebookResult = await this.dataFiles.getRulebook(spec);
     if (!rulebookResult.ok) return rulebookResult;
     const defensives = rulebookResult.value.defensives ?? [];

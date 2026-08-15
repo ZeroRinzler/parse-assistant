@@ -31,7 +31,7 @@ export class CollapsibleTextComponent {
       if (typeof ResizeObserver !== 'undefined') {
         const observer = new ResizeObserver(measure);
         observer.observe(el);
-        this.destroyRef.onDestroy(() => observer.disconnect());
+        this.destroyRef.onDestroy(() => { observer.disconnect(); });
       }
     });
   }

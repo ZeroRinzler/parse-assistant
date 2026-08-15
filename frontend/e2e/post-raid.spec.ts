@@ -27,7 +27,7 @@ test.beforeAll(async ({ browser }) => {
   page = await browser.newPage();
   // Seeded before boot so the one analysis targets Elsahr instead of the roster's first player.
   await page.addInitScript(
-    ([key, name]) => localStorage.setItem(key, JSON.stringify({ playerName: name })),
+    ([key, name]) => { localStorage.setItem(key, JSON.stringify({ playerName: name })); },
     [STICKY_PLAYER_KEY, PLAYER_NAME],
   );
   await page.goto('/');

@@ -3,7 +3,7 @@ import { WritableSignal, provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { FormControl } from '@angular/forms';
 import { EncounterEntry, SpecEntry } from '../../core/models/encounter.models';
-import { LoadError, Result, ok } from '../../core/result';
+import { Result, ok } from '../../core/result';
 import { mountVm } from '../../../testing/component-harness';
 import { PreFightComponent } from './pre-fight';
 import { EncounterSelectionService } from './encounter-selection.service';
@@ -39,8 +39,8 @@ function providers(encounterSelection: Partial<EncounterSelectionService>): unkn
 
 function mountPreFight(encounters: EncounterEntry[] = [BENCHED_ENCOUNTER]) {
   return mountVm(PreFightComponent, {}, providers({
-    getSpecs: (): Promise<Result<SpecEntry[], LoadError>> => Promise.resolve(ok([])),
-    getEncounters: (_spec: string): Promise<Result<EncounterEntry[], LoadError>> => Promise.resolve(ok(encounters)),
+    getSpecs: (): Promise<Result<SpecEntry[]>> => Promise.resolve(ok([])),
+    getEncounters: (_spec: string): Promise<Result<EncounterEntry[]>> => Promise.resolve(ok(encounters)),
   }));
 }
 
@@ -68,18 +68,18 @@ describe('PreFightComponent stale-encounter reset', () => {
     pickEncounter(vm, SELECTED_ENCOUNTER_ID);
     expect(selectedEncId(vm)).toBe(SELECTED_ENCOUNTER_ID);
 
-    (vm['onClassChange'] as () => void)();
+    (vm['onClassChange'])();
 
     expect(selectedEncId(vm)).toBe(NO_ENCOUNTER);
   });
 
   it('closes the encounter-gated cards when the spec changes', () => {
     const { vm } = mountPreFight();
-    (vm['specControl'] as FormControl<string>).setValue(NEW_SPEC);
+    (vm['specControl']).setValue(NEW_SPEC);
     pickEncounter(vm, SELECTED_ENCOUNTER_ID);
     expect(selectedEncId(vm)).toBe(SELECTED_ENCOUNTER_ID);
 
-    (vm['onSpecChange'] as () => void)();
+    (vm['onSpecChange'])();
 
     expect(selectedEncId(vm)).toBe(NO_ENCOUNTER);
   });
@@ -92,13 +92,13 @@ describe('PreFightComponent encounter load latest-wins', () => {
   const NEWER_ENCOUNTER: EncounterEntry = { id: 3131, name: 'Boss Newer', sample_count: 4 };
 
   class ParkedEncounterSelection {
-    private readonly resolvers = new Map<string, (result: Result<EncounterEntry[], LoadError>) => void>();
+    private readonly resolvers = new Map<string, (result: Result<EncounterEntry[]>) => void>();
 
-    getSpecs(): Promise<Result<SpecEntry[], LoadError>> {
+    getSpecs(): Promise<Result<SpecEntry[]>> {
       return Promise.resolve(ok([]));
     }
 
-    getEncounters(spec: string): Promise<Result<EncounterEntry[], LoadError>> {
+    getEncounters(spec: string): Promise<Result<EncounterEntry[]>> {
       return new Promise(resolve => this.resolvers.set(spec, resolve));
     }
 
@@ -115,7 +115,7 @@ describe('PreFightComponent encounter load latest-wins', () => {
       providers: [
         provideZonelessChangeDetection(),
         PreFightComponent,
-        ...providers(api as unknown as EncounterSelectionService),
+        ...providers(api),
       ] as never[],
     });
     return { api, vm: TestBed.inject(PreFightComponent) as unknown as Record<string, unknown> };
@@ -201,13 +201,13 @@ describe('PreFightComponent card loading state', () => {
 
   it('goes busy again when another encounter is picked', async () => {
     const { vm } = mountPreFight([BENCHED_ENCOUNTER, OTHER_BENCHED_ENCOUNTER]);
-    (vm['specControl'] as FormControl<string>).setValue(NEW_SPEC);
+    (vm['specControl']).setValue(NEW_SPEC);
     pickEncounter(vm, SELECTED_ENCOUNTER_ID);
     for (const name of CARD_BUSY_SIGNALS) reportCardLoaded(vm, name);
     expect(cardsBusy(vm)).toBe(false);
 
     pickEncounter(vm, OTHER_ENCOUNTER_ID);
-    await (vm['onEncChange'] as () => Promise<void>)();
+    (vm['onEncChange'])();
 
     expect(cardsBusy(vm)).toBe(true);
   });

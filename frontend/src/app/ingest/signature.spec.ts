@@ -5,7 +5,7 @@ import {
   isFutureVersion,
   type SignatureRanking,
 } from './signature';
-import { ok, missing, transient, permanent, type Result, type LoadError } from '../core/result';
+import { ok, missing, transient, permanent, type Result } from '../core/result';
 
 const rankings = (...rows: [string, number][]): SignatureRanking[] =>
   rows.map(([report_code, fight_id]) => ({ report_code, fight_id }));
@@ -284,9 +284,9 @@ describe('stampBurstFile', () => {
   const data = { spec: 'X', encounter_id: 1 };
 
   // Only .ok and .error.kind matter to the stamp, so the ok payload is a placeholder.
-  const OK: Result<unknown, LoadError> = ok('slice');
-  const ALL_OK: Result<unknown, LoadError>[] = [OK, OK, OK, OK, OK];
-  const withSibling = (sibling: Result<unknown, LoadError>): Result<unknown, LoadError>[] => [OK, sibling, OK, OK, OK];
+  const OK: Result<unknown> = ok('slice');
+  const ALL_OK: Result<unknown>[] = [OK, OK, OK, OK, OK];
+  const withSibling = (sibling: Result<unknown>): Result<unknown>[] => [OK, sibling, OK, OK, OK];
 
   const nextRunSkips = (file: { source_signature?: string }): boolean =>
     signatureMatches(readStoredSignature(file), SIGNATURE);

@@ -83,7 +83,7 @@ export class DefensiveComponent {
             this._clipAnchors.set([]);
           }
         },
-        settled: () => this.busyChange.emit(false),
+        settled: () => { this.busyChange.emit(false); },
       });
     });
   }

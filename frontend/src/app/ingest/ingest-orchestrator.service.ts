@@ -61,9 +61,9 @@ class ApiWclClient implements WclQueryClient {
 
   constructor(private readonly wclApi: WclApiService) {}
 
-  query<T = unknown, TVars extends object = Record<string, never>>(gql: string, variables?: TVars): Promise<T> {
+  query<T = unknown>(gql: string, variables?: object): Promise<T> {
     // These reads are marked uncached (see wclCachingHeaders), so the budget gate sees fresh data.
-    return this.wclApi.query<T>(gql, (variables ?? {}) as object);
+    return this.wclApi.query<T>(gql, (variables ?? {}));
   }
 
   async assertBudget(margin: number): Promise<void> {
@@ -220,7 +220,7 @@ export class IngestOrchestratorService {
     const displayBySpec = new Map(orderInputs.map(input => [input.spec, input] as const));
     const versionLines = specs.map(spec => {
       const info = displayBySpec.get(spec);
-      const versionLabel = info && info.displayVersion != null ? `v${info.displayVersion}` : 'v?';
+      const versionLabel = info?.displayVersion != null ? `v${info.displayVersion}` : 'v?';
       return `${spec} ${versionLabel}`;
     });
     console.log(`Specs (old version first):\n${versionLines.join('\n')}`);

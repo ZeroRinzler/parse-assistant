@@ -14,7 +14,7 @@ export const retryTransientInterceptor: HttpInterceptorFn = (req, next) => {
   return next(req).pipe(
     retry({
       count: maxAttempts,
-      delay: (error, retryCount) => {
+      delay: (error: unknown, retryCount) => {
         const status = error instanceof HttpErrorResponse ? error.status : -1;
         if (!RETRYABLE_STATUSES.has(status)) return throwError(() => error);
         return timer(BASE_DELAY_MS * 2 ** (retryCount - 1));
