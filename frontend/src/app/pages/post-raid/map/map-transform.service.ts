@@ -12,8 +12,6 @@ import { posActorId } from './map-positions';
 import { DataSource } from '../../../core/data-source/data-source';
 import { MapData } from './map-data-source';
 
-// Re-exported so call sites / specs importing these from the transform service keep working.
-export { toParseRankings } from '../../../shared/analysis/wcl-projections';
 export { posActorId } from './map-positions';
 
 /** How many top parses to sample (matches the ingest bench). */

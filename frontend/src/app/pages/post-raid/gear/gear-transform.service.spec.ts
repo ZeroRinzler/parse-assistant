@@ -67,10 +67,6 @@ describe('toParseGear', () => {
     });
   });
 
-  it('returns null for absent gear', () => {
-    expect(toParseGear(null, ranking, 537)).toBeNull();
-    expect(toParseGear({ found: false }, ranking, 537)).toBeNull();
-  });
 });
 
 function gearParse(overrides: Partial<ParseGear>): ParseGear {

@@ -1,22 +1,15 @@
 /** Named spell-id constants for tests, since production code never hardcodes spec spell IDs (they come from the rulebook). */
 
-// Bloodlust / Heroism family - must match the real IDs the engine detects.
+// Bloodlust - must match the real ID the engine detects.
 export const BLOODLUST = 2825;
-export const HEROISM = 32182;
-export const TIME_WARP = 80353;
-export const ANCIENT_HYSTERIA = 90355;
-export const PRIMAL_RAGE = 264667;
-export const FURY_OF_THE_ASPECTS = 390386;
 
 export const SHADOW_BLADES = 121471;
 export const SHADOW_DANCE = 185313;
 export const SECRET_TECHNIQUE = 280719;
 export const VANISH = 1856;
-export const SYMBOLS_OF_DEATH = 212283;
 
 export const CLOAK_OF_SHADOWS = 31224;
 export const EVASION = 5277;
-export const CRIMSON_VIAL = 185311;
 export const FEINT = 1966;
 
 export const EVISCERATE = 196819;

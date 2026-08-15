@@ -16,8 +16,6 @@ import { TimedEvent, abilityIcons, findParseActor, normalizeAbilityId, relativeS
 import { DataSource } from '../../../core/data-source/data-source';
 import { DefensiveBench, DefensivePlanMeta } from './defensive-data-source';
 
-// Re-exported so call sites / specs importing it from the transform service keep working.
-export { toParseRankings } from '../../../shared/analysis/wcl-projections';
 
 const TOP_PARSE_COUNT = 10;
 // Over-fetch so a private/unfetchable top parse can be backfilled; the loop break caps actual fetches at TOP_PARSE_COUNT.

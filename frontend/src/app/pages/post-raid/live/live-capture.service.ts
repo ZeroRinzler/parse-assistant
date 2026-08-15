@@ -15,7 +15,6 @@ export interface CaptureProfile {
 }
 
 export interface Segment {
-  idx: number;
   start: number;
   end: number;
   blob: Blob;
@@ -71,12 +70,6 @@ export function buildClipWindow(
     toMs: absStart + window.windowLengthS * 1000 + roll.postMs,
     key: window.key,
   };
-}
-
-export function buildClipWindows(
-  reportStartTime: number, fightStartTime: number, windows: ClipAnchor[], roll: ClipRoll,
-): ClipWindow[] {
-  return windows.map(window => buildClipWindow(reportStartTime, fightStartTime, window, roll));
 }
 
 export function fullPullWindow(reportStartTime: number, fightStartTime: number, fightEndTime: number): ClipWindow {
@@ -139,7 +132,6 @@ export class LiveCaptureFeatureService {
 
   private stream: MediaStream | null = null;
   private readonly segments = signal<Segment[]>([]);
-  private segIdx = 0;
   private mimeType = 'video/webm';
 
   readonly liveEnabled = this.liveActive.asReadonly();
@@ -222,7 +214,7 @@ export class LiveCaptureFeatureService {
       const cutoff = Date.now() - BUFFER_MS;
       // Only a segment with footage counts toward clip coverage; a zero-byte blob cannot decode.
       if (blob.size) {
-        const segment: Segment = { idx: this.segIdx++, start, end: Date.now(), blob };
+        const segment: Segment = { start, end: Date.now(), blob };
         this.segments.update(buffer => [...buffer.filter(existing => existing.end >= cutoff), segment]);
       }
       if (this.isCapturing()) this.cycleSegment();

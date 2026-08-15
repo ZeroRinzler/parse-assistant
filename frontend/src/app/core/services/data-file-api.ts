@@ -37,10 +37,6 @@ export class DataFileApiService {
     return foldMissingToEmpty(await this.io.readJson<EncounterEntry[]>(`${spec}/encounters.json`));
   }
 
-  getPositions(spec: string, encounterId: number): Promise<Result<EncounterPositions>> {
-    return this.io.readJson<EncounterPositions>(`${spec}/positions/${encounterId}.json`);
-  }
-
   writeSlice(spec: string, encounterId: number, slice: string, data: unknown): Promise<void> {
     return this.io.writeJson(`${spec}/${slice}/${encounterId}.json`, data);
   }

@@ -11,7 +11,6 @@ export const DAMAGE = /\d+(\.\d+)?[KM]/;
 export const CLOCK = /-?\d+:\d{2}/;
 export const PERCENT = /[+-]?\d+(\.\d+)?%/;
 export const RATIO = /\d+ \/ \d+/;
-export const DECIMAL = /\d+\.\d+/;
 
 /** Asserts the "Typical uses" cell (shared by defensive-plan and rotation-cd-plan) renders a value: number:'1.0-1' drops the fraction on a whole number, so a bare integer is a valid render, not a miss. */
 export async function showsTypicalUses(scope: Locator): Promise<void> {

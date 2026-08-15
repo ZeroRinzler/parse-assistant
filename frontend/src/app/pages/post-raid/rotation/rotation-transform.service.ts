@@ -20,8 +20,6 @@ import {
 import { detectBloodlust } from './rotation-bloodlust';
 import { RotationBench } from './rotation-data-source';
 
-// Re-exported so call sites and specs can import it from this service.
-export { toParseRankings } from '../../../shared/analysis/wcl-projections';
 
 /** How many top parses to sample. */
 const TOP_PARSE_COUNT = 10;

@@ -1,7 +1,7 @@
-import { assert, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   ClipRoll, ClipWindow, Segment,
-  absoluteWindowStart, buildClipWindows, fullPullWindow, interSegmentGapMs, segmentSeekOffset, segmentsCover, selectSegments,
+  absoluteWindowStart, buildClipWindow, fullPullWindow, interSegmentGapMs, segmentSeekOffset, segmentsCover, selectSegments,
 } from './live-capture.service';
 import { ClipAnchor } from '../../../core/models/capture.models';
 
@@ -12,8 +12,8 @@ const WINDOW_LENGTH_S = 6;
 const ROLL: ClipRoll = { preMs: 5_000, postMs: 5_000 };
 
 /** A blob-less segment stub - the pure fns only read the wall-clock bounds. */
-function seg(idx: number, startMs: number, endMs: number): Segment {
-  return { idx, start: startMs, end: endMs, blob: new Blob([]) };
+function seg(startMs: number, endMs: number): Segment {
+  return { start: startMs, end: endMs, blob: new Blob([]) };
 }
 
 function anchor(over: Partial<ClipAnchor> = {}): ClipAnchor {
@@ -30,29 +30,16 @@ describe('absoluteWindowStart', () => {
   });
 });
 
-describe('buildClipWindows', () => {
-  it('widens each window by pre/post roll around its absolute span', () => {
+describe('buildClipWindow', () => {
+  it('widens the window by pre/post roll around its absolute span', () => {
     const absStart = REPORT_START_MS + FIGHT_START_MS + WINDOW_TIME_S * 1000;
-    const [window] = buildClipWindows(REPORT_START_MS, FIGHT_START_MS, [anchor()], ROLL);
-    assert.exists(window);
+    const window = buildClipWindow(REPORT_START_MS, FIGHT_START_MS, anchor(), ROLL);
     expect(window.fromMs).toBe(absStart - ROLL.preMs);
-    assert.exists(window);
     expect(window.toMs).toBe(absStart + WINDOW_LENGTH_S * 1000 + ROLL.postMs);
   });
 
-  it('carries each window key through unchanged', () => {
-    const [window] = buildClipWindows(REPORT_START_MS, FIGHT_START_MS, [anchor({ key: 'def3' })], ROLL);
-    assert.exists(window);
-    expect(window.key).toBe('def3');
-  });
-
-  it('keeps one clip per window rather than merging them', () => {
-    const windows = buildClipWindows(REPORT_START_MS, FIGHT_START_MS, [anchor({ key: 'a' }), anchor({ key: 'b', timeS: 11 })], ROLL);
-    expect(windows.map(w => w.key)).toEqual(['a', 'b']);
-  });
-
-  it('returns [] for no windows', () => {
-    expect(buildClipWindows(REPORT_START_MS, FIGHT_START_MS, [], ROLL)).toEqual([]);
+  it('carries the window key through unchanged', () => {
+    expect(buildClipWindow(REPORT_START_MS, FIGHT_START_MS, anchor({ key: 'def3' }), ROLL).key).toBe('def3');
   });
 });
 
@@ -75,17 +62,17 @@ describe('selectSegments', () => {
   const window: ClipWindow = { fromMs: 100, toMs: 200, key: 'w0' };
 
   it('returns only the segments overlapping the window, sorted by start', () => {
-    const before = seg(0, 0, 90);
-    const overlapLeft = seg(1, 50, 150);
-    const inside = seg(2, 150, 180);
-    const after = seg(3, 210, 260);
+    const before = seg(0, 90);
+    const overlapLeft = seg(50, 150);
+    const inside = seg(150, 180);
+    const after = seg(210, 260);
     const selected = selectSegments([after, inside, overlapLeft, before], window);
-    expect(selected.map(s => s.idx)).toEqual([1, 2]);
+    expect(selected).toEqual([overlapLeft, inside]);
   });
 
   it('excludes a segment that only touches the window edge (strict overlap)', () => {
-    const endsAtStart = seg(0, 0, 100); // end == fromMs
-    const startsAtEnd = seg(1, 200, 300); // start == toMs
+    const endsAtStart = seg(0, 100); // end == fromMs
+    const startsAtEnd = seg(200, 300); // start == toMs
     expect(selectSegments([endsAtStart, startsAtEnd], window)).toEqual([]);
   });
 
@@ -99,11 +86,11 @@ describe('segmentSeekOffset', () => {
 
   it('is the seconds from the first segment start to the window start', () => {
     // window starts 2s into a segment that began at 10_000
-    expect(segmentSeekOffset(window, seg(0, 10_000, 13_000))).toBe(2);
+    expect(segmentSeekOffset(window, seg(10_000, 13_000))).toBe(2);
   });
 
   it('clamps to 0 when the window starts before the first segment', () => {
-    expect(segmentSeekOffset(window, seg(0, 13_000, 16_000))).toBe(0);
+    expect(segmentSeekOffset(window, seg(13_000, 16_000))).toBe(0);
   });
 
   it('is 0 when there is no first segment', () => {
@@ -114,26 +101,26 @@ describe('segmentSeekOffset', () => {
 describe('interSegmentGapMs', () => {
   it('sums the wall-clock gaps between consecutive segments (the recorder restarts)', () => {
     // 100ms lost between segments 0 and 1, 50ms between 1 and 2.
-    expect(interSegmentGapMs([seg(0, 0, 3_000), seg(1, 3_100, 6_100), seg(2, 6_150, 9_150)])).toBe(150);
+    expect(interSegmentGapMs([seg(0, 3_000), seg(3_100, 6_100), seg(6_150, 9_150)])).toBe(150);
   });
 
   it('is 0 for back-to-back segments', () => {
-    expect(interSegmentGapMs([seg(0, 0, 3_000), seg(1, 3_000, 6_000)])).toBe(0);
+    expect(interSegmentGapMs([seg(0, 3_000), seg(3_000, 6_000)])).toBe(0);
   });
 
   it('is 0 for a single segment and for none', () => {
-    expect(interSegmentGapMs([seg(0, 0, 3_000)])).toBe(0);
+    expect(interSegmentGapMs([seg(0, 3_000)])).toBe(0);
     expect(interSegmentGapMs([])).toBe(0);
   });
 });
 
 describe('segmentsCover', () => {
   it('is true when a segment overlaps the span', () => {
-    expect(segmentsCover([seg(0, 100, 200)], 150, 300)).toBe(true);
+    expect(segmentsCover([seg(100, 200)], 150, 300)).toBe(true);
   });
 
   it('is false when every segment is disjoint from the span (report not recorded here)', () => {
-    expect(segmentsCover([seg(0, 100, 200)], 500, 900)).toBe(false);
+    expect(segmentsCover([seg(100, 200)], 500, 900)).toBe(false);
   });
 
   it('is false for an empty buffer', () => {

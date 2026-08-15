@@ -1249,8 +1249,7 @@ export function benchedRules(
 export function evaluateCondition(
   cond: RuleCondition, ctx: RuleContext, band: RuleBand | null, severity: Severity, remedy?: string,
 ): AnalysisFinding | null {
-  const spec = specFor(cond);
-  return spec.evaluate(cond, ctx, band, spec.judging(cond), severity, remedy);
+  return specFor(cond).evaluate(cond, ctx, band, ruleJudging(cond), severity, remedy);
 }
 
 /** Whether the pull gave the player any chance to break the rule; without this a rule reads as followed on a fight it never came up in. */

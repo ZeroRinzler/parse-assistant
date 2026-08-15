@@ -79,12 +79,6 @@ describe('DataFileApiService reads', () => {
     expect(transport.reads).toEqual(['SubtletyRogue/rulebook.json']);
   });
 
-  it('reads positions at {spec}/positions/{enc}.json', async () => {
-    const transport = new RecordingTransport(ok(null));
-    await withTransport(transport).getPositions(SPEC, ENCOUNTER_ID);
-    expect(transport.reads).toEqual(['SubtletyRogue/positions/3176.json']);
-  });
-
   it('reads the spec manifest at index.json, folding a missing file to ok([]) but propagating a transient error', async () => {
     const specs: SpecEntry[] = [{ spec: SPEC, encounter_count: 2 }];
     const present = new RecordingTransport(ok(specs));
