@@ -58,8 +58,6 @@ async function waitForHttp(url, name) {
 }
 
 async function launchBrowser() {
-  const executablePath = process.env.INGEST_CHROMIUM_PATH;
-  if (executablePath) return await chromium.launch({ executablePath });
   try {
     return await chromium.launch();
   } catch {
