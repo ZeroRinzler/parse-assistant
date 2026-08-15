@@ -49,7 +49,7 @@ export function filterEncounters(expansions: WclExpansion[]): IngestEncounter[] 
       .map(partition => partition.id)
       .sort((a, b) => b - a);
     for (const encounter of (zone.encounters ?? [])) {
-      result.push({ id: encounter.id, name: encounter.name, zone: zone.name, zoneId: zone.id, expansion: firstExpansion.name, partitionIds });
+      result.push({ id: encounter.id, name: encounter.name, zone: zone.name, zoneId: zone.id, partitionIds });
     }
   }
   return result;

@@ -94,20 +94,19 @@ export function buildAbilityIconsQuery(ids: number[]): string {
 // Ingest discovery queries (used only by src/app/ingest, bundled only there)
 
 /** The WCL hourly point budget - the ingest orchestrator's budget gate. */
-export const RATE_LIMIT_Q = `query { rateLimitData { limitPerHour pointsSpentThisHour pointsResetIn } }`;
+export const RATE_LIMIT_Q = `query { rateLimitData { limitPerHour pointsSpentThisHour } }`;
 
 // `class.slug`/`spec.slug` are the exact `className`/`specName` the rankings query takes; the folder key is `spec.slug + class.slug`.
-export const CLASSES_Q = `query { gameData { classes { id name slug specs { id name slug } } } }`;
+export const CLASSES_Q = `query { gameData { classes { name slug specs { name slug } } } }`;
 
 /** The worldData expansion tree the current-raid discovery filters. */
 export const ENCOUNTERS_Q = `
 query {
   worldData {
     expansions {
-      id name
       zones {
         id name frozen
-        partitions { id name }
+        partitions { id }
         encounters { id name }
       }
     }

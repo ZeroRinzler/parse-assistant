@@ -6,16 +6,16 @@ describe('filterEncounters', () => {
   it('uses only the first expansion, excludes beta/ptr zones, and sorts partitions descending', () => {
     const expansions: WclExpansion[] = [
       {
-        id: 1, name: 'Current', zones: [
-          { id: 10, name: 'Raid', partitions: [{ id: 1, name: 'p1' }, { id: 3, name: 'p3' }, { id: 2, name: 'p2' }], encounters: [{ id: 100, name: 'Boss 1' }] },
+        zones: [
+          { id: 10, name: 'Raid', partitions: [{ id: 1 }, { id: 3 }, { id: 2 }], encounters: [{ id: 100, name: 'Boss 1' }] },
           { id: 11, name: 'Beta Zone', encounters: [{ id: 200, name: 'Beta Boss' }] },
         ],
       },
-      { id: 2, name: 'Older', zones: [{ id: 20, name: 'Old Raid', encounters: [{ id: 300, name: 'Old Boss' }] }] },
+      { zones: [{ id: 20, name: 'Old Raid', encounters: [{ id: 300, name: 'Old Boss' }] }] },
     ];
     const encounters = filterEncounters(expansions);
     expect(encounters).toHaveLength(1);
-    expect(encounters[0]).toMatchObject({ id: 100, name: 'Boss 1', zone: 'Raid', expansion: 'Current', partitionIds: [3, 2, 1] });
+    expect(encounters[0]).toMatchObject({ id: 100, name: 'Boss 1', zone: 'Raid', partitionIds: [3, 2, 1] });
   });
 
   it('returns [] when there are no expansions', () => {
@@ -26,7 +26,7 @@ describe('filterEncounters', () => {
   it('drops frozen zones even when their name matches no exclude pattern, and carries zoneId', () => {
     const expansions: WclExpansion[] = [
       {
-        id: 7, name: 'Midnight', zones: [
+        zones: [
           { id: 46, name: 'VS / DR / MQD', frozen: false, encounters: [{ id: 3176, name: 'Imperator Averzian' }] },
           { id: 53, name: 'The Venomous Abyss', frozen: true, encounters: [{ id: 3470, name: 'Old Boss' }] },
           { id: 510, name: 'The Venomous Abyss Complete Raid', frozen: true, encounters: [{ id: 3191, name: 'Aggregate' }] },
@@ -60,13 +60,13 @@ describe('protectedEncounterIds', () => {
   it('collects every non-frozen current-expansion id (ignoring name-exclude/probe), and drops frozen + older expansions', () => {
     const expansions: WclExpansion[] = [
       {
-        id: 7, name: 'Midnight', zones: [
+        zones: [
           { id: 46, name: 'VS / DR / MQD', frozen: false, encounters: [{ id: 3176, name: 'A' }, { id: 3177, name: 'B' }] },
           { id: 47, name: 'Mythic+ Season 1', frozen: false, encounters: [{ id: 112526, name: 'Dungeon' }] }, // name-excluded but still protected
           { id: 53, name: 'The Venomous Abyss', frozen: true, encounters: [{ id: 3470, name: 'Old' }] },
         ],
       },
-      { id: 6, name: 'The War Within', zones: [{ id: 44, name: 'Manaforge Omega', frozen: true, encounters: [{ id: 3129, name: 'Old' }] }] },
+      { zones: [{ id: 44, name: 'Manaforge Omega', frozen: true, encounters: [{ id: 3129, name: 'Old' }] }] },
     ];
     const ids = protectedEncounterIds(expansions);
     expect([...ids].sort((a, b) => a - b)).toEqual([3176, 3177, 112526]);
@@ -79,15 +79,15 @@ describe('protectedEncounterIds', () => {
 
 describe('mapClassesToSpecMeta', () => {
   const classes: WclGameClass[] = [
-    { id: 4, name: 'Rogue', slug: 'Rogue', specs: [
-      { id: 259, name: 'Assassination', slug: 'Assassination' },
-      { id: 261, name: 'Subtlety', slug: 'Subtlety' },
+    { name: 'Rogue', slug: 'Rogue', specs: [
+      { name: 'Assassination', slug: 'Assassination' },
+      { name: 'Subtlety', slug: 'Subtlety' },
     ] },
-    { id: 3, name: 'Hunter', slug: 'Hunter', specs: [
-      { id: 253, name: 'Beast Mastery', slug: 'BeastMastery' },
+    { name: 'Hunter', slug: 'Hunter', specs: [
+      { name: 'Beast Mastery', slug: 'BeastMastery' },
     ] },
-    { id: 12, name: 'Demon Hunter', slug: 'DemonHunter', specs: [
-      { id: 1473, name: 'Devourer', slug: 'Devourer' },
+    { name: 'Demon Hunter', slug: 'DemonHunter', specs: [
+      { name: 'Devourer', slug: 'Devourer' },
     ] },
   ];
 
@@ -114,7 +114,7 @@ describe('mapClassesToSpecMeta', () => {
 describe('specWclFromMetas', () => {
   it('projects each spec to [className, specName]', () => {
     const metas = mapClassesToSpecMeta([
-      { id: 4, name: 'Rogue', slug: 'Rogue', specs: [{ id: 261, name: 'Subtlety', slug: 'Subtlety' }] },
+      { name: 'Rogue', slug: 'Rogue', specs: [{ name: 'Subtlety', slug: 'Subtlety' }] },
     ]);
     expect(specWclFromMetas(metas)['SubtletyRogue']).toEqual(['Rogue', 'Subtlety']);
   });
