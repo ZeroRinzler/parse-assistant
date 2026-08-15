@@ -29,15 +29,17 @@ jobs:
   # static output is handed to the publish job as artifacts.
   build:
     runs-on: ubuntu-latest
+    # A merge fires push and pull_request:closed at once, and the loser of the gh-pages
+    # concurrency queue is cancelled silently. Only the push run publishes.
+    if: github.event.action != 'closed' || github.event.pull_request.merged == false
     permissions:
       contents: read
       pull-requests: read
-    # The gh-pages root slices this run owns: push -> the prod shell (main/ plus the root
-    # index.html and 404.html), pull_request -> the pr-* previews, dispatch -> both (full
-    # resync). data/ (owned by ingest-parses) and CNAME ride along untouched.
+    # The shell is main/ plus the root index.html and 404.html; data/ (owned by ingest-parses)
+    # and CNAME ride along untouched. Previews rebuild every run, so a closed PR's is reaped
+    # by omission.
     env:
       BUILD_SHELL: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
-      BUILD_PREVIEWS: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' }}
     outputs:
       open_prs: ${{ steps.open-prs.outputs.numbers }}
 
@@ -76,7 +78,6 @@ jobs:
       # vanishes by not being rebuilt (PRs against other branches have no buildable app).
       - name: List open PR numbers
         id: open-prs
-        if: env.BUILD_PREVIEWS == 'true'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
@@ -95,7 +96,6 @@ jobs:
       # the reap of the others. pull/N/head is UNTRUSTED contributor code; this job holds no
       # write credential, so the npm ci / build it runs cannot reach a token or push.
       - name: Build all open PR previews
-        if: env.BUILD_PREVIEWS == 'true'
         env:
           OPEN_PRS: ${{ steps.open-prs.outputs.numbers }}
         run: |
@@ -127,7 +127,6 @@ jobs:
           retention-days: 1
 
       - name: Upload previews artifact
-        if: env.BUILD_PREVIEWS == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: preview-out
@@ -147,7 +146,6 @@ jobs:
       deployments: write
     env:
       BUILD_SHELL: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
-      BUILD_PREVIEWS: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' }}
       OPEN_PRS: ${{ needs.build.outputs.open_prs }}
 
     steps:
@@ -173,7 +171,6 @@ jobs:
           path: shell-out
 
       - name: Download previews artifact
-        if: env.BUILD_PREVIEWS == 'true'
         continue-on-error: true
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -195,12 +192,10 @@ jobs:
               rm -rf main index.html 404.html
               cp -a ../shell-out/. .
             fi
-            if [ "$BUILD_PREVIEWS" = "true" ]; then
-              # Remove any existing previews/ wrapper dir along with the per-PR dirs.
-              rm -rf pr-* previews
-              if compgen -G "../preview-out/pr-*" > /dev/null; then
-                cp -a ../preview-out/pr-* .
-              fi
+            # Remove any existing previews/ wrapper dir along with the per-PR dirs.
+            rm -rf pr-* previews
+            if compgen -G "../preview-out/pr-*" > /dev/null; then
+              cp -a ../preview-out/pr-* .
             fi
             git checkout --quiet --orphan _deploy
             git add -A
@@ -211,11 +206,9 @@ jobs:
             else
               parts=""
               if [ "$BUILD_SHELL" = "true" ]; then
-                parts="main shell"
+                parts="main shell + "
               fi
-              if [ "$BUILD_PREVIEWS" = "true" ]; then
-                parts="${parts:+$parts + }PR previews: ${OPEN_PRS:-(none)}"
-              fi
+              parts="${parts}PR previews: ${OPEN_PRS:-(none)}"
               git -c user.name="github-actions[bot]" \
                   -c user.email="github-actions[bot]@users.noreply.github.com" \
                   commit --quiet -m "Publish $parts"
@@ -224,11 +217,19 @@ jobs:
           )
           git worktree remove --force ghp
 
-      # Keeps the per-PR "View deployment" link in sync: live on open/update, inactive on
-      # close. Only pull_request events carry a single PR.
-      - name: Update deployment status for the triggering PR
-        if: github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'main'
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+  # Its own job because a merged close skips the build above but must still retire the link.
+  pr-deployment-status:
+    needs: publish
+    if: >-
+      always() && github.event_name == 'pull_request'
+      && github.event.pull_request.base.ref == 'main'
+      && (github.event.action == 'closed' || needs.publish.result == 'success')
+    runs-on: ubuntu-latest
+    permissions:
+      deployments: write
+
+    steps:
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const pr = context.payload.pull_request.number;
