@@ -240,7 +240,6 @@ export function clusterDefensiveWindows(windows: ParseDefWindow[], sampleCount: 
         window_length_s: round(mean(cluster.map(member => member.window_length_s)) ?? 0),
         defensive_name: defensiveName,
         spell_id: clusterHead.spell_id,
-        common_defensives: [defensiveName],
         common_cds: [defensiveName],
         ref_game_id,
         ability_breakdown: clusterAbilityBreakdown(cluster),

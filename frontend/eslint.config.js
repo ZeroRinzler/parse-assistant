@@ -108,9 +108,7 @@ export default defineConfig([
         process: 'readonly',
         console: 'readonly',
         setTimeout: 'readonly',
-        clearTimeout: 'readonly',
         fetch: 'readonly',
-        URL: 'readonly',
       },
     },
     rules: {

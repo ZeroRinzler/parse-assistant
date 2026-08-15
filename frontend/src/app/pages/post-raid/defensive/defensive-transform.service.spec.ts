@@ -208,8 +208,6 @@ describe('clusterDefensiveWindows', () => {
     expect(out).toHaveLength(1);
     expect(out[0]).toMatchObject({ time_s: 10.5, defensive_name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS, dmg_avg: 700, ref_game_id: BOSS_GAME_ID });
     assert.exists(out[0]);
-    expect(out[0].common_defensives).toEqual(['Cloak of Shadows']);
-    assert.exists(out[0]);
     expect(out[0].ability_breakdown[0]).toMatchObject({ spell_id: BOSS_HIT, avg_damage: 500, count: 2 });
   });
 

@@ -317,7 +317,7 @@ export function buildDefensiveWindows(
     const notReached = window.time_s > fightDurationS;
     const playerWindow = notReached ? null : (playerWindows[index] ?? null);
     const playerDamage = playerWindow?.window_damage ?? null;
-    const defensiveName = window.defensive_name ?? window.common_defensives?.[0] ?? '';
+    const defensiveName = window.defensive_name ?? '';
     const playerDefensive = playerDefensives.find(entry => entry.name === defensiveName);
     const covered = playerCoveredWindow(window, playerDefensive);
     const { status, icon, note } = defensiveWindowStatus(playerDamage, window.dmg_max, window.dmg_stddev, notReached, covered);
@@ -346,7 +346,7 @@ export function buildDefensivePlanRows(bench: DefensiveBench | null): DefensiveP
   return bench.defensives.map(defensive => {
     const benchmark = benchmarks[defensive.name];
     const windowsS = windows
-      .filter(window => (window.defensive_name ?? window.common_defensives?.[0]) === defensive.name)
+      .filter(window => window.defensive_name === defensive.name)
       .map(window => window.time_s)
       .sort((a, b) => a - b);
     const holds = benchmark?.majority_hold

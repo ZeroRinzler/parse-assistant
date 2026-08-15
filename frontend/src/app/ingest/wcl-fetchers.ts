@@ -72,7 +72,7 @@ export async function rankingsFromPartition<T>(
 }
 
 export async function getRankingsLite(
-  client: WclQueryClient, spec: string, encounterId: number, specWcl: SpecWclMap, count = 10, partitionIds: number[] = [],
+  client: WclQueryClient, spec: string, encounterId: number, specWcl: SpecWclMap, count: number, partitionIds: number[],
 ): Promise<ParseRanking[]> {
   const mapping = specWcl[spec];
   if (!mapping) throw new Error(`Unknown spec: ${spec}`);

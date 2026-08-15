@@ -35,6 +35,7 @@ describe('orderSpecsByVersion', () => {
     let next = 0;
     const order = orderSpecsByVersion(
       [entry({ spec: 'Charlie' }), entry({ spec: 'Alpha' }), entry({ spec: 'Bravo' })],
+      DEFAULT_PRIORITY_SPECS,
       () => {
         const key = keys[next++];
         assert.exists(key);
@@ -49,6 +50,7 @@ describe('orderSpecsByVersion', () => {
     let next = 0;
     const order = orderSpecsByVersion(
       [entry({ spec: 'OutlawRogue' }), entry({ spec: 'SubtletyRogue' }), entry({ spec: 'AssassinationRogue' })],
+      DEFAULT_PRIORITY_SPECS,
       () => {
         const key = keys[next++];
         assert.exists(key);
@@ -65,8 +67,8 @@ describe('orderSpecsByVersion', () => {
         entry({ spec: 'SubtletyRogue' }),
         entry({ spec: 'AssassinationRogue' }),
       ],
-      () => 0,
       ['SubtletyRogue'],
+      () => 0,
     );
     expect(order[0]).toBe('SubtletyRogue');
     expect(order.slice(1).sort()).toEqual(['AssassinationRogue', 'OutlawRogue']);
@@ -79,7 +81,6 @@ describe('orderSpecsByVersion', () => {
         entry({ spec: 'EmptySpec', dataCount: 0, onCurrentVersion: false }),
         entry({ spec: 'OldSpec', onCurrentVersion: false }),
       ],
-      Math.random,
       ['SubtletyRogue'],
     );
     expect(order).toEqual(['EmptySpec', 'OldSpec', 'SubtletyRogue']);
@@ -99,14 +100,14 @@ describe('orderSpecsByVersion', () => {
   it('caps a run at SPEC_LIMIT specs, dropping the overflow', () => {
     // One more spec than the cap: specsForRun orders then slices, so the run never exceeds SPEC_LIMIT.
     const entries = Array.from({ length: SPEC_LIMIT + 1 }, (_, i) => entry({ spec: `Spec${i}` }));
-    expect(specsForRun(entries, () => 0.5)).toHaveLength(SPEC_LIMIT);
+    expect(specsForRun(entries)).toHaveLength(SPEC_LIMIT);
   });
 
   it('pins a custom priority list in order, ahead of the randomized rest', () => {
     const order = orderSpecsByVersion(
       [entry({ spec: 'OutlawRogue' }), entry({ spec: 'ArmsWarrior' }), entry({ spec: 'SubtletyRogue' })],
-      () => 0,
       ['ArmsWarrior', 'SubtletyRogue'],
+      () => 0,
     );
     expect(order).toEqual(['ArmsWarrior', 'SubtletyRogue', 'OutlawRogue']);
   });

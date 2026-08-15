@@ -117,8 +117,7 @@ export class PullOverviewFeatureService {
       if (!dps.ok) return dps;
 
       const deathEventsTimed = withRelativeS(deathEvents, fight.startTime);
-      const myDeaths = deathEventsTimed.filter(event => event.targetID === playerId);
-      const deaths = buildDeathRows(myDeaths, playerId, names);
+      const deaths = buildDeathRows(deathEventsTimed, playerId, names);
       let outcomeTimeS = fight.duration_s;
       if (result === 'wipe') {
         const resurrects = await this.wclApi.getResurrects(reportCode, fight.id, fight.startTime, fight.endTime);

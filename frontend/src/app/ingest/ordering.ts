@@ -24,8 +24,8 @@ export interface SpecOrderEntry {
 /** Order within each version group is randomized per call so every spec gets a turn at the front over many runs. */
 export function orderSpecsByVersion(
   entries: readonly SpecOrderEntry[],
-  random: () => number = Math.random,
   prioritySpecs: readonly string[] = DEFAULT_PRIORITY_SPECS,
+  random: () => number = Math.random,
 ): string[] {
   const group = (entry: SpecOrderEntry): number =>
     entry.dataCount === 0 ? 0 : entry.onCurrentVersion ? 2 : 1;
@@ -45,10 +45,9 @@ export function orderSpecsByVersion(
 
 export function specsForRun(
   entries: readonly SpecOrderEntry[],
-  random: () => number = Math.random,
   prioritySpecs: readonly string[] = DEFAULT_PRIORITY_SPECS,
 ): string[] {
-  return orderSpecsByVersion(entries, random, prioritySpecs).slice(0, SPEC_LIMIT);
+  return orderSpecsByVersion(entries, prioritySpecs).slice(0, SPEC_LIMIT);
 }
 
 /** So a partially ingested spec fills its remaining bosses before re-checking the ones already done. */
