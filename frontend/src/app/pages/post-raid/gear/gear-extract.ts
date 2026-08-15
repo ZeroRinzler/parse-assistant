@@ -23,7 +23,7 @@ const HTML_ENTITIES: Record<string, string> = {
 };
 
 export function decodeHtmlEntities(text: string): string {
-  return text.replace(/&(?:amp|lt|gt|quot|#39);/g, entity => HTML_ENTITIES[entity]);
+  return text.replace(/&(?:amp|lt|gt|quot|#39);/g, entity => HTML_ENTITIES[entity] ?? entity);
 }
 
 export function extractGear(gear: WclGearItem[] | undefined): {
@@ -34,7 +34,7 @@ export function extractGear(gear: WclGearItem[] | undefined): {
   const enchants: NonNullable<CharacterGear['enchants']> = [];
 
   (gear ?? []).forEach((item, slotIndex) => {
-    if (!item?.id) return;
+    if (!item.id) return;
     const itemId = typeof item.id === 'string' ? parseInt(item.id, 10) : item.id;
 
     if ((TRINKET_SLOTS as readonly number[]).includes(slotIndex)) {

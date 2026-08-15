@@ -212,10 +212,12 @@ export class MapCanvasComponent {
     ctx.strokeStyle = muted; ctx.globalAlpha = 0.25; ctx.lineWidth = 1.5;
     for (const trail of benchTrails) {
       ctx.beginPath();
-      trail.forEach((point, index) => {
+      let prev: RelPos | undefined;
+      for (const point of trail) {
         const [x, y] = toScreen(point);
-        if (index && point.mapID === trail[index - 1].mapID) ctx.lineTo(x, y); else ctx.moveTo(x, y);
-      });
+        if (prev && point.mapID === prev.mapID) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+        prev = point;
+      }
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
@@ -231,10 +233,12 @@ export class MapCanvasComponent {
     if (liveTrail.length) {
       ctx.strokeStyle = gold; ctx.globalAlpha = 0.5; ctx.lineWidth = 2;
       ctx.beginPath();
-      liveTrail.forEach((point, index) => {
+      let prev: RelPos | undefined;
+      for (const point of liveTrail) {
         const [x, y] = toScreen(point);
-        if (index && point.mapID === liveTrail[index - 1].mapID) ctx.lineTo(x, y); else ctx.moveTo(x, y);
-      });
+        if (prev && point.mapID === prev.mapID) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+        prev = point;
+      }
       ctx.stroke(); ctx.globalAlpha = 1;
     }
     if (read?.player) {

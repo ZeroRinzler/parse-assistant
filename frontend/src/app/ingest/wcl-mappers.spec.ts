@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { assert, describe, it, expect } from 'vitest';
 import { filterEncounters, groupEncountersByZone, protectedEncounterIds, mapClassesToSpecMeta, specWclFromMetas } from './wcl-mappers';
 import type { WclExpansion, IngestEncounter, WclGameClass } from './models/wcl.models';
 
@@ -47,8 +47,12 @@ describe('groupEncountersByZone', () => {
     ] as IngestEncounter[];
     const groups = groupEncountersByZone(encounters);
     expect([...groups.keys()].sort((a, b) => a - b)).toEqual([46, 54]);
-    expect(groups.get(46)!.map(encounter => encounter.id)).toEqual([1, 2]);
-    expect(groups.get(54)!.map(encounter => encounter.id)).toEqual([3]);
+    const zone46 = groups.get(46);
+    assert.exists(zone46);
+    expect(zone46.map(encounter => encounter.id)).toEqual([1, 2]);
+    const zone54 = groups.get(54);
+    assert.exists(zone54);
+    expect(zone54.map(encounter => encounter.id)).toEqual([3]);
   });
 });
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { assert, describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
@@ -99,6 +99,7 @@ describe('WclAuthService', () => {
 
     const requests = httpMock.match(req => req.url === WCL_TOKEN_URL);
     expect(requests.length).toBe(1);
+    assert.exists(requests[0]);
     requests[0].flush({ access_token: FIRST_TOKEN, expires_in: TOKEN_LIFETIME_S });
 
     expect(await first).toBe(FIRST_TOKEN);

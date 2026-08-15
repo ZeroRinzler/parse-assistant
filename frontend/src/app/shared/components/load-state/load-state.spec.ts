@@ -24,7 +24,7 @@ function render(inputs: Record<string, unknown>): Rendered {
   fixture.detectChanges();
   const host = fixture.nativeElement as HTMLElement;
   return {
-    text: (host.textContent ?? '').replace(/\s+/g, ' ').trim(),
+    text: host.textContent.replace(/\s+/g, ' ').trim(),
     icon: (host.querySelector('mat-icon')?.textContent ?? '').trim(),
   };
 }

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from 'vitest';
+import { assert, describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from 'vitest';
 import { getEncounters, getRankingsLite, rankingsFromPartition } from './wcl-fetchers';
 import { BudgetExceededError } from './wcl-client';
 import type { WclQueryClient } from './wcl-client';
@@ -131,6 +131,7 @@ describe('getRankingsLite', () => {
     const ranked = await getRankingsLite(client, 'SubtletyRogue', 100, SPEC_WCL, 10, [3, 2]);
     expect(queried).toEqual([3, 2]);
     expect(ranked).toHaveLength(1);
+    assert.exists(ranked[0]);
     expect(ranked[0].player).toBe('A');
   });
 
@@ -139,6 +140,7 @@ describe('getRankingsLite', () => {
       query: () => ({ worldData: { encounter: { name: 'Boss', characterRankings: JSON.stringify({ rankings: [{ name: 'A', report: { code: 'r', fightID: 1 } }] }) } } }),
     });
     const ranked = await getRankingsLite(client, 'SubtletyRogue', 100, SPEC_WCL, 10, []);
+    assert.exists(ranked[0]);
     expect(ranked[0].player).toBe('A');
   });
 });

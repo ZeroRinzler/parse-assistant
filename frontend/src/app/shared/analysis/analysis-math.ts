@@ -21,14 +21,14 @@ export function getOrInsert<K, V>(map: Map<K, V>, key: K, makeDefault: () => V):
 export function groupByTime<T extends { time_s: number }>(windows: T[], mergeS: number): T[][] {
   const sorted = [...windows].sort((a, b) => a.time_s - b.time_s);
   const clusters: T[][] = [];
-  let openTimes: number[] = [];
+  let open: { members: T[]; times: number[] } | null = null;
   for (const window of sorted) {
-    if (clusters.length && Math.abs(window.time_s - (median(openTimes) ?? 0)) <= mergeS) {
-      clusters[clusters.length - 1].push(window);
-      openTimes.push(window.time_s);
+    if (open && Math.abs(window.time_s - (median(open.times) ?? 0)) <= mergeS) {
+      open.members.push(window);
+      open.times.push(window.time_s);
     } else {
-      clusters.push([window]);
-      openTimes = [window.time_s];
+      open = { members: [window], times: [window.time_s] };
+      clusters.push(open.members);
     }
   }
   return clusters;
@@ -79,5 +79,5 @@ const SEVERITY_ORDER: Record<AnalysisFinding['severity'], number> = {
 };
 /** Sort findings in place: critical first, success last (stable for equal ranks). */
 export function sortBySeverity(findings: AnalysisFinding[]): void {
-  findings.sort((a, b) => (SEVERITY_ORDER[a.severity] ?? 4) - (SEVERITY_ORDER[b.severity] ?? 4));
+  findings.sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
 }

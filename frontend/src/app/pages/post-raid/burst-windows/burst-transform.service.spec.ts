@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { assert, describe, it, expect } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
@@ -161,6 +161,7 @@ describe('windowAbilityBreakdown', () => {
     // A cast at exactly endS (3) is excluded; one just inside (2.999) counts.
     const castRows: [number, number][] = [[3, EVISCERATE], [2.999, EVISCERATE]];
     const breakdown = windowAbilityBreakdown(windowHits, castRows, 1, 3, nameOf, new Set(['Eviscerate']));
+    assert.exists(breakdown[0]);
     expect(breakdown[0].casts).toBe(1);
   });
 
@@ -172,6 +173,7 @@ describe('windowAbilityBreakdown', () => {
     );
     const breakdown = windowAbilityBreakdown(windowHits, [], 1, 3, nameOf, new Set());
     expect(breakdown).toHaveLength(6);
+    assert.exists(breakdown[0]);
     expect(breakdown[0].damage).toBe(ABILITY_COUNT * 100);
   });
 
@@ -197,6 +199,7 @@ describe('findParseWindows', () => {
     const windows = scanWindows(burst, LONG_FIGHT_S);
     expect(windows).toHaveLength(1);
     expect(windows[0]).toMatchObject({ time_s: 10, window_length_s: 4, window_damage: 4 * BIN_DAMAGE });
+    assert.exists(windows[0]);
     expect(windows[0].ability_breakdown[0]).toMatchObject({ spell_id: SHADOW_BLADES_DAMAGE, damage: 4 * BIN_DAMAGE });
   });
 
@@ -259,6 +262,7 @@ describe('findParseWindows', () => {
     const windows = scanWindows([...burstAt(10), damage(BLACK_POWDER, 14, 10)], LONG_FIGHT_S);
     expect(windows).toHaveLength(1);
     expect(windows[0]).toMatchObject({ window_length_s: 4, window_damage: 4 * BIN_DAMAGE });
+    assert.exists(windows[0]);
     expect(windows[0].ability_breakdown.map(ability => ability.spell_id)).not.toContain(BLACK_POWDER);
   });
 
@@ -266,6 +270,7 @@ describe('findParseWindows', () => {
     const probeDamage = 10;
     const windows = scanWindows([...burstAt(10), damage(BLACK_POWDER, 13.999, probeDamage)], LONG_FIGHT_S);
     expect(windows[0]).toMatchObject({ window_length_s: 4, window_damage: 4 * BIN_DAMAGE + probeDamage });
+    assert.exists(windows[0]);
     expect(windows[0].ability_breakdown.map(ability => ability.spell_id)).toContain(BLACK_POWDER);
   });
 
@@ -291,6 +296,7 @@ describe('findParseWindows', () => {
     // Window is [10s, 14s); a Shadow Blades cast at 10s is inside.
     const timings = cdTimings(timed([cast(SHADOW_BLADES, 10)], 0), [{ name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 90 }]);
     const windows = scanWindows(burstAt(10), LONG_FIGHT_S, { timings, casts: [cast(SHADOW_BLADES, 10)] });
+    assert.exists(windows[0]);
     expect(windows[0].active_cds).toEqual(['Shadow Blades']);
   });
 
@@ -298,6 +304,7 @@ describe('findParseWindows', () => {
     // A cast at 14s sits exactly on the window end -> not attributed.
     const timings = cdTimings(timed([cast(SHADOW_BLADES, 14)], 0), [{ name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 90 }]);
     const windows = scanWindows(burstAt(10), LONG_FIGHT_S, { timings, casts: [cast(SHADOW_BLADES, 14)] });
+    assert.exists(windows[0]);
     expect(windows[0].active_cds).toEqual([]);
   });
 
@@ -305,12 +312,14 @@ describe('findParseWindows', () => {
     // Eviscerate deals the burst damage but was never cast (only Shadow Blades was).
     const names = new Map([[SHADOW_BLADES, 'Shadow Blades'], [SHADOW_BLADES_DAMAGE, 'Eviscerate']]);
     const windows = scanWindows(burstAt(10), LONG_FIGHT_S, { casts: [cast(SHADOW_BLADES, 10)], abilityNames: names });
+    assert.exists(windows[0]);
     expect(windows[0].ability_breakdown[0]).toMatchObject({ spell_id: SHADOW_BLADES_DAMAGE, is_passive: true });
   });
 
   it('marks an actively cast ability as not passive', () => {
     const names = new Map([[SHADOW_BLADES_DAMAGE, 'Eviscerate']]);
     const windows = scanWindows(burstAt(10), LONG_FIGHT_S, { casts: [cast(SHADOW_BLADES_DAMAGE, 10)], abilityNames: names });
+    assert.exists(windows[0]);
     expect(windows[0].ability_breakdown[0]).toMatchObject({ spell_id: SHADOW_BLADES_DAMAGE, is_passive: false });
   });
 });
@@ -338,6 +347,7 @@ describe('clusterParseWindows', () => {
       time_s: 11, common_cds: ['Shadow Blades'], window_length_s: 6,
       dmg_avg: 700, dmg_min: 500, dmg_max: 900, dmg_stddev: 200,
     });
+    assert.exists(out[0]);
     expect(out[0].ability_breakdown[0]).toMatchObject({ spell_id: SHADOW_BLADES_DAMAGE, avg_damage: ABILITY_DAMAGE, count: 3 });
   });
 
@@ -362,11 +372,13 @@ describe('clusterParseWindows', () => {
   });
 
   it('marks a clustered ability passive only when every member never cast it', () => {
-    expect(clusterParseWindows([window(10, true), window(11, true)], 2)[0].ability_breakdown[0])
-      .toMatchObject({ is_passive: true });
+    const allPassive = clusterParseWindows([window(10, true), window(11, true)], 2)[0];
+    assert.exists(allPassive);
+    expect(allPassive.ability_breakdown[0]).toMatchObject({ is_passive: true });
     // One member did cast it -> the clustered ability is not passive.
-    expect(clusterParseWindows([window(10, true), window(11, false)], 2)[0].ability_breakdown[0])
-      .toMatchObject({ is_passive: false });
+    const oneCast = clusterParseWindows([window(10, true), window(11, false)], 2)[0];
+    assert.exists(oneCast);
+    expect(oneCast.ability_breakdown[0]).toMatchObject({ is_passive: false });
   });
 
   // Consensus counts DISTINCT parses, not windows: two dense runs from one parse count once toward the gate.
@@ -391,6 +403,7 @@ describe('clusterParseWindows', () => {
     const other = { ...window(12, false, PARSE_B), window_damage: PARSE_B_DMG };
     const out = clusterParseWindows([small, big, other], SAMPLE_COUNT);
     expect(out).toHaveLength(1);
+    assert.exists(out[0]);
     expect(out[0].dmg_avg).toBe(EXPECTED_AVG);
   });
 
@@ -409,12 +422,15 @@ describe('clusterParseWindows', () => {
       member(3, [main], ['Shadow Blades']),
     ], SAMPLE_COUNT);
     expect(out).toHaveLength(1);
+    assert.exists(out[0]);
     const abilities = out[0].ability_breakdown.map(entry => entry.spell_id);
     expect(abilities).toContain(SHADOW_BLADES_DAMAGE);  // 4 of 4
     expect(abilities).toContain(BLACK_POWDER);          // exactly 2 of 4 -> the >= majority boundary
     expect(abilities).not.toContain(EVISCERATE);        // 1 of 4 -> below majority
+    assert.exists(out[0]);
     expect(out[0].ability_breakdown.find(entry => entry.spell_id === BLACK_POWDER)?.count).toBe(2);  // count = distinct parses
     // common_cds share the same majority filter: 'Vanish' at exactly 2 of 4 must also surface.
+    assert.exists(out[0]);
     expect(out[0].common_cds).toEqual(expect.arrayContaining(['Shadow Blades', 'Vanish']));
   });
 });
@@ -469,6 +485,7 @@ describe('BurstTransformService (live, in-browser)', () => {
     expect(bench.value.encounter_name).toBe('Boss');
     expect(bench.value.cd_spell_ids).toEqual({ 'Shadow Blades': SHADOW_BLADES });
     expect(bench.value.windows).toHaveLength(1);
+    assert.exists(bench.value.windows[0]);
     expect(bench.value.windows[0].common_cds).toContain('Shadow Blades');
     // ability_icons is complete: header cooldown AND every window ability resolved by id.
     expect(bench.value.ability_icons[SHADOW_BLADES]).toEqual({ icon: `icon_${SHADOW_BLADES}`, name: `name_${SHADOW_BLADES}` });

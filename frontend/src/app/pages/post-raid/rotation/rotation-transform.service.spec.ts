@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { assert, describe, it, expect } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
@@ -38,8 +38,10 @@ describe('summarizeCooldownCasts', () => {
 
   it('flags a held second cast (>8s past the prior cast + cooldown)', () => {
     const summaries = summarizeCooldownCasts(timed([cast(SHADOW_BLADES, 0), cast(SHADOW_BLADES, 110)], 0), cooldowns, 200, null);
+    assert.exists(summaries[0]);
     expect(summaries[0].cast_pattern).toBe('hold');
     // prior 0 + cd 90 = expected 90; actual 110 -> 20s hold.
+    assert.exists(summaries[0]);
     expect(summaries[0].hold_windows[0]).toMatchObject({ cast_index: 2, actual_s: 110, delay_s: 20 });
   });
 
@@ -47,15 +49,20 @@ describe('summarizeCooldownCasts', () => {
     // cast 2 held (0 -> 200, well past reset); cast 3 is on cooldown after it (200 -> 290).
     const summaries = summarizeCooldownCasts(
       timed([cast(SHADOW_BLADES, 0), cast(SHADOW_BLADES, 200), cast(SHADOW_BLADES, 290)], 0), cooldowns, 400, null);
+    assert.exists(summaries[0]);
     expect(summaries[0].hold_windows).toHaveLength(1);
+    assert.exists(summaries[0]);
+    assert.exists(summaries[0].hold_windows[0]);
     expect(summaries[0].hold_windows[0].cast_index).toBe(2);
   });
 
   it('does not flag a hold exactly at the threshold (strict)', () => {
     // prior 0 + cd 90 + 8s threshold = 98; a cast at 98 has delay exactly 8 -> not a hold.
     const atBoundary = summarizeCooldownCasts(timed([cast(SHADOW_BLADES, 0), cast(SHADOW_BLADES, 98)], 0), cooldowns, 200, null);
+    assert.exists(atBoundary[0]);
     expect(atBoundary[0].hold_windows).toHaveLength(0);
     const past = summarizeCooldownCasts(timed([cast(SHADOW_BLADES, 0), cast(SHADOW_BLADES, 98.1)], 0), cooldowns, 200, null);
+    assert.exists(past[0]);
     expect(past[0].hold_windows).toHaveLength(1);
   });
 });
@@ -157,7 +164,7 @@ describe('buildCdBenchmark', () => {
 
 describe('computeEfficiencyThresholds', () => {
   it('derives a p90 downtime floor and per-parse efficiency mean', () => {
-    const result = computeEfficiencyThresholds([[0.5, 0.6, 0.7, 5]], [100]);
+    const result = computeEfficiencyThresholds([{ gapListS: [0.5, 0.6, 0.7, 5], durationS: 100 }]);
     // d3 p90 quantile of [0.5,0.6,0.7,5]: 0.7 + 0.7*(5-0.7) = 3.71s.
     expect(result.downtimeThresholdS).toBe(3.71);
     // only the 5s gap clears the floor -> 5s downtime over 100s -> (1 - 5/100)*100 = 95%.
@@ -165,7 +172,7 @@ describe('computeEfficiencyThresholds', () => {
   });
 
   it('falls back to the default floor with no gaps', () => {
-    const result = computeEfficiencyThresholds([[]], [100]);
+    const result = computeEfficiencyThresholds([{ gapListS: [], durationS: 100 }]);
     expect(result.downtimeThresholdS).toBe(1.5);
     expect(result.topAvgEfficiency).toBe(0);
   });
@@ -181,6 +188,7 @@ describe('aggregateCdBenchmarks', () => {
       [[summary('Shadow Blades')], [summary('Shadow Blades')]],
       [{ name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 90 }]);
     expect(Object.keys(result)).toEqual(['Shadow Blades']);
+    assert.exists(result['Shadow Blades']);
     expect(result['Shadow Blades'].sample_count).toBe(2);
   });
 });
@@ -204,23 +212,32 @@ describe('benchRules', () => {
     const benched = benchRules([ruleA, ruleB, ruleC], perParse);
 
     // Rule A: every one of the 5 parses contributed its own instance.
+    assert.exists(benched[0]);
     expect(benched[0].rule).toBe(ruleA);
+    assert.exists(benched[0]);
     expect(benched[0].sample_count).toBe(5);
+    assert.exists(benched[0]);
     expect(benched[0].band).not.toBeNull();
 
     // Rule B: only the second parse's sample was non-empty, below the parse floor.
+    assert.exists(benched[1]);
     expect(benched[1].sample_count).toBe(1);
+    assert.exists(benched[1]);
     expect(benched[1].band).toBeNull();
 
     // Rule C: only the first parse's sample was non-empty.
+    assert.exists(benched[2]);
     expect(benched[2].sample_count).toBe(1);
+    assert.exists(benched[2]);
     expect(benched[2].band).toBeNull();
   });
 
   it('returns a null band, with no contributing parses, for a rule index with no samples anywhere', () => {
     const perParse: ParseRuleSamples[] = [[sample([])], [sample([])], [sample([])], [sample([])], [sample([])]];
     const [entry] = benchRules([ruleA], perParse);
+    assert.exists(entry);
     expect(entry.band).toBeNull();
+    assert.exists(entry);
     expect(entry.sample_count).toBe(0);
   });
 });
@@ -285,6 +302,7 @@ describe('RotationTransformService (live, in-browser)', () => {
       expect(bench.sample_count).toBe(MIN_SAMPLE_COUNT);
       expect(bench.encounter_name).toBe('Boss');
       expect(bench.cd_spell_ids).toEqual({ 'Shadow Blades': SHADOW_BLADES });
+      assert.exists(bench.per_cd_benchmarks['Shadow Blades']);
       expect(bench.per_cd_benchmarks['Shadow Blades'].sample_count).toBe(MIN_SAMPLE_COUNT);
       expect(bench.ability_icons[SHADOW_BLADES]).toEqual({ icon: 'sb', name: 'Shadow Blades' });
       expect(bench.major_cooldowns).toHaveLength(1);

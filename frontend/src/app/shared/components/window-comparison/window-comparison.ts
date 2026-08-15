@@ -9,7 +9,7 @@ import { SignedPercentPipe } from '../../pipes/signed-percent-pipe';
 import { RangeRow, ComparisonWindow } from '../../../core/models/window-comparison.models';
 
 type TimelineCell =
-  | { readonly kind: 'window'; readonly index: number }
+  | { readonly kind: 'window'; readonly index: number; readonly window: ComparisonWindow }
   | { readonly kind: 'gap'; readonly id: string };
 
 // Distinguishes option ids when several comparison cards share a page (burst + defensive).
@@ -80,14 +80,15 @@ export class WindowComparisonComponent {
 
   // Flat sequence of chips interleaved with dashed pacing slots so the template renders one row without measuring time.
   protected readonly timelineCells = computed<TimelineCell[]>(() => {
-    const windows = this.windows();
     const cells: TimelineCell[] = [];
-    windows.forEach((w, i) => {
-      cells.push({ kind: 'window', index: i });
-      const next = windows[i + 1];
-      if (!next) return;
-      const slots = this.gapSlots(next.timeStartS - w.timeEndS);
-      for (let s = 0; s < slots; s++) cells.push({ kind: 'gap', id: `${i}-${s}` });
+    let prev: { window: ComparisonWindow; index: number } | undefined;
+    this.windows().forEach((window, index) => {
+      if (prev) {
+        const slots = this.gapSlots(window.timeStartS - prev.window.timeEndS);
+        for (let s = 0; s < slots; s++) cells.push({ kind: 'gap', id: `${prev.index}-${s}` });
+      }
+      cells.push({ kind: 'window', index, window });
+      prev = { window, index };
     });
     return cells;
   });

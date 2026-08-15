@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { assert, describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { DOCUMENT } from '@angular/common';
 import { WowheadTooltipsService } from './wowhead-tooltips';
@@ -34,8 +34,12 @@ function stubWowheadPower(doc: Document): ReturnType<typeof vi.fn> {
 // Drive both script `load` events so the service reaches its `ready` state.
 function finishLoading(service: WowheadTooltipsService, doc: Document): void {
   service.ensureLoaded();
-  scriptWith(doc, CONFIG_SRC)!.dispatchEvent(new Event('load'));
-  scriptWith(doc, TOOLTIPS_SRC)!.dispatchEvent(new Event('load'));
+  const configScript = scriptWith(doc, CONFIG_SRC);
+  assert.exists(configScript);
+  configScript.dispatchEvent(new Event('load'));
+  const tooltipsScript = scriptWith(doc, TOOLTIPS_SRC);
+  assert.exists(tooltipsScript);
+  tooltipsScript.dispatchEvent(new Event('load'));
 }
 
 const flushMicrotasks = () => Promise.resolve();
@@ -63,7 +67,9 @@ describe('WowheadTooltipsService', () => {
     expect(scriptWith(doc, CONFIG_SRC)).toBeDefined();
     expect(scriptWith(doc, TOOLTIPS_SRC)).toBeUndefined();
 
-    scriptWith(doc, CONFIG_SRC)!.dispatchEvent(new Event('load'));
+    const configScript = scriptWith(doc, CONFIG_SRC);
+    assert.exists(configScript);
+    configScript.dispatchEvent(new Event('load'));
 
     expect(scriptWith(doc, TOOLTIPS_SRC)).toBeDefined();
   });
@@ -72,7 +78,9 @@ describe('WowheadTooltipsService', () => {
     const { service, doc } = setup();
 
     service.ensureLoaded();
-    scriptWith(doc, CONFIG_SRC)!.dispatchEvent(new Event('load'));
+    const configScript = scriptWith(doc, CONFIG_SRC);
+    assert.exists(configScript);
+    configScript.dispatchEvent(new Event('load'));
     service.ensureLoaded();
     service.ensureLoaded();
 
@@ -85,7 +93,9 @@ describe('WowheadTooltipsService', () => {
     const { service, doc } = setup();
 
     service.ensureLoaded();
-    scriptWith(doc, CONFIG_SRC)!.dispatchEvent(new Event('error'));
+    const configScript = scriptWith(doc, CONFIG_SRC);
+    assert.exists(configScript);
+    configScript.dispatchEvent(new Event('error'));
 
     expect(warn).toHaveBeenCalled();
   });

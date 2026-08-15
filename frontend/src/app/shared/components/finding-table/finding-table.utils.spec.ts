@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach, MockInstance } from 'vitest';
+import { assert, describe, it, expect, vi, beforeEach, afterEach, MockInstance } from 'vitest';
 import {
   bucketFindings, rowsFromEntries, onPlanFromEntries, CAT_LABEL, FindingEntry, UNKNOWN_COOLDOWN_LABEL,
 } from './finding-table.utils';
@@ -33,8 +33,11 @@ describe('bucketFindings', () => {
     const entries = bucketFindings([finding], { spellId, icon });
 
     expect(entries).toHaveLength(1);
+    assert.exists(entries[0]);
     expect(entries[0].name).toBe('Shadow Blades');
+    assert.exists(entries[0]);
     expect(entries[0].hasCritical).toBe(true);
+    assert.exists(entries[0]);
     expect(entries[0].hasIssue).toBe(true);
   });
 
@@ -50,9 +53,13 @@ describe('bucketFindings', () => {
     const entries = bucketFindings([finding], { spellId, icon });
 
     expect(entries).toHaveLength(1);
+    assert.exists(entries[0]);
     expect(entries[0].name).toBe('Feint');
+    assert.exists(entries[0]);
     expect(entries[0].hasIssue).toBe(true);
+    assert.exists(entries[0]);
     expect(entries[0].hasCritical).toBe(false);
+    assert.exists(entries[0]);
     expect(entries[0].metaItems).toContain('1 hold');
   });
 
@@ -61,6 +68,7 @@ describe('bucketFindings', () => {
     const entries = bucketFindings([finding], { spellId, icon });
 
     expect(entries).toHaveLength(1);
+    assert.exists(entries[0]);
     expect(entries[0].name).toBe('Shadow Blades');
   });
 
@@ -69,8 +77,11 @@ describe('bucketFindings', () => {
     const entries = bucketFindings([finding], { spellId, icon });
 
     expect(entries).toHaveLength(1);
+    assert.exists(entries[0]);
     expect(entries[0].name).toBe('Shadow Blades');
+    assert.exists(entries[0]);
     expect(entries[0].hasIssue).toBe(false);
+    assert.exists(entries[0]);
     expect(entries[0].hasCritical).toBe(false);
   });
 
@@ -81,7 +92,9 @@ describe('bucketFindings', () => {
     ];
     const entries = bucketFindings(findings, { spellId, icon });
 
+    assert.exists(entries[0]);
     expect(entries[0].metaItems).toHaveLength(1);
+    assert.exists(entries[0]);
     expect(entries[0].metaItems[0]).toBe('held');
   });
 
@@ -92,6 +105,7 @@ describe('bucketFindings', () => {
     ];
     const entries = bucketFindings(findings, { spellId, icon });
 
+    assert.exists(entries[0]);
     expect(entries[0].metaItems).toContain('2 holds');
   });
 
@@ -103,8 +117,11 @@ describe('bucketFindings', () => {
     const finding = f('warning', 'cast_efficiency');
     const entries = bucketFindings([finding], { spellId, icon });
     expect(entries).toHaveLength(1);
+    assert.exists(entries[0]);
     expect(entries[0].name).toBe(UNKNOWN_COOLDOWN_LABEL);
+    assert.exists(entries[0]);
     expect(entries[0].hasIssue).toBe(true);
+    assert.exists(entries[0]);
     expect(entries[0].findings).toContain(finding);
   });
 
@@ -141,8 +158,11 @@ describe('rowsFromEntries', () => {
   it('generates one row per finding for entries with hasIssue=true', () => {
     const rows = rowsFromEntries([issueEntry], CAT_LABEL);
     expect(rows).toHaveLength(1);
+    assert.exists(rows[0]);
     expect(rows[0].name).toBe('Shadow Blades');
+    assert.exists(rows[0]);
     expect(rows[0].chip).toBe('lost cast');
+    assert.exists(rows[0]);
     expect(rows[0].measured).toEqual({ value: '0 / 2', unit: 'cast(s)' });
   });
 
@@ -156,6 +176,7 @@ describe('rowsFromEntries', () => {
       metaItems: [], findings: [{ severity: 'warning', category: 'rule_violation', message: 'bad', occurrences: [] }],
     };
     const rows = rowsFromEntries([entry], CAT_LABEL);
+    assert.exists(rows[0]);
     expect(rows[0].measured).toEqual({ value: '-' });
   });
 
@@ -169,8 +190,11 @@ describe('rowsFromEntries', () => {
       ],
     };
     const rows = rowsFromEntries([mixedEntry], CAT_LABEL);
+    assert.exists(rows[0]);
     expect(rows[0].severity).toBe('critical');
+    assert.exists(rows[1]);
     expect(rows[1].severity).toBe('info');
+    assert.exists(rows[2]);
     expect(rows[2].severity).toBe('warning');
   });
 });

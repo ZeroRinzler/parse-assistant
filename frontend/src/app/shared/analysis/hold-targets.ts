@@ -23,14 +23,16 @@ export interface HoldWindowSource {
 // Prior-relative: each cast is measured against the prior ACTUAL cast + the cooldown, not a cumulative ideal schedule, so a single hold does not cascade into later casts.
 export function detectHoldWindows(castTimesS: number[], effectiveCd: number): HoldWindow[] {
   const holdWindows: HoldWindow[] = [];
-  for (let castIndex = 1; castIndex < castTimesS.length; castIndex++) {
-    const expected = castTimesS[castIndex - 1] + effectiveCd;
-    const actual = castTimesS[castIndex];
-    const delay = actual - expected;
-    if (delay > HOLD_THRESHOLD_S) {
-      holdWindows.push({ cast_index: castIndex + 1, actual_s: round(actual), delay_s: round(delay) });
+  let prevS: number | undefined;
+  castTimesS.forEach((actual, castIndex) => {
+    if (prevS != null) {
+      const delay = actual - (prevS + effectiveCd);
+      if (delay > HOLD_THRESHOLD_S) {
+        holdWindows.push({ cast_index: castIndex + 1, actual_s: round(actual), delay_s: round(delay) });
+      }
     }
-  }
+    prevS = actual;
+  });
   return holdWindows;
 }
 
@@ -72,18 +74,26 @@ export function holdSuggestionFindings(
 ): AnalysisFinding[] {
   const findings: AnalysisFinding[] = [];
   if (!castTimesS.length) return findings;
+  // The player's casts as (prior, cast) pairs keyed by 1-based cast number; cast 1 has no prior, so no pair.
+  const priorPairs = new Map<number, { castS: number; prevCastS: number }>();
+  let prev: number | undefined;
+  castTimesS.forEach((castS, index) => {
+    if (prev != null) priorPairs.set(index + 1, { castS, prevCastS: prev });
+    prev = castS;
+  });
   for (const [idxStr, target] of Object.entries(holdTargets)) {
-    const index = parseInt(idxStr, 10) - 1;
-    // Need a prior cast to measure a prior-relative gap; index 0 has none.
-    if (index < 1 || index >= castTimesS.length) continue;
-    const playerDelay = castTimesS[index] - castTimesS[index - 1] - target.effective_cd_s;
+    // A hold target past the player's own cast count has no pair to judge.
+    const pair = priorPairs.get(parseInt(idxStr, 10));
+    if (!pair) continue;
+    const { castS, prevCastS } = pair;
+    const playerDelay = castS - prevCastS - target.effective_cd_s;
     if (playerDelay < target.delay_s - target.band_s) {
       findings.push({
         severity: 'info',
         category: 'hold_suggestion',
-        timestamp_s: castTimesS[index],
-        measured: { value: fmtClock(castTimesS[index]), unit: `top ${fmtClock(target.target_s)}` },
-        message: `${name} cast ${idxStr} at ${fmtClock(castTimesS[index])}. ${target.count}/${target.total_samples} top parses hold to ${fmtClock(target.target_s)}.`,
+        timestamp_s: castS,
+        measured: { value: fmtClock(castS), unit: `top ${fmtClock(target.target_s)}` },
+        message: `${name} cast ${idxStr} at ${fmtClock(castS)}. ${target.count}/${target.total_samples} top parses hold to ${fmtClock(target.target_s)}.`,
         details: { remedy: `Hold ${name} to ${fmtClock(target.target_s)}.`, cd_name: name },
         occurrences: [],
       });

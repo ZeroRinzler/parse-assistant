@@ -43,7 +43,7 @@ import { LoadStateComponent, RenderableLoadError } from '../../shared/components
 
 export function extractCode(url: string): string {
   const m = /\/reports\/([a-zA-Z0-9]+)/.exec(url);
-  return m ? m[1] : url.trim();
+  return m?.[1] ?? url.trim();
 }
 
 export function extractFightId(url: string): number | null {
@@ -69,18 +69,18 @@ export function isKeystoneFight(difficulty: number | null | undefined): boolean 
 
 export function buildFights(fights: WclReport['fights'] = []): WclFight[] {
   const bossAttempt: Record<number, number> = {};
-  return (fights || [])
+  return fights
     .filter(f => (f.encounterID || 0) > 0)
     .sort((a, b) => a.startTime - b.startTime)
     .map(f => {
       const eid = f.encounterID || 0;
-      bossAttempt[eid] = (bossAttempt[eid] || 0) + 1;
+      bossAttempt[eid] = (bossAttempt[eid] ?? 0) + 1;
       return { ...f, duration_s: Math.round((f.endTime - f.startTime) / 100) / 10, attempt: bossAttempt[eid] };
     });
 }
 
-export function buildPlayers(actors: WclReport['masterData']['actors'] = []): WclPlayer[] {
-  return (actors || [])
+export function buildPlayers(actors: NonNullable<WclReport['masterData']>['actors'] = []): WclPlayer[] {
+  return actors
     .map(a => ({ id: a.id, name: a.name, spec: a.subType || 'Unknown', server: a.server || '' }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -134,7 +134,7 @@ export function specOf(groups: PlayerDetailGroups, playerId: number): string {
   for (const role of ['dps', 'healers', 'tanks', 'unknown']) {
     for (const player of (groups[role] ?? [])) {
       if (player.id !== playerId) continue;
-      const className = (player.type ?? '').replace(/ /g, '');
+      const className = player.type.replace(/ /g, '');
       const spec = ((player.specs ?? [])[0]?.spec ?? '').replace(/ /g, '');
       return spec && className ? spec + className : '';
     }

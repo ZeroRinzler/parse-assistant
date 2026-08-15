@@ -93,7 +93,7 @@ export class DefensiveComponent {
     const icons = this._iconByName();
     return bucketFindings(this._findings(), {
       spellId: name => spellIds[name] ?? null,
-      icon: name => icons[name],
+      icon: name => icons[name] ?? '',
     });
   });
 

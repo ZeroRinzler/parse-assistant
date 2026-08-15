@@ -5,10 +5,7 @@ import { TimedEvent, targetKey } from './wcl-projections';
 export type AuraWindows = Map<number, [number, number | null][]>;
 
 function lastOpen(spans: [number, number | null][]): [number, number | null] | undefined {
-  for (let i = spans.length - 1; i >= 0; i--) {
-    if (spans[i][1] == null) return spans[i];
-  }
-  return undefined;
+  return [...spans].reverse().find(span => span[1] == null);
 }
 
 /** Buffs and debuffs carry the same apply/remove shape, so one call covers either stream. */
@@ -16,7 +13,7 @@ export function buildAuraWindows(events: TimedEvent[]): AuraWindows {
   const windows: AuraWindows = new Map();
   for (const event of events) {
     const spellId = event.abilityGameID;
-    if (spellId == null) continue;
+    if (!spellId) continue;
     const timeS = event.atS;
     if (event.type === 'applybuff' || event.type === 'applydebuff') {
       getOrInsert(windows, spellId, () => []).push([timeS, null]);
@@ -94,7 +91,8 @@ export function buildAuraSpansByTarget(events: TimedEvent[], spellId: number): A
     if (event.abilityGameID !== spellId) continue;
     const timeS = event.atS;
     const list = getOrInsert(spans, targetKey(event), (): AuraSpan[] => []);
-    const open = list.length && list[list.length - 1].endS == null ? list[list.length - 1] : null;
+    const tail = list[list.length - 1];
+    const open = tail && tail.endS == null ? tail : null;
     if (event.type === 'applybuff' || event.type === 'applydebuff') {
       if (!open) list.push({ startS: timeS, endS: null, endedByRefresh: false });
     } else if (event.type === 'refreshbuff' || event.type === 'refreshdebuff') {

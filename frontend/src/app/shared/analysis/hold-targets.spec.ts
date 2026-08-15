@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { assert, describe, it, expect } from 'vitest';
 import {
   HOLD_BAND_MIN_S, HoldWindowSource, buildHoldTargets, detectHoldWindows, holdSuggestionFindings,
 } from './hold-targets';
@@ -24,6 +24,7 @@ describe('detectHoldWindows', () => {
     // cast 2 held (0 -> 200); cast 3 on cooldown after it (200 -> 290).
     const holds = detectHoldWindows([0, 200, 290], EFFECTIVE_CD_S);
     expect(holds).toHaveLength(1);
+    assert.exists(holds[0]);
     expect(holds[0].cast_index).toBe(2);
   });
 
@@ -47,7 +48,9 @@ describe('buildHoldTargets', () => {
     // 5 of 10 hold index 2 -> meets max(2, 0.5 * 10 = 5).
     const targets = buildHoldTargets([...heldAt(110, 20, 5), ...noHolds(5)], EFFECTIVE_CD_S);
     expect(targets[String(HELD_INDEX)]).toBeDefined();
-    expect(targets[String(HELD_INDEX)].count).toBe(5);
+    const heldTarget = targets[String(HELD_INDEX)];
+    assert.exists(heldTarget);
+    expect(heldTarget.count).toBe(5);
   });
 
   it('drops a target below the majority (strict boundary)', () => {
@@ -113,7 +116,9 @@ describe('holdSuggestionFindings', () => {
 
   it('reports the cast clock and the consensus in the message', () => {
     const [finding] = holdSuggestionFindings(NAME, [PRIOR_CAST_S, UNDER_HELD_S], holdTargets);
+    assert.exists(finding);
     expect(finding.message).toContain(`${HELD_COUNT}/${TOTAL_SAMPLED} top parses hold to 02:10`);
+    assert.exists(finding);
     expect(finding.details?.cd_name).toBe(NAME);
   });
 

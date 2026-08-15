@@ -62,7 +62,7 @@ export interface WclReport {
   /** Unix epoch ms of the report's first logged event; the shared clock for clip correlation. */
   startTime: number;
   fights: WclFight[];
-  masterData: {
+  masterData?: {
     actors: { id: number; name: string; subType: string; server: string }[];
     enemies?: { id: number; name: string; gameID: number }[];
     abilities: WclAbility[];

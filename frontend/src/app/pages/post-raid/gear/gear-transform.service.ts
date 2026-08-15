@@ -118,7 +118,7 @@ export function aggregateEnchants(parses: ParseGear[]): EncounterGearStats['ench
   for (const parse of parses) {
     for (const enchant of parse.enchants) {
       const slot = enchant.slot;
-      if (slot != null && enchant.id) {
+      if (enchant.id) {
         const slotMap = getOrInsert(enchantCounters, slot, () => new Map<number, number>());
         slotMap.set(enchant.id, (slotMap.get(enchant.id) ?? 0) + 1);
         // A parse whose name lookup failed stores '', which a later real name replaces.
@@ -149,8 +149,9 @@ export function aggregateParseGear(parses: ParseGear[]): EncounterGearStats {
 export function withTalentDiffs(
   builds: EncounterGearStats['talent_builds'], talents: Result<SpecTalents>,
 ): EncounterGearStats['talent_builds'] {
-  if (!talents.ok || builds.length < 2) return builds;
-  const baselineKey = builds[0].key;
+  const baseline = builds[0];
+  if (!talents.ok || builds.length < 2 || !baseline) return builds;
+  const baselineKey = baseline.key;
   return builds.map((build, i) => i === 0 ? build : { ...build, diff: buildTalentDiff(build.key, baselineKey, talents.value) });
 }
 
@@ -225,7 +226,7 @@ export class GearTransformService implements DataSource<GearBench> {
       };
       const gear = toParseGear(characterGear, ranking, player.id);
       if (!gear) return null;
-      return { gear, encounterName: fight.name ?? '' };
+      return { gear, encounterName: fight.name };
     } catch (err) {
       logWarn(`GearTransformService parse ${ranking.report_code}:${ranking.fight_id}`, err);
       return null;

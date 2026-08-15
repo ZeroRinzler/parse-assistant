@@ -18,7 +18,7 @@ const STATUS_ICONS: Record<GearStatus, string> = {
   ok: 'check_circle', warn: 'warning', info: 'info', unknown: 'help_outline',
 };
 
-export function slotName(slot: number): string { return SLOT_NAMES[slot] || `Slot ${slot}`; }
+export function slotName(slot: number): string { return SLOT_NAMES[slot] ?? `Slot ${slot}`; }
 export function statusIcon(status: GearStatus): string { return STATUS_ICONS[status]; }
 
 export interface EnchantRow {
@@ -174,19 +174,20 @@ export function buildTalentDiff(
 
 export function talentStatusOf(topStats: EncounterGearStats | null, playerKey: string): { status: GearStatus; note: string } {
   const builds = topStats?.talent_builds ?? [];
-  if (!builds.length) return { status: 'unknown', note: 'No talent data.' };
-  const topPct = builds[0]?.pct ?? 0;
-  if (playerKey?.split(':')[0] !== (builds[0]?.key ?? '').split(':')[0]) {
+  const [topBuild] = builds;
+  if (!topBuild) return { status: 'unknown', note: 'No talent data.' };
+  if (playerKey.split(':')[0] !== topBuild.key.split(':')[0]) {
     return { status: 'unknown', note: 'No talent data.' };
   }
-  if (builds[0]?.key === playerKey) {
+  if (topBuild.key === playerKey) {
     return { status: 'ok', note: 'Standard build.' };
   }
   const altIndex = builds.findIndex(b => b.key === playerKey);
-  if (altIndex > 0) {
-    return { status: 'info', note: `Alt build ${altIndex}. ${builds[altIndex].pct}% run this build.` };
+  const altBuild = altIndex > 0 ? builds[altIndex] : undefined;
+  if (altBuild) {
+    return { status: 'info', note: `Alt build ${altIndex}. ${altBuild.pct}% run this build.` };
   }
-  return { status: 'warn', note: `Off-meta build. ${topPct}% run the standard one.` };
+  return { status: 'warn', note: `Off-meta build. ${topBuild.pct}% run the standard one.` };
 }
 
 /** Overall usage of a trinket id among top parsers (summed across slots 12/13). */

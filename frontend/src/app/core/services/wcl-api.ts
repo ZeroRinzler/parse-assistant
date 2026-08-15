@@ -37,8 +37,8 @@ export class WclApiService {
 
   async getReport(code: string): Promise<WclReport> {
     const vars: ReportQueryVars = { code };
-    const result = await this.query<{ reportData: { report: WclReport | null } }>(REPORT_Q, vars);
-    const report = result?.reportData?.report;
+    const result = await this.query<{ reportData: { report: WclReport | null } | null }>(REPORT_Q, vars);
+    const report = result.reportData?.report;
     // WCL returns report: null for a code it won't serve (missing, private, expired) with no GraphQL error.
     if (!report) throw this.reportUnavailable(code);
     return report;
@@ -47,10 +47,10 @@ export class WclApiService {
   /** Fights-only read of a report - the live-sync poll's new-pull probe. */
   async getReportFights(code: string): Promise<WclReport['fights']> {
     const vars: ReportQueryVars = { code };
-    const result = await this.query<{ reportData: { report: { fights: WclReport['fights'] } | null } }>(
+    const result = await this.query<{ reportData: { report: { fights: WclReport['fights'] | null } | null } | null }>(
       REPORT_FIGHTS_Q, vars,
     );
-    const report = result?.reportData?.report;
+    const report = result.reportData?.report;
     // Same unserved-report case as getReport; fail typed rather than into a TypeError.
     if (!report) throw this.reportUnavailable(code);
     return report.fights ?? [];
@@ -59,10 +59,10 @@ export class WclApiService {
   /** Raw `playerDetails` groups (dps / healers / tanks / unknown). Consumers map to spec. */
   async getPlayerDetails(code: string, fightId: number): Promise<PlayerDetailGroups> {
     const vars: PlayerDetailsQueryVars = { code, fightIDs: [fightId] };
-    const result = await this.query<{ reportData: { report: { playerDetails: { data: { playerDetails: PlayerDetailGroups } } } | null } }>(
+    const result = await this.query<{ reportData: { report: { playerDetails: { data: { playerDetails: PlayerDetailGroups | null } | null } | null } | null } | null }>(
       PLAYER_DETAILS_Q, vars,
     );
-    const playerDetails = result?.reportData?.report?.playerDetails?.data?.playerDetails;
+    const playerDetails = result.reportData?.report?.playerDetails?.data?.playerDetails;
     // Same unserved-report case as getReport; fail typed rather than into a TypeError.
     if (!playerDetails) throw this.reportUnavailable(code);
     return playerDetails;
@@ -87,7 +87,7 @@ export class WclApiService {
       if (sourceId != null) vars.sourceID = sourceId;
       if (includeResources) vars.includeResources = true;
       if (hostilityType) vars.hostilityType = hostilityType;
-      const result = await this.query<{ reportData: { report: { events: { data: WclEvent[]; nextPageTimestamp?: number } } } }>(
+      const result = await this.query<{ reportData: { report: { events: { data: WclEvent[] | null; nextPageTimestamp?: number } } } }>(
         EVENTS_Q, vars,
       );
       const page = result.reportData.report.events;
@@ -102,10 +102,10 @@ export class WclApiService {
   // Returns the events array as WCL returns it (empty when the log carries none); consumers pick the player's event (see `selectCombatantInfo`).
   async getCombatantInfo(code: string, fightId: number, playerId: number): Promise<WclCombatantInfo[]> {
     const vars: CombatantInfoQueryVars = { code, fightIDs: [fightId], sourceID: playerId };
-    const result = await this.query<{ reportData: { report: { events: { data: WclCombatantInfo[] } } | null } }>(
+    const result = await this.query<{ reportData: { report: { events: { data: WclCombatantInfo[] | null } | null } | null } | null }>(
       COMBATANT_INFO_Q, vars,
     );
-    const report = result?.reportData?.report;
+    const report = result.reportData?.report;
     // Same unserved-report case as getReport; fail typed rather than folding null into a success [].
     if (!report) throw this.reportUnavailable(code);
     return report.events?.data ?? [];
@@ -114,10 +114,10 @@ export class WclApiService {
   // Consumers pick their player's `data.entries` row by actor id and derive DPS from `total` over the fight duration.
   async getDamageDoneTable(code: string, fightId: number): Promise<WclTableBlob | null> {
     const vars: TableQueryVars = { code, fightIDs: [fightId], dataType: 'DamageDone' };
-    const result = await this.query<{ reportData: { report: { table: WclTableBlob } } }>(
+    const result = await this.query<{ reportData: { report: { table: WclTableBlob | null } | null } | null }>(
       TABLE_Q, vars,
     );
-    return result?.reportData?.report?.table ?? null;
+    return result.reportData?.report?.table ?? null;
   }
 
   // WCL has no `Resurrects` data type, so this scans `All` with a server-side `type` filter (only matches come back).
@@ -126,7 +126,7 @@ export class WclApiService {
     let currentStart = startTime;
     for (;;) {
       const vars: ResurrectsQueryVars = { code, fightIDs: [fightId], filter: 'type = "resurrect"', startTime: currentStart, endTime };
-      const result = await this.query<{ reportData: { report: { events: { data: WclEvent[]; nextPageTimestamp?: number } } } }>(
+      const result = await this.query<{ reportData: { report: { events: { data: WclEvent[] | null; nextPageTimestamp?: number } } } }>(
         RESURRECTS_Q, vars,
       );
       const page = result.reportData.report.events;
@@ -140,20 +140,20 @@ export class WclApiService {
   // Names may carry HTML entities, so consumers decode them.
   async getGameNames(itemIds: number[], enchantIds: number[]): Promise<Record<string, { id: number; name: string }>> {
     if (!itemIds.length && !enchantIds.length) return {};
-    const result = await this.query<{ gameData: Record<string, { id: number; name: string }> }>(
+    const result = await this.query<{ gameData: Record<string, { id: number; name: string }> | null }>(
       buildGearNamesQuery(itemIds, enchantIds),
     );
-    return result?.gameData ?? {};
+    return result.gameData ?? {};
   }
 
   // `gameData.ability` resolves any REAL id - including passives a report's `masterData.abilities` omits - but returns `null` for a nonexistent id.
   async getAbilities(ids: number[]): Promise<Record<string, WclRawAbility | null>> {
     const unique = [...new Set(ids)].filter(id => id > 0);
     if (!unique.length) return {};
-    const result = await this.query<{ gameData: Record<string, WclRawAbility | null> }>(
+    const result = await this.query<{ gameData: Record<string, WclRawAbility | null> | null }>(
       buildAbilityIconsQuery(unique),
     );
-    return result?.gameData ?? {};
+    return result.gameData ?? {};
   }
 
   // Returned as-is (`null` for an unknown spec, since no query can be built); consumers unwrap both forms (see `unwrapRankings` / `toParseRankings`), and an omitted `partition` leaves the variable null, which is what makes WCL fall back to the zone's current one.
@@ -162,9 +162,9 @@ export class WclApiService {
     if (!meta) return null;
     const vars: RankingsQueryVars = { encounterID: encounterId, className: meta.className, specName: meta.specName };
     if (partition != null) vars.partition = partition;
-    const result = await this.query<{ worldData: { encounter: { characterRankings: WclRankingsBlob } } }>(
+    const result = await this.query<{ worldData: { encounter: { characterRankings: WclRankingsBlob | null } | null } | null }>(
       RANKINGS_Q, vars,
     );
-    return result?.worldData?.encounter?.characterRankings ?? null;
+    return result.worldData?.encounter?.characterRankings ?? null;
   }
 }

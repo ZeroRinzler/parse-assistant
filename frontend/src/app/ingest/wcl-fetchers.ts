@@ -54,7 +54,7 @@ export async function getEncounters(client: WclQueryClient, specWcl: SpecWclMap)
     if (await isZoneLive(client, zoneEncounters, specWcl)) {
       encounters.push(...zoneEncounters);
     } else {
-      logWarn('getEncounters', `zone "${zoneEncounters[0].zone}" dropped as non-live (no real rankings) - skipping ${zoneEncounters.length} encounter(s)`);
+      logWarn('getEncounters', `zone "${zoneEncounters[0]?.zone}" dropped as non-live (no real rankings) - skipping ${zoneEncounters.length} encounter(s)`);
     }
   }
   return { encounters, protectedIds };

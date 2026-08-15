@@ -32,16 +32,15 @@ export function orderSpecsByVersion(
   const priorityRank = new Map(prioritySpecs.map((spec, index) => [spec, index] as const));
   const priority = (entry: SpecOrderEntry): number => priorityRank.get(entry.spec) ?? prioritySpecs.length;
   // One fixed random key per entry keeps the comparator a valid total order, unlike calling random() inside it.
-  const shuffleKey = new Map(entries.map(entry => [entry, random()] as const));
   return entries
-    .slice()
+    .map(entry => ({ entry, shuffleKey: random() }))
     .sort(
       (a, b) =>
-        group(a) - group(b) ||
-        priority(a) - priority(b) ||
-        (shuffleKey.get(a) ?? 0) - (shuffleKey.get(b) ?? 0),
+        group(a.entry) - group(b.entry) ||
+        priority(a.entry) - priority(b.entry) ||
+        a.shuffleKey - b.shuffleKey,
     )
-    .map(entry => entry.spec);
+    .map(({ entry }) => entry.spec);
 }
 
 export function specsForRun(

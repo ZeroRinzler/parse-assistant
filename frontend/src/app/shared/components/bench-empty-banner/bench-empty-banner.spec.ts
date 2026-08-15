@@ -11,7 +11,7 @@ function render(inputs: Record<string, unknown>): string {
   const fixture = TestBed.createComponent(BenchEmptyBannerComponent);
   for (const [name, value] of Object.entries(inputs)) fixture.componentRef.setInput(name, value);
   fixture.detectChanges();
-  return ((fixture.nativeElement as HTMLElement).textContent ?? '').replace(/\s+/g, ' ').trim();
+  return (fixture.nativeElement as HTMLElement).textContent.replace(/\s+/g, ' ').trim();
 }
 
 describe('BenchEmptyBannerComponent', () => {

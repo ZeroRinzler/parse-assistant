@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { assert, describe, it, expect } from 'vitest';
 import { WritableSignal, provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { FormControl } from '@angular/forms';
@@ -103,7 +103,9 @@ describe('PreFightComponent encounter load latest-wins', () => {
     }
 
     settle(spec: string, encounters: EncounterEntry[]): void {
-      this.resolvers.get(spec)!(ok(encounters));
+      const resolve = this.resolvers.get(spec);
+      assert.exists(resolve);
+      resolve(ok(encounters));
     }
   }
 

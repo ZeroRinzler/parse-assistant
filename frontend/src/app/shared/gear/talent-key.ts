@@ -26,7 +26,7 @@ export function parseTalentKey(key: string): TalentPick[] {
   if (prefix !== KEY_PREFIX || !body) return [];
   return body.split(PICK_SEPARATOR).reduce<TalentPick[]>((picks, part) => {
     const [entryId, rank] = part.split(FIELD_SEPARATOR).map(Number);
-    if (Number.isFinite(entryId) && Number.isFinite(rank)) picks.push({ entryId, rank });
+    if (entryId != null && rank != null && Number.isFinite(entryId) && Number.isFinite(rank)) picks.push({ entryId, rank });
     return picks;
   }, []);
 }

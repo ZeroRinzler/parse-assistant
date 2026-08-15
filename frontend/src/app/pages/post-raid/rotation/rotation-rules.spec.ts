@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { assert, describe, it, expect } from 'vitest';
 import {
   RulebookRule, RuleSeverity,
   CastWithoutPriorCondition, HoldCooldownForAnchorCondition, CastOutsideBuffCondition,
@@ -101,8 +101,10 @@ describe('rule engine', () => {
     const ctx = ruleCtx([cast(SHADOW_DANCE, 10), cast(SECRET_TECHNIQUE, 30)]);
     const finding = evaluateCastWithoutPrior(SECRET_TECH_NEEDS_DANCE, ctx, band(PAIR_WINDOW_S), 'warning', 'do x');
     expect(finding).not.toBeNull();
-    expect(finding!.measured).toEqual({ value: '1 / 1', unit: 'cast(s)' });
-    expect(finding!.details?.remedy).toBe('do x');
+    assert.exists(finding);
+    expect(finding.measured).toEqual({ value: '1 / 1', unit: 'cast(s)' });
+    assert.exists(finding);
+    expect(finding.details?.remedy).toBe('do x');
   });
 
   it('passes when Shadow Dance precedes Secret Technique inside the window', () => {
@@ -115,7 +117,8 @@ describe('rule engine', () => {
     const ctx = ruleCtx([cast(SHADOW_BLADES, 10), cast(SHADOW_BLADES, 120), cast(SHADOW_DANCE, 110)]);
     const finding = evaluateHoldForAnchor(HOLD_DANCE_FOR_BLADES, ctx, band(HOLD_WINDOW_S), 'critical');
     expect(finding).not.toBeNull();
-    expect(finding!.measured).toEqual({ value: '1 / 1', unit: 'charge(s)' });
+    assert.exists(finding);
+    expect(finding.measured).toEqual({ value: '1 / 1', unit: 'charge(s)' });
   });
 
   it('flags a required cast that only follows the judged one, because position defaults to before', () => {
@@ -168,19 +171,22 @@ describe('rule engine', () => {
     const description = 'Secret Technique always inside Shadow Dance';
     const rule: RulebookRule = { severity: 'warning', description, condition: SECRET_TECH_NEEDS_DANCE };
     const violated = evaluateRules([benched(rule)], ruleCtx([cast(SECRET_TECHNIQUE, 10)]));
+    assert.exists(violated[0]);
     expect(violated[0].label).toBe(description);
     expect(rulesFollowed([benched(rule)], ruleCtx([cast(SHADOW_DANCE, 8), cast(SECRET_TECHNIQUE, 10)]))).toEqual([description]);
   });
 
   it('evaluateRules falls back to the synthesized label when a rule has no description', () => {
     const rule: RulebookRule = { severity: 'warning', condition: SECRET_TECH_NEEDS_DANCE };
-    expect(evaluateRules([benched(rule)], ruleCtx([cast(SECRET_TECHNIQUE, 10)]))[0].label)
-      .toBe('Secret Technique without Shadow Dance');
+    const finding = evaluateRules([benched(rule)], ruleCtx([cast(SECRET_TECHNIQUE, 10)]))[0];
+    assert.exists(finding);
+    expect(finding.label).toBe('Secret Technique without Shadow Dance');
   });
 
   it('evaluateRules carries the rule type onto the finding', () => {
     const rule: RulebookRule = { type: 'cooldown_pairing', severity: 'warning', condition: SECRET_TECH_NEEDS_DANCE };
     const findings = evaluateRules([benched(rule)], ruleCtx([cast(SECRET_TECHNIQUE, 10)]));
+    assert.exists(findings[0]);
     expect(findings[0].rule_type).toBe('cooldown_pairing');
   });
 });
@@ -188,7 +194,9 @@ describe('rule engine', () => {
 describe('rule severity', () => {
   it.each(['critical', 'warning', 'info'] as RuleSeverity[])('carries an authored %s onto the finding', severity => {
     const rule: RulebookRule = { severity, condition: SECRET_TECH_NEEDS_DANCE };
-    expect(evaluateRules([benched(rule)], ruleCtx([cast(SECRET_TECHNIQUE, 10)]))[0].severity).toBe(severity);
+    const finding = evaluateRules([benched(rule)], ruleCtx([cast(SECRET_TECHNIQUE, 10)]))[0];
+    assert.exists(finding);
+    expect(finding.severity).toBe(severity);
   });
 });
 
@@ -393,7 +401,9 @@ describe('evaluateOpeningSequence', () => {
   it('still flags a first step landing past the window, which is why the gate reads casts and not progress', () => {
     const ctx = ruleCtx([cast(EVISCERATE, 1), cast(SHADOW_BLADES, 30)]);
     const rule: RulebookRule = { severity: 'warning', condition: opener };
-    expect(evaluateRules([benched(rule, band(OPENER_WINDOW_S))], ctx)[0].measured?.value).toBe('0 / 3');
+    const finding = evaluateRules([benched(rule, band(OPENER_WINDOW_S))], ctx)[0];
+    assert.exists(finding);
+    expect(finding.measured?.value).toBe('0 / 3');
   });
 });
 
@@ -1678,8 +1688,10 @@ describe('occurrence strips', () => {
     const casts = Array.from({ length: OVER_CAP_CASTS }, (_, i) => cast(BLACK_POWDER, i + 1));
     const dmg = Array.from({ length: OVER_CAP_CASTS }, (_, i) => damage(BLACK_POWDER, i + 1.5, 100, { target: 1 }));
     const finding = evaluateCastAtTargetCount(blackPowder, ruleCtx(casts, { damage: dmg }), band(3), 'warning');
-    const occurrences = finding!.occurrences;
+    assert.exists(finding);
+    const occurrences = finding.occurrences;
     expect(occurrences.length).toBe(24);
+    assert.exists(occurrences[0]);
     expect(occurrences[0].atS).toBe(1);
     const timestamps = occurrences.map(o => o.atS);
     expect(timestamps).toEqual([...timestamps].sort((a, b) => (a ?? 0) - (b ?? 0)));
@@ -1697,7 +1709,8 @@ describe('occurrence strips', () => {
     const PASSING_CASTS = 30; // clears MAX_OCCURRENCES (24) so sampling kicks in
     const passes = Array.from({ length: PASSING_CASTS }, (_, i) => atCombo(100 + i, MAX_COMBO_POINTS));
     const finding = evaluateResourceAtCast(finisher, ruleCtx([...fails, ...passes]), band(1), 'warning');
-    const occurrences = finding!.occurrences;
+    assert.exists(finding);
+    const occurrences = finding.occurrences;
     expect(occurrences.length).toBe(24);
     const failingAtS = occurrences.filter(occ => !occ.ok).map(occ => occ.atS);
     expect(failingAtS).toEqual(FAIL_AT_S);

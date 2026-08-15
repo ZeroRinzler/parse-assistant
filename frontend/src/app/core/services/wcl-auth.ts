@@ -32,9 +32,9 @@ export class WclAuthService {
       client_id: environment.wclClientId,
       client_secret: environment.wclClientSecret,
     });
-    let data: TokenResponse;
+    let data: TokenResponse | null;
     try {
-      data = await firstValueFrom(this.http.post<TokenResponse>(
+      data = await firstValueFrom(this.http.post<TokenResponse | null>(
         TOKEN_URL,
         params.toString(),
         { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
@@ -53,7 +53,8 @@ export class WclAuthService {
       throw new WclTransportError('WCL token response carried no access_token.', 0);
     }
     this._token = accessToken;
-    const expiresInS = data.expires_in && data.expires_in > 0 ? data.expires_in : 3600;
+    const expiresIn = data?.expires_in;
+    const expiresInS = expiresIn && expiresIn > 0 ? expiresIn : 3600;
     this._expiry = Date.now() + expiresInS * 1000;
     return this._token;
   }

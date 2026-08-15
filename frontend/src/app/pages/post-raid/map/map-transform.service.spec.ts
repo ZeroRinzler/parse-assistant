@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { assert, describe, it, expect } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
 import { WclEvent } from '../../../core/models/wcl.models';
@@ -48,9 +48,11 @@ describe('collectPositionSamples', () => {
       resEvent({ ts: 2000, source: 1, x: 200, y: 100, maxHp: 5000 }),
       resEvent({ ts: 1000, source: 1, x: 100, y: 50, facing: 1500, mapID: 7, maxHp: 5000 }),
     ], 0));
-    const samples = byActor.get(1)!;
+    const samples = byActor.get(1);
+    assert.exists(samples);
     expect(samples.map(s => s.t)).toEqual([1, 2]);
     expect(samples[0]).toEqual({ t: 1, x: 100, y: 50, facing: 1500, mapID: 7, maxHp: 5000 });
+    assert.exists(samples[1]);
     expect(samples[1].x).toBe(200);
   });
 });
@@ -264,8 +266,8 @@ describe('buildParsePositions', () => {
     // player samples span 0..6s, so they resample onto the 1.5s grid: 0, 1.5, 3, 4.5, 6.
     expect(parse.player.map(row => row[0])).toEqual([0, 1.5, 3, 4.5, 6]);
     // player rows are [t, x, y, mapID]; enemy rows keep facing at index 3
-    expect(parse.player.every(row => row.length === 4)).toBe(true);
-    expect(parse.enemies.every(enemy => enemy.samples.every(row => row.length === 5))).toBe(true);
+    parse.player.forEach(row => { expect(row.length).toBe(4); });
+    parse.enemies.forEach(enemy => { enemy.samples.forEach(row => { expect(row.length).toBe(5); }); });
     const boss = parse.enemies.find(e => e.is_boss);
     expect(boss?.game_id).toBe(100);
     expect(parse.enemies.some(e => e.game_id === 200 && !e.is_boss)).toBe(true);

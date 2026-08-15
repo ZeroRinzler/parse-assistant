@@ -34,36 +34,35 @@ function sameMap(a: PosSample, b: PosSample): boolean {
 
 /** Returns null when `t` is more than `tolerance` seconds past either end of the timeline. */
 export function positionAt(timeline: ActorTimeline | undefined, t: number, tolerance = 3): PosSample | null {
-  const samples = timeline?.samples;
-  if (!samples?.length) return null;
-  if (t <= samples[0].t) return t < samples[0].t - tolerance ? null : { ...samples[0], t };
-  const last = samples[samples.length - 1];
-  if (t >= last.t) return t > last.t + tolerance ? null : { ...last, t };
+  const samples = timeline?.samples ?? [];
+  const first = samples[0];
+  if (!first) return null;
+  if (t <= first.t) return t < first.t - tolerance ? null : { ...first, t };
 
-  let lo = 0, hi = samples.length - 1;
-  while (lo < hi) {
-    const mid = (lo + hi) >> 1;
-    if (samples[mid].t < t) lo = mid + 1; else hi = mid;
+  // Walk to the first sample at or past `t`; `before` trails one behind, so the pair brackets `t`.
+  let before = first;
+  for (const after of samples) {
+    if (after.t < t) { before = after; continue; }
+    const span = after.t - before.t;
+    const fraction = span > 0 ? (t - before.t) / span : 0;
+    // Coordinates only compare within one mapID, so a bracket straddling a map swap snaps to the nearer sample.
+    if (before.mapID !== after.mapID) return { ...(fraction < 0.5 ? before : after), t };
+    let facing: number | undefined;
+    if (before.facing != null && after.facing != null) {
+      facing = before.facing + angleDelta(before.facing, after.facing) * fraction;
+    } else {
+      facing = before.facing ?? after.facing;
+    }
+    return {
+      t,
+      x: before.x + (after.x - before.x) * fraction,
+      y: before.y + (after.y - before.y) * fraction,
+      facing,
+      mapID: before.mapID,
+    };
   }
-  const after = samples[lo];
-  const before = samples[lo - 1];
-  const span = after.t - before.t;
-  const fraction = span > 0 ? (t - before.t) / span : 0;
-  // Coordinates only compare within one mapID, so a bracket straddling a map swap snaps to the nearer sample.
-  if (before.mapID !== after.mapID) return { ...(fraction < 0.5 ? before : after), t };
-  let facing: number | undefined;
-  if (before.facing != null && after.facing != null) {
-    facing = before.facing + angleDelta(before.facing, after.facing) * fraction;
-  } else {
-    facing = before.facing ?? after.facing;
-  }
-  return {
-    t,
-    x: before.x + (after.x - before.x) * fraction,
-    y: before.y + (after.y - before.y) * fraction,
-    facing,
-    mapID: before.mapID,
-  };
+  // Every sample lies before `t`, so `before` is the timeline's last one.
+  return t > before.t + tolerance ? null : { ...before, t };
 }
 
 /** When the reference has no facing, world axes are used (forward = +y). */

@@ -50,7 +50,7 @@ export class HttpWclTransport implements WclTransport {
     }
     // A 200 with a GraphQL `errors` array never improves on retry, so it classifies permanent, not transient.
     if (body.errors?.length) {
-      const message = body.errors[0]?.message || 'WCL GraphQL error';
+      const message = body.errors[0]?.message ?? 'WCL GraphQL error';
       if (code) {
         this.failedCodes.add(code);
         if (/permission/i.test(message)) this.inaccessibleCodes.add(code);

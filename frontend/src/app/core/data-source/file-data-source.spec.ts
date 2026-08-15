@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { assert, describe, it, expect } from 'vitest';
 import { DataFileApiService } from '../services/data-file-api';
 import { FileDataSource } from './file-data-source';
 import { Result, ok, missing } from '../result';
@@ -43,6 +43,7 @@ describe('FileDataSource', () => {
   it('reads the slice directory it was constructed with (map binds "positions")', async () => {
     const { files, calls } = fakeFiles(missing('Not yet ingested.'));
     await new FileDataSource<DummyBench>(files, 'positions').getBench(SPEC, ENCOUNTER_ID);
+    assert.exists(calls[0]);
     expect(calls[0][2]).toBe('positions');
   });
 });

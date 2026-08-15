@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { assert, describe, it, expect, afterEach } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
@@ -34,12 +34,15 @@ describe('indexTalentTrees', () => {
   it('keys each spec by {SpecName}{ClassName} across every node bucket', () => {
     const bySpec = indexTalentTrees([SUBTLETY_TREE]);
     expect([...bySpec.keys()]).toEqual(['SubtletyRogue']);
-    expect(bySpec.get('SubtletyRogue')![22]).toEqual(
+    const subtletyTalents = bySpec.get('SubtletyRogue');
+    assert.exists(subtletyTalents);
+    expect(subtletyTalents[22]).toEqual(
       { name: 'Find Weakness', icon: 'ability_findweakness', spellId: 91023 });
   });
 
   it('carries a hero-tree pick with no spell id and skips an entry with no id', () => {
-    const talents = indexTalentTrees([SUBTLETY_TREE]).get('SubtletyRogue')!;
+    const talents = indexTalentTrees([SUBTLETY_TREE]).get('SubtletyRogue');
+    assert.exists(talents);
     expect(talents[44]).toEqual({ name: 'Trickster', icon: '' });
     expect(Object.keys(talents)).toEqual(['11', '22', '23', '33', '44']);
   });

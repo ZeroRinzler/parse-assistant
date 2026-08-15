@@ -109,7 +109,7 @@ export interface SpendAtStacksCondition {
   /** `min` flags spending below the field's level, `max` flags generating near the cap. */
   bound: 'min' | 'max';
   /** The buff's own stack cap, a game constant like a cooldown rather than a field behaviour. */
-  max_stacks: number;
+  max_stacks?: number;
   /** States that suspend the rule, so a proc that licenses a cheap cast is not counted against it. */
   except_buff_spell_ids?: number[];
   except_buff_spell_names?: string[];
@@ -165,7 +165,7 @@ export interface RulebookRule {
   type?: string;
   severity: RuleSeverity;
   description?: string;
-  condition: RuleCondition;
+  condition?: RuleCondition;
   action?: string;
 }
 

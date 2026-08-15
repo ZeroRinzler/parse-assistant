@@ -104,7 +104,7 @@ export interface LiveReference {
 
 export function resolveLiveReference(positions: EncounterPositions, enemies: MapEnemyActor[]): LiveReference {
   const refActorByGameId = new Map<number, number>();
-  for (const enemy of enemies) if (enemy.gameID != null) refActorByGameId.set(enemy.gameID, enemy.id);
+  for (const enemy of enemies) refActorByGameId.set(enemy.gameID, enemy.id);
   const bossGameId = listReferenceEnemies(positions).find(enemy => enemy.isBoss)?.gameId;
   const bossActorId = bossGameId != null ? (refActorByGameId.get(bossGameId) ?? null) : null;
   return { bossActorId, refActorByGameId };
@@ -179,7 +179,7 @@ export class MapFeatureService {
     const seq = ++this.prepareSeq;
     this.live.set(null);
     this._resetOverlay();
-    if (!fight?.encounterID) { this.positions.set(null); this.error.set(null); return; }
+    if (!fight.encounterID) { this.positions.set(null); this.error.set(null); return; }
     const result = await this.source.getBench(spec, fight.encounterID);
     if (seq !== this.prepareSeq) return; // a newer prepare superseded this selection
     this._applyBench(result);

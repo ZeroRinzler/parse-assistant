@@ -77,12 +77,12 @@ export function summarizeCooldownCasts(
       }
     }
 
-    const holdWindows = detectHoldWindows(castTimesS, cooldown.cooldown ?? 90);
+    const holdWindows = detectHoldWindows(castTimesS, cooldown.cooldown);
 
     return {
       name: cooldown.name,
       total_uses: castTimesS.length,
-      first_cast_s: castTimesS.length ? round(castTimesS[0]) : null,
+      first_cast_s: castTimesS[0] != null ? round(castTimesS[0]) : null,
       bl_aligned: blAligned,
       bl_offset_s: blOffsetS,
       cast_times_s: castTimesS.map(timeS => round(timeS, 2)),
@@ -96,7 +96,11 @@ export function summarizeCooldownCasts(
 export function castGapListS(castEvents: TimedEvent[]): number[] {
   const completed = castEvents.filter(event => event.type === 'cast').sort((a, b) => a.atS - b.atS);
   const gaps: number[] = [];
-  for (let i = 1; i < completed.length; i++) gaps.push(round(completed[i].atS - completed[i - 1].atS, 3));
+  let prev: TimedEvent | undefined;
+  for (const event of completed) {
+    if (prev) gaps.push(round(event.atS - prev.atS, 3));
+    prev = event;
+  }
   return gaps.sort((a, b) => a - b);
 }
 
@@ -121,8 +125,11 @@ export function buildCdBenchmark(entries: CdSummary[], effectiveCd: number): Per
   const firstCasts = entries.map(entry => entry.first_cast_s).filter((value): value is number => value != null);
   const gaps: number[] = [];
   for (const entry of entries) {
-    const times = entry.cast_times_s;
-    for (let i = 1; i < times.length; i++) gaps.push(times[i] - times[i - 1]);
+    let prev: number | undefined;
+    for (const timeS of entry.cast_times_s) {
+      if (prev != null) gaps.push(timeS - prev);
+      prev = timeS;
+    }
   }
   const blOffsets = entries.map(entry => entry.bl_offset_s).filter((value): value is number => value != null);
   const blCount = entries.filter(entry => entry.bl_aligned).length;
@@ -152,19 +159,17 @@ export function buildCdBenchmark(entries: CdSummary[], effectiveCd: number): Per
 }
 
 export function computeEfficiencyThresholds(
-  gapLists: number[][], durations: number[],
+  parses: { gapListS: number[]; durationS: number }[],
 ): { downtimeThresholdS: number; topAvgEfficiency: number; topEfficiencyStddev: number } {
-  const allGaps = gapLists.flat().sort((a, b) => a - b);
+  const allGaps = parses.flatMap(parse => parse.gapListS).sort((a, b) => a - b);
   let downtimeThresholdS = DEFAULT_DOWNTIME_THRESHOLD_S;
   if (allGaps.length) {
     downtimeThresholdS = quantile(allGaps, DOWNTIME_PERCENTILE) ?? DEFAULT_DOWNTIME_THRESHOLD_S;
   }
   const efficiencies: number[] = [];
-  for (let i = 0; i < gapLists.length; i++) {
-    const gaps = gapLists[i];
-    const durationS = durations[i] ?? 0;
-    if (gaps.length && durationS > 0) {
-      const downtimeS = gaps.filter(gap => gap > downtimeThresholdS).reduce((sum, gap) => sum + gap, 0);
+  for (const { gapListS, durationS } of parses) {
+    if (gapListS.length && durationS > 0) {
+      const downtimeS = gapListS.filter(gap => gap > downtimeThresholdS).reduce((sum, gap) => sum + gap, 0);
       efficiencies.push(round(Math.max(0, (1 - downtimeS / durationS) * 100)));
     }
   }
@@ -178,7 +183,7 @@ export function computeEfficiencyThresholds(
 export function aggregateCdBenchmarks(
   perParse: CdSummary[][], cooldowns: RulebookCooldown[],
 ): Record<string, PerCdBenchmark> {
-  const cdSecondsByName = new Map(cooldowns.map(cooldown => [cooldown.name, cooldown.cooldown ?? 90]));
+  const cdSecondsByName = new Map(cooldowns.map(cooldown => [cooldown.name, cooldown.cooldown]));
   const byCd = new Map<string, CdSummary[]>();
   for (const summaries of perParse) {
     for (const summary of summaries) {
@@ -206,7 +211,9 @@ interface ParseRotation {
 export function benchRules(rules: RulebookRule[], perParse: ParseRuleSamples[]): BenchedRule[] {
   return rules.map((rule, i) => ({
     rule,
-    ...ruleBand(rule.condition, perParse.map(samples => samples[i] ?? { values: [], unmeasuredOut: 0 })),
+    ...(rule.condition
+      ? ruleBand(rule.condition, perParse.map(samples => samples[i] ?? { values: [], unmeasuredOut: 0 }))
+      : { band: null, sample_count: 0 }),
   }));
 }
 
@@ -230,16 +237,14 @@ export class RotationTransformService implements DataSource<RotationBench> {
 
       const perParse: CdSummary[][] = [];
       const ruleSamples: ParseRuleSamples[] = [];
-      const gapLists: number[][] = [];
-      const durations: number[] = [];
+      const gapParses: { gapListS: number[]; durationS: number }[] = [];
       let encounterName = '';
       for (const ranking of rankings) {
         const parse = await this.computeParse(ranking, cooldowns, judgeable);
         if (!parse) continue;
         perParse.push(parse.summaries);
         ruleSamples.push(parse.ruleSamples);
-        gapLists.push(parse.gapListS);
-        durations.push(parse.durationS);
+        gapParses.push({ gapListS: parse.gapListS, durationS: parse.durationS });
         encounterName ||= parse.encounterName;
         if (perParse.length >= TOP_PARSE_COUNT) break;
       }
@@ -247,7 +252,7 @@ export class RotationTransformService implements DataSource<RotationBench> {
         return missing(`Only ${perParse.length} usable top parse(s) for this encounter; ${MIN_PARSE_COUNT} are needed to bench it.`);
       }
 
-      const { downtimeThresholdS, topAvgEfficiency, topEfficiencyStddev } = computeEfficiencyThresholds(gapLists, durations);
+      const { downtimeThresholdS, topAvgEfficiency, topEfficiencyStddev } = computeEfficiencyThresholds(gapParses);
 
       const cd_spell_ids = rotationCdSpellIds(cooldowns, defensives);
       return ok({
@@ -255,7 +260,7 @@ export class RotationTransformService implements DataSource<RotationBench> {
         encounter_id: encounterId,
         encounter_name: encounterName,
         sample_count: perParse.length,
-        avg_duration_s: durations.length ? round((mean(durations) ?? 0)) : 0,
+        avg_duration_s: gapParses.length ? round(mean(gapParses.map(parse => parse.durationS)) ?? 0) : 0,
         downtime_threshold_s: downtimeThresholdS,
         top_avg_efficiency: topAvgEfficiency,
         top_efficiency_stddev: topEfficiencyStddev,
@@ -308,8 +313,8 @@ export class RotationTransformService implements DataSource<RotationBench> {
         summaries: summarizeCooldownCasts(castsTimed, cooldowns, fightDurS, blTimeS),
         gapListS: castGapListS(castsTimed),
         durationS: fightDurS,
-        encounterName: fight.name ?? '',
-        ruleSamples: rules.map(rule => sampleRule(rule.condition, ruleCtx)),
+        encounterName: fight.name,
+        ruleSamples: rules.map(rule => (rule.condition ? sampleRule(rule.condition, ruleCtx) : { values: [], unmeasuredOut: 0 })),
       };
     } catch (err) {
       logWarn(`RotationTransformService parse ${ranking.report_code}:${ranking.fight_id}`, err);

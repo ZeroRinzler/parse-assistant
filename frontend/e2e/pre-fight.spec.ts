@@ -20,7 +20,7 @@ test.beforeAll(async ({ browser }) => {
 });
 
 test.afterAll(async () => {
-  await page?.close();
+  await page.close();
 });
 
 test('selecting class, spec, and encounter loads that spec\'s plan', async () => {

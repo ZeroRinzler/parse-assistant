@@ -20,14 +20,8 @@
       (keydown)="onKeydown($event)">
       <div class="flex flex-wrap items-start gap-1.5 px-0.5">
         @for (cell of timelineCells(); track cell.kind === 'window' ? 'w' + cell.index : 'g' + cell.id) {
-          @if (cell.kind === 'gap') {
-            <!-- The hidden label keeps this box top-aligned with the chips' timestamp row. -->
-            <div class="flex flex-col items-center gap-1.5 shrink-0" aria-hidden="true">
-              <div class="w-5 h-10 rounded-md border border-dashed border-[var(--border)] opacity-40"></div>
-              <span class="text-[10px] invisible">0</span>
-            </div>
-          } @else {
-            @let w = windows()[cell.index];
+          @if (cell.kind === 'window') {
+            @let w = cell.window;
             @let active = activeIndex() === cell.index;
             @let iconTone =
               w.status === 'good' ? 'text-[var(--success)]' :
@@ -55,6 +49,12 @@
               <span [class]="'tabular-nums text-[10px] ' + (active ? 'text-[var(--gold)]' : 'text-[var(--muted)]')">
                 {{ w.timeStartS | formatDuration }}
               </span>
+            </div>
+          } @else {
+            <!-- The hidden label keeps this box top-aligned with the chips' timestamp row. -->
+            <div class="flex flex-col items-center gap-1.5 shrink-0" aria-hidden="true">
+              <div class="w-5 h-10 rounded-md border border-dashed border-[var(--border)] opacity-40"></div>
+              <span class="text-[10px] invisible">0</span>
             </div>
           }
         }

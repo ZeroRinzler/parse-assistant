@@ -118,13 +118,16 @@ export function gapDelayFindings(
   const findings: AnalysisFinding[] = [];
   if (defBench.avg_gap_s == null || defBench.stddev_gap_s == null) return findings;
   const avgGapS = defBench.avg_gap_s;
-  for (let i = 1; i < castTimesS.length; i++) {
-    const gap = castTimesS[i] - castTimesS[i - 1];
+  let prevS: number | undefined;
+  for (const timeS of castTimesS) {
+    const gap = prevS != null ? timeS - prevS : null;
+    prevS = timeS;
+    if (gap == null) continue;
     if (isOutlierAbove(gap, avgGapS, defBench.stddev_gap_s)) {
       findings.push({ severity: 'warning', category: 'cooldown_delay', cd_name: name,
-        timestamp_s: castTimesS[i],
+        timestamp_s: timeS,
         measured: { value: `${gap.toFixed(0)}s`, unit: `avg ${avgGapS.toFixed(0)}s` },
-        message: `${name} sat ${gap.toFixed(0)}s between uses at ${fmtClock(castTimesS[i])}. Top raiders average ${avgGapS.toFixed(0)}s.`,
+        message: `${name} sat ${gap.toFixed(0)}s between uses at ${fmtClock(timeS)}. Top raiders average ${avgGapS.toFixed(0)}s.`,
         details: { remedy: `Use ${name} sooner after it resets.` }, occurrences: [] });
     }
   }
@@ -168,7 +171,7 @@ export function analyzeOneDefensive(
   const suggestions: AnalysisFinding[] = [];
   if (cast_times_s?.length) {
     const firstS = cast_times_s[0];
-    if (majorityUse && isOutlierAbove(firstS, defBench.avg_first_cast_s, defBench.stddev_first_cast_s)) {
+    if (firstS != null && majorityUse && isOutlierAbove(firstS, defBench.avg_first_cast_s, defBench.stddev_first_cast_s)) {
       issues.push({ severity: 'warning', category: 'cooldown_delay', cd_name: name,
         timestamp_s: firstS,
         measured: { value: `+${(firstS - defBench.avg_first_cast_s).toFixed(0)}s`, unit: `top ${fmtClock(defBench.avg_first_cast_s)}` },
@@ -212,7 +215,7 @@ export function computePlayerDefensiveWindows(topDefWindows: BurstWindow[], dtEv
     for (const event of winEvents) {
       if (!event.abilityGameID) continue;
       const spellId = normalizeAbilityId(event.abilityGameID);
-      byAbility[spellId] = (byAbility[spellId] || 0) + dmgOf(event);
+      byAbility[spellId] = (byAbility[spellId] ?? 0) + dmgOf(event);
     }
     const ability_breakdown = Object.entries(byAbility)
       .sort((a, b) => b[1] - a[1])
@@ -337,23 +340,23 @@ export function buildDefensiveWindows(
 }
 
 export function buildDefensivePlanRows(bench: DefensiveBench | null): DefensivePlanRow[] {
-  if (!bench?.defensives?.length) return [];
-  const benchmarks = bench.per_defensive_benchmarks ?? {};
-  const windows = bench.defensive_windows ?? [];
+  if (!bench?.defensives.length) return [];
+  const benchmarks = bench.per_defensive_benchmarks;
+  const windows = bench.defensive_windows;
   return bench.defensives.map(defensive => {
     const benchmark = benchmarks[defensive.name];
     const windowsS = windows
       .filter(window => (window.defensive_name ?? window.common_defensives?.[0]) === defensive.name)
       .map(window => window.time_s)
       .sort((a, b) => a - b);
-    const holds = benchmark?.majority_hold && benchmark.hold_targets
+    const holds = benchmark?.majority_hold
       ? Object.entries(benchmark.hold_targets)
           .sort((a, b) => Number(a[0]) - Number(b[0]))
           .map(([idx, hold]) => ({ castIndex: Number(idx), targetS: hold.target_s }))
       : [];
-    const spellId = defensive.spell_id ?? null;
-    const ability = spellId != null ? bench.ability_icons[spellId] : undefined;
-    if (spellId != null && !ability) logWarn('buildDefensivePlanRows: ability id missing from ability map', spellId);
+    const spellId = defensive.spell_id;
+    const ability = bench.ability_icons[spellId];
+    if (!ability) logWarn('buildDefensivePlanRows: ability id missing from ability map', spellId);
     // First cast is a user-only stat; gate it on the same use-share majority the analysis uses.
     const usedByMajority = benchmark != null && defensiveUsedShare(benchmark) >= MIN_USE_SHARE_FRAC;
     return {

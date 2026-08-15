@@ -80,7 +80,7 @@ export class NorthernSkyTransformService implements DataSource<NorthernSkyBench>
       );
       const timesBySpellId = new Map<number, number[]>();
       for (const ability of abilities) timesBySpellId.set(ability.spell_id, cooldownCastTimes(casts, ability.spell_id));
-      return { timesBySpellId, encounterName: fight.name ?? '' };
+      return { timesBySpellId, encounterName: fight.name };
     } catch (cause) {
       logWarn(`NorthernSkyTransformService parse ${ranking.report_code}:${ranking.fight_id}`, cause);
       return null;

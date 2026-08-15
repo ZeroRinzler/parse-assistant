@@ -75,7 +75,7 @@ export function toParseRankings(raw: WclRawRanking[], count: number): ParseRanki
     }));
 }
 
-type ReportActor = WclReport['masterData']['actors'][number];
+type ReportActor = NonNullable<WclReport['masterData']>['actors'][number];
 
 // A rankings row spells a realm "Twisting Nether" where a report actor spells it "Twisting-Nether", so identity is the alphanumerics.
 function realmKey(server: string): string {
@@ -87,8 +87,8 @@ export function findParseActor(actors: ReportActor[] | undefined, ranking: Parse
   const named = (actors ?? []).filter(actor => actor.name === ranking.player);
   if (named.length < 2) return named[0] ?? null;
   const rankedRealm = realmKey(ranking.server);
-  const onRealm = rankedRealm ? named.filter(actor => realmKey(actor.server) === rankedRealm) : [];
-  return onRealm.length === 1 ? onRealm[0] : null;
+  const [onlyOnRealm, ambiguous] = rankedRealm ? named.filter(actor => realmKey(actor.server) === rankedRealm) : [];
+  return onlyOnRealm !== undefined && ambiguous === undefined ? onlyOnRealm : null;
 }
 
 /** Header chips for a window: each spell id with its baked icon + name. */

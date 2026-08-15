@@ -7,7 +7,7 @@ const CONFIG_SRC = 'wh-tooltips-config.js';
 const TOOLTIPS_SRC = 'https://wow.zamimg.com/js/tooltips.js';
 
 interface WowheadPower {
-  refreshLinks(): void;
+  refreshLinks?: () => void;
 }
 type WowheadWindow = Window & { $WowheadPower?: WowheadPower };
 

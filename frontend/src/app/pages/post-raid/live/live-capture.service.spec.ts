@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { assert, describe, expect, it } from 'vitest';
 import {
   ClipRoll, ClipWindow, Segment,
   absoluteWindowStart, buildClipWindows, fullPullWindow, interSegmentGapMs, segmentSeekOffset, segmentsCover, selectSegments,
@@ -34,12 +34,15 @@ describe('buildClipWindows', () => {
   it('widens each window by pre/post roll around its absolute span', () => {
     const absStart = REPORT_START_MS + FIGHT_START_MS + WINDOW_TIME_S * 1000;
     const [window] = buildClipWindows(REPORT_START_MS, FIGHT_START_MS, [anchor()], ROLL);
+    assert.exists(window);
     expect(window.fromMs).toBe(absStart - ROLL.preMs);
+    assert.exists(window);
     expect(window.toMs).toBe(absStart + WINDOW_LENGTH_S * 1000 + ROLL.postMs);
   });
 
   it('carries each window key through unchanged', () => {
     const [window] = buildClipWindows(REPORT_START_MS, FIGHT_START_MS, [anchor({ key: 'def3' })], ROLL);
+    assert.exists(window);
     expect(window.key).toBe('def3');
   });
 

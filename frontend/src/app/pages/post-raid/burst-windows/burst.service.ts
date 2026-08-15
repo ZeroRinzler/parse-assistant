@@ -141,7 +141,7 @@ function playerWindowAggregate(
     if (!event.abilityGameID) continue;
     // Match the bench breakdown's normalized spell_id keys so the detail-row join hits.
     const spellId = normalizeAbilityId(event.abilityGameID);
-    byAbility[spellId] = (byAbility[spellId] || 0) + eventDamage(event);
+    byAbility[spellId] = (byAbility[spellId] ?? 0) + eventDamage(event);
   }
   const castsByName = new Map<string, number>();
   for (const event of casts) {

@@ -28,7 +28,7 @@ test.beforeAll(async ({ browser }) => {
   // Seeded before boot so the one analysis targets Elsahr instead of the roster's first player.
   await page.addInitScript(
     ([key, name]) => { localStorage.setItem(key, JSON.stringify({ playerName: name })); },
-    [STICKY_PLAYER_KEY, PLAYER_NAME],
+    [STICKY_PLAYER_KEY, PLAYER_NAME] as const,
   );
   await page.goto('/');
   await page.getByLabel('Warcraft Logs Report URL or Code').fill(REPORT_URL);
@@ -38,7 +38,7 @@ test.beforeAll(async ({ browser }) => {
 });
 
 test.afterAll(async () => {
-  await page?.close();
+  await page.close();
 });
 
 test('analyzing the report selects the last pull and the sticky player', async () => {

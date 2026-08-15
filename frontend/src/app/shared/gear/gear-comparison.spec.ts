@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { assert, describe, it, expect } from 'vitest';
 import {
   buildBenchEnchantRows,
   buildBenchTrinketRows,
@@ -25,8 +25,11 @@ describe('buildBenchEnchantRows', () => {
       enchants: { 15: [{ id: 8041, name: 'Sophic Devotion', pct: 80 }] },
     }));
     expect(rows).toHaveLength(1);
+    assert.exists(rows[0]);
     expect(rows[0].name).toBe('Sophic Devotion');
+    assert.exists(rows[0]);
     expect(rows[0].slotName).toBe('Main Hand');
+    assert.exists(rows[0]);
     expect(rows[0].pct).toBe(80);
   });
 
@@ -35,6 +38,7 @@ describe('buildBenchEnchantRows', () => {
     const rows = buildBenchEnchantRows(stats({
       enchants: { 15: [{ id: 8041, name: '', pct: 90 }] },
     }));
+    assert.exists(rows[0]);
     expect(rows[0].name).toBe('Enchant #8041');
   });
 
@@ -107,6 +111,7 @@ describe('buildBenchTrinketRows', () => {
       trinkets: { 12: [{ id: 193701, name: 'Box', icon: 'box', pct: 50 }] },
     }));
     expect(rows).toHaveLength(1);
+    assert.exists(rows[0]);
     expect(rows[0].slotLabel).toBe('Trinket 1');
   });
 

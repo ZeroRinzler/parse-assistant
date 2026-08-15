@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { assert, describe, it, expect } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
@@ -206,7 +206,9 @@ describe('withTalentDiffs', () => {
 
   it('bakes each alt build\'s diff against the most common build, leaving the most common one empty', () => {
     const out = withTalentDiffs(builds(), ok(talents));
+    assert.exists(out[0]);
     expect(out[0].diff).toEqual([]);
+    assert.exists(out[1]);
     expect(out[1].diff).toEqual([
       { kind: 'added', talent: talents[11] },
       { kind: 'dropped', talent: talents[10] },
@@ -297,6 +299,7 @@ describe('GearTransformService (live, in-browser)', () => {
     const bench = await TestBed.inject(GearTransformService).getBench('SubtletyRogue', 1);
     expect(bench.ok).toBe(true);
     if (!bench.ok) return;
+    assert.exists(bench.value.talent_builds[1]);
     expect(bench.value.talent_builds[1].diff).toEqual([
       { kind: 'added', talent: talents[ALT_ENTRY] },
       { kind: 'dropped', talent: talents[BASELINE_ENTRY] },
@@ -313,7 +316,7 @@ describe('GearTransformService (live, in-browser)', () => {
     });
     const bench = await TestBed.inject(GearTransformService).getBench('SubtletyRogue', 1);
     expect(bench.ok).toBe(true);
-    if (bench.ok) expect(bench.value.talent_builds.every(build => build.diff.length === 0)).toBe(true);
+    if (bench.ok) expect(bench.value.talent_builds.every(build => (build.diff ?? []).length === 0)).toBe(true);
   });
 
   it('backfills past a private (unfetchable) top parse to keep the sample count full', async () => {

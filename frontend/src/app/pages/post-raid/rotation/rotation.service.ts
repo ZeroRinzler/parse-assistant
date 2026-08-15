@@ -113,13 +113,13 @@ export function checkLostUses(
 export function checkFirstCastDelay(
   cdName: string, castTimesS: number[], cdBench: PerCdBenchmark,
 ): AnalysisFinding | null {
-  if (!castTimesS.length) return null;
   const firstS = castTimesS[0];
+  if (firstS == null) return null;
   if (!isOutlierAbove(firstS, cdBench.avg_first_cast_s, cdBench.stddev_first_cast_s)) return null;
   const lateS = (firstS - cdBench.avg_first_cast_s).toFixed(0);
   return {
     severity: 'warning', category: 'cooldown_delay', cd_name: cdName,
-    timestamp_s: castTimesS[0],
+    timestamp_s: firstS,
     measured: { value: `+${lateS}s`, unit: `top ${fmtClock(cdBench.avg_first_cast_s)}` },
     message: `${cdName} opened at ${fmtClock(firstS)}, ${lateS}s later than top raiders. Aim for ${fmtClock(cdBench.avg_first_cast_s)}.`,
     details: { remedy: `Open with ${cdName} earlier.` }, occurrences: [] };
@@ -128,16 +128,17 @@ export function checkFirstCastDelay(
 export function checkBloodlustAlignment(
   cdName: string, castTimesS: number[], cdBench: PerCdBenchmark, blTimeS: number | null, wantsBL: boolean,
 ): { blAligned: boolean; findings: AnalysisFinding[] } {
-  if (blTimeS === null || !castTimesS.length) return { blAligned: false, findings: [] };
+  const firstCastS = castTimesS[0];
+  if (blTimeS === null || firstCastS == null) return { blAligned: false, findings: [] };
   const inWindow = castTimesS.filter(timeS =>
     timeS >= blTimeS - BL_WINDOW_LEAD_S && timeS <= blTimeS + BLOODLUST_DURATION_S + BL_WINDOW_TRAIL_S);
   const blAligned = inWindow.length > 0;
   const findings: AnalysisFinding[] = [];
   if (!blAligned && wantsBL) {
     findings.push({ severity: 'critical', category: 'cooldown_alignment', cd_name: cdName,
-      timestamp_s: castTimesS[0],
+      timestamp_s: firstCastS,
       measured: { value: 'missed', unit: 'BL' },
-      message: `${cdName} missed Bloodlust. Bloodlust started at ${fmtClock(blTimeS)}, ${cdName} at ${fmtClock(castTimesS[0])}.`,
+      message: `${cdName} missed Bloodlust. Bloodlust started at ${fmtClock(blTimeS)}, ${cdName} at ${fmtClock(firstCastS)}.`,
       details: { remedy: `Align ${cdName} with Bloodlust.` }, occurrences: [] });
   } else if (blAligned && cdBench.avg_bl_offset_s != null && cdBench.stddev_bl_offset_s != null) {
     const offsets = inWindow.map(timeS => timeS - blTimeS);
@@ -159,13 +160,16 @@ export function checkBloodlustAlignment(
 export function checkGaps(cdName: string, castTimesS: number[], cdBench: PerCdBenchmark): AnalysisFinding[] {
   const findings: AnalysisFinding[] = [];
   if (cdBench.avg_gap_s == null || cdBench.stddev_gap_s == null) return findings;
-  for (let i = 1; i < castTimesS.length; i++) {
-    const gap = castTimesS[i] - castTimesS[i - 1];
+  let prevS: number | undefined;
+  for (const timeS of castTimesS) {
+    const gap = prevS != null ? timeS - prevS : null;
+    prevS = timeS;
+    if (gap == null) continue;
     if (isOutlierAbove(gap, cdBench.avg_gap_s, cdBench.stddev_gap_s)) findings.push({
       severity: 'warning', category: 'cooldown_delay', cd_name: cdName,
-      timestamp_s: castTimesS[i],
+      timestamp_s: timeS,
       measured: { value: `${gap.toFixed(0)}s`, unit: `avg ${cdBench.avg_gap_s.toFixed(0)}s` },
-      message: `${cdName} sat ${gap.toFixed(0)}s between casts at ${fmtClock(castTimesS[i])}. Top raiders average ${cdBench.avg_gap_s.toFixed(0)}s.`,
+      message: `${cdName} sat ${gap.toFixed(0)}s between casts at ${fmtClock(timeS)}. Top raiders average ${cdBench.avg_gap_s.toFixed(0)}s.`,
       details: { remedy: `Press ${cdName} sooner, about every ${cdBench.avg_gap_s.toFixed(0)}s.` }, occurrences: [] });
   }
   return findings;
@@ -175,11 +179,15 @@ export function checkGaps(cdName: string, castTimesS: number[], cdBench: PerCdBe
 export function checkCastEfficiency(
   castTimesS: number[], fightDurS: number, bench: RotationBench,
 ): AnalysisFinding | null {
-  if (castTimesS.length < 2 || bench.downtime_threshold_s == null) return null;
+  if (castTimesS.length < 2) return null;
   let totalDtS = 0;
-  for (let i = 1; i < castTimesS.length; i++) {
-    const gap = castTimesS[i] - castTimesS[i - 1];
-    if (gap > bench.downtime_threshold_s) totalDtS += gap;
+  let prevS: number | undefined;
+  for (const timeS of castTimesS) {
+    if (prevS != null) {
+      const gap = timeS - prevS;
+      if (gap > bench.downtime_threshold_s) totalDtS += gap;
+    }
+    prevS = timeS;
   }
   const topE = bench.top_avg_efficiency;
   const topSD = bench.top_efficiency_stddev;
@@ -246,7 +254,7 @@ export function analyzeRotationFindings(input: RotationScanInput): AnalysisFindi
 
   const blTimeS = detectBloodlust(buffEvents);
 
-  const perCdBench = bench.per_cd_benchmarks ?? {};
+  const perCdBench = bench.per_cd_benchmarks;
   for (const cd of cooldowns) {
     const castTimesS = casts
       .filter(cast => cast.abilityGameID === cd.spell_id)
@@ -388,14 +396,14 @@ export function buildCdPlan(
   });
   return ordered.map(cd => {
     const cdBench = benchmarks[cd.name];
-    const holds = cdBench?.majority_hold && cdBench.hold_targets
+    const holds = cdBench?.majority_hold
       ? Object.entries(cdBench.hold_targets)
           .sort((a, b) => Number(a[0]) - Number(b[0]))
           .map(([idx, target]) => ({ castIndex: Number(idx), targetS: target.target_s }))
       : [];
-    const spellId = cd.spell_id ?? null;
-    const ability = spellId != null ? abilities[spellId] : undefined;
-    if (spellId != null && !ability) logWarn('buildCdPlan: ability id missing from ability map', spellId);
+    const spellId = cd.spell_id;
+    const ability = abilities[spellId];
+    if (!ability) logWarn('buildCdPlan: ability id missing from ability map', spellId);
     // First cast and uses/min are user-only stats; gate them on the same use-share majority the analysis uses.
     const usedByMajority = cdBench != null && usedShare(cdBench) >= MIN_USE_SHARE_FRAC;
     return {
@@ -409,7 +417,7 @@ export function buildCdPlan(
       sampleCount: cdBench?.sample_count ?? 0,
       usesPerMin: usedByMajority ? cdBench.uses_per_min.avg : null,
       bloodlust: (cdBench?.bl_pct ?? 0) >= BL_CONSENSUS_PCT,
-      bloodlustPct: (cdBench?.bl_pct ?? 0) >= BL_CONSENSUS_PCT ? cdBench.bl_pct : null,
+      bloodlustPct: cdBench != null && cdBench.bl_pct >= BL_CONSENSUS_PCT ? cdBench.bl_pct : null,
       holds,
       rule: cd.usage_rule ?? null,
     };
