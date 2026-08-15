@@ -10,7 +10,6 @@
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "test:ci": "ng test --configuration ci",
-    "test:watch": "ng test --watch",
     "ingest": "node scripts/ingest-headless.mjs",
     "e2e": "playwright test",
     "lint": "ng lint && eslint scripts e2e playwright.config.ts",
