@@ -4,6 +4,7 @@ import { WCL_TRANSPORT, WclTransportError, WCL_UNUSABLE_STATUS } from './wcl-tra
 import {
   WclReport, WclEvent,
   PlayerDetailGroups, WclRankingsBlob, WclRawAbility, WclCombatantInfo, WclTableBlob,
+  MYTHIC_DIFFICULTY,
 } from '../models/wcl.models';
 import {
   REPORT_Q, REPORT_FIGHTS_Q, PLAYER_DETAILS_Q, EVENTS_Q,
@@ -160,7 +161,7 @@ export class WclApiService {
   async getRankings(spec: string, encounterId: number, partition?: number | null): Promise<WclRankingsBlob | null> {
     const meta = await this.specMeta.resolve(spec);
     if (!meta) return null;
-    const vars: RankingsQueryVars = { encounterID: encounterId, className: meta.className, specName: meta.specName };
+    const vars: RankingsQueryVars = { encounterID: encounterId, className: meta.className, specName: meta.specName, difficulty: MYTHIC_DIFFICULTY };
     if (partition != null) vars.partition = partition;
     const result = await this.query<{ worldData: { encounter: { characterRankings: WclRankingsBlob | null } | null } | null }>(
       RANKINGS_Q, vars,

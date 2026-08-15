@@ -12,7 +12,7 @@ import { LiveCaptureFeatureService } from './live/live-capture.service';
 import {
   PostRaidComponent,
   specOf, extractCode, extractFightId, isValidReportCode, buildFights, buildPlayers, visiblePlayersOf, pickLivePlayerId,
-  livePollActionOf, isKeystoneFight, unsupportedEncounterNotice,
+  livePollActionOf, isUnsupportedDifficulty, unsupportedEncounterNotice,
 } from './post-raid';
 
 function fight(p: Partial<WclFight>): WclFight {
@@ -89,23 +89,49 @@ describe('isValidReportCode', () => {
   });
 });
 
-describe('isKeystoneFight', () => {
+describe('isUnsupportedDifficulty', () => {
   const MYTHIC_PLUS = 10;
   const RAID_MYTHIC = 5;
   const RAID_HEROIC = 4;
+  const RAID_NORMAL = 3;
 
   it('reports a keystone dungeon boss', () => {
-    expect(isKeystoneFight(MYTHIC_PLUS)).toBe(true);
+    expect(isUnsupportedDifficulty(MYTHIC_PLUS)).toBe(true);
   });
 
-  it('does not report a mythic raid pull, the difficulty right below it', () => {
-    expect(isKeystoneFight(RAID_MYTHIC)).toBe(false);
-    expect(isKeystoneFight(RAID_HEROIC)).toBe(false);
+  it('reports the raid difficulties below Mythic', () => {
+    expect(isUnsupportedDifficulty(RAID_HEROIC)).toBe(true);
+    expect(isUnsupportedDifficulty(RAID_NORMAL)).toBe(true);
+  });
+
+  it('does not report a Mythic raid pull', () => {
+    expect(isUnsupportedDifficulty(RAID_MYTHIC)).toBe(false);
   });
 
   it('does not report a fight WCL sent no difficulty for', () => {
-    expect(isKeystoneFight(null)).toBe(false);
-    expect(isKeystoneFight(undefined)).toBe(false);
+    expect(isUnsupportedDifficulty(null)).toBe(false);
+    expect(isUnsupportedDifficulty(undefined)).toBe(false);
+  });
+});
+
+describe('unsupportedEncounterNotice', () => {
+  const MYTHIC_PLUS = 10;
+  const RAID_HEROIC = 4;
+  const RAID_NORMAL = 3;
+  const RAID_FINDER = 1;
+
+  it('names a keystone boss and calls for a Mythic raid pull', () => {
+    expect(unsupportedEncounterNotice('Nexus-Point Xenas', MYTHIC_PLUS))
+      .toBe('Nexus-Point Xenas is a Mythic+ boss. Pick a Mythic raid pull.');
+  });
+
+  it('names the raid difficulty of a Heroic or Normal pull', () => {
+    expect(unsupportedEncounterNotice('Vorasius', RAID_HEROIC)).toBe('Vorasius is a Heroic pull. Pick a Mythic pull.');
+    expect(unsupportedEncounterNotice('Vorasius', RAID_NORMAL)).toBe('Vorasius is a Normal pull. Pick a Mythic pull.');
+  });
+
+  it('falls back to a plain non-Mythic message for an unnamed difficulty', () => {
+    expect(unsupportedEncounterNotice('Vorasius', RAID_FINDER)).toBe('Vorasius was not pulled on Mythic. Pick a Mythic pull.');
   });
 });
 
@@ -489,7 +515,7 @@ describe('PostRaidComponent keystone fight', () => {
 
     await selectFight(vm, DUNGEON_FIGHT.id);
 
-    expect((vm['notice'] as () => string)()).toBe(unsupportedEncounterNotice(DUNGEON_FIGHT.name));
+    expect((vm['notice'] as () => string)()).toBe(unsupportedEncounterNotice(DUNGEON_FIGHT.name, DUNGEON_FIGHT.difficulty));
     expect((vm['spec'] as () => string)()).toBe('');
     expect((vm['ready'] as () => boolean)()).toBe(false);
     expect(getPlayerDetails).not.toHaveBeenCalled();
@@ -763,7 +789,7 @@ describe('PostRaidComponent selection latest-wins', () => {
     api.settleDetails(EARLIER_PULL_ID, EARLIER_DETAILS);
     await earlier;
 
-    expect(vm.notice()).toBe(unsupportedEncounterNotice(KEYSTONE_PULL.name));
+    expect(vm.notice()).toBe(unsupportedEncounterNotice(KEYSTONE_PULL.name, MYTHIC_PLUS_DIFFICULTY));
     expect(vm.spec()).toBe('');
     expect(vm.loadingAnalysis()).toBe(false);
   });

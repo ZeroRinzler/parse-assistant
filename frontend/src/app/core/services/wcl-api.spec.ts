@@ -4,20 +4,22 @@ import { WclApiService } from './wcl-api';
 import { WclAuthService } from './wcl-auth';
 import { DataFileApiService } from './data-file-api';
 import { ok } from '../result';
-import { WclCombatantInfo } from '../models/wcl.models';
+import { WclCombatantInfo, MYTHIC_DIFFICULTY } from '../models/wcl.models';
 import { WCL_TRANSPORT, WclTransport, WclTransportError, WCL_UNUSABLE_STATUS } from './wcl-transport';
 
 const UNAUTHORIZED_STATUS = 401;
 
-/** Records the token of every query so the 401 refresh-and-retry can be asserted. */
+/** Records the token and variables of every query so the 401 refresh-and-retry and the pinned rankings difficulty can be asserted. */
 class RecordingTransport implements WclTransport {
   readonly tokens: string[] = [];
+  readonly variables: object[] = [];
   /** Status to throw on the first call, then succeed (null = always succeed). */
   failFirstWith: number | null = null;
   /** Payload for the next query; null uses the default served-report shape. */
   response: unknown = null;
-  async query<TData>(_gqlString: string, _variables: object, token: string): Promise<TData> {
+  async query<TData>(_gqlString: string, variables: object, token: string): Promise<TData> {
     this.tokens.push(token);
+    this.variables.push(variables);
     if (this.failFirstWith != null && this.tokens.length === 1) {
       throw new WclTransportError('rejected', this.failFirstWith);
     }
@@ -27,6 +29,11 @@ class RecordingTransport implements WclTransport {
     } as unknown as TData;
   }
 }
+
+const SPEC_META = {
+  spec: 'SubtletyRogue', className: 'Rogue', specName: 'Subtlety',
+  classLabel: 'Rogue', specLabel: 'Subtlety', classIcon: 'class_rogue', specIcon: 'ability_stealth',
+};
 
 function setup(): { api: WclApiService; transport: RecordingTransport; tokens: string[] } {
   const transport = new RecordingTransport();
@@ -42,7 +49,7 @@ function setup(): { api: WclApiService; transport: RecordingTransport; tokens: s
       { provide: WclAuthService, useValue: authStub as unknown as WclAuthService },
       { provide: WCL_TRANSPORT, useValue: transport },
       // Satisfies the SpecMetaService constructor fetch behind getRankings' spec resolution.
-      { provide: DataFileApiService, useValue: { getSpecMeta: async () => ok([]) } },
+      { provide: DataFileApiService, useValue: { getSpecMeta: async () => ok([SPEC_META]) } },
     ],
   });
   return { api: TestBed.inject(WclApiService), transport, tokens };
@@ -106,6 +113,19 @@ describe('WclApiService', () => {
       };
       const events = await api.getAllEvents('code', 1, 'Casts', 0, 1000, 5);
       expect(events).toHaveLength(FIRST_PAGE * 2);
+    });
+  });
+
+  describe('getRankings', () => {
+    const ENCOUNTER_ID = 3176;
+
+    it('pins the rankings query to Mythic difficulty', async () => {
+      const { api, transport } = setup();
+      transport.response = { worldData: { encounter: { characterRankings: { rankings: [] } } } };
+      await api.getRankings(SPEC_META.spec, ENCOUNTER_ID);
+      expect(transport.variables[0]).toMatchObject({
+        className: SPEC_META.className, specName: SPEC_META.specName, difficulty: MYTHIC_DIFFICULTY,
+      });
     });
   });
 

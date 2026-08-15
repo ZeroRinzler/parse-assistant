@@ -14,6 +14,9 @@ export interface WclFight {
   difficulty?: number | null;
 }
 
+/** The only difficulty the app analyzes and benches. */
+export const MYTHIC_DIFFICULTY = 5;
+
 export interface WclPlayer {
   id: number;
   name: string;

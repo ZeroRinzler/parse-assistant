@@ -13,7 +13,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { WclApiService } from '../../core/services/wcl-api';
 import { LiveReportSyncService, POLL_INTERVAL_S } from '../../core/services/live-report-sync';
-import { WclFight, WclPlayer, WclReport, PlayerDetailGroups } from '../../core/models/wcl.models';
+import { WclFight, WclPlayer, WclReport, PlayerDetailGroups, MYTHIC_DIFFICULTY } from '../../core/models/wcl.models';
 import { ClipAnchor } from '../../core/models/capture.models';
 import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner/loading-spinner';
 import { BenchEmptyBannerComponent } from '../../shared/components/bench-empty-banner/bench-empty-banner';
@@ -58,13 +58,18 @@ export function isValidReportCode(code: string): boolean {
 }
 
 const MYTHIC_PLUS_DIFFICULTY = 10;
+const RAID_DIFFICULTY_NAMES: Record<number, string> = { 3: 'Normal', 4: 'Heroic' };
 
-export function unsupportedEncounterNotice(fightName: string): string {
-  return `${fightName} is a Mythic+ boss. Pick a raid pull.`;
+// WCL omits difficulty on some fights; a missing one is not evidence of a lower difficulty.
+export function isUnsupportedDifficulty(difficulty: number | null | undefined): boolean {
+  return difficulty != null && difficulty !== MYTHIC_DIFFICULTY;
 }
 
-export function isKeystoneFight(difficulty: number | null | undefined): boolean {
-  return difficulty === MYTHIC_PLUS_DIFFICULTY;
+export function unsupportedEncounterNotice(fightName: string, difficulty: number | null | undefined): string {
+  if (difficulty === MYTHIC_PLUS_DIFFICULTY) return `${fightName} is a Mythic+ boss. Pick a Mythic raid pull.`;
+  const label = RAID_DIFFICULTY_NAMES[difficulty ?? 0];
+  if (label) return `${fightName} is a ${label} pull. Pick a Mythic pull.`;
+  return `${fightName} was not pulled on Mythic. Pick a Mythic pull.`;
 }
 
 export function buildFights(fights: WclReport['fights'] = []): WclFight[] {
@@ -422,7 +427,7 @@ export class PostRaidComponent {
     this.notice.set('');
 
     const fight = this.fights().find(f => f.id === fightId);
-    if (isKeystoneFight(fight?.difficulty)) { this.notice.set(unsupportedEncounterNotice(fight?.name ?? '')); return; }
+    if (isUnsupportedDifficulty(fight?.difficulty)) { this.notice.set(unsupportedEncounterNotice(fight?.name ?? '', fight?.difficulty)); return; }
 
     this.loadingAnalysis.set(true);
     this.loadingMsg.set('Fetching player data from Warcraft Logs…');

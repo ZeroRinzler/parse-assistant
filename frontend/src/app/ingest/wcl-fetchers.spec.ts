@@ -3,7 +3,7 @@ import { getEncounters, getRankingsLite, rankingsFromPartition } from './wcl-fet
 import { BudgetExceededError } from './wcl-client';
 import type { WclQueryClient } from './wcl-client';
 import type { SpecWclMap } from './wcl-mappers';
-import type { WclRawRanking } from '../core/models/wcl.models';
+import { MYTHIC_DIFFICULTY, type WclRawRanking } from '../core/models/wcl.models';
 
 const SPEC_WCL: SpecWclMap = {
   FireMage: ['Mage', 'Fire'],
@@ -133,6 +133,18 @@ describe('getRankingsLite', () => {
     expect(ranked).toHaveLength(1);
     assert.exists(ranked[0]);
     expect(ranked[0].player).toBe('A');
+  });
+
+  it('pins the rankings query to Mythic difficulty', async () => {
+    const seen: (number | undefined)[] = [];
+    const client = fakeClient({
+      query: (_gql, vars) => {
+        seen.push((vars as { difficulty?: number }).difficulty);
+        return { worldData: { encounter: { name: 'Boss', characterRankings: { rankings: ranks(1) } } } };
+      },
+    });
+    await getRankingsLite(client, 'SubtletyRogue', 100, SPEC_WCL, 10, []);
+    expect(seen).toEqual([MYTHIC_DIFFICULTY]);
   });
 
   it('parses characterRankings when returned as a JSON string', async () => {
