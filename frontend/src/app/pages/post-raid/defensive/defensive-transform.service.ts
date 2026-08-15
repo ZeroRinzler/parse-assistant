@@ -209,7 +209,7 @@ export function clusterAbilityBreakdown(cluster: ParseDefWindow[]): BurstWindow[
     .slice(0, ABILITY_BREAKDOWN_TOP_N);
 }
 
-export function clusterDefensiveWindows(windows: ParseDefWindow[], sampleCount: number, mergeS = CLUSTER_MERGE_S): BurstWindow[] {
+export function clusterDefensiveWindows(windows: ParseDefWindow[], sampleCount: number): BurstWindow[] {
   if (!windows.length) return [];
   const byDefensive = new Map<string, ParseDefWindow[]>();
   for (const window of windows) {
@@ -219,7 +219,7 @@ export function clusterDefensiveWindows(windows: ParseDefWindow[], sampleCount: 
   const minParses = Math.max(2, sampleCount * CONSENSUS_FRAC);
   const result: BurstWindow[] = [];
   for (const [defensiveName, group] of byDefensive.entries()) {
-    for (const cluster of groupByTime(group, mergeS)) {
+    for (const cluster of groupByTime(group, CLUSTER_MERGE_S)) {
       const distinctParses = new Set(cluster.map(member => member.parse_index)).size;
       const clusterHead = cluster[0];
       if (!clusterHead || distinctParses < minParses) continue;

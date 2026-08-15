@@ -228,11 +228,11 @@ export function computePlayerDefensiveWindows(topDefWindows: BurstWindow[], dtEv
 const WINDOW_NEAR_S = 3;
 
 export function playerCoveredWindow(
-  window: BurstWindow, playerDefensive: PlayerDefensive | undefined, nearS = WINDOW_NEAR_S,
+  window: BurstWindow, playerDefensive: PlayerDefensive | undefined,
 ): boolean {
   if (!playerDefensive) return false;
-  const lo = window.time_s - nearS;
-  const hi = window.time_s + window.window_length_s + nearS;
+  const lo = window.time_s - WINDOW_NEAR_S;
+  const hi = window.time_s + window.window_length_s + WINDOW_NEAR_S;
   return playerDefensive.windows.some(span => span.start_s <= hi && span.end_s >= lo);
 }
 
