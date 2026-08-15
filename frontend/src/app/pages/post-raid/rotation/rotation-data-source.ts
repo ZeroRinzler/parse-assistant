@@ -9,7 +9,6 @@ export interface RotationBench {
   encounter_id: number;
   encounter_name: string;
   sample_count: number;
-  avg_duration_s: number;
   downtime_threshold_s: number;
   top_avg_efficiency: number;
   top_efficiency_stddev: number;

@@ -109,12 +109,10 @@ function benchUsesPerMin(entries: CdSummary[]): UsesPerMin {
       usesPerMin.push(round((entry.cast_times_s.length / entry.fight_duration_s) * 60, 3));
     }
   }
-  if (!usesPerMin.length) return { avg: 0, stddev: 0, min: 0, max: 0 };
+  if (!usesPerMin.length) return { avg: 0, stddev: 0 };
   return {
     avg: round((mean(usesPerMin) ?? 0), 3),
     stddev: round((deviation(usesPerMin) ?? 0), 3),
-    min: Math.min(...usesPerMin),
-    max: Math.max(...usesPerMin),
   };
 }
 
@@ -131,9 +129,6 @@ export function buildCdBenchmark(entries: CdSummary[], effectiveCd: number): Per
   }
   const blOffsets = entries.map(entry => entry.bl_offset_s).filter((value): value is number => value != null);
   const blCount = entries.filter(entry => entry.bl_aligned).length;
-  const upmList = entries
-    .filter(entry => entry.fight_duration_s > 0)
-    .map(entry => entry.total_uses / (entry.fight_duration_s / 60));
   const usesPerMin = benchUsesPerMin(entries);
   const usedUses = entries.map(entry => entry.total_uses).filter(uses => uses > 0);
 
@@ -146,9 +141,7 @@ export function buildCdBenchmark(entries: CdSummary[], effectiveCd: number): Per
     stddev_gap_s: gaps.length ? round((deviation(gaps) ?? 0)) : null,
     avg_bl_offset_s: blOffsets.length ? round((mean(blOffsets) ?? 0)) : null,
     stddev_bl_offset_s: blOffsets.length ? round((deviation(blOffsets) ?? 0)) : null,
-    avg_uses: entries.length ? round(mean(entries.map(entry => entry.total_uses)) ?? 0) : 0,
     median_uses: usedUses.length ? round(median(usedUses) ?? 0) : 0,
-    avg_uses_per_min: upmList.length ? round((mean(upmList) ?? 0), 2) : 0,
     uses_per_min: usesPerMin,
     bl_pct: entries.length ? Math.round((blCount / entries.length) * 100) : 0,
     majority_hold: entries.filter(entry => entry.cast_pattern === 'hold').length >= entries.length * HOLD_CONSENSUS_FRAC,
@@ -258,7 +251,6 @@ export class RotationTransformService implements DataSource<RotationBench> {
         encounter_id: encounterId,
         encounter_name: encounterName,
         sample_count: perParse.length,
-        avg_duration_s: gapParses.length ? round(mean(gapParses.map(parse => parse.durationS)) ?? 0) : 0,
         downtime_threshold_s: downtimeThresholdS,
         top_avg_efficiency: topAvgEfficiency,
         top_efficiency_stddev: topEfficiencyStddev,

@@ -2,8 +2,6 @@ export interface RulebookCooldown {
   name: string;
   spell_id: number;
   cooldown: number;
-  duration?: number;
-  align_with_bloodlust?: boolean;
   opener_priority?: number;
   usage_rule?: string;
   talent_gated?: boolean;
@@ -176,7 +174,4 @@ export interface Rulebook {
   major_cooldowns?: RulebookCooldown[];
   defensives?: RulebookDefensive[];
   rules?: RulebookRule[];
-  source_summary?: string;
-  guide_count?: number;
-  saved_at?: string;
 }

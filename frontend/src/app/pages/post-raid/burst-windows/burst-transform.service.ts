@@ -252,7 +252,6 @@ export function clusterParseWindows(windows: ParseWindow[], sampleCount: number)
         avg_damage: Math.round((mean(list) ?? 0)),
         min_damage: Math.round(Math.min(...list)),
         max_damage: Math.round(Math.max(...list)),
-        count: list.length,
         avg_casts: Math.round(mean(abilityCasts.get(spell_id) ?? []) ?? 0),
         is_passive: (abilityPassive.get(spell_id) ?? []).every(Boolean),
       }))

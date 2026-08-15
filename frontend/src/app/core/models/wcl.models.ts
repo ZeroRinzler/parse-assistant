@@ -130,11 +130,7 @@ export interface WclRawAbility {
 }
 
 export interface CharacterGear {
-  found: boolean;
-  spec?: string;
-  source_report?: string | null;
   talent_key?: string;
   trinkets?: { slot: number; id: number; name: string; icon?: string }[];
   enchants?: { slot: number; id: number; name: string }[];
-  message?: string;
 }

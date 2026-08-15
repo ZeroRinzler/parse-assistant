@@ -156,7 +156,7 @@ function playerWindowAggregate(
       const spell_id = parseInt(sid, 10);
       return { spell_id, damage: Math.round(dmg), casts: castsByName.get(nameOf(spell_id)) ?? 0 };
     });
-  return { time_s: window.time_s, window_damage: Math.round(winTotal), ability_breakdown };
+  return { window_damage: Math.round(winTotal), ability_breakdown };
 }
 
 export function findPlayerBurstWindows(

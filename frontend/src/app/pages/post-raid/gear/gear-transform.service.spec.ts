@@ -55,7 +55,7 @@ describe('toParseGear', () => {
 
   it('reduces a found CharacterGear to its fingerprint tagged with the parse identity', () => {
     const gear: CharacterGear = {
-      found: true, talent_key: 'v3:10.1,20.1',
+      talent_key: 'v3:10.1,20.1',
       trinkets: [{ slot: 12, id: 100, name: 'A', icon: 'inv_a' }],
       enchants: [{ slot: 15, id: 8041, name: 'Sophic' }],
     };

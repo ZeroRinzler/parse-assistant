@@ -41,7 +41,7 @@ describe('defensiveSpellIds', () => {
 describe('defensivePlanMeta', () => {
   it('carries metadata with nullable defaults', () => {
     expect(defensivePlanMeta([{ name: 'Evasion', spell_id: EVASION, cooldown: 120 }]))
-      .toEqual([{ name: 'Evasion', spell_id: EVASION, cooldown: 120, duration: null, usage_rule: null, talent_gated: false }]);
+      .toEqual([{ name: 'Evasion', spell_id: EVASION, cooldown: 120, usage_rule: null, talent_gated: false }]);
   });
 });
 
@@ -83,10 +83,8 @@ describe('findParseDefensiveWindows', () => {
       300, windows, [CLOAK], new Map([[BOSS_ACTOR, BOSS_GAME_ID], [ADD_ACTOR, ADD_GAME_ID]]),
     );
     expect(result).toHaveLength(1);
-    // window damage = (500 + 250 absorbed) + 200 at the inclusive end = 950; parse total = 950 + 999 = 1949.
+    // window damage = (500 + 250 absorbed) + 200 at the inclusive end = 950.
     expect(result[0]).toMatchObject({ defensive_name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS, window_damage: 950, ref_game_id: BOSS_GAME_ID });
-    assert.exists(result[0]);
-    expect(result[0].pct_of_total).toBeCloseTo(950 / 1949);
     assert.exists(result[0]);
     expect(result[0].ability_breakdown[0]).toMatchObject({ spell_id: BOSS_HIT, damage: 750 });
   });
@@ -151,7 +149,7 @@ describe('clusterDamageStats', () => {
 
 describe('clusterAbilityBreakdown', () => {
   const member = (abilities: { spell_id: number; damage: number }[], parseIndex = 0): ParseDefWindow => ({
-    time_s: 10, window_length_s: 5, window_damage: 700, pct_of_total: 0.2, parse_index: parseIndex,
+    time_s: 10, window_length_s: 5, window_damage: 700, parse_index: parseIndex,
     defensive_name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS, ref_game_id: BOSS_GAME_ID, ability_breakdown: abilities,
   });
 
@@ -160,7 +158,7 @@ describe('clusterAbilityBreakdown', () => {
       member([{ spell_id: BOSS_HIT, damage: 400 }], 0), member([{ spell_id: BOSS_HIT, damage: 600 }], 1),
     ]);
     expect(out).toHaveLength(1);
-    expect(out[0]).toMatchObject({ spell_id: BOSS_HIT, avg_damage: 500, min_damage: 400, max_damage: 600, count: 2 });
+    expect(out[0]).toMatchObject({ spell_id: BOSS_HIT, avg_damage: 500, min_damage: 400, max_damage: 600 });
   });
 
   it('drops an ability below the parse-majority share (boundary)', () => {
@@ -172,7 +170,7 @@ describe('clusterAbilityBreakdown', () => {
     expect(out.map(ability => ability.spell_id)).toEqual([BOSS_HIT]);
   });
 
-  it('gates and counts by DISTINCT parses, not window entries (1 of 4 does not surface)', () => {
+  it('gates by DISTINCT parses, not window entries (1 of 4 does not surface)', () => {
     // 4 distinct parses share BOSS_HIT; only parse 0 carries ADD_HIT -> 0.25 < 0.5 majority -> dropped.
     const out = clusterAbilityBreakdown([
       member([{ spell_id: BOSS_HIT, damage: 500 }, { spell_id: ADD_HIT, damage: 100 }], 0),
@@ -181,7 +179,7 @@ describe('clusterAbilityBreakdown', () => {
       member([{ spell_id: BOSS_HIT, damage: 500 }], 3),
     ]);
     expect(out).toHaveLength(1);
-    expect(out[0]).toMatchObject({ spell_id: BOSS_HIT, count: 4 });  // count = distinct parses
+    expect(out[0]).toMatchObject({ spell_id: BOSS_HIT });
   });
 
   it('counts a parse contributing an ability across two of its windows once, summing its damage', () => {
@@ -193,13 +191,13 @@ describe('clusterAbilityBreakdown', () => {
       member([{ spell_id: BOSS_HIT, damage: SECOND_S }], 0),
       member([{ spell_id: BOSS_HIT, damage: OTHER }], 1),
     ]);
-    expect(out[0]).toMatchObject({ spell_id: BOSS_HIT, count: 2, avg_damage: EXPECTED_AVG, min_damage: OTHER, max_damage: FIRST_S + SECOND_S });
+    expect(out[0]).toMatchObject({ spell_id: BOSS_HIT, avg_damage: EXPECTED_AVG, min_damage: OTHER, max_damage: FIRST_S + SECOND_S });
   });
 });
 
 describe('clusterDefensiveWindows', () => {
-  const window = (timeS: number, parseIndex: number, pct = 0.2): ParseDefWindow => ({
-    time_s: timeS, window_length_s: 5, window_damage: 700, pct_of_total: pct, parse_index: parseIndex,
+  const window = (timeS: number, parseIndex: number): ParseDefWindow => ({
+    time_s: timeS, window_length_s: 5, window_damage: 700, parse_index: parseIndex,
     defensive_name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS, ref_game_id: BOSS_GAME_ID, ability_breakdown: [{ spell_id: BOSS_HIT, damage: 500 }],
   });
 
@@ -208,7 +206,7 @@ describe('clusterDefensiveWindows', () => {
     expect(out).toHaveLength(1);
     expect(out[0]).toMatchObject({ time_s: 10.5, defensive_name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS, dmg_avg: 700, ref_game_id: BOSS_GAME_ID });
     assert.exists(out[0]);
-    expect(out[0].ability_breakdown[0]).toMatchObject({ spell_id: BOSS_HIT, avg_damage: 500, count: 2 });
+    expect(out[0].ability_breakdown[0]).toMatchObject({ spell_id: BOSS_HIT, avg_damage: 500 });
   });
 
   it('keeps a window in exactly half the parses, drops one just below (majority boundary)', () => {
@@ -219,7 +217,7 @@ describe('clusterDefensiveWindows', () => {
   });
 
   it('surfaces a consensus window regardless of how little damage was taken', () => {
-    const low = [window(10, 0, 0.01), window(11, 1, 0.01)];
+    const low = [window(10, 0), window(11, 1)];
     expect(clusterDefensiveWindows(low, 2)).toHaveLength(1);
   });
 });
@@ -232,8 +230,7 @@ describe('buildDefensiveBenchmark', () => {
     const EXPECTED_AVG_FIRST_CAST_S = (FIRST_A_S + FIRST_B_S) / 2;                 // 15
     const EXPECTED_AVG_GAP_S = ((SECOND_A_S - FIRST_A_S) + (SECOND_B_S - FIRST_B_S)) / 2; // 135
     const USERS = 2;
-    const USES_A = 2, USES_B = 3;                 // distinct so avg_uses (2.5) differs from the user count (2)
-    const EXPECTED_AVG_USES = (USES_A + USES_B) / 2;
+    const USES_A = 2, USES_B = 3;
     const summaries: ParseDefensiveSummary[] = [
       { name: 'C', cast_times_s: [FIRST_A_S, SECOND_A_S], first_cast_s: FIRST_A_S, uses: USES_A, fight_duration_s: FIGHT_DUR_S, hold_windows: [], cast_pattern: 'on_cooldown' },
       { name: 'C', cast_times_s: [FIRST_B_S, SECOND_B_S], first_cast_s: FIRST_B_S, uses: USES_B, fight_duration_s: FIGHT_DUR_S, hold_windows: [], cast_pattern: 'on_cooldown' },
@@ -243,38 +240,34 @@ describe('buildDefensiveBenchmark', () => {
     expect(benchmark.used_sample_count).toBe(USERS);     // users-only
     expect(benchmark.avg_first_cast_s).toBe(EXPECTED_AVG_FIRST_CAST_S);
     expect(benchmark.avg_gap_s).toBe(EXPECTED_AVG_GAP_S);
-    expect(benchmark.avg_uses).toBe(EXPECTED_AVG_USES);
-    // uses/min per parse: 2/300*60 = 0.4 and 3/300*60 = 0.6 -> mean 0.5, min 0.4, max 0.6.
-    expect(benchmark.uses_per_min).toMatchObject({ avg: 0.5, min: 0.4, max: 0.6 });
+    // uses/min per parse: 2/300*60 = 0.4 and 3/300*60 = 0.6 -> mean 0.5.
+    expect(benchmark.uses_per_min).toMatchObject({ avg: 0.5 });
   });
 
   const userSummary = (uses: number): ParseDefensiveSummary =>
     ({ name: 'C', cast_times_s: [10], first_cast_s: 10, uses, fight_duration_s: FIGHT_DUR_S, hold_windows: [], cast_pattern: 'on_cooldown' });
 
-  it('keeps median_uses steady against a single outlier that would drag avg_uses up', () => {
+  it('keeps median_uses steady against a single outlier', () => {
     const TYPICAL_USES = 3;
     const OUTLIER_USES = 20;  // one parse spiking far above the rest
     const summaries = [userSummary(TYPICAL_USES), userSummary(TYPICAL_USES), userSummary(TYPICAL_USES), userSummary(OUTLIER_USES)];
     const benchmark = buildDefensiveBenchmark(summaries, CLOAK.cooldown, summaries.length);
     expect(benchmark.median_uses).toBe(TYPICAL_USES);
-    expect(benchmark.avg_uses).toBeGreaterThan(TYPICAL_USES);  // the mean the outlier does skew, for contrast
   });
 });
 
 describe('aggregateDefensiveBenchmarks', () => {
-  it('builds per-defensive benchmarks with total vs used sample counts + the summary', () => {
+  it('builds per-defensive benchmarks with total vs used sample counts', () => {
     const USES_A = 1, USES_B = 3;
-    const EXPECTED_AVG_USES = (USES_A + USES_B) / 2;
     const parseA: ParseDefensiveSummary[] = [{ name: 'Cloak of Shadows', cast_times_s: [10], first_cast_s: 10, uses: USES_A, fight_duration_s: FIGHT_DUR_S, hold_windows: [], cast_pattern: 'on_cooldown' }];
     const parseB: ParseDefensiveSummary[] = [{ name: 'Cloak of Shadows', cast_times_s: [20], first_cast_s: 20, uses: USES_B, fight_duration_s: FIGHT_DUR_S, hold_windows: [], cast_pattern: 'on_cooldown' }];
     const parseC: ParseDefensiveSummary[] = []; // this parse never used Cloak
     const TOTAL_PARSES = 3, USERS = 2;
     const out = aggregateDefensiveBenchmarks([parseA, parseB, parseC], [CLOAK]);
-    assert.exists(out.perDefensiveBenchmarks['Cloak of Shadows']);
-    expect(out.perDefensiveBenchmarks['Cloak of Shadows'].sample_count).toBe(TOTAL_PARSES);   // total
-    assert.exists(out.perDefensiveBenchmarks['Cloak of Shadows']);
-    expect(out.perDefensiveBenchmarks['Cloak of Shadows'].used_sample_count).toBe(USERS);     // users-only
-    expect(out.topDefensivesSummary).toEqual([{ spell_id: CLOAK_OF_SHADOWS, avg_uses: EXPECTED_AVG_USES, min_uses: USES_A, max_uses: USES_B }]);
+    assert.exists(out['Cloak of Shadows']);
+    expect(out['Cloak of Shadows'].sample_count).toBe(TOTAL_PARSES);   // total
+    assert.exists(out['Cloak of Shadows']);
+    expect(out['Cloak of Shadows'].used_sample_count).toBe(USERS);     // users-only
   });
 });
 
@@ -329,7 +322,6 @@ describe('DefensiveTransformService (live, in-browser)', () => {
     expect(bench.value.defensives[0]).toMatchObject({ name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS });
     expect(bench.value.defensive_windows).toHaveLength(1);
     expect(bench.value.defensive_windows[0]).toMatchObject({ defensive_name: 'Cloak of Shadows', dmg_avg: 1000, ref_game_id: 6666 });
-    expect(bench.value.top_defensives_summary).toEqual([{ spell_id: CLOAK_OF_SHADOWS, avg_uses: 1, min_uses: 1, max_uses: 1 }]);
     expect(bench.value.ability_icons[700]).toEqual({ icon: 'hit', name: 'Boss Hit' });
   });
 

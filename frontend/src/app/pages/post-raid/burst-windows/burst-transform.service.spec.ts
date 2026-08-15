@@ -348,11 +348,7 @@ describe('clusterParseWindows', () => {
       dmg_avg: 700, dmg_min: 500, dmg_max: 900, dmg_stddev: 200,
     });
     assert.exists(out[0]);
-    expect(out[0].ability_breakdown[0]).toMatchObject({ spell_id: SHADOW_BLADES_DAMAGE, avg_damage: ABILITY_DAMAGE, count: 3 });
-  });
-
-  it('does not emit avg_targets', () => {
-    expect(clusterParseWindows([window(10), window(11)], 2)[0]).not.toHaveProperty('avg_targets');
+    expect(out[0].ability_breakdown[0]).toMatchObject({ spell_id: SHADOW_BLADES_DAMAGE, avg_damage: ABILITY_DAMAGE });
   });
 
   // Consensus gate: survive only with at least max(2, CLUSTER_MIN_FRAC * sampleCount) member parses (floor 4 at sampleCount 10).
@@ -427,8 +423,6 @@ describe('clusterParseWindows', () => {
     expect(abilities).toContain(SHADOW_BLADES_DAMAGE);  // 4 of 4
     expect(abilities).toContain(BLACK_POWDER);          // exactly 2 of 4 -> the >= majority boundary
     expect(abilities).not.toContain(EVISCERATE);        // 1 of 4 -> below majority
-    assert.exists(out[0]);
-    expect(out[0].ability_breakdown.find(entry => entry.spell_id === BLACK_POWDER)?.count).toBe(2);  // count = distinct parses
     // common_cds share the same majority filter: 'Vanish' at exactly 2 of 4 must also surface.
     assert.exists(out[0]);
     expect(out[0].common_cds).toEqual(expect.arrayContaining(['Shadow Blades', 'Vanish']));
@@ -466,7 +460,7 @@ const wclFake = {
 const filesFake = {
   getRulebook: async () => ok(rulebook({
     spec: 'SubtletyRogue',
-    cooldowns: [{ name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 90, duration: 20 }],
+    cooldowns: [{ name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 90 }],
   })),
 };
 

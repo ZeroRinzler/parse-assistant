@@ -5,7 +5,7 @@
   "description": "AI-generated rulebook for a single WoW specialization. Extract all major offensive cooldowns, all personal defensive cooldowns, and the spec's checkable rotation/cooldown usage rules from the supplied guide content. Output ONLY the raw JSON object - no markdown fences, no preamble. The first character must be '{' and the last must be '}'.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["spec", "spec_icon", "major_cooldowns", "defensives", "rules", "source_summary"],
+  "required": ["spec", "spec_icon", "major_cooldowns", "defensives", "rules"],
   "properties": {
     "spec": {
       "type": "string",
@@ -32,26 +32,13 @@
       "type": "array",
       "description": "The spec's rotation and cooldown rules, each one something the app can check against a player's own log: which abilities go together, which buffs and dots stay up, which resource level to spend at, how many enemies change the priority, and what the opener is. Every rule needs a condition, so leave out advice that cannot be expressed as one of the condition kinds - a spec whose sources are mostly prose yields few rules, which is correct. Quality over count: two real rules beat eight, and an empty list is valid. Never write a 'keep X on cooldown' rule; the app already checks that for every major cooldown.",
       "items": { "$ref": "#/$defs/rule" }
-    },
-    "source_summary": {
-      "type": "string",
-      "not": { "pattern": "[\u2014\u2013\u2212\u00b7]" },
-      "description": "2-3 sentences summarising the cooldown strategy these guides recommend."
-    },
-    "guide_count": {
-      "type": "integer",
-      "description": "Written by the pipeline after the rulebook is saved. Never populate it."
-    },
-    "saved_at": {
-      "type": "string",
-      "description": "Written by the pipeline after the rulebook is saved. Never populate it."
     }
   },
   "$defs": {
     "majorCooldown": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "spell_id", "cooldown", "align_with_bloodlust", "usage_rule"],
+      "required": ["name", "spell_id", "cooldown", "usage_rule"],
       "properties": {
         "name": {
           "type": "string",
@@ -65,15 +52,6 @@
           "type": "number",
           "description": "Cooldown in seconds.",
           "exclusiveMinimum": 0
-        },
-        "duration": {
-          "type": "number",
-          "description": "Optional. Active buff/window duration in seconds.",
-          "exclusiveMinimum": 0
-        },
-        "align_with_bloodlust": {
-          "type": "boolean",
-          "description": "true if the guide explicitly says to sync this with Bloodlust / Heroism / Time Warp. Default false if the guide does not mention it."
         },
         "opener_priority": {
           "type": "integer",

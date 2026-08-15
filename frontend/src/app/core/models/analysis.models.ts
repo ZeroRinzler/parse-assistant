@@ -41,7 +41,6 @@ export interface AbilityBreakdown {
   avg_damage: number;
   min_damage: number;
   max_damage: number;
-  count: number;
   /** Top-parse average cast count per window. Burst windows only; absent on defensives. */
   avg_casts?: number;
   // Burst windows only: true when no top parse ever cast this ability, so the UI shows a "passive" tag instead of a cast count.
@@ -55,19 +54,15 @@ export interface BurstWindow {
   dmg_max: number;
   dmg_stddev: number;
   common_cds: string[];
-  avg_targets?: number;
   ability_breakdown: AbilityBreakdown[];
   window_length_s: number;
   defensive_name?: string;
   spell_id?: number;
   /** Map reference for defensive windows: gameID of the enemy dealing the window's main damage. */
   ref_game_id?: number | null;
-  // Defensive windows only: mean share of each parse's total damage taken the window carried, used to gate/rank windows by mitigation magnitude.
-  dmg_pct_avg?: number;
 }
 
 export interface PlayerBurstWindow {
-  time_s?: number;
   window_damage: number;
   ability_breakdown?: { spell_id: number; damage: number; casts?: number }[];
 }
@@ -75,23 +70,12 @@ export interface PlayerBurstWindow {
 export interface DefensiveWindow {
   start_s: number;
   end_s: number;
-  dmg_during: number;
 }
 
 export interface PlayerDefensive {
-  spell_id: number;
   name: string;
-  cooldown: number;
   uses: number;
   cast_times_s?: number[];
-  first_cast_s?: number;
   windows: DefensiveWindow[];
   talent_gated?: boolean;
-}
-
-export interface TopDefensiveSummary {
-  spell_id: number;
-  avg_uses: number;
-  min_uses: number;
-  max_uses: number;
 }

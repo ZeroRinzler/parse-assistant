@@ -3,7 +3,7 @@ import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
 import { ParseRanking, WclReport } from '../../../core/models/wcl.models';
 import { RulebookDefensive } from '../../../core/models/rulebook.models';
-import { BurstWindow, TopDefensiveSummary } from '../../../core/models/analysis.models';
+import { BurstWindow } from '../../../core/models/analysis.models';
 import { PerDefensiveBenchmark } from '../../../core/models/encounter.models';
 import { logWarn } from '../../../core/log';
 import { Result, ok, missing } from '../../../core/result';
@@ -37,7 +37,6 @@ export function defensivePlanMeta(defensives: RulebookDefensive[]): DefensivePla
     name: defensive.name,
     spell_id: defensive.spell_id,
     cooldown: defensive.cooldown,
-    duration: defensive.duration ?? null,
     usage_rule: defensive.usage_rule ?? null,
     talent_gated: !!defensive.talent_gated,
   }));
@@ -57,7 +56,6 @@ export interface ParseDefWindow {
   time_s: number;
   window_length_s: number;
   window_damage: number;
-  pct_of_total: number;
   /** Index of the parse this window came from, so clustering counts DISTINCT parses. */
   parse_index: number;
   defensive_name: string;
@@ -137,7 +135,6 @@ export function findParseDefensiveWindows(
     .map(event => [event.atS, (event.amount ?? 0) + (event.absorbed ?? 0), event.abilityGameID, event.sourceID ?? null] as WindowHit)
     .sort((a, b) => a[0] - b[0]);
   if (!hits.length) return [];
-  const total = hits.reduce((sum, hit) => sum + hit[1], 0);
 
   const result: ParseDefWindow[] = [];
   for (const defensive of defensives) {
@@ -162,7 +159,6 @@ export function findParseDefensiveWindows(
         time_s: round(startS),
         window_length_s: round(endS - startS),
         window_damage: windowDmg,
-        pct_of_total: total > 0 ? windowDmg / total : 0,
         parse_index: 0,
         defensive_name: defensive.name,
         spell_id: spellId,
@@ -202,7 +198,6 @@ export function clusterAbilityBreakdown(cluster: ParseDefWindow[]): BurstWindow[
         avg_damage: Math.round((mean(perParseDamage) ?? 0)),
         min_damage: Math.round(Math.min(...perParseDamage)),
         max_damage: Math.round(Math.max(...perParseDamage)),
-        count: byParse.size,
       };
     })
     .sort((a, b) => b.avg_damage - a.avg_damage)
@@ -223,8 +218,6 @@ export function clusterDefensiveWindows(windows: ParseDefWindow[], sampleCount: 
       const distinctParses = new Set(cluster.map(member => member.parse_index)).size;
       const clusterHead = cluster[0];
       if (!clusterHead || distinctParses < minParses) continue;
-      // Damage-taken share is reported for context (dmg_pct_avg) but does not gate the window.
-      const shares = cluster.map(member => member.pct_of_total);
       const damages = cluster.map(member => member.window_damage);
 
       const refCounts = new Map<number, number>();
@@ -236,7 +229,6 @@ export function clusterDefensiveWindows(windows: ParseDefWindow[], sampleCount: 
       result.push({
         time_s: round(median(cluster.map(member => member.time_s)) ?? 0),
         ...clusterDamageStats(damages),
-        dmg_pct_avg: round((mean(shares) ?? 0), 3),
         window_length_s: round(mean(cluster.map(member => member.window_length_s)) ?? 0),
         defensive_name: defensiveName,
         spell_id: clusterHead.spell_id,
@@ -262,9 +254,6 @@ export function buildDefensiveBenchmark(
       prev = timeS;
     }
   }
-  const usesPerMinList = summaries
-    .filter(summary => summary.fight_duration_s && summary.uses)
-    .map(summary => summary.uses / (summary.fight_duration_s / 60));
   const benchUsesPerMin = summaries
     .filter(summary => summary.fight_duration_s > 0 && summary.uses > 0)
     .map(summary => round(summary.uses / summary.fight_duration_s * 60, 3));
@@ -277,26 +266,22 @@ export function buildDefensiveBenchmark(
     avg_gap_s: gaps.length ? round((mean(gaps) ?? 0)) : null,
     stddev_gap_s: gaps.length ? round((deviation(gaps) ?? 0)) : null,
     hold_targets: buildHoldTargets(summaries, effectiveCd, totalParses),
-    avg_uses: summaries.length ? round(mean(summaries.map(summary => summary.uses)) ?? 0) : 0,
     median_uses: summaries.length ? round(median(summaries.map(summary => summary.uses)) ?? 0) : 0,
-    avg_uses_per_min: usesPerMinList.length ? Math.round((mean(usesPerMinList) ?? 0) * 100) / 100 : 0,
     uses_per_min: benchUsesPerMin.length
       ? {
           avg: round(mean(benchUsesPerMin) ?? 0, 3),
           stddev: round(deviation(benchUsesPerMin) ?? 0, 3),
-          min: Math.min(...benchUsesPerMin),
-          max: Math.max(...benchUsesPerMin),
         }
-      : { avg: 0, stddev: 0, min: 0, max: 0 },
+      : { avg: 0, stddev: 0 },
     majority_hold: summaries.filter(summary => summary.cast_pattern === 'hold').length > summaries.length * MEMBER_MAJORITY_FRAC,
   };
 }
 
-/** Aggregate per-parse summaries into the per-defensive benchmarks + top-defensives summary. */
+/** Aggregate per-parse summaries into the per-defensive benchmarks. */
 export function aggregateDefensiveBenchmarks(
   perParseSummaries: ParseDefensiveSummary[][],
   defensives: RulebookDefensive[],
-): { perDefensiveBenchmarks: Record<string, PerDefensiveBenchmark>; topDefensivesSummary: TopDefensiveSummary[] } {
+): Record<string, PerDefensiveBenchmark> {
   const byName = new Map<string, ParseDefensiveSummary[]>();
   for (const parse of perParseSummaries) {
     for (const summary of parse) {
@@ -307,21 +292,13 @@ export function aggregateDefensiveBenchmarks(
   // Every sampled parse contributes one array, so the count is the total-parse use-share denominator.
   const totalParses = perParseSummaries.length;
   const perDefensiveBenchmarks: Record<string, PerDefensiveBenchmark> = {};
-  const topDefensivesSummary: TopDefensiveSummary[] = [];
   // Iterate the rulebook defensives so the name, cooldown, and spell id come from one source.
   for (const defensive of defensives) {
     const summaries = byName.get(defensive.name);
     if (!summaries?.length) continue; // no sampled parse used this defensive
     perDefensiveBenchmarks[defensive.name] = buildDefensiveBenchmark(summaries, defensive.cooldown, totalParses);
-    const uses = summaries.map(summary => summary.uses);
-    topDefensivesSummary.push({
-      spell_id: defensive.spell_id,
-      avg_uses: round((mean(uses) ?? 0)),
-      min_uses: Math.min(...uses),
-      max_uses: Math.max(...uses),
-    });
   }
-  return { perDefensiveBenchmarks, topDefensivesSummary };
+  return perDefensiveBenchmarks;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -356,7 +333,7 @@ export class DefensiveTransformService implements DataSource<DefensiveBench> {
       if (!sampleCount) return missing(NO_DEFENSIVE_BENCH_MESSAGE);
 
       const defensiveWindows = clusterDefensiveWindows(allWindows, sampleCount);
-      const { perDefensiveBenchmarks, topDefensivesSummary } = aggregateDefensiveBenchmarks(perParseSummaries, defensives);
+      const perDefensiveBenchmarks = aggregateDefensiveBenchmarks(perParseSummaries, defensives);
       const cd_spell_ids = defensiveSpellIds(defensives);
       // A real icon for every defensive + window ability by id (complete, no fallback).
       const referencedIds = [
@@ -371,7 +348,6 @@ export class DefensiveTransformService implements DataSource<DefensiveBench> {
         sample_count: sampleCount,
         per_defensive_benchmarks: perDefensiveBenchmarks,
         defensive_windows: defensiveWindows,
-        top_defensives_summary: topDefensivesSummary,
         defensives: defensivePlanMeta(defensives),
         cd_spell_ids,
         ability_icons: abilityIcons(await this.wclApi.getAbilities(referencedIds)),

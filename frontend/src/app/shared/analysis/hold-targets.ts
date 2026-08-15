@@ -55,9 +55,7 @@ export function buildHoldTargets(
       const delayStddev = round(deviation(delays) ?? 0);
       targets[String(castIndex)] = {
         target_s: round(median(actuals) ?? 0),
-        stddev_s: round(deviation(actuals) ?? 0),
         delay_s: round(median(delays) ?? 0),
-        delay_stddev_s: delayStddev,
         band_s: round(Math.max(delayStddev, HOLD_BAND_MIN_S)),
         effective_cd_s: round(effectiveCd),
         count: actuals.length,

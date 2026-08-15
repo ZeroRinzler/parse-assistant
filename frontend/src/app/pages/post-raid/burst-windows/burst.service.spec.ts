@@ -122,14 +122,14 @@ describe('buildBurstView', () => {
     time_s: 10, window_length_s: 20, dmg_avg: 1000, dmg_min: 800, dmg_max: 1200, dmg_stddev: 100,
     common_cds: ['Shadow Blades'],
     ability_breakdown: [
-      { spell_id: SHADOW_BLADES_DAMAGE, avg_damage: 600, min_damage: 400, max_damage: 800, count: 5, avg_casts: 2 },
+      { spell_id: SHADOW_BLADES_DAMAGE, avg_damage: 600, min_damage: 400, max_damage: 800, avg_casts: 2 },
     ],
   };
   const abilities = { [SHADOW_BLADES]: { icon: 'sb', name: 'Shadow Blades' }, [SHADOW_BLADES_DAMAGE]: { icon: 'evis', name: 'Eviscerate' } };
 
   it('pairs each window with the player damage at the same index', () => {
     const player: PlayerBurstWindow[] = [
-      { time_s: 10, window_damage: 950, ability_breakdown: [{ spell_id: SHADOW_BLADES_DAMAGE, damage: 550, casts: 2 }] },
+      { window_damage: 950, ability_breakdown: [{ spell_id: SHADOW_BLADES_DAMAGE, damage: 550, casts: 2 }] },
     ];
     const view = buildBurstView([window], player, 300, { 'Shadow Blades': SHADOW_BLADES }, abilities);
     expect(view.windows).toHaveLength(1);
@@ -147,7 +147,7 @@ describe('buildBurstView', () => {
     const passiveWindow: BurstWindow = {
       ...window,
       ability_breakdown: [
-        { spell_id: SHADOW_BLADES_DAMAGE, avg_damage: 600, min_damage: 400, max_damage: 800, count: 5, avg_casts: 0, is_passive: true },
+        { spell_id: SHADOW_BLADES_DAMAGE, avg_damage: 600, min_damage: 400, max_damage: 800, avg_casts: 0, is_passive: true },
       ],
     };
     const view = buildBurstView([passiveWindow], [], 300, {}, abilities, true);
@@ -278,7 +278,7 @@ const benchFixture: BurstBench = {
   windows: [{
     time_s: 10, window_length_s: 20, dmg_avg: 1000, dmg_min: 800, dmg_max: 1200, dmg_stddev: 100,
     common_cds: ['Shadow Blades'],
-    ability_breakdown: [{ spell_id: SHADOW_BLADES_DAMAGE, avg_damage: 600, min_damage: 400, max_damage: 800, count: 5, avg_casts: 2 }],
+    ability_breakdown: [{ spell_id: SHADOW_BLADES_DAMAGE, avg_damage: 600, min_damage: 400, max_damage: 800, avg_casts: 2 }],
   }],
 };
 

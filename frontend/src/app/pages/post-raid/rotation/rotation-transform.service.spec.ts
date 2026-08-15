@@ -93,7 +93,6 @@ describe('buildCdBenchmark', () => {
     expect(bench.avg_first_cast_s).toBe(6);
     expect(bench.avg_bl_offset_s).toBe(3);
     expect(bench.bl_pct).toBe(100);
-    expect(bench.avg_uses).toBe(2);
     // 2 casts over a 120s fight -> 1.0 uses/min for both parses.
     expect(bench.uses_per_min.avg).toBe(1);
     // inter-cast gaps [95-5, 97-7] = [90, 90] -> mean 90, stddev 0.
@@ -277,7 +276,7 @@ const wclFake = {
 };
 const filesFake = {
   getRulebook: async () => ok(rulebook({
-    cooldowns: [{ name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 90, align_with_bloodlust: true }],
+    cooldowns: [{ name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 90 }],
   })),
 };
 

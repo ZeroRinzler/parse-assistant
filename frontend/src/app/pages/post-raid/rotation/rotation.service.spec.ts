@@ -52,8 +52,8 @@ function cdBench(over: Partial<PerCdBenchmark> = {}): PerCdBenchmark {
     avg_first_cast_s: 5, stddev_first_cast_s: 2,
     avg_gap_s: 90, stddev_gap_s: 5,
     avg_bl_offset_s: 0, stddev_bl_offset_s: 2,
-    avg_uses: 2, median_uses: 2, avg_uses_per_min: 1,
-    uses_per_min: { avg: 1, stddev: 0.1, min: 0.9, max: 1.1 },
+    median_uses: 2,
+    uses_per_min: { avg: 1, stddev: 0.1 },
     bl_pct: 100, majority_hold: false, hold_targets: {}, sample_count: 5, used_sample_count: 5,
     ...over,
   };
@@ -62,9 +62,9 @@ function cdBench(over: Partial<PerCdBenchmark> = {}): PerCdBenchmark {
 function bench(over: Partial<RotationBench> = {}): RotationBench {
   return {
     spec: 'SubtletyRogue', encounter_id: 1, encounter_name: 'Boss', sample_count: 5,
-    avg_duration_s: 120, downtime_threshold_s: 1.5, top_avg_efficiency: 90, top_efficiency_stddev: 3,
+    downtime_threshold_s: 1.5, top_avg_efficiency: 90, top_efficiency_stddev: 3,
     per_cd_benchmarks: { 'Shadow Blades': cdBench() },
-    major_cooldowns: [{ name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 90, align_with_bloodlust: true }],
+    major_cooldowns: [{ name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 90 }],
     rules: [],
     cd_spell_ids: { 'Shadow Blades': SHADOW_BLADES },
     ability_icons: { [SHADOW_BLADES]: { icon: 'sb', name: 'Shadow Blades' } },
@@ -89,7 +89,7 @@ describe('analyzeRotationFindings', () => {
   it('emits a success when used on cd and BL-aligned', () => {
     const casts = [cast(SHADOW_BLADES, 6)];
     const buffs = [applyBuff(BLOODLUST, 6)];
-    const single = bench({ per_cd_benchmarks: { 'Shadow Blades': cdBench({ uses_per_min: { avg: 0.5, stddev: 0.1, min: 0.4, max: 0.6 } }) } });
+    const single = bench({ per_cd_benchmarks: { 'Shadow Blades': cdBench({ uses_per_min: { avg: 0.5, stddev: 0.1 } }) } });
     const findings = analyzeRotationFindings(scan({ castEvents: casts, buffEvents: buffs, bench: single }));
     const success = findings.find(f => f.category === 'cooldown_usage' && f.severity === 'success');
     expect(success).toBeDefined();
@@ -160,7 +160,7 @@ describe('analyzeRotationFindings Bloodlust detection', () => {
 describe('analyzeRotationFindings hold suggestions (prior-relative)', () => {
   const holdBench = bench({
     per_cd_benchmarks: { 'Shadow Blades': cdBench({
-      hold_targets: { '2': { target_s: 130, stddev_s: 5, delay_s: 30, delay_stddev_s: 3, band_s: 5, effective_cd_s: 90, count: 4, total_samples: 5 } },
+      hold_targets: { '2': { target_s: 130, delay_s: 30, band_s: 5, effective_cd_s: 90, count: 4, total_samples: 5 } },
     }) },
   });
 
@@ -328,8 +328,8 @@ describe('checkCastEfficiency', () => {
 
 describe('analyzeOneCooldown', () => {
   const FIGHT_DUR_S = 120;
-  const UPM = { avg: 0.5, stddev: 0.1, min: 0.4, max: 0.6 };  // top-parse uses-per-minute
-  const cd = { name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 90, align_with_bloodlust: true };
+  const UPM = { avg: 0.5, stddev: 0.1 };  // top-parse uses-per-minute
+  const cd = { name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 90 };
   const single = cdBench({ uses_per_min: UPM });
   // A cooldown a minority of top parses use: used/sample below MIN_USE_SHARE_FRAC (0.5).
   const TOTAL_SAMPLED = 10;
@@ -454,10 +454,10 @@ describe('buildCdPlan', () => {
   it('orders by opener priority and surfaces holds for majority-hold cds', () => {
     const cooldowns = [
       { name: 'Vanish', spell_id: VANISH, cooldown: 120, opener_priority: 2, usage_rule: 'late' },
-      { name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 90, opener_priority: 1, align_with_bloodlust: true, usage_rule: 'open' },
+      { name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 90, opener_priority: 1, usage_rule: 'open' },
     ];
     const benchmarks = {
-      'Shadow Blades': cdBench({ majority_hold: true, hold_targets: { '2': { target_s: 100, stddev_s: 5, delay_s: 10, delay_stddev_s: 2, band_s: 5, effective_cd_s: 90, count: 4, total_samples: 5 } } }),
+      'Shadow Blades': cdBench({ majority_hold: true, hold_targets: { '2': { target_s: 100, delay_s: 10, band_s: 5, effective_cd_s: 90, count: 4, total_samples: 5 } } }),
       'Vanish': cdBench({ avg_first_cast_s: 20 }),
     };
     const plan = buildCdPlan(cooldowns, benchmarks, abilities);
@@ -472,8 +472,8 @@ describe('buildCdPlan', () => {
 
   it('drives the Bloodlust badge from bl_pct, not the rulebook flag', () => {
     const cooldowns = [
-      { name: 'Aligned', spell_id: SHADOW_BLADES, cooldown: 90, align_with_bloodlust: false },
-      { name: 'Unaligned', spell_id: VANISH, cooldown: 120, align_with_bloodlust: true },
+      { name: 'Aligned', spell_id: SHADOW_BLADES, cooldown: 90 },
+      { name: 'Unaligned', spell_id: VANISH, cooldown: 120 },
     ];
     const benchmarks = {
       Aligned: cdBench({ bl_pct: 50 }),    // flag false, but data says aligned -> badge on (50 boundary)
@@ -504,8 +504,8 @@ describe('buildCdPlan', () => {
     // used_sample_count 0 -> the transform emits avg_first_cast_s 0, a no-data sentinel, not a 0:00 open.
     const TOTAL_SAMPLED = 5;
     const unused = cdBench({
-      sample_count: TOTAL_SAMPLED, used_sample_count: 0, avg_first_cast_s: 0, avg_uses: 0, median_uses: 0,
-      uses_per_min: { avg: 0, stddev: 0, min: 0, max: 0 },
+      sample_count: TOTAL_SAMPLED, used_sample_count: 0, avg_first_cast_s: 0, median_uses: 0,
+      uses_per_min: { avg: 0, stddev: 0 },
     });
     const plan = buildCdPlan([{ name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 90 }], { 'Shadow Blades': unused }, abilities);
     assert.exists(plan[0]);
@@ -546,7 +546,7 @@ describe('buildCdPlan', () => {
     // Default cdBench: used_sample_count 5 of sample_count 5 -> full use share, so the gate passes.
     const FIRST_CAST_S = 8;
     const USES_PER_MIN = 1.2;
-    const used = cdBench({ avg_first_cast_s: FIRST_CAST_S, uses_per_min: { avg: USES_PER_MIN, stddev: 0.1, min: 1, max: 1.4 } });
+    const used = cdBench({ avg_first_cast_s: FIRST_CAST_S, uses_per_min: { avg: USES_PER_MIN, stddev: 0.1 } });
     const plan = buildCdPlan([{ name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 90 }], { 'Shadow Blades': used }, abilities);
     assert.exists(plan[0]);
     expect(plan[0].firstCastS).toBe(FIRST_CAST_S);
@@ -619,7 +619,7 @@ describe('RotationFeatureService', () => {
       getAllEvents: async (_c: string, _f: number, dataType: string) =>
         dataType === 'Casts' ? [cast(SHADOW_BLADES, 6)] : [applyBuff(BLOODLUST, 6)],
     };
-    const single = bench({ per_cd_benchmarks: { 'Shadow Blades': cdBench({ uses_per_min: { avg: 0.5, stddev: 0.1, min: 0.4, max: 0.6 } }) } });
+    const single = bench({ per_cd_benchmarks: { 'Shadow Blades': cdBench({ uses_per_min: { avg: 0.5, stddev: 0.1 } }) } });
     const service = withSource(ok(single), wcl);
     const result = await service.loadPlayerView('SubtletyRogue', 1, 'rX', 1, 10);
     expect(result.ok).toBe(true);

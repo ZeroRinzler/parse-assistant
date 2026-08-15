@@ -49,20 +49,20 @@ describe('benchToStats', () => {
 
 describe('buildCharacterGear', () => {
   it('is a permanent error when the log has no combatant info', () => {
-    expect(buildCharacterGear(null, {}, 'r1', 'SubtletyRogue'))
+    expect(buildCharacterGear(null, {}))
       .toEqual(permanent('No combatant info in this log.', 'gear.combatant-info'));
   });
 
   it('builds the gear fingerprint when the event carries gear', () => {
     const event = toRawEvent({
-      found: true, talent_key: STANDARD_KEY,
+      talent_key: STANDARD_KEY,
       trinkets: [{ slot: 12, id: 100, name: 'A' }],
       enchants: [{ slot: 15, id: 8041, name: 'Sophic' }],
     });
-    const result = buildCharacterGear(event, {}, 'r1', 'SubtletyRogue');
+    const result = buildCharacterGear(event, {});
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value).toMatchObject({ found: true, source_report: 'r1', talent_key: STANDARD_KEY });
+    expect(result.value).toMatchObject({ talent_key: STANDARD_KEY });
   });
 });
 
@@ -86,7 +86,7 @@ describe('buildGearView', () => {
 
   it('comparison mode: player matching bench is on-plan (ok)', () => {
     const player: CharacterGear = {
-      found: true, talent_key: STANDARD_KEY,
+      talent_key: STANDARD_KEY,
       trinkets: [{ slot: 12, id: 100, name: 'A' }],
       enchants: [{ slot: 15, id: 8041, name: 'Sophic' }],
     };
@@ -99,7 +99,7 @@ describe('buildGearView', () => {
 
   it('comparison mode: missing high-consensus enchant flags a warning', () => {
     const player: CharacterGear = {
-      found: true, talent_key: STANDARD_KEY,
+      talent_key: STANDARD_KEY,
       trinkets: [{ slot: 12, id: 100, name: 'A' }],
       enchants: [],
     };
@@ -123,7 +123,7 @@ describe('emptyGearView', () => {
 function configure(bench: Result<GearBench>, gear: CharacterGear | null): GearFeatureService {
   const source: DataSource<GearBench> = { getBench: () => Promise.resolve(bench) };
   const wclFake = {
-    getCombatantInfo: async (): Promise<WclCombatantInfo[]> => (gear?.found ? [toRawEvent(gear)] : []),
+    getCombatantInfo: async (): Promise<WclCombatantInfo[]> => (gear ? [toRawEvent(gear)] : []),
     getGameNames: async () => ({}),
   };
   TestBed.configureTestingModule({
@@ -151,7 +151,7 @@ describe('GearFeatureService', () => {
 
   it('loadComparisonView merges fetched player gear with the bench', async () => {
     const player: CharacterGear = {
-      found: true, talent_key: STANDARD_KEY,
+      talent_key: STANDARD_KEY,
       trinkets: [{ slot: 12, id: 100, name: 'A' }],
       enchants: [{ slot: 15, id: 8041, name: 'Sophic' }],
     };

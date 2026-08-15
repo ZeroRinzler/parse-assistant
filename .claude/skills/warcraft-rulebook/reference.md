@@ -40,7 +40,7 @@ Discover `<branch>` and `<TIER>` **once per session** and reuse them for every s
 legendaries), comments, and empty lines. Keep every line that starts with `actions` or `actions.`,
 including the sub-list definitions, and keep its conditions (`if=`, `buff.X.up`,
 `cooldown.X.remains`, resource gates) verbatim - they are the raw material for `major_cooldowns`,
-`align_with_bloodlust`, `opener_priority`, and the rule conditions.
+`opener_priority`, and the rule conditions.
 
 **Never trim the filler lines** - the terminal unconditioned action at the bottom of each sub-list
 and the gates just above it. They are the `filler_in_buff` raw material, and every buff named in a

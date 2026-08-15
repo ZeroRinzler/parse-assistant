@@ -46,8 +46,6 @@ export function emptyGearView(): GearComparisonView {
 export function buildCharacterGear(
   event: WclCombatantInfo | null,
   names: Record<string, { id: number; name: string }>,
-  code: string,
-  spec?: string,
 ): Result<CharacterGear> {
   if (!event?.gear?.length) {
     return permanent('No combatant info in this log.', 'gear.combatant-info');
@@ -62,7 +60,7 @@ export function buildCharacterGear(
     if (!enchant.name && enchant.id) enchant.name = decodeHtmlEntities(names[`e${enchant.id}`]?.name ?? '');
   }
 
-  return ok({ found: true, spec, source_report: code, talent_key, trinkets, enchants });
+  return ok({ talent_key, trinkets, enchants });
 }
 
 export function benchToStats(bench: GearBench): EncounterGearStats {
@@ -115,7 +113,7 @@ export class GearFeatureService {
   ): Promise<Result<GearComparisonView>> {
     const bench = await this.source.getBench(spec, encounterId);
     if (!bench.ok) return bench;
-    const playerGear = await this.fetchPlayerGear(reportCode, fightId, playerId, spec);
+    const playerGear = await this.fetchPlayerGear(reportCode, fightId, playerId);
     if (!playerGear.ok) return playerGear;
     return ok(buildGearView(playerGear.value, benchToStats(bench.value)));
   }
@@ -128,7 +126,7 @@ export class GearFeatureService {
 
   // A WCL fetch failure becomes a mapped LoadError, never a silent fallback.
   private async fetchPlayerGear(
-    reportCode: string, fightId: number, playerId: number, spec: string,
+    reportCode: string, fightId: number, playerId: number,
   ): Promise<Result<CharacterGear>> {
     try {
       const event = selectCombatantInfo(await this.wclApi.getCombatantInfo(reportCode, fightId, playerId), playerId);
@@ -143,7 +141,7 @@ export class GearFeatureService {
           logWarn(`GearFeatureService name resolution ${reportCode}:${fightId}:${playerId}`, err);
         }
       }
-      return buildCharacterGear(event, names, reportCode, spec);
+      return buildCharacterGear(event, names);
     } catch (cause) {
       logWarn(`GearFeatureService player gear ${reportCode}:${fightId}:${playerId}`, cause);
       return toLoadError(cause, 'gear.player-view');

@@ -16,7 +16,7 @@ function stats(partial: Partial<EncounterGearStats> = {}): EncounterGearStats {
 }
 
 function gear(partial: Partial<CharacterGear> = {}): CharacterGear {
-  return { found: true, ...partial };
+  return { ...partial };
 }
 
 describe('buildBenchEnchantRows', () => {

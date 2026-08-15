@@ -167,7 +167,7 @@ export class GearTransformService implements DataSource<GearBench> {
       const parses: ParseGear[] = [];
       let encounterName = '';
       for (const ranking of rankings) {
-        const fetched = await this.fetchParseGear(ranking, spec);
+        const fetched = await this.fetchParseGear(ranking);
         if (!fetched) continue;
         parses.push(fetched.gear);
         encounterName ||= fetched.encounterName;
@@ -192,7 +192,7 @@ export class GearTransformService implements DataSource<GearBench> {
   }
 
   private async fetchParseGear(
-    ranking: ParseRanking, spec: string,
+    ranking: ParseRanking,
   ): Promise<{ gear: ParseGear; encounterName: string } | null> {
     try {
       const report = await this.wclApi.getReport(ranking.report_code);
@@ -220,7 +220,6 @@ export class GearTransformService implements DataSource<GearBench> {
       }
 
       const characterGear: CharacterGear = {
-        found: true, spec, source_report: ranking.report_code,
         talent_key: talentKeyFromTree(event.talentTree), trinkets, enchants,
       };
       return { gear: toParseGear(characterGear, ranking, player.id), encounterName: fight.name };

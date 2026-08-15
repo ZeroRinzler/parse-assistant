@@ -101,8 +101,8 @@ describe('holdSuggestionFindings', () => {
 
   const targetAt = (castIndex: number): CdHoldTargets => ({
     [castIndex]: {
-      target_s: TARGET_CLOCK_S, stddev_s: HOLD_BAND_S,
-      delay_s: HOLD_DELAY_S, delay_stddev_s: 3, band_s: HOLD_BAND_S, effective_cd_s: EFFECTIVE_CD_S,
+      target_s: TARGET_CLOCK_S,
+      delay_s: HOLD_DELAY_S, band_s: HOLD_BAND_S, effective_cd_s: EFFECTIVE_CD_S,
       count: HELD_COUNT, total_samples: TOTAL_SAMPLED,
     },
   });

@@ -70,43 +70,35 @@ export function buildDefensiveUsageWindows(
   spellId: number,
   buffSpans: [number, number | null][],
   castEvents: TimedEvent[],
-  dmgInWindow: (startS: number, endS: number) => number,
   fightEndS: number,
 ): DefensiveUsageWindow[] {
   const windows = buffSpans.map(([windowStartS, windowEndS]) => {
     // An open buff (no remove) runs to fight end, never a rulebook duration.
     const end = windowEndS ?? fightEndS;
-    return { start_s: Math.round(windowStartS * 10) / 10, end_s: Math.round(end * 10) / 10, dmg_during: Math.round(dmgInWindow(windowStartS, end)) };
+    return { start_s: Math.round(windowStartS * 10) / 10, end_s: Math.round(end * 10) / 10 };
   });
   if (windows.length) return windows;
   return castEvents
     .filter(cast => cast.type === 'cast' && cast.abilityGameID === spellId)
     .map(cast => cast.atS)
     .filter(timeS => timeS >= 0 && timeS <= fightEndS)
-    .map(timeS => ({ start_s: Math.round(timeS * 10) / 10, end_s: Math.round(timeS * 10) / 10, dmg_during: 0 }));
+    .map(timeS => ({ start_s: Math.round(timeS * 10) / 10, end_s: Math.round(timeS * 10) / 10 }));
 }
 
 export function analyzeDefensives(
   defensives: DefensivePlanMeta[],
   castEvents: TimedEvent[],
   buffEvents: TimedEvent[],
-  dtEvents: TimedEvent[],
   fightEndS: number,
 ): PlayerDefensive[] {
   if (!defensives.length) return [];
-  const dmgTaken = dtEvents.filter(event => event.type === 'damage');
   const buffWin = buildAuraWindows(buffEvents);
-  const dmgInWindow = (windowStartS: number, windowEndS: number): number =>
-    dmgTaken.reduce((sum, event) => {
-      const timeS = event.atS;
-      return timeS >= windowStartS && timeS <= windowEndS ? sum + dmgOf(event) : sum;
-    }, 0);
 
   return defensives.map(defensive => {
     const spellId = defensive.spell_id;
-    const windows = buildDefensiveUsageWindows(spellId, buffWin.get(spellId) ?? [], castEvents, dmgInWindow, fightEndS);
+    const windows = buildDefensiveUsageWindows(spellId, buffWin.get(spellId) ?? [], castEvents, fightEndS);
     const cast_times_s = windows.map(window => window.start_s).sort((a, b) => a - b);
-    const entry: PlayerDefensive = { name: defensive.name, spell_id: spellId, cooldown: defensive.cooldown, uses: windows.length, cast_times_s, windows };
+    const entry: PlayerDefensive = { name: defensive.name, uses: windows.length, cast_times_s, windows };
     if (defensive.talent_gated) entry.talent_gated = true;
     return entry;
   });
@@ -221,7 +213,7 @@ export function computePlayerDefensiveWindows(topDefWindows: BurstWindow[], dtEv
       .sort((a, b) => b[1] - a[1])
       .slice(0, 6)
       .map(([sid, damage]) => ({ spell_id: parseInt(sid, 10), damage: Math.round(damage) }));
-    return { time_s: window.time_s, window_damage: Math.round(winTotal), ability_breakdown };
+    return { window_damage: Math.round(winTotal), ability_breakdown };
   });
 }
 
@@ -406,7 +398,7 @@ export class DefensiveFeatureService {
 
       const dtEventsTimed = withRelativeS(dtEvents, fight.startTime);
       const playerDefensives = analyzeDefensives(
-        bench.value.defensives, withRelativeS(casts, fight.startTime), withRelativeS(buffs, fight.startTime), dtEventsTimed, fightDurationS,
+        bench.value.defensives, withRelativeS(casts, fight.startTime), withRelativeS(buffs, fight.startTime), fightDurationS,
       );
       const findings = bench.value.defensives.length && playerDefensives.length
         ? analyzeDefensiveFindings(playerDefensives, bench.value.per_defensive_benchmarks, fightDurationS)

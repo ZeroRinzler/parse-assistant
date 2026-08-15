@@ -38,7 +38,7 @@ from those files, and you never read, mention, or reference any other specializa
 
 Write pretty-printed JSON to the output path in your prompt, creating the directory if needed. Overwrite
 any existing file without reading it: this is a clean-slate regeneration. Set `spec` to your folder key
-and `spec_icon` to the stem given in your prompt. Never write `guide_count` or `saved_at`.
+and `spec_icon` to the stem given in your prompt.
 
 Report one line: spec key, the major_cooldowns / defensives / rules counts, and any ability name the
 sources called for that your table did not contain. No prose narration.

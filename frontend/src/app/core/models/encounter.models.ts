@@ -14,15 +14,12 @@ export interface EncounterEntry {
 export interface UsesPerMin {
   avg: number;
   stddev: number;
-  min: number;
-  max: number;
 }
 
 // A cooldown cast index where a majority of top parses deliberately hold past the natural reset.
 export interface HoldTarget {
   /** Absolute clock target (median cast time), for display ("hold to 3:20"). */
   target_s: number;
-  stddev_s: number;
   count: number;
   total_samples: number;
 }
@@ -31,8 +28,7 @@ export interface HoldTarget {
 export interface CdHoldTarget extends HoldTarget {
   /** Prior-relative hold past natural reset (median of actual - (prior + effective_cd_s)). */
   delay_s: number;
-  delay_stddev_s: number;
-  /** Tolerance half-width the runtime compares against: max(delay_stddev_s, floor). */
+  /** Tolerance half-width the runtime compares against: max(delay stddev, floor). */
   band_s: number;
   /** Cadence zero-point used for `delay_s` (nominal rulebook cooldown). */
   effective_cd_s: number;
@@ -47,10 +43,8 @@ export interface PerCdBenchmark {
   stddev_gap_s: number | null;
   avg_bl_offset_s: number | null;
   stddev_bl_offset_s: number | null;
-  avg_uses: number;
-  // A median, unlike avg_uses: one outlier parse cannot move it.
+  // A median: one outlier parse cannot move it.
   median_uses: number;
-  avg_uses_per_min: number;
   uses_per_min: UsesPerMin;
   bl_pct: number;
   majority_hold: boolean;
@@ -70,10 +64,8 @@ export interface PerDefensiveBenchmark {
   avg_gap_s: number | null;
   stddev_gap_s: number | null;
   hold_targets: CdHoldTargets;
-  avg_uses: number;
-  // A median, unlike avg_uses: one outlier parse cannot move it.
+  // A median: one outlier parse cannot move it.
   median_uses: number;
-  avg_uses_per_min: number;
   uses_per_min: UsesPerMin;
   majority_hold: boolean;
 }
