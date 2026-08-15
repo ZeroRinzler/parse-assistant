@@ -23,10 +23,11 @@ import { type WclQueryClient, BudgetExceededError } from './wcl-client';
 import { INGEST_VERSION } from './ingest-version';
 import { specsForRun, orderEncountersByMissingFirst, parsePrioritySpecs, type SpecOrderEntry } from './ordering';
 import {
-  encounterSkipKey, signatureAfterFetch, readStoredSignature, readStoredVersion, signatureMatches,
+  encounterSkipKey, signatureAfterFetch, readStoredSignature, readStoredVersion, readStoredIngestedAt, signatureMatches,
   stampSignature, stampBurstFile, readInaccessibleParses,
-  type SignatureRanking, type SignedFile,
+  type SignatureRanking, type SignedFile, type IngestStamp,
 } from './signature';
+import { formatSpecReport, SELECTED_MARKER, type SpecReportRow } from './spec-report';
 import type { WclRateLimitData, IngestEncounter, WclGameClass } from './models/wcl.models';
 
 const TOP_N = 10;
@@ -44,6 +45,10 @@ export interface IngestRunSummary {
   failed: { spec: string; message: string }[];
   budgetStopped: boolean;
   fatal?: string;
+}
+
+function nowS(): number {
+  return Math.floor(Date.now() / 1000);
 }
 
 function publishSummary(summary: IngestRunSummary): void {
@@ -202,29 +207,39 @@ export class IngestOrchestratorService {
     const orderInputs = await Promise.all(withRulebook.map(async spec => {
       const burstFiles = (await this.dataFile.listSliceFiles(spec, 'burst'))
         .filter(file => file.endsWith('.json'));
-      const versions = await Promise.all(burstFiles.map(async file => {
+      const stamps = await Promise.all(burstFiles.map(async file => {
         const slice = await this.dataFile.getSlice<SignedFile>(spec, parseInt(file), 'burst');
-        return slice.ok ? readStoredVersion(slice.value) : null;
+        return slice.ok ? slice.value : null;
       }));
+      const versions = stamps.map(file => (file ? readStoredVersion(file) : null));
       const storedVersions = versions.filter((stored): stored is number => stored !== null);
+      const storedTimes = stamps
+        .map(file => (file ? readStoredIngestedAt(file) : null))
+        .filter((stored): stored is number => stored !== null);
       const entry: SpecOrderEntry = {
         spec,
         dataCount: burstFiles.length,
         onCurrentVersion: burstFiles.length > 0 && versions.every(stored => stored === INGEST_VERSION),
       };
+      // Worst version but most recent write: "still on v23", "last ingested 3h ago".
       const displayVersion = storedVersions.length ? Math.min(...storedVersions) : null;
-      return { spec, entry, displayVersion };
+      const displayIngestedAtS = storedTimes.length ? Math.max(...storedTimes) : null;
+      return { entry, displayVersion, displayIngestedAtS };
     }));
     const prioritySpecs = parsePrioritySpecs(new URLSearchParams(globalThis.location.search).get('prioritySpecs'));
-    const specs = specsForRun(orderInputs.map(input => input.entry), prioritySpecs);
-    const displayBySpec = new Map(orderInputs.map(input => [input.spec, input] as const));
-    const versionLines = specs.map(spec => {
-      const info = displayBySpec.get(spec);
-      const versionLabel = info?.displayVersion != null ? `v${info.displayVersion}` : 'v?';
-      return `${spec} ${versionLabel}`;
-    });
-    console.log(`Specs (old version first):\n${versionLines.join('\n')}`);
-    return specs;
+    const { ordered, selected } = specsForRun(orderInputs.map(input => input.entry), prioritySpecs);
+    const displayBySpec = new Map(orderInputs.map(input => [input.entry.spec, input] as const));
+    const selectedSpecs = new Set(selected);
+    const rows: SpecReportRow[] = ordered.map(spec => ({
+      spec,
+      version: displayBySpec.get(spec)?.displayVersion ?? null,
+      ingestedAtS: displayBySpec.get(spec)?.displayIngestedAtS ?? null,
+      selected: selectedSpecs.has(spec),
+    }));
+    console.log(
+      `Specs (old version first, ${SELECTED_MARKER} = ingested this run):\n${formatSpecReport(rows, nowS())}`,
+    );
+    return selected;
   }
 
   /** Returns true when the run stopped on the WCL budget (remaining specs resume next run). */
@@ -314,6 +329,7 @@ export class IngestOrchestratorService {
     const inaccessibleCodes = new Set(this.wclTransport.takeInaccessibleCodes());
     const failedCodes = new Set(this.wclTransport.takeFailedCodes());
     const { signature, inaccessibleParses } = signatureAfterFetch(poolRows, inaccessibleCodes, failedCodes, version, TOP_N);
+    const stamp: IngestStamp = { version: INGEST_VERSION, ingestedAtS: nowS() };
 
     // Skip on any failure so a slice is never overwritten with partial data.
     const skipNote = (slice: string, error: LoadError): string =>
@@ -325,28 +341,28 @@ export class IngestOrchestratorService {
     const writes: Promise<unknown>[] = [];
     if (burst.ok) {
       const stamped = stampBurstFile(
-        burst.value, signature, INGEST_VERSION, inaccessibleParses, [burst, rotation, defensive, gear, map, northernSky],
+        burst.value, signature, stamp, inaccessibleParses, [burst, rotation, defensive, gear, map, northernSky],
       );
       writes.push(this.dataFile.writeSlice(spec, encId, 'burst', stamped));
       wroteAny = true;
     } else { console.log(skipNote('burst', burst.error)); }
     if (rotation.ok) {
-      writes.push(this.dataFile.writeSlice(spec, encId, 'rotation', stampSignature(rotation.value, signature, INGEST_VERSION)));
+      writes.push(this.dataFile.writeSlice(spec, encId, 'rotation', stampSignature(rotation.value, signature, stamp)));
       wroteAny = true;
     } else { console.log(skipNote('rotation', rotation.error)); }
     if (defensive.ok) {
-      writes.push(this.dataFile.writeSlice(spec, encId, 'defensive', stampSignature(defensive.value, signature, INGEST_VERSION)));
+      writes.push(this.dataFile.writeSlice(spec, encId, 'defensive', stampSignature(defensive.value, signature, stamp)));
       wroteAny = true;
     } else { console.log(skipNote('defensive', defensive.error)); }
     if (gear.ok) {
-      writes.push(this.dataFile.writeSlice(spec, encId, 'gear', stampSignature(gear.value, signature, INGEST_VERSION)));
+      writes.push(this.dataFile.writeSlice(spec, encId, 'gear', stampSignature(gear.value, signature, stamp)));
       wroteAny = true;
     } else { console.log(skipNote('gear', gear.error)); }
     if (map.ok) {
-      writes.push(this.dataFile.writePositions(spec, encId, stampSignature(map.value, signature, INGEST_VERSION)));
+      writes.push(this.dataFile.writePositions(spec, encId, stampSignature(map.value, signature, stamp)));
     } else { console.log(skipNote('positions', map.error)); }
     if (northernSky.ok) {
-      writes.push(this.dataFile.writeSlice(spec, encId, 'northern-sky', stampSignature(northernSky.value, signature, INGEST_VERSION)));
+      writes.push(this.dataFile.writeSlice(spec, encId, 'northern-sky', stampSignature(northernSky.value, signature, stamp)));
       wroteAny = true;
     } else { console.log(skipNote('northern-sky', northernSky.error)); }
 

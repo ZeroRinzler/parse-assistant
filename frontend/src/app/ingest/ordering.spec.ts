@@ -100,7 +100,15 @@ describe('orderSpecsByVersion', () => {
   it('caps a run at SPEC_LIMIT specs, dropping the overflow', () => {
     // One more spec than the cap: specsForRun orders then slices, so the run never exceeds SPEC_LIMIT.
     const entries = Array.from({ length: SPEC_LIMIT + 1 }, (_, i) => entry({ spec: `Spec${i}` }));
-    expect(specsForRun(entries)).toHaveLength(SPEC_LIMIT);
+    expect(specsForRun(entries).selected).toHaveLength(SPEC_LIMIT);
+  });
+
+  it('reports every spec in the same order the cap was applied to, so the deferred ones are still logged', () => {
+    const entries = Array.from({ length: SPEC_LIMIT + 3 }, (_, i) => entry({ spec: `Spec${i}` }));
+    const { ordered, selected } = specsForRun(entries);
+    expect(ordered).toHaveLength(SPEC_LIMIT + 3);
+    expect(ordered.slice(0, SPEC_LIMIT)).toEqual(selected);
+    expect([...ordered].sort()).toEqual(entries.map(item => item.spec).sort());
   });
 
   it('pins a custom priority list in order, ahead of the randomized rest', () => {

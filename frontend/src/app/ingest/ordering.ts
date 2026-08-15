@@ -43,11 +43,18 @@ export function orderSpecsByVersion(
     .map(({ entry }) => entry.spec);
 }
 
+export interface SpecRunPlan {
+  /** Every known spec, for reporting only: `selected` is what the run ingests. */
+  ordered: string[];
+  selected: string[];
+}
+
 export function specsForRun(
   entries: readonly SpecOrderEntry[],
   prioritySpecs: readonly string[] = DEFAULT_PRIORITY_SPECS,
-): string[] {
-  return orderSpecsByVersion(entries, prioritySpecs).slice(0, SPEC_LIMIT);
+): SpecRunPlan {
+  const ordered = orderSpecsByVersion(entries, prioritySpecs);
+  return { ordered, selected: ordered.slice(0, SPEC_LIMIT) };
 }
 
 /** So a partially ingested spec fills its remaining bosses before re-checking the ones already done. */
