@@ -2,8 +2,8 @@
     <mat-card appearance="outlined" class="mb-5 p-4">
       <mat-form-field appearance="outline" class="w-full">
         <mat-label>Warcraft Logs Report URL or Code</mat-label>
-        <input matInput [formControl]="reportControl" placeholder="https://www.warcraftlogs.com/reports/AbCdEfGh…"
-               (keydown.enter)="loadReport()" (paste)="onPaste()" />
+        <input matInput #reportInput [formControl]="reportControl" placeholder="https://www.warcraftlogs.com/reports/AbCdEfGh…"
+               (keydown.enter)="loadReport()" (paste)="onPaste($event, reportInput)" />
         <!-- Unconditional: `@if`-gating this leaves the field red with no message (MAT_ERROR misses a conditional child). -->
         <mat-error>Paste a Warcraft Logs report URL or a 16-character report code.</mat-error>
       </mat-form-field>

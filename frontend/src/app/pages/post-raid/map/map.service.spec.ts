@@ -11,6 +11,7 @@ import {
   FACING_OFFSET_RAD,
 } from './map.service';
 import { withRelativeS } from '../../../shared/analysis/wcl-projections';
+import { whenStable } from '../../../../testing/when-stable';
 
 /** Fixture events build against a fight-start of 0, so stamping is a pass-through to seconds. */
 const timed = withRelativeS;
@@ -230,6 +231,9 @@ describe('MapFeatureService', () => {
 
 interface RecordedFetch { dataType: string; sourceId?: number; includeResources?: boolean; hostilityType?: string; }
 
+// Resolving in one turn would let a wait pass here that a real fetch (transport, interceptor, parse) would not.
+const FETCH_TURNS = 20;
+
 /** Returns no events, so no overlay is built (overlay content is covered above). */
 class RecordingWclApi {
   readonly calls: RecordedFetch[] = [];
@@ -239,7 +243,9 @@ class RecordingWclApi {
     sourceId?: number, includeResources?: boolean, hostilityType?: string,
   ): Promise<WclEvent[]> {
     this.calls.push({ dataType, sourceId, includeResources, hostilityType });
-    return Promise.resolve([]);
+    let settling = Promise.resolve<WclEvent[]>([]);
+    for (let turn = 0; turn < FETCH_TURNS; turn++) settling = settling.then(events => events);
+    return settling;
   }
 }
 
@@ -248,8 +254,6 @@ const sampleFight = { id: 1, encounterID: 3144, startTime: 0, endTime: 10_000, n
 
 const PLAYER_ACTOR_ID = 5;
 
-/** Drain microtasks + the macrotask queue so a fire-and-forget async load settles. */
-const settle = (): Promise<void> => new Promise(resolve => setTimeout(resolve, 0));
 
 describe('MapFeatureService deferred overlay', () => {
   function setup(): { service: MapFeatureService; api: RecordingWclApi } {
@@ -275,7 +279,7 @@ describe('MapFeatureService deferred overlay', () => {
     expect(api.getAllEventsCalls).toBe(0);
 
     service.openAt({ timeS: 1 });
-    await settle();
+    await whenStable();
     expect(api.getAllEventsCalls).toBeGreaterThan(0); // opening the panel triggers the fetch
   });
 
@@ -284,20 +288,20 @@ describe('MapFeatureService deferred overlay', () => {
     await service.prepare('code', sampleFight, 5, 'SubtletyRogue', []);
 
     service.openAt({ timeS: 1 });
-    await settle();
+    await whenStable();
     const afterFirstOpen = api.getAllEventsCalls;
     expect(afterFirstOpen).toBeGreaterThan(0);
 
     service.close();
     service.openAt({ timeS: 2 });
-    await settle();
+    await whenStable();
     expect(api.getAllEventsCalls).toBe(afterFirstOpen);
   });
 
   it('does not fetch when the map is never opened', async () => {
     const { service, api } = setup();
     await service.prepare('code', sampleFight, 5, 'SubtletyRogue', []);
-    await settle();
+    await whenStable();
     expect(api.getAllEventsCalls).toBe(0);
   });
 
@@ -305,7 +309,7 @@ describe('MapFeatureService deferred overlay', () => {
     const { service, api } = setup();
     await service.prepare('code', sampleFight, PLAYER_ACTOR_ID, 'SubtletyRogue', []);
     service.openAt({ timeS: 1 });
-    await settle();
+    await whenStable();
 
     const EXPECTED_FETCH_COUNT = 2; // player casts + enemy casts, nothing else
     expect(api.calls).toHaveLength(EXPECTED_FETCH_COUNT);
@@ -322,7 +326,7 @@ describe('MapFeatureService deferred overlay', () => {
     const { service } = setup(); // RecordingWclApi returns [] events, so the player has no samples
     await service.prepare('code', sampleFight, PLAYER_ACTOR_ID, 'SubtletyRogue', []);
     service.openAt({ timeS: 1 });
-    await settle();
+    await whenStable();
 
     // The overlay loaded but yielded no "you" trail: surfaced as a failure, not a silent bench-only map.
     expect(service.live()).toBeNull();
@@ -374,7 +378,7 @@ describe('MapFeatureService deferred overlay', () => {
     const service = TestBed.inject(MapFeatureService);
     await service.prepare('code', sampleFight, PLAYER_ACTOR_ID, 'SubtletyRogue', []);
     service.openAt({ timeS: 1 });
-    await settle();
+    await whenStable();
 
     // The bench loaded fine, but the player's own trail fetch failed: no live overlay, spinner clears, failure surfaces.
     expect(service.live()).toBeNull();

@@ -1,5 +1,6 @@
 // All ingestion logic lives in the Angular app; this file must never grow any.
 import { spawn } from 'child_process';
+import { once } from 'events';
 import { chromium } from 'playwright';
 
 const APP_URL = 'http://localhost:4200';
@@ -8,6 +9,7 @@ const READY_TIMEOUT_MS = 5 * 60_000;
 const READY_POLL_MS = 500;
 const DONE_POLL_MS = 1_000;
 const DONE_TIMEOUT_MS = 15 * 60_000;
+const KILL_GRACE_MS = 5_000;
 
 const children = [];
 
@@ -34,12 +36,23 @@ function startChild(name, command, args) {
 let shuttingDown = false;
 let browser = null;
 
+// Subscribing to 'exit' before signalling is what keeps a child that dies immediately from stranding the await.
+async function endChild(child) {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  const exited = once(child, 'exit');
+  child.kill('SIGTERM');
+  const escalation = setTimeout(() => child.kill('SIGKILL'), KILL_GRACE_MS);
+  try {
+    await exited;
+  } finally {
+    clearTimeout(escalation);
+  }
+}
+
 async function shutdown(exitCode) {
   shuttingDown = true;
   if (browser) await browser.close().catch(() => undefined);
-  for (const child of children) child.kill('SIGTERM');
-  // Give the children a moment to die before the process exit reaps them hard.
-  await new Promise(resolve => setTimeout(resolve, 500));
+  await Promise.all(children.map(endChild));
   process.exit(exitCode);
 }
 

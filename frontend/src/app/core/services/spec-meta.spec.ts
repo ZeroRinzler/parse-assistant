@@ -29,8 +29,6 @@ function serviceWith(getSpecMeta: () => Promise<Result<SpecMeta[]>>): SpecMetaSe
   return TestBed.inject(SpecMetaService);
 }
 
-const microtask = () => new Promise(resolve => setTimeout(resolve));
-
 describe('SpecMetaService', () => {
   it('hydrates itself from the data file on first injection', async () => {
     const service = serviceWith(async () => ok([SUBTLETY]));
@@ -39,13 +37,14 @@ describe('SpecMetaService', () => {
 
   it('keeps resolve pending until the first hydration lands', async () => {
     const service = serviceWith(() => new Promise(() => undefined));
-    let resolved: unknown = 'pending';
-    void service.resolve('SubtletyRogue').then(meta => { resolved = meta; });
-    await microtask();
-    expect(resolved).toBe('pending');
+    const STILL_PENDING = Symbol('still pending');
+    const resolving = service.resolve('SubtletyRogue');
+
+    // Racing an already-resolved promise settles on the next microtask, so it wins iff `resolving` has not.
+    await expect(Promise.race([resolving, Promise.resolve(STILL_PENDING)])).resolves.toBe(STILL_PENDING);
+
     service.hydrate([SUBTLETY]);
-    await microtask();
-    expect(resolved).toMatchObject({ className: 'Rogue', specName: 'Subtlety' });
+    await expect(resolving).resolves.toMatchObject({ className: 'Rogue', specName: 'Subtlety' });
   });
 
   it('resolves undefined for an unknown spec once hydrated', async () => {

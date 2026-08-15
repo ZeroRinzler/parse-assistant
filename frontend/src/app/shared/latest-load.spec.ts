@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { TestBed } from '@angular/core/testing';
+import { whenStable } from '../../testing/when-stable';
 import { LatestLoad } from './latest-load';
 
 const FIRST_VALUE = 'first response';
@@ -30,6 +32,12 @@ async function flushLoadChain(): Promise<void> {
   await Promise.resolve();
 }
 
+/** LatestLoad reports its chain to PendingTasks, so it only constructs inside an injection context. */
+function newLoader(): LatestLoad {
+  TestBed.resetTestingModule();
+  return TestBed.runInInjectionContext(() => new LatestLoad());
+}
+
 function spyOnConsoleWarn() {
   return vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 }
@@ -40,7 +48,7 @@ describe('LatestLoad', () => {
   });
 
   it('applies the value of the latest load', async () => {
-    const loader = new LatestLoad();
+    const loader = newLoader();
     const load = deferred<string>();
     const applied: string[] = [];
 
@@ -52,7 +60,7 @@ describe('LatestLoad', () => {
   });
 
   it('ignores a stale response that resolves after a newer run started', async () => {
-    const loader = new LatestLoad();
+    const loader = newLoader();
     const staleLoad = deferred<string>();
     const latestLoad = deferred<string>();
     const applied: string[] = [];
@@ -72,7 +80,7 @@ describe('LatestLoad', () => {
 
   it('logs a warning with the load context and applies nothing when the load rejects', async () => {
     const warnSpy = spyOnConsoleWarn();
-    const loader = new LatestLoad();
+    const loader = newLoader();
     const load = deferred<string>();
     const applied: string[] = [];
 
@@ -85,7 +93,7 @@ describe('LatestLoad', () => {
   });
 
   it('fires settled for the latest load when it resolves', async () => {
-    const loader = new LatestLoad();
+    const loader = newLoader();
     const load = deferred<string>();
     let settledCount = 0;
 
@@ -102,7 +110,7 @@ describe('LatestLoad', () => {
 
   it('fires settled for the latest load when it rejects', async () => {
     spyOnConsoleWarn();
-    const loader = new LatestLoad();
+    const loader = newLoader();
     const load = deferred<string>();
     let settledCount = 0;
 
@@ -118,7 +126,7 @@ describe('LatestLoad', () => {
   });
 
   it('does not fire settled for a stale load but fires it for the newer one', async () => {
-    const loader = new LatestLoad();
+    const loader = newLoader();
     const staleLoad = deferred<string>();
     const latestLoad = deferred<string>();
     let staleSettledCount = 0;
@@ -144,7 +152,7 @@ describe('LatestLoad', () => {
 
   it('logs the warning for a stale rejection but fires no settled', async () => {
     const warnSpy = spyOnConsoleWarn();
-    const loader = new LatestLoad();
+    const loader = newLoader();
     const staleLoad = deferred<string>();
     const latestLoad = deferred<string>();
     let staleSettledCount = 0;
@@ -160,5 +168,31 @@ describe('LatestLoad', () => {
 
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining(LOAD_CONTEXT), LOAD_FAILURE);
     expect(staleSettledCount).toBe(0);
+  });
+
+  // A bare stability check only spans a few microtask turns, so this depth is what proves the reported task is doing the waiting.
+  const DEEPER_THAN_A_BARE_STABILITY_CHECK = 20;
+
+  it('holds the app unstable until the chain settles, however many turns the load takes', async () => {
+    const loader = newLoader();
+    let applied = '';
+    let load = Promise.resolve(FIRST_VALUE);
+    for (let hop = 0; hop < DEEPER_THAN_A_BARE_STABILITY_CHECK; hop++) load = load.then(value => value);
+
+    loader.run(load, { context: LOAD_CONTEXT, apply: value => { applied = value; } });
+    await whenStable();
+
+    expect(applied).toBe(FIRST_VALUE);
+  });
+
+  it('lets the app settle once the load has, so a later wait does not hang', async () => {
+    const loader = newLoader();
+    const load = deferred<string>();
+
+    loader.run(load.promise, { context: LOAD_CONTEXT, apply: () => undefined });
+    load.resolve(FIRST_VALUE);
+    await whenStable();
+
+    await expect(whenStable()).resolves.toBeUndefined();
   });
 });

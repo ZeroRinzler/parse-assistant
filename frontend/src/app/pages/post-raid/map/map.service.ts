@@ -1,5 +1,5 @@
 /** The positioning math is owned here as pure fns rather than shared, so the slice stays self-contained. */
-import { Injectable, Injector, computed, inject, signal } from '@angular/core';
+import { Injectable, Injector, PendingTasks, computed, inject, signal } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { WclEvent, WclFight } from '../../../core/models/wcl.models';
 import { EncounterPositions, ReferenceSelector } from '../../../core/models/positioning.models';
@@ -130,6 +130,7 @@ export class MapFeatureService {
   private readonly source = inject(MAP_DATA_SOURCE);
   // Resolved lazily: only `prepare` needs WCL, so bench-only paths (/pre, tests) never pull in the WCL transport.
   private readonly injector = inject(Injector);
+  private readonly pending = inject(PendingTasks);
 
   readonly positions = signal<EncounterPositions | null>(null);
   readonly live = signal<MapLiveOverlay | null>(null);
@@ -197,8 +198,9 @@ export class MapFeatureService {
     this.preS.set(isWindow ? 0 : MAP_POINT_PAD_S);
     this.postS.set(isWindow ? windowLengthS : MAP_POINT_PAD_S);
     this.open.set(true);
-    // First open triggers the deferred fetch; a no-op once loaded or with no pending pull.
-    void this.ensureLiveOverlay();
+    // First open triggers the deferred fetch, reported as pending work so a caller can await it; a no-op once loaded or with no pending pull.
+    const done = this.pending.add();
+    void this.ensureLiveOverlay().finally(done);
   }
 
   close(): void { this.open.set(false); }

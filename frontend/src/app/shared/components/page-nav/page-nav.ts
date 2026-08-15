@@ -70,9 +70,11 @@ export class PageNavComponent {
     );
 
     // Material only recomputes the sidenav content margin on open/close, not on an already-open drawer's width change, so force it after the rail's width class swaps.
-    effect(() => {
+    effect(onCleanup => {
       this.railCollapsed();
-      requestAnimationFrame(() => this.container()?.updateContentMargins());
+      const frame = requestAnimationFrame(() => this.container()?.updateContentMargins());
+      // Without this a frame surviving destruction measures a torn-down container.
+      onCleanup(() => { cancelAnimationFrame(frame); });
     });
   }
 
