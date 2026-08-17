@@ -95,15 +95,15 @@
         <wl-bench-empty-banner variant="pre" [encounter]="selectedEncounter()?.name ?? ''"></wl-bench-empty-banner>
       }
 
-      <wl-northern-sky-export [spec]="selectedSpec()" [encounterId]="selectedEncId()" (busyChange)="northernSkyBusy.set($event)" (availableChange)="northernSkyAvailable.set($event)"></wl-northern-sky-export>
+      <wl-northern-sky-export [spec]="selectedSpec()" [encounterId]="selectedEncId()" (busyChange)="cards.setBusy('northernSky', $event)" (availableChange)="cards.setAvailable('northernSky', $event)"></wl-northern-sky-export>
 
-      <wl-gear [spec]="selectedSpec()" [encounterId]="selectedEncId()" (busyChange)="gearBusy.set($event)" (availableChange)="gearAvailable.set($event)"></wl-gear>
+      <wl-gear [spec]="selectedSpec()" [encounterId]="selectedEncId()" (busyChange)="cards.setBusy('gear', $event)" (availableChange)="cards.setAvailable('gear', $event)"></wl-gear>
 
-      <wl-rotation-cd-plan [spec]="selectedSpec()" [encounterId]="selectedEncId()" (busyChange)="cdPlanBusy.set($event)" (availableChange)="cdPlanAvailable.set($event)"></wl-rotation-cd-plan>
+      <wl-rotation-cd-plan [spec]="selectedSpec()" [encounterId]="selectedEncId()" (busyChange)="cards.setBusy('cdPlan', $event)" (availableChange)="cards.setAvailable('cdPlan', $event)"></wl-rotation-cd-plan>
 
-      <wl-defensive-plan [spec]="selectedSpec()" [encounterId]="selectedEncId()" (busyChange)="defensivePlanBusy.set($event)" (availableChange)="defensivePlanAvailable.set($event)"></wl-defensive-plan>
+      <wl-defensive-plan [spec]="selectedSpec()" [encounterId]="selectedEncId()" (busyChange)="cards.setBusy('defensivePlan', $event)" (availableChange)="cards.setAvailable('defensivePlan', $event)"></wl-defensive-plan>
 
-      <wl-burst-windows [spec]="selectedSpec()" [encounterId]="selectedEncId()" [showMap]="mapReady()" (openMap)="onOpenMap($event)" (busyChange)="burstBusy.set($event)" (availableChange)="burstAvailable.set($event)"></wl-burst-windows>
+      <wl-burst-windows [spec]="selectedSpec()" [encounterId]="selectedEncId()" [showMap]="mapReady()" (openMap)="onOpenMap($event)" (busyChange)="cards.setBusy('burst', $event)" (availableChange)="cards.setAvailable('burst', $event)"></wl-burst-windows>
     </div>
   }
 

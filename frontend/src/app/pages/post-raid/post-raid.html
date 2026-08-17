@@ -99,7 +99,7 @@
             [showClip]="clipReady()"
             (openMap)="onOpenMap($event)"
             (openClip)="onOpenClip($event)"
-            (busyChange)="pullOverviewBusy.set($event)">
+            (busyChange)="cards.setBusy('pullOverview', $event)">
           </wl-pull-overview>
 
           <wl-rotation
@@ -108,8 +108,8 @@
             [reportCode]="reportCode()"
             [fightId]="selectedFightId()!"
             [playerId]="selectedPlayerId()!"
-            (busyChange)="rotationBusy.set($event)"
-            (availableChange)="rotationAvailable.set($event)">
+            (busyChange)="cards.setBusy('rotation', $event)"
+            (availableChange)="cards.setAvailable('rotation', $event)">
           </wl-rotation>
 
           <wl-burst-windows
@@ -122,8 +122,8 @@
             [showClip]="clipReady()"
             (openMap)="onOpenMap($event)"
             (openClip)="onOpenClip($event)"
-            (busyChange)="burstBusy.set($event)"
-            (availableChange)="burstAvailable.set($event)">
+            (busyChange)="cards.setBusy('burst', $event)"
+            (availableChange)="cards.setAvailable('burst', $event)">
           </wl-burst-windows>
 
           <wl-defensive
@@ -136,8 +136,8 @@
             [showClip]="clipReady()"
             (openMap)="onDefensiveOpenMap($event)"
             (openClip)="onOpenClip($event)"
-            (busyChange)="defensiveBusy.set($event)"
-            (availableChange)="defensiveAvailable.set($event)">
+            (busyChange)="cards.setBusy('defensive', $event)"
+            (availableChange)="cards.setAvailable('defensive', $event)">
           </wl-defensive>
 
           <wl-gear
@@ -146,8 +146,8 @@
             [report]="reportCode()"
             [fight]="selectedFightId()!"
             [player]="selectedPlayerId()!"
-            (busyChange)="gearBusy.set($event)"
-            (availableChange)="gearAvailable.set($event)">
+            (busyChange)="cards.setBusy('gear', $event)"
+            (availableChange)="cards.setAvailable('gear', $event)">
           </wl-gear>
         </div>
       }

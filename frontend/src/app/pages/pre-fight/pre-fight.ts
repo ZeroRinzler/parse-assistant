@@ -14,6 +14,7 @@ import { BenchEmptyBannerComponent } from '../../shared/components/bench-empty-b
 import { LoadStateComponent, RenderableLoadError } from '../../shared/components/load-state/load-state';
 import { ArtIconComponent } from '../../shared/components/art-icon/art-icon';
 import { LatestLoad } from '../../shared/latest-load';
+import { CardDeck, CardEntry } from '../../shared/card-deck';
 import { FormatSpecPipe } from '../../shared/pipes/format-spec-pipe';
 import { ClassIconPipe } from '../../shared/pipes/class-icon-pipe';
 import { SpecIconPipe } from '../../shared/pipes/spec-icon-pipe';
@@ -26,6 +27,16 @@ import { GearComponent } from '../post-raid/gear/gear';
 import { MapPanelComponent } from '../post-raid/map/map-panel';
 import { MapFeatureService, MapAnchor } from '../post-raid/map/map.service';
 import { NorthernSkyExportComponent } from '../post-raid/northern-sky/northern-sky-export';
+
+export type PreFightCardId = 'northernSky' | 'gear' | 'cdPlan' | 'defensivePlan' | 'burst';
+
+export const PRE_FIGHT_CARDS: readonly CardEntry<PreFightCardId>[] = [
+  { id: 'northernSky', hasBench: true },
+  { id: 'gear', hasBench: true },
+  { id: 'cdPlan', hasBench: true },
+  { id: 'defensivePlan', hasBench: true },
+  { id: 'burst', hasBench: true },
+];
 
 /** Pre-fight page shell; selection is not carried in the URL - the last spec is restored from localStorage, the encounter is always re-selected. */
 @Component({
@@ -72,24 +83,10 @@ export class PreFightComponent implements OnInit {
 
   private readonly encounterLoader = new LatestLoad();
 
-  // Init true avoids a one-frame banner flash on a benched encounter (pre-fight cards render with no reveal gate).
-  protected readonly gearAvailable = signal(true);
-  protected readonly cdPlanAvailable = signal(true);
-  protected readonly defensivePlanAvailable = signal(true);
-  protected readonly burstAvailable = signal(true);
-  protected readonly northernSkyAvailable = signal(true);
-  protected readonly benchAvailable = computed(() =>
-    this.gearAvailable() || this.cdPlanAvailable() || this.defensivePlanAvailable()
-    || this.burstAvailable() || this.northernSkyAvailable());
-
-  protected readonly gearBusy = signal(true);
-  protected readonly cdPlanBusy = signal(true);
-  protected readonly defensivePlanBusy = signal(true);
-  protected readonly burstBusy = signal(true);
-  protected readonly northernSkyBusy = signal(true);
-  protected readonly cardsBusy = computed(() =>
-    this.gearBusy() || this.cdPlanBusy() || this.defensivePlanBusy()
-    || this.burstBusy() || this.northernSkyBusy());
+  // Cards count as available until they report otherwise, which avoids a one-frame banner flash on a benched encounter (pre-fight cards render with no reveal gate).
+  protected readonly cards = new CardDeck(PRE_FIGHT_CARDS, { availableUntilReported: true });
+  protected readonly benchAvailable = this.cards.benchAvailable;
+  protected readonly cardsBusy = this.cards.anyBusy;
 
   protected readonly mapReady = this.mapFeature.ready;
 
@@ -191,11 +188,7 @@ export class PreFightComponent implements OnInit {
     const encId = this.encControl.value;
     const spec = this.specControl.value;
     this.mapFeature.clear();
-    this.gearBusy.set(true);
-    this.cdPlanBusy.set(true);
-    this.defensivePlanBusy.set(true);
-    this.burstBusy.set(true);
-    this.northernSkyBusy.set(true);
+    this.cards.markAllBusy();
     if (!encId || !spec) return;
     void this.mapFeature.loadBench(spec, encId);
   }

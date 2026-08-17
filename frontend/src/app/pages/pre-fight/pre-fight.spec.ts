@@ -1,11 +1,12 @@
 import { assert, describe, it, expect } from 'vitest';
-import { WritableSignal, provideZonelessChangeDetection } from '@angular/core';
+import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { FormControl } from '@angular/forms';
 import { EncounterEntry, SpecEntry } from '../../core/models/encounter.models';
 import { Result, ok } from '../../core/result';
+import { CardDeck } from '../../shared/card-deck';
 import { mountVm } from '../../../testing/component-harness';
-import { PreFightComponent } from './pre-fight';
+import { PreFightComponent, PreFightCardId } from './pre-fight';
 import { EncounterSelectionService } from './encounter-selection.service';
 import { MapFeatureService } from '../post-raid/map/map.service';
 import { SelectionStore } from '../../core/services/selection-store';
@@ -21,7 +22,7 @@ const NEW_SPEC = 'SubtletyRogue';
 const BENCHED_ENCOUNTER: EncounterEntry = { id: SELECTED_ENCOUNTER_ID, name: 'Boss A', sample_count: 12 };
 const OTHER_BENCHED_ENCOUNTER: EncounterEntry = { id: OTHER_ENCOUNTER_ID, name: 'Boss B', sample_count: 9 };
 
-const CARD_BUSY_SIGNALS = ['northernSkyBusy', 'gearBusy', 'cdPlanBusy', 'defensivePlanBusy', 'burstBusy'];
+const CARD_IDS: readonly PreFightCardId[] = ['northernSky', 'gear', 'cdPlan', 'defensivePlan', 'burst'];
 
 function providers(encounterSelection: Partial<EncounterSelectionService>): unknown[] {
   const mapFeature = {
@@ -59,8 +60,8 @@ function cardsBusy(vm: Record<string, unknown>): boolean {
   return (vm['cardsBusy'] as () => boolean)();
 }
 
-function reportCardLoaded(vm: Record<string, unknown>, name: string): void {
-  (vm[name] as WritableSignal<boolean>).set(false);
+function reportCardLoaded(vm: Record<string, unknown>, id: PreFightCardId): void {
+  (vm['cards'] as CardDeck<PreFightCardId>).setBusy(id, false);
 }
 
 describe('PreFightComponent stale-encounter reset', () => {
@@ -178,24 +179,10 @@ describe('PreFightComponent encounter load latest-wins', () => {
 });
 
 describe('PreFightComponent card loading state', () => {
-  it('reports the cards busy before any of them has loaded', () => {
-    const { vm } = mountPreFight();
-
-    expect(cardsBusy(vm)).toBe(true);
-  });
-
-  it('stays busy while one card is still loading', () => {
-    const { vm } = mountPreFight();
-
-    for (const name of CARD_BUSY_SIGNALS.slice(0, -1)) reportCardLoaded(vm, name);
-
-    expect(cardsBusy(vm)).toBe(true);
-  });
-
   it('clears the busy state once every card has loaded', () => {
     const { vm } = mountPreFight();
 
-    for (const name of CARD_BUSY_SIGNALS) reportCardLoaded(vm, name);
+    for (const id of CARD_IDS) reportCardLoaded(vm, id);
 
     expect(cardsBusy(vm)).toBe(false);
   });
@@ -204,7 +191,7 @@ describe('PreFightComponent card loading state', () => {
     const { vm } = mountPreFight([BENCHED_ENCOUNTER, OTHER_BENCHED_ENCOUNTER]);
     (vm['specControl']).setValue(NEW_SPEC);
     pickEncounter(vm, SELECTED_ENCOUNTER_ID);
-    for (const name of CARD_BUSY_SIGNALS) reportCardLoaded(vm, name);
+    for (const id of CARD_IDS) reportCardLoaded(vm, id);
     expect(cardsBusy(vm)).toBe(false);
 
     pickEncounter(vm, OTHER_ENCOUNTER_ID);

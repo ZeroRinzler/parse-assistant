@@ -35,6 +35,7 @@ import { ClassIconPipe } from '../../shared/pipes/class-icon-pipe';
 import { BossIconPipe } from '../../shared/pipes/boss-icon-pipe';
 import { ArtIconComponent } from '../../shared/components/art-icon/art-icon';
 import { LatestRun } from '../../shared/latest-run';
+import { CardDeck, CardEntry } from '../../shared/card-deck';
 import { SelectionStore } from '../../core/services/selection-store';
 import { logWarn } from '../../core/log';
 import { Result, permanent } from '../../core/result';
@@ -147,6 +148,17 @@ export function specOf(groups: PlayerDetailGroups, playerId: number): string {
   return '';
 }
 
+type PostRaidCardId = 'pullOverview' | 'rotation' | 'burst' | 'defensive' | 'gear';
+
+// Pull overview describes the pull itself instead of measuring it against top parses, so it has no bench and never keeps the empty-bench banner away.
+const POST_RAID_CARDS: readonly CardEntry<PostRaidCardId>[] = [
+  { id: 'pullOverview', hasBench: false },
+  { id: 'rotation', hasBench: true },
+  { id: 'burst', hasBench: true },
+  { id: 'defensive', hasBench: true },
+  { id: 'gear', hasBench: true },
+];
+
 // Selection is NOT mirrored to the URL: a report loads only via an explicit Analyze action, never auto-run from a query param, so a crawled link never spends the shared WCL rate-limit budget.
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -185,22 +197,10 @@ export class PostRaidComponent {
   protected readonly loadingAnalysis = signal(false);
   protected readonly loadingMsg = signal('Loading…');
 
-  // Starts true, and the spinner stays up until every card emits busyChange(false), so the cards never flash empty content between mount and first data.
-  protected readonly pullOverviewBusy = signal(true);
-  protected readonly rotationBusy = signal(true);
-  protected readonly burstBusy = signal(true);
-  protected readonly defensiveBusy = signal(true);
-  protected readonly gearBusy = signal(true);
-  protected readonly cardsBusy = computed(() =>
-    this.pullOverviewBusy() || this.rotationBusy() || this.burstBusy() || this.defensiveBusy() || this.gearBusy());
-
-  // The banner shows when none have a bench. Rotation counts via its offensives, which is also what gates its rules card.
-  protected readonly rotationAvailable = signal(false);
-  protected readonly burstAvailable = signal(false);
-  protected readonly defensiveAvailable = signal(false);
-  protected readonly gearAvailable = signal(false);
-  protected readonly benchAvailable = computed(() =>
-    this.rotationAvailable() || this.burstAvailable() || this.defensiveAvailable() || this.gearAvailable());
+  // Cards start busy, and the spinner stays up until every one emits busyChange(false), so they never flash empty content between mount and first data.
+  protected readonly cards = new CardDeck(POST_RAID_CARDS, { availableUntilReported: false });
+  protected readonly cardsBusy = this.cards.anyBusy;
+  protected readonly benchAvailable = this.cards.benchAvailable;
 
   // `notice` carries the non-failure states the taxonomy does not cover (invalid code, zero-pull report).
   protected readonly loadError = signal<RenderableLoadError | null>(null);
@@ -447,11 +447,7 @@ export class PostRaidComponent {
       this.spec.set(spec);
 
       // Marks every card busy before they mount/reload, so the spinner stays up with no gap where the cards render empty.
-      this.pullOverviewBusy.set(true);
-      this.rotationBusy.set(true);
-      this.burstBusy.set(true);
-      this.defensiveBusy.set(true);
-      this.gearBusy.set(true);
+      this.cards.markAllBusy();
       this.loadingMsg.set('Fetching analysis data from Warcraft Logs…');
 
       if (fight) {
