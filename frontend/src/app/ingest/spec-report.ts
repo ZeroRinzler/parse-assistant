@@ -15,7 +15,7 @@ const DAY_S = 24 * HOUR_S;
 // Fixed locale: the log reads the same whoever runs it.
 const AGE = new Intl.RelativeTimeFormat('en', { numeric: 'always', style: 'narrow' });
 
-export function formatAge(ageS: number): string {
+function formatAge(ageS: number): string {
   const age = Math.floor(Math.max(0, ageS));
   if (age >= DAY_S) return AGE.format(-Math.floor(age / DAY_S), 'day');
   if (age >= HOUR_S) return AGE.format(-Math.floor(age / HOUR_S), 'hour');

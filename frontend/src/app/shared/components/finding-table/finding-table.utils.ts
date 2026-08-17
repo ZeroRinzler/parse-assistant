@@ -13,7 +13,7 @@ export const CAT_LABEL: Record<string, string> = {
   hold_suggestion: 'hold',
 };
 
-export interface FindingMeasure {
+interface FindingMeasure {
   value: string;
   unit?: string;
 }

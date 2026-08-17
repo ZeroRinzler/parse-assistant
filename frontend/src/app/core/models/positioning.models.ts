@@ -6,7 +6,7 @@ export type PosRow = [number, number, number, number | null, number | null];
 /** A resampled player position row: [t_s, x, y, mapID | null]. Only the reference frame reads facing, so player rows store none. */
 export type PlayerPosRow = [number, number, number, number | null];
 
-export interface ParseEnemyTimeline {
+interface ParseEnemyTimeline {
   game_id: number | null;
   name: string;
   is_boss: boolean;

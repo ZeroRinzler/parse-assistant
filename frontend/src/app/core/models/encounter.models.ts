@@ -17,7 +17,7 @@ export interface UsesPerMin {
 }
 
 // A cooldown cast index where a majority of top parses deliberately hold past the natural reset.
-export interface HoldTarget {
+interface HoldTarget {
   /** Absolute clock target (median cast time), for display ("hold to 3:20"). */
   target_s: number;
   count: number;
@@ -25,7 +25,7 @@ export interface HoldTarget {
 }
 
 // Cascade-free: the band is measured from the player's OWN prior cast, not a cumulative ideal schedule.
-export interface CdHoldTarget extends HoldTarget {
+interface CdHoldTarget extends HoldTarget {
   /** Prior-relative hold past natural reset (median of actual - (prior + effective_cd_s)). */
   delay_s: number;
   /** Tolerance half-width the runtime compares against: max(delay stddev, floor). */

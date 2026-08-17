@@ -36,7 +36,7 @@ export interface AnalysisFinding {
   timeline?: FindingTimeline;
 }
 
-export interface AbilityBreakdown {
+interface AbilityBreakdown {
   spell_id: number;
   avg_damage: number;
   min_damage: number;
@@ -67,7 +67,7 @@ export interface PlayerBurstWindow {
   ability_breakdown?: { spell_id: number; damage: number; casts?: number }[];
 }
 
-export interface DefensiveWindow {
+interface DefensiveWindow {
   start_s: number;
   end_s: number;
 }

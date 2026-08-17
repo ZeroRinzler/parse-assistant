@@ -4,7 +4,7 @@ import { CdHoldTargets } from '../../core/models/encounter.models';
 import { AnalysisFinding } from '../../core/models/analysis.models';
 
 /** A gap beyond this past the expected on-cooldown time counts as a deliberate hold. */
-export const HOLD_THRESHOLD_S = 8.0;
+const HOLD_THRESHOLD_S = 8.0;
 /** A hold target surfaces only when a MAJORITY of sampled parses hold at that index. */
 export const HOLD_CONSENSUS_FRAC = 0.5;
 /** Floor on the runtime tolerance band half-width, so a tight cluster still tolerates jitter. */

@@ -8,7 +8,7 @@ import { FormatDurationPipe } from '../../pipes/format-duration-pipe';
 import type { FindingRow, OnPlanChip } from './finding-table.utils';
 
 // Re-export so callers can import types + helpers from either this file or the utils module.
-export type { FindingMeasure, FindingRow, OnPlanChip, FindingEntry, BucketOptions } from './finding-table.utils';
+export type { FindingRow, OnPlanChip } from './finding-table.utils';
 export { rowsFromEntries, onPlanFromEntries, bucketFindings, CAT_LABEL } from './finding-table.utils';
 
 @Component({

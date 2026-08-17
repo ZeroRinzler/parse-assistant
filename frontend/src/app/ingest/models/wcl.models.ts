@@ -5,12 +5,12 @@ export interface WclRateLimitData {
   pointsSpentThisHour?: number;
 }
 
-export interface WclPartition { id: number; }
+interface WclPartition { id: number; }
 // `frozen` is optional so an absent field is treated as not-frozen (the live current tier).
-export interface WclZone { id: number; name: string; frozen?: boolean; partitions?: WclPartition[]; encounters?: { id: number; name: string }[]; }
+interface WclZone { id: number; name: string; frozen?: boolean; partitions?: WclPartition[]; encounters?: { id: number; name: string }[]; }
 export interface WclExpansion { zones?: WclZone[]; }
 
-export interface WclGameSpec { name: string; slug: string; }
+interface WclGameSpec { name: string; slug: string; }
 export interface WclGameClass { name: string; slug: string; specs?: WclGameSpec[]; }
 
 export interface IngestEncounter {

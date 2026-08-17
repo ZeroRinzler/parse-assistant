@@ -19,7 +19,7 @@ const TOP_PARSE_COUNT = 10;
 // Over-fetches so a private/unfetchable top parse can be backfilled by the next-best one; the break in the loop caps actual fetches at TOP_PARSE_COUNT.
 const CANDIDATE_POOL_COUNT = TOP_PARSE_COUNT * 2;
 /** Fixed resample cadence, seconds (mirrors ingest `POSITIONS_INTERVAL_S`). */
-export const POSITIONS_INTERVAL_S = 1.5;
+const POSITIONS_INTERVAL_S = 1.5;
 const MAX_TRACKED_ENEMIES = 5;
 const MIN_ENEMY_SAMPLES = 4;
 // Times/durations are stored rounded to deciseconds (0.1s): multiply, round, divide.
@@ -108,7 +108,7 @@ export function resamplePlayerTimeline(samples: RawPosSample[], durationS: numbe
 
 export interface EnemyMeta { gameID: number | null; name: string; }
 
-export interface EnemyCandidate {
+interface EnemyCandidate {
   actorId: number;
   count: number;
   maxHp: number;

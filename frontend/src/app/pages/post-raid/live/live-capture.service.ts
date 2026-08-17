@@ -38,7 +38,7 @@ export interface ClipRoll {
   postMs: number;
 }
 
-export const DEFAULT_CAPTURE_PROFILE: CaptureProfile = {
+const DEFAULT_CAPTURE_PROFILE: CaptureProfile = {
   codec: 'vp9',
   maxHeight: 1080,
   fps: 30,
@@ -46,13 +46,13 @@ export const DEFAULT_CAPTURE_PROFILE: CaptureProfile = {
 };
 
 /** A single continuous recorder with `timeslice` cannot be assembled via MSE. */
-export const SEG_MS = 3_000;
+const SEG_MS = 3_000;
 
 /** Rolling-buffer retention: covers the longest fight plus WCL upload lag plus pre-roll. */
-export const BUFFER_MS = 12 * 60 * 1_000;
+const BUFFER_MS = 12 * 60 * 1_000;
 
-export const POINT_CLIP_ROLL: ClipRoll = { preMs: 5_000, postMs: 5_000 };
-export const NO_CLIP_ROLL: ClipRoll = { preMs: 0, postMs: 0 };
+const POINT_CLIP_ROLL: ClipRoll = { preMs: 5_000, postMs: 5_000 };
+const NO_CLIP_ROLL: ClipRoll = { preMs: 0, postMs: 0 };
 
 /** Grace period before a downloaded clip's object URL is revoked, so the browser can read the blob. */
 const DOWNLOAD_URL_TTL_MS = 10_000;
@@ -358,7 +358,7 @@ export async function pipeIntoElement(video: HTMLVideoElement, blobs: Blob[], mi
 }
 
 /** Each segment is a self-contained WebM whose clusters restart at 0, so a plain blob concat repeats the header and timeline and players read only the first segment's ~SEG_MS. */
-export async function remuxSegments(blobs: Blob[]): Promise<Blob> {
+async function remuxSegments(blobs: Blob[]): Promise<Blob> {
   // A module-scope import would put the muxer in the landing bundle.
   const {
     BlobSource, BufferTarget, EncodedPacketSink, EncodedVideoPacketSource, Input, Output, WEBM, WebMOutputFormat,

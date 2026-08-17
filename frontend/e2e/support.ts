@@ -17,9 +17,9 @@ export async function showsTypicalUses(scope: Locator): Promise<void> {
   const cell = scope.locator('span').filter({ hasText: 'Typical uses' }).first();
   await expect(cell.getByText(/^\d+(\.\d+)?$/).first()).toBeVisible();
 }
-export const SECONDS = /[+-]?\d+(\.\d+)?s/;
+const SECONDS = /[+-]?\d+(\.\d+)?s/;
 
-export const MEASURE = new RegExp([RATIO, PERCENT, CLOCK, SECONDS].map(r => r.source).join('|'));
+const MEASURE = new RegExp([RATIO, PERCENT, CLOCK, SECONDS].map(r => r.source).join('|'));
 
 /** Mirrors CAT_LABEL in shared/components/finding-table/finding-table.utils.ts. */
 export const CD_CHIP = /\b(lost cast|held|BL miss|downtime|hold)\b/;

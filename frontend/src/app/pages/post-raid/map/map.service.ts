@@ -58,7 +58,7 @@ export interface MapAnchor {
   reference?: ReferenceSelector;
 }
 
-export const MAP_POINT_PAD_S = 5;
+const MAP_POINT_PAD_S = 5;
 
 /** With `includeResources: true` WCL flattens one actor's position onto each event, so each event yields one sample. */
 export function buildActorTimelines(events: TimedEvent[]): Map<number, ActorTimeline> {

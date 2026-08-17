@@ -85,9 +85,9 @@ export interface BenchedRule {
   sample_count: number;
 }
 
-export type CastTimes = Record<number, number[]>;
+type CastTimes = Record<number, number[]>;
 
-export function buildCastTimes(casts: TimedEvent[]): CastTimes {
+function buildCastTimes(casts: TimedEvent[]): CastTimes {
   const castTimes: CastTimes = {};
   for (const cast of casts) {
     if (cast.type === 'cast' && cast.abilityGameID) {
@@ -1246,7 +1246,7 @@ export function benchedRules(
   );
 }
 
-export function evaluateCondition(
+function evaluateCondition(
   cond: RuleCondition, ctx: RuleContext, band: RuleBand | null, severity: Severity, remedy?: string,
 ): AnalysisFinding | null {
   return specFor(cond).evaluate(cond, ctx, band, ruleJudging(cond), severity, remedy);

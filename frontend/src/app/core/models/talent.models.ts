@@ -7,7 +7,7 @@ export interface TalentEntry {
 
 export type SpecTalents = Record<string, TalentEntry>;
 
-export type TalentDiffKind = 'added' | 'dropped' | 'rank';
+type TalentDiffKind = 'added' | 'dropped' | 'rank';
 
 export interface TalentDiff {
   kind: TalentDiffKind;

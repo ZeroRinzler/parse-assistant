@@ -6,7 +6,7 @@ import { Result, ok, permanent } from '../../../core/result';
 import { toLoadError } from '../../../core/http-load-error';
 import { TimedEvent, withRelativeS } from '../../../shared/analysis/wcl-projections';
 
-export type PullResult = 'kill' | 'wipe';
+type PullResult = 'kill' | 'wipe';
 
 export interface PullDeathRow {
   index: number;

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "src/**/*.spec.ts",
+    "scripts/ingest-server.js",
+    "e2e/**/*.spec.ts",
+    "playwright.config.ts"
+  ],
+  "project": [
+    "src/**/*.ts",
+    "scripts/**/*.{js,mjs}",
+    "e2e/**/*.ts",
+    "eslint-rules/*.js"
+  ],
+  "playwright": false
+}

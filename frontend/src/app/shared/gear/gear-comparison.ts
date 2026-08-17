@@ -274,7 +274,7 @@ export interface BenchTrinketRow {
   pct: number;
 }
 
-export interface RecommendedTrinket {
+interface RecommendedTrinket {
   id: number;
   name: string;
   icon: string;
@@ -282,7 +282,7 @@ export interface RecommendedTrinket {
 }
 
 /** The two distinct trinkets top parsers run, merged by id: no parse wears the same trinket in both slots, so slot-12 + slot-13 usage sums to the true "% running it" (40% + 30% = 70%). */
-export function topTrinketPair(stats: EncounterGearStats | null): RecommendedTrinket[] {
+function topTrinketPair(stats: EncounterGearStats | null): RecommendedTrinket[] {
   const topTrinkets = stats?.trinkets ?? {};
   const byId = new Map<number, RecommendedTrinket>();
   for (const slot of [12, 13]) {

@@ -218,7 +218,7 @@ export function findParseWindows(scan: ParseWindowScan): ParseWindow[] {
 }
 
 /** Keep each parse's biggest window (by window_damage), so a cluster counts DISTINCT parses. */
-export function dedupeByParse(cluster: ParseWindow[]): ParseWindow[] {
+function dedupeByParse(cluster: ParseWindow[]): ParseWindow[] {
   const byParse = new Map<number, ParseWindow>();
   for (const window of cluster) {
     const current = byParse.get(window.parse_index);
