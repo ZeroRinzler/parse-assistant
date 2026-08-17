@@ -95,6 +95,7 @@ Before committing, verify:
 - [ ] `npm test`, `npm run lint`, and `npm run build` pass
 - [ ] No hardcoded colors, no CSS classes in component TS, all formatting through pipes
 - [ ] Every fallible load returns `Result<T, LoadError>` and renders one `wl-load-state`
+- [ ] Every comment the diff adds passes the CLAUDE.md gate, audited one by one: it names the concrete mistake a reader makes without it, in one line - summaries, narration, restated code, and fixture descriptions are deleted, not kept
 
 ## Verification
 
