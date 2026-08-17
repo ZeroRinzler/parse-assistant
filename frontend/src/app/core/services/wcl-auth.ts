@@ -1,15 +1,19 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
+import * as z from '../zod-mini';
 import { WclTransportError } from './wcl-transport';
 import { environment } from '../../../environments/environment';
 
 const TOKEN_URL = 'https://www.warcraftlogs.com/oauth/token';
 
-interface TokenResponse {
-  access_token: string;
-  expires_in?: number;
-}
+const DEFAULT_TOKEN_LIFETIME_S = 3600;
+
+const TOKEN_RESPONSE_SCHEMA = z.looseObject({
+  access_token: z.string().check(z.minLength(1)),
+  // An unusable lifetime falls back to the default rather than voiding an otherwise good token.
+  expires_in: z.catch(z.optional(z.number().check(z.positive())), undefined),
+});
 
 @Injectable({ providedIn: 'root' })
 export class WclAuthService {
@@ -32,9 +36,9 @@ export class WclAuthService {
       client_id: environment.wclClientId,
       client_secret: environment.wclClientSecret,
     });
-    let data: TokenResponse | null;
+    let data: unknown;
     try {
-      data = await firstValueFrom(this.http.post<TokenResponse | null>(
+      data = await firstValueFrom(this.http.post<unknown>(
         TOKEN_URL,
         params.toString(),
         { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
@@ -47,15 +51,13 @@ export class WclAuthService {
       // Keep the status so toLoadError can tell a transient outage from a rejected secret; a bare Error would discard it and always classify as permanent.
       throw new WclTransportError(`WCL token request failed (${status}): ${detail}`, status);
     }
-    const accessToken = data?.access_token;
-    if (typeof accessToken !== 'string' || accessToken.length === 0) {
+    const grant = TOKEN_RESPONSE_SCHEMA.safeParse(data);
+    if (!grant.success) {
       // A 200 with no token (captive portal): reject as transient rather than cache junk that 401-loops for an hour.
       throw new WclTransportError('WCL token response carried no access_token.', 0);
     }
-    this._token = accessToken;
-    const expiresIn = data?.expires_in;
-    const expiresInS = expiresIn && expiresIn > 0 ? expiresIn : 3600;
-    this._expiry = Date.now() + expiresInS * 1000;
+    this._token = grant.data.access_token;
+    this._expiry = Date.now() + (grant.data.expires_in ?? DEFAULT_TOKEN_LIFETIME_S) * 1000;
     return this._token;
   }
 

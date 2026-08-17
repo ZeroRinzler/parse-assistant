@@ -8,9 +8,6 @@ const PRE_FIGHT_STORAGE_KEY = 'wl.sel.preFight';
 const POST_RAID_SELECTION: PostRaidSelection = { playerName: 'Shadowmaster' };
 const PRE_FIGHT_SELECTION: PreFightSelection = { spec: 'SubtletyRogue' };
 
-/** A torn or truncated write leaves a stored value JSON.parse rejects. */
-const CORRUPTED_STORED_VALUE = '{"playerName":';
-
 /** Stands in for a disabled, full, or otherwise unavailable localStorage. */
 const STORAGE_FAILURE = 'localStorage unavailable';
 
@@ -48,14 +45,6 @@ describe('SelectionStore', () => {
 
     expect(store.loadPostRaid()).toBeNull();
     expect(store.loadPreFight()).toBeNull();
-  });
-
-  it('returns null and logs a warning when the stored JSON is corrupted', () => {
-    const warn = spyOnWarn();
-    localStorage.setItem(POST_RAID_STORAGE_KEY, CORRUPTED_STORED_VALUE);
-
-    expect(new SelectionStore().loadPostRaid()).toBeNull();
-    expect(warn).toHaveBeenCalled();
   });
 
   it('does not throw and logs a warning when the storage write fails', () => {

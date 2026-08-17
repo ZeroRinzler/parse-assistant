@@ -1,7 +1,9 @@
 import { Injectable, inject } from '@angular/core';
+import * as z from '../../../core/zod-mini';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { WclFight, WclReport, WclTableBlob } from '../../../core/models/wcl.models';
 import { logWarn } from '../../../core/log';
+import { parseJson } from '../../../core/json';
 import { Result, ok, permanent } from '../../../core/result';
 import { toLoadError } from '../../../core/http-load-error';
 import { TimedEvent, withRelativeS } from '../../../shared/analysis/wcl-projections';
@@ -43,21 +45,20 @@ export function wipeTimeS(
   return fightDurationS;
 }
 
+const DAMAGE_TABLE_SCHEMA = z.looseObject({
+  data: z.optional(z.looseObject({
+    entries: z.optional(z.array(z.looseObject({ id: z.number(), total: z.number() }))),
+  })),
+});
+
 // null means an unusable table (absent/unparseable/no entries array); a valid table can still have an empty entry list (a real 0-damage pull).
 function tableEntries(blob: WclTableBlob | null): { id: number; total: number }[] | null {
   if (!blob) return null;
-  const parsed = typeof blob === 'string' ? safeJson(blob) : blob;
+  const parsed = typeof blob === 'string'
+    ? parseJson(DAMAGE_TABLE_SCHEMA, blob, 'pull-overview.tableEntries')
+    : blob;
   const entries = parsed?.data?.entries;
   return Array.isArray(entries) ? entries : null;
-}
-
-function safeJson(raw: string): { data?: { entries?: { id: number; total: number }[] } } | null {
-  try {
-    return JSON.parse(raw) as { data?: { entries?: { id: number; total: number }[] } };
-  } catch (err) {
-    logWarn('pull-overview.tableEntries', err);
-    return null;
-  }
 }
 
 // An unusable table is a permanent load failure (a played pull would show a bogus 0); a player absent from a valid table (a healer) is a real 0.

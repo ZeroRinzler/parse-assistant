@@ -1,4 +1,5 @@
 // A tailored file is fresh when the ingest version AND the exact top-parse set that produced it are unchanged, folded into one short hash.
+import * as z from '../core/zod-mini';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils.js';
 import { type Result } from '../core/result';
@@ -74,11 +75,12 @@ export function readStoredIngestedAt(file: SignedFile): number | null {
   return file.ingested_at_s ?? null;
 }
 
+const VERSIONED_FILE_SCHEMA = z.looseObject({ ingest_version: z.number() });
+
 /** Files with no numeric `ingest_version` (manifests, rulebooks) are never future. */
 export function isFutureVersion(parsed: unknown, currentVersion: number): boolean {
-  if (typeof parsed !== 'object' || parsed === null) return false;
-  const version = (parsed as { ingest_version?: unknown }).ingest_version;
-  return typeof version === 'number' && Number.isFinite(version) && version > currentVersion;
+  const file = VERSIONED_FILE_SCHEMA.safeParse(parsed);
+  return file.success && file.data.ingest_version > currentVersion;
 }
 
 export function signatureMatches(stored: string | null, current: string): boolean {

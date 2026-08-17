@@ -1,19 +1,18 @@
 import { Injectable } from '@angular/core';
+import * as z from '../zod-mini';
 import { logWarn } from '../log';
+import { parseJson } from '../json';
 
 // Only the player NAME is kept: WCL actor ids are per-report (not stable across pulls or logs).
-export interface PostRaidSelection {
-  playerName: string | null;
-}
+const POST_RAID_SCHEMA = z.object({ playerName: z.nullable(z.string()) });
+export type PostRaidSelection = z.infer<typeof POST_RAID_SCHEMA>;
 
-export interface PreFightSelection {
-  spec: string | null;
-}
+const PRE_FIGHT_SCHEMA = z.object({ spec: z.nullable(z.string()) });
+export type PreFightSelection = z.infer<typeof PRE_FIGHT_SCHEMA>;
 
 // Stored as the set of cooldown spell ids the user has DESELECTED, so a cooldown that first appears for a new spec/encounter defaults to checked.
-export interface NorthernSkyExportSelection {
-  excludedSpellIds: number[];
-}
+const NORTHERN_SKY_SCHEMA = z.object({ excludedSpellIds: z.array(z.number()) });
+export type NorthernSkyExportSelection = z.infer<typeof NORTHERN_SKY_SCHEMA>;
 
 const POST_RAID_KEY = 'wl.sel.postRaid';
 const PRE_FIGHT_KEY = 'wl.sel.preFight';
@@ -27,7 +26,7 @@ export class SelectionStore {
   }
 
   loadPostRaid(): PostRaidSelection | null {
-    return this._load(POST_RAID_KEY, 'SelectionStore.loadPostRaid') as PostRaidSelection | null;
+    return this._load(POST_RAID_KEY, POST_RAID_SCHEMA, 'SelectionStore.loadPostRaid');
   }
 
   savePreFight(value: PreFightSelection): void {
@@ -35,7 +34,7 @@ export class SelectionStore {
   }
 
   loadPreFight(): PreFightSelection | null {
-    return this._load(PRE_FIGHT_KEY, 'SelectionStore.loadPreFight') as PreFightSelection | null;
+    return this._load(PRE_FIGHT_KEY, PRE_FIGHT_SCHEMA, 'SelectionStore.loadPreFight');
   }
 
   saveNorthernSky(value: NorthernSkyExportSelection): void {
@@ -43,7 +42,7 @@ export class SelectionStore {
   }
 
   loadNorthernSky(): NorthernSkyExportSelection | null {
-    return this._load(NORTHERN_SKY_KEY, 'SelectionStore.loadNorthernSky') as NorthernSkyExportSelection | null;
+    return this._load(NORTHERN_SKY_KEY, NORTHERN_SKY_SCHEMA, 'SelectionStore.loadNorthernSky');
   }
 
   private _save(key: string, value: unknown, context: string): void {
@@ -54,11 +53,11 @@ export class SelectionStore {
     }
   }
 
-  private _load(key: string, context: string): unknown {
+  private _load<S extends z.ZodMiniType>(key: string, schema: S, context: string): z.infer<S> | null {
     try {
       const stored = localStorage.getItem(key);
       if (!stored) return null;
-      return JSON.parse(stored) as unknown;
+      return parseJson(schema, stored, context);
     } catch (err) {
       logWarn(context, err);
       return null;
