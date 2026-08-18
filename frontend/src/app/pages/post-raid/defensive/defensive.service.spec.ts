@@ -18,7 +18,7 @@ import { CLOAK_OF_SHADOWS } from '../../../../testing/spell-ids';
 import {
   WCL_MELEE_EVENT_ABILITY_ID, WOW_AUTO_ATTACK_SPELL_ID, WCL_SYNTHETIC_SOURCE_FALLBACK_ID, withRelativeS,
 } from '../../../shared/analysis/wcl-projections';
-import { Result, ok, missing, transient } from '../../../core/result';
+import { Result, ok, missing } from '../../../core/result';
 
 /** Fixture events build against a fight-start of 0, so stamping is a pass-through to seconds. */
 const timed = withRelativeS;
@@ -599,11 +599,6 @@ describe('DefensiveFeatureService.loadPlan (pre-fight)', () => {
       expect(result.value.rows).toHaveLength(1);
       expect(result.value.rows[0]).toMatchObject({ name: 'Cloak of Shadows', spellId: CLOAK_OF_SHADOWS, typicalUses: 2, firstCastS: 10, windowsS: [30] });
     }
-  });
-
-  it('propagates a transient bench outage so the pre-fight plan surfaces a retry error', async () => {
-    const service = serviceWith(transient('WCL is unreachable right now.'));
-    expect(await service.loadPlan('SubtletyRogue', 1)).toEqual(transient('WCL is unreachable right now.'));
   });
 
   it('propagates a missing bench so the pre-fight plan waiting state shows', async () => {

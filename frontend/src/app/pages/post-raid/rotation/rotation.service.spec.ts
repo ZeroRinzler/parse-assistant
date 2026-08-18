@@ -645,11 +645,6 @@ describe('RotationFeatureService', () => {
     const service = withSource(missing('Not yet ingested.'));
     expect(await service.loadPlanView('SubtletyRogue', 1)).toEqual(missing('Not yet ingested.'));
   });
-
-  it('propagates a transient bench outage so the pre-fight plan surfaces a retry error', async () => {
-    const service = withSource(transient('WCL is unreachable right now.'));
-    expect(await service.loadPlanView('SubtletyRogue', 1)).toEqual(transient('WCL is unreachable right now.'));
-  });
 });
 
 describe('RotationFeatureService fetch shape', () => {

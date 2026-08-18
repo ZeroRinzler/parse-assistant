@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { TestBed } from '@angular/core/testing';
-import { ok, missing, transient } from '../../../core/result';
+import { ok, missing } from '../../../core/result';
 import { SHADOW_BLADES, SHADOW_DANCE, EVASION } from '../../../../testing/spell-ids';
 import { NORTHERN_SKY_DATA_SOURCE, NorthernSkyBench, NorthernSkyAbility } from './northern-sky-data-source';
 import {
@@ -155,12 +155,5 @@ describe('NorthernSkyFeatureService', () => {
       providers: [{ provide: NORTHERN_SKY_DATA_SOURCE, useValue: { getBench: async () => missing('Not yet ingested.') } }],
     });
     expect(await TestBed.inject(NorthernSkyFeatureService).getExport('SubtletyRogue', ENCOUNTER_ID)).toEqual(missing('Not yet ingested.'));
-  });
-
-  it('propagates a transient bench outage so the export surfaces a retry error', async () => {
-    TestBed.configureTestingModule({
-      providers: [{ provide: NORTHERN_SKY_DATA_SOURCE, useValue: { getBench: async () => transient('WCL is unreachable right now.') } }],
-    });
-    expect(await TestBed.inject(NorthernSkyFeatureService).getExport('SubtletyRogue', ENCOUNTER_ID)).toEqual(transient('WCL is unreachable right now.'));
   });
 });

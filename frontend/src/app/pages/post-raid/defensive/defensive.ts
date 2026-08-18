@@ -1,14 +1,11 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal } from '@angular/core';
-import { AnalysisFinding } from '../../../core/models/analysis.models';
-import { ComparisonWindow } from '../../../core/models/window-comparison.models';
+import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 import { ClipAnchor } from '../../../core/models/capture.models';
 import {
   bucketFindings, CAT_LABEL, FindingRow, FindingTableComponent, onPlanFromEntries, rowsFromEntries,
 } from '../../../shared/components/finding-table/finding-table';
 import { WindowComparisonComponent } from '../../../shared/components/window-comparison/window-comparison';
-import { LoadStateComponent, RenderableLoadError } from '../../../shared/components/load-state/load-state';
-import { LatestLoad } from '../../../shared/latest-load';
-import { logWarn } from '../../../core/log';
+import { LoadStateComponent } from '../../../shared/components/load-state/load-state';
+import { loadResource } from '../../../shared/load-resource';
 import { DefensiveFeatureService, DefensiveMapAnchor, defensiveFindingClipAnchor } from './defensive.service';
 
 @Component({
@@ -37,61 +34,32 @@ export class DefensiveComponent {
   /** Whether the top-parse bench exists. The page aggregates it for the banner. */
   readonly availableChange = output<boolean>();
 
-  protected readonly available = signal(true);
-  protected readonly error = signal<RenderableLoadError | null>(null);
-  private readonly _findings = signal<AnalysisFinding[]>([]);
-  private readonly _spellIdsByName = signal<Record<string, number>>({});
-  private readonly _iconByName = signal<Record<string, string>>({});
-  private readonly _windows = signal<ComparisonWindow[]>([]);
-  private readonly _anchors = signal<DefensiveMapAnchor[]>([]);
-  private readonly _clipAnchors = signal<ClipAnchor[]>([]);
-  protected readonly windows = this._windows.asReadonly();
+  private readonly load = loadResource({
+    params: () => ({
+      spec: this.spec(),
+      encounterId: this.encounterId(),
+      report: this.report(),
+      fight: this.fight(),
+      player: this.player(),
+    }),
+    load: p => this.defensive.loadAnalysisView(p.spec, p.encounterId, p.report, p.fight, p.player),
+    context: 'defensive.loadAnalysisView',
+    initialAvailable: true,
+    busyChange: this.busyChange,
+    availableChange: this.availableChange,
+  });
 
-  private readonly loader = new LatestLoad();
-
-  constructor() {
-    effect(() => {
-      const spec = this.spec();
-      const encounterId = this.encounterId();
-      const report = this.report();
-      const fight = this.fight();
-      const player = this.player();
-      this.loader.run(this.defensive.loadAnalysisView(spec, encounterId, report, fight, player), {
-        context: 'defensive.loadAnalysisView',
-        apply: result => {
-          if (result.ok) {
-            const view = result.value;
-            this.error.set(null);
-            this.available.set(true);
-            this.availableChange.emit(true);
-            this._findings.set(view.findings);
-            this._spellIdsByName.set(view.spellIdsByName);
-            this._iconByName.set(view.iconByName);
-            this._windows.set(view.windows);
-            this._anchors.set(view.anchors);
-            this._clipAnchors.set(view.clipAnchors);
-          } else {
-            if (result.error.kind === 'permanent') logWarn(result.error.id, result.error.context);
-            this.error.set(result.error.kind === 'missing' ? null : result.error);
-            this.available.set(false);
-            this.availableChange.emit(false);
-            this._findings.set([]);
-            this._spellIdsByName.set({});
-            this._iconByName.set({});
-            this._windows.set([]);
-            this._anchors.set([]);
-            this._clipAnchors.set([]);
-          }
-        },
-        settled: () => { this.busyChange.emit(false); },
-      });
-    });
-  }
+  protected readonly available = this.load.available;
+  protected readonly error = this.load.error;
+  protected readonly windows = computed(() => this.load.value()?.windows ?? []);
+  private readonly anchors = computed<DefensiveMapAnchor[]>(() => this.load.value()?.anchors ?? []);
+  private readonly clipAnchors = computed<ClipAnchor[]>(() => this.load.value()?.clipAnchors ?? []);
 
   private readonly entries = computed(() => {
-    const spellIds = this._spellIdsByName();
-    const icons = this._iconByName();
-    return bucketFindings(this._findings(), {
+    const view = this.load.value();
+    const spellIds = view?.spellIdsByName ?? {};
+    const icons = view?.iconByName ?? {};
+    return bucketFindings(view?.findings ?? [], {
       spellId: name => spellIds[name] ?? null,
       icon: name => icons[name] ?? '',
     });
@@ -101,12 +69,12 @@ export class DefensiveComponent {
   protected readonly onPlan = computed(() => onPlanFromEntries(this.entries()));
 
   protected onOpenMap(index: number): void {
-    const anchor = this._anchors()[index];
+    const anchor = this.anchors()[index];
     if (anchor) this.openMap.emit(anchor);
   }
 
   protected onOpenClip(index: number): void {
-    const anchor = this._clipAnchors()[index];
+    const anchor = this.clipAnchors()[index];
     if (anchor) this.openClip.emit(anchor);
   }
 

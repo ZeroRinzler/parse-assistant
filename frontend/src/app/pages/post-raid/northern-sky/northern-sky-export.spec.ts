@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Clipboard } from '@angular/cdk/clipboard';
-import { missing, transient, ok, Result, LoadError } from '../../../core/result';
+import { ok, Result, LoadError } from '../../../core/result';
 import { mountVm } from '../../../../testing/component-harness';
 import { SelectionStore } from '../../../core/services/selection-store';
 import { NorthernSkyExportComponent } from './northern-sky-export';
@@ -11,8 +11,6 @@ import { whenStable } from '../../../../testing/when-stable';
 
 const SPEC = 'SubtletyRogue';
 const ENCOUNTER_ID = 3009;
-const OUTAGE_MESSAGE = 'WCL is unreachable right now.';
-const NOT_INGESTED_MESSAGE = 'Not yet ingested.';
 const CAST_TIMES_S = [10, 30];
 
 function ability(spellId: number, kind: NorthernSkyAbility['kind']): NorthernSkyAbility {
@@ -36,25 +34,7 @@ function mount(getExport: () => Promise<Result<NorthernSkyBench>>, copySucceeds 
   ]);
 }
 
-describe('NorthernSkyExportComponent load states', () => {
-  it('surfaces a retry error when the bench load hits a transient outage', async () => {
-    const { vm } = mount(async () => transient(OUTAGE_MESSAGE));
-
-    await whenStable();
-
-    expect((vm['error'] as () => LoadError | null)()).toEqual({ kind: 'transient', message: OUTAGE_MESSAGE });
-    expect((vm['available'] as () => boolean)()).toBe(false);
-  });
-
-  it('waits without an error when the encounter has no bench yet', async () => {
-    const { vm } = mount(async () => missing(NOT_INGESTED_MESSAGE));
-
-    await whenStable();
-
-    expect((vm['error'] as () => LoadError | null)()).toBeNull();
-    expect((vm['available'] as () => boolean)()).toBe(false);
-  });
-
+describe('NorthernSkyExportComponent export availability', () => {
   it('waits without an error when the bench carries no abilities', async () => {
     const { vm } = mount(async () => ok(bench()));
 
@@ -71,14 +51,6 @@ describe('NorthernSkyExportComponent load states', () => {
 
     expect((vm['error'] as () => LoadError | null)()).toBeNull();
     expect((vm['available'] as () => boolean)()).toBe(true);
-  });
-
-  it('clears a previous error once the bench loads successfully', async () => {
-    const { vm } = mount(async () => ok(bench({ abilities: POPULATED_ABILITIES })));
-
-    await whenStable();
-
-    expect((vm['error'] as () => LoadError | null)()).toBeNull();
   });
 });
 

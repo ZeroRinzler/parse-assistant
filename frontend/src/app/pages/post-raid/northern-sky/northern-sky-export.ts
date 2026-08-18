@@ -1,14 +1,13 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal } from '@angular/core';
 import { Clipboard } from '@angular/cdk/clipboard';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { FlyoverPanelComponent } from '../../../shared/components/flyover-panel/flyover-panel';
 import { GameIconComponent } from '../../../shared/components/game-icon/game-icon';
-import { LoadStateComponent, RenderableLoadError } from '../../../shared/components/load-state/load-state';
+import { LoadStateComponent } from '../../../shared/components/load-state/load-state';
 import { SelectionStore } from '../../../core/services/selection-store';
-import { LatestLoad } from '../../../shared/latest-load';
-import { logWarn } from '../../../core/log';
+import { loadResource } from '../../../shared/load-resource';
 import { NorthernSkyBench } from './northern-sky-data-source';
 import {
   NorthernSkyFeatureService, buildNorthernSkyNote, abilitiesByKind, selectedIds, isAllSelected,
@@ -31,44 +30,29 @@ export class NorthernSkyExportComponent {
   readonly busyChange = output<boolean>();
   readonly availableChange = output<boolean>();
 
-  private readonly bench = signal<NorthernSkyBench | null>(null);
+  private readonly load = loadResource({
+    params: () => ({ spec: this.spec(), encounterId: this.encounterId() }),
+    load: ({ spec, encounterId }) => this.feature.getExport(spec, encounterId),
+    context: 'northernSky.getExport',
+    availableWhen: (bench: NorthernSkyBench) => bench.abilities.length > 0,
+    busyChange: this.busyChange,
+    availableChange: this.availableChange,
+  });
+
+  private readonly bench = this.load.value;
   private readonly excluded = signal<ReadonlySet<number>>(new Set(this.selection.loadNorthernSky()?.excludedSpellIds ?? []));
   protected readonly open = signal(false);
   protected readonly copied = signal(false);
   protected readonly copyFailed = signal(false);
-  protected readonly error = signal<RenderableLoadError | null>(null);
+  protected readonly error = this.load.error;
 
   protected readonly abilities = computed(() => this.bench()?.abilities ?? []);
   private readonly grouped = computed(() => abilitiesByKind(this.abilities()));
   protected readonly cooldowns = computed(() => this.grouped().cooldowns);
   protected readonly defensives = computed(() => this.grouped().defensives);
-  protected readonly available = computed(() => this.abilities().length > 0);
+  protected readonly available = this.load.available;
   protected readonly allSelected = computed(() => isAllSelected(this.abilities(), this.excluded()));
   protected readonly panelOpen = computed(() => isPanelOpen(this.open(), this.available()));
-
-  private readonly loader = new LatestLoad();
-
-  constructor() {
-    effect(() => {
-      const spec = this.spec();
-      const encounterId = this.encounterId();
-      this.loader.run(this.feature.getExport(spec, encounterId), {
-        context: 'northernSky.getExport',
-        apply: result => {
-          if (result.ok) {
-            this.error.set(null);
-            this.bench.set(result.value);
-          } else {
-            if (result.error.kind === 'permanent') logWarn(result.error.id, result.error.context);
-            this.error.set(result.error.kind === 'missing' ? null : result.error);
-            this.bench.set(null);
-          }
-          this.availableChange.emit(this.available());
-        },
-        settled: () => { this.busyChange.emit(false); },
-      });
-    });
-  }
 
   protected isSelected(spellId: number): boolean {
     return !this.excluded().has(spellId);
