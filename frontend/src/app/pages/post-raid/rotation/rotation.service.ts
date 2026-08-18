@@ -386,6 +386,41 @@ export function bucketRotationFindings(
   };
 }
 
+function holdsOf(cdBench: PerCdBenchmark | undefined): CdPlanRow['holds'] {
+  if (!cdBench?.majority_hold) return [];
+  return Object.entries(cdBench.hold_targets)
+    .sort((a, b) => Number(a[0]) - Number(b[0]))
+    .map(([idx, target]) => ({ castIndex: Number(idx), targetS: target.target_s }));
+}
+
+type CdPlanUsage = Pick<
+  CdPlanRow, 'firstCastS' | 'typicalUses' | 'usedSampleCount' | 'sampleCount' | 'usesPerMin' | 'bloodlust' | 'bloodlustPct'
+>;
+
+// First cast and uses/min are user-only stats; gate them on the same use-share majority the analysis uses.
+function cdPlanUsageOf(cdBench: PerCdBenchmark | undefined): CdPlanUsage {
+  if (!cdBench) return { firstCastS: null, typicalUses: null, usedSampleCount: 0, sampleCount: 0, usesPerMin: null, bloodlust: false, bloodlustPct: null };
+  const usedByMajority = usedShare(cdBench) >= MIN_USE_SHARE_FRAC;
+  const alignedWithBl = cdBench.bl_pct >= BL_CONSENSUS_PCT;
+  return {
+    firstCastS: usedByMajority ? cdBench.avg_first_cast_s : null,
+    // Typical uses is the median over the parses that pressed it at all, so any adoption (not just a majority) yields a number.
+    typicalUses: cdBench.used_sample_count > 0 ? cdBench.median_uses : null,
+    usedSampleCount: cdBench.used_sample_count, sampleCount: cdBench.sample_count,
+    usesPerMin: usedByMajority ? cdBench.uses_per_min.avg : null,
+    bloodlust: alignedWithBl, bloodlustPct: alignedWithBl ? cdBench.bl_pct : null,
+  };
+}
+
+function cdPlanRow(cd: RulebookCooldown, cdBench: PerCdBenchmark | undefined, abilities: AbilityIcons): CdPlanRow {
+  const ability = abilities[cd.spell_id];
+  if (!ability) logWarn('buildCdPlan: ability id missing from ability map', cd.spell_id);
+  return {
+    name: cd.name, spellId: cd.spell_id, icon: ability?.icon ?? '', ...cdPlanUsageOf(cdBench),
+    holds: holdsOf(cdBench), rule: cd.usage_rule ?? null,
+  };
+}
+
 export function buildCdPlan(
   cooldowns: RulebookCooldown[], benchmarks: Record<string, PerCdBenchmark>, abilities: AbilityIcons,
 ): CdPlanRow[] {
@@ -394,34 +429,7 @@ export function buildCdPlan(
     const pb = b.opener_priority ?? 99;
     return pa !== pb ? pa - pb : a.name.localeCompare(b.name);
   });
-  return ordered.map(cd => {
-    const cdBench = benchmarks[cd.name];
-    const holds = cdBench?.majority_hold
-      ? Object.entries(cdBench.hold_targets)
-          .sort((a, b) => Number(a[0]) - Number(b[0]))
-          .map(([idx, target]) => ({ castIndex: Number(idx), targetS: target.target_s }))
-      : [];
-    const spellId = cd.spell_id;
-    const ability = abilities[spellId];
-    if (!ability) logWarn('buildCdPlan: ability id missing from ability map', spellId);
-    // First cast and uses/min are user-only stats; gate them on the same use-share majority the analysis uses.
-    const usedByMajority = cdBench != null && usedShare(cdBench) >= MIN_USE_SHARE_FRAC;
-    return {
-      name: cd.name,
-      spellId,
-      icon: ability?.icon ?? '',
-      firstCastS: usedByMajority ? cdBench.avg_first_cast_s : null,
-      // Typical uses is the median over the parses that pressed it at all, so any adoption (not just a majority) yields a number.
-      typicalUses: cdBench && cdBench.used_sample_count > 0 ? cdBench.median_uses : null,
-      usedSampleCount: cdBench?.used_sample_count ?? 0,
-      sampleCount: cdBench?.sample_count ?? 0,
-      usesPerMin: usedByMajority ? cdBench.uses_per_min.avg : null,
-      bloodlust: (cdBench?.bl_pct ?? 0) >= BL_CONSENSUS_PCT,
-      bloodlustPct: cdBench != null && cdBench.bl_pct >= BL_CONSENSUS_PCT ? cdBench.bl_pct : null,
-      holds,
-      rule: cd.usage_rule ?? null,
-    };
-  });
+  return ordered.map(cd => cdPlanRow(cd, benchmarks[cd.name], abilities));
 }
 
 @Injectable({ providedIn: 'root' })

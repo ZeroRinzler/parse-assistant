@@ -55,6 +55,33 @@ export interface TrinketRow {
 
 // The comparison builders below take a real `CharacterGear` (never null); the bench-only view uses the dedicated `buildBench*` builders instead, so a not-yet-loaded player never renders "Not enchanted".
 
+type TopEnchant = EncounterGearStats['enchants'][number][number];
+type PlayerEnchant = NonNullable<CharacterGear['enchants']>[number];
+
+function enchantLabel(enchant: { id: number; name: string } | undefined): string {
+  return enchant ? (enchant.name || `Enchant #${enchant.id}`) : '';
+}
+
+function enchantRowFor(name: string, player: PlayerEnchant | undefined, slotTop: TopEnchant[]): EnchantRow | null {
+  const top = slotTop[0];
+  const topName = enchantLabel(top);
+  if (!player) {
+    if (!top || top.pct < ENCHANT_CONSENSUS_PCT) return null;
+    return { slotName: name, status: 'warn', name: 'Not enchanted', topPct: top.pct,
+      note: `Apply ${topName}` };
+  }
+  const playerName = enchantLabel(player);
+  if (player.id === top?.id) {
+    return { slotName: name, status: 'ok', name: playerName, topPct: top.pct,
+      note: `${top.pct}% run this` };
+  }
+  if (top) {
+    return { slotName: name, status: 'info', name: playerName, topPct: slotTop.find(e => e.id === player.id)?.pct ?? null,
+      note: `${top.pct}% run ${topName}` };
+  }
+  return { slotName: name, status: 'ok', name: playerName, topPct: null, note: null };
+}
+
 /** Flags slots the player left un-enchanted that top parsers consider mandatory, and surfaces where the player differs from the consensus enchant. */
 export function buildEnchantRows(gear: CharacterGear, stats: EncounterGearStats | null): EnchantRow[] {
   const topEnch = stats?.enchants ?? {};
@@ -64,32 +91,10 @@ export function buildEnchantRows(gear: CharacterGear, stats: EncounterGearStats 
   for (const k of Object.keys(topEnch)) slots.add(Number(k));
   for (const e of playerEnch) slots.add(e.slot);
 
-  const rows: EnchantRow[] = [];
-  for (const slot of [...slots].sort((a, b) => a - b)) {
-    const name = slotName(slot);
-    const top = topEnch[slot]?.[0];
-    const topName = top ? (top.name || `Enchant #${top.id}`) : '';
-    const player = playerEnch.find(e => e.slot === slot);
-    if (!player) {
-      if (top && top.pct >= ENCHANT_CONSENSUS_PCT) {
-        rows.push({ slotName: name, status: 'warn', name: 'Not enchanted', topPct: top.pct,
-          note: `Apply ${topName}` });
-      }
-      continue;
-    }
-    const playerName = player.name || `Enchant #${player.id}`;
-    const playerUsagePct = topEnch[slot]?.find(e => e.id === player.id)?.pct ?? null;
-    if (player.id === top?.id) {
-      rows.push({ slotName: name, status: 'ok', name: playerName, topPct: top.pct,
-        note: `${top.pct}% run this` });
-    } else if (top) {
-      rows.push({ slotName: name, status: 'info', name: playerName, topPct: playerUsagePct,
-        note: `${top.pct}% run ${topName}` });
-    } else {
-      rows.push({ slotName: name, status: 'ok', name: playerName, topPct: null, note: null });
-    }
-  }
-  return rows;
+  return [...slots]
+    .sort((a, b) => a - b)
+    .map(slot => enchantRowFor(slotName(slot), playerEnch.find(e => e.slot === slot), topEnch[slot] ?? []))
+    .filter(row => row !== null);
 }
 
 export function enchantStatusOf(rows: EnchantRow[]): GearStatus {

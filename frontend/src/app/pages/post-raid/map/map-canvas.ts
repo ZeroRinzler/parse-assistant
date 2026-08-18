@@ -82,7 +82,7 @@ export class MapCanvasComponent {
     return buildTrail(live.playerId, refId, live.timelines, this.anchorTime(), this.preS(), this.postS(), STEP_S);
   });
 
-  protected readonly readout = computed(() => {
+  protected readonly readout = computed<Readout | null>(() => {
     if (!this.positions()) return null;
     const t = this.scrubT();
     const points = parsePointsAt(this.parseTimelines(), t);
@@ -162,91 +162,149 @@ export class MapCanvasComponent {
   private draw(canvas: HTMLCanvasElement): void {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const dpr = globalThis.devicePixelRatio || 1;
     const cssW = canvas.clientWidth || 600;
     const cssH = canvas.clientHeight || 420;
-    // Only resize the backing buffer when it changed: assigning width/height reallocates + clears it, wasted work every frame during playback.
-    const bufW = Math.round(cssW * dpr);
-    const bufH = Math.round(cssH * dpr);
-    if (canvas.width !== bufW || canvas.height !== bufH) {
-      canvas.width = bufW;
-      canvas.height = bufH;
-    }
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, cssW, cssH);
-
-    const cx = cssW / 2, cy = cssH / 2;
-    const radiusPx = Math.min(cssW, cssH) / 2 - 28;
+    resetSurface(canvas, ctx, cssW, cssH);
 
     const benchTrails = this.benchTrails();
     const liveTrail = this.liveTrail();
     const read = this.readout();
+    const frame = buildFrame(canvas, ctx, cssW, cssH, benchTrails, liveTrail);
 
-    let maxYd = 10;
-    for (const trail of benchTrails) for (const point of trail) maxYd = Math.max(maxYd, point.dist);
-    for (const point of liveTrail) maxYd = Math.max(maxYd, point.dist);
-    maxYd = Math.ceil(maxYd / 5) * 5 + 5;
-    const scale = radiusPx / maxYd;
-    const toScreen = (point: { fwd: number; right: number }): [number, number] => [cx + point.right * scale, cy - point.fwd * scale];
-
-    // The canvas draws imperatively and cannot consume `var(--token)`, so design tokens are resolved to concrete values here.
-    const css = getComputedStyle(canvas);
-    const token = (name: string): string => css.getPropertyValue(name).trim();
-    const gold = token('--gold');
-    const border = token('--border');
-    const muted = token('--muted');
-    const enemyColor = token('--critical');
-    const rankedColor = token('--accent');
-    const outline = token('--map-dot-outline');
-
-    ctx.strokeStyle = border; ctx.fillStyle = muted; ctx.font = '11px system-ui, sans-serif'; ctx.lineWidth = 1;
-    for (let yd = 5; yd <= maxYd; yd += 5) {
-      ctx.beginPath(); ctx.arc(cx, cy, yd * scale, 0, 2 * Math.PI); ctx.stroke();
-      ctx.fillText(`${yd}y`, cx + 3, cy - yd * scale + 12);
-    }
-
-    ctx.fillStyle = enemyColor;
-    ctx.beginPath(); ctx.moveTo(cx, cy - 9); ctx.lineTo(cx - 7, cy + 6); ctx.lineTo(cx + 7, cy + 6); ctx.closePath(); ctx.fill();
-
-    const t = this.scrubT();
-    ctx.strokeStyle = muted; ctx.globalAlpha = 0.25; ctx.lineWidth = 1.5;
-    for (const trail of benchTrails) {
-      ctx.beginPath();
-      let prev: RelPos | undefined;
-      for (const point of trail) {
-        const [x, y] = toScreen(point);
-        if (prev && point.mapID === prev.mapID) ctx.lineTo(x, y); else ctx.moveTo(x, y);
-        prev = point;
-      }
-      ctx.stroke();
-    }
-    ctx.globalAlpha = 1;
-    const benchNow = parsePointsAt(this.parseTimelines(), t);
-    ctx.fillStyle = muted;
-    for (const point of benchNow) { const [x, y] = toScreen(point); ctx.beginPath(); ctx.arc(x, y, 3, 0, 2 * Math.PI); ctx.fill(); }
-    if (read?.centroid) {
-      const [x, y] = toScreen(read.centroid);
-      ctx.strokeStyle = rankedColor; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(x, y, 7, 0, 2 * Math.PI); ctx.stroke();
-    }
-
-    if (liveTrail.length) {
-      ctx.strokeStyle = gold; ctx.globalAlpha = 0.5; ctx.lineWidth = 2;
-      ctx.beginPath();
-      let prev: RelPos | undefined;
-      for (const point of liveTrail) {
-        const [x, y] = toScreen(point);
-        if (prev && point.mapID === prev.mapID) ctx.lineTo(x, y); else ctx.moveTo(x, y);
-        prev = point;
-      }
-      ctx.stroke(); ctx.globalAlpha = 1;
-    }
-    if (read?.player) {
-      const [x, y] = toScreen(read.player);
-      const r = 5;
-      ctx.fillStyle = gold;
-      ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath(); ctx.fill();
-      ctx.strokeStyle = outline; ctx.lineWidth = 1; ctx.stroke();
-    }
+    drawRangeRings(frame);
+    drawReference(frame);
+    drawBenchTrails(frame, benchTrails);
+    drawBenchNow(frame, parsePointsAt(this.parseTimelines(), this.scrubT()), read);
+    drawLive(frame, liveTrail, read);
   }
+}
+
+interface Readout {
+  centroid: { fwd: number; right: number } | null;
+  player: RelPos | null;
+}
+
+interface Palette {
+  gold: string;
+  border: string;
+  muted: string;
+  enemy: string;
+  ranked: string;
+  outline: string;
+}
+
+interface Frame {
+  ctx: CanvasRenderingContext2D;
+  toScreen: (point: { fwd: number; right: number }) => [number, number];
+  palette: Palette;
+  cx: number;
+  cy: number;
+  scale: number;
+  maxYd: number;
+}
+
+function resetSurface(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, cssW: number, cssH: number): void {
+  const dpr = globalThis.devicePixelRatio || 1;
+  // Only resize the backing buffer when it changed: assigning width/height reallocates + clears it, wasted work every frame during playback.
+  const bufW = Math.round(cssW * dpr);
+  const bufH = Math.round(cssH * dpr);
+  if (canvas.width !== bufW || canvas.height !== bufH) {
+    canvas.width = bufW;
+    canvas.height = bufH;
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssW, cssH);
+}
+
+// The canvas draws imperatively and cannot consume `var(--token)`, so design tokens are resolved to concrete values here.
+function readPalette(canvas: HTMLCanvasElement): Palette {
+  const css = getComputedStyle(canvas);
+  const token = (name: string): string => css.getPropertyValue(name).trim();
+  return {
+    gold: token('--gold'),
+    border: token('--border'),
+    muted: token('--muted'),
+    enemy: token('--critical'),
+    ranked: token('--accent'),
+    outline: token('--map-dot-outline'),
+  };
+}
+
+function maxYards(benchTrails: RelPos[][], liveTrail: RelPos[]): number {
+  let maxYd = 10;
+  for (const trail of benchTrails) for (const point of trail) maxYd = Math.max(maxYd, point.dist);
+  for (const point of liveTrail) maxYd = Math.max(maxYd, point.dist);
+  return Math.ceil(maxYd / 5) * 5 + 5;
+}
+
+function buildFrame(
+  canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, cssW: number, cssH: number,
+  benchTrails: RelPos[][], liveTrail: RelPos[],
+): Frame {
+  const cx = cssW / 2, cy = cssH / 2;
+  const radiusPx = Math.min(cssW, cssH) / 2 - 28;
+  const maxYd = maxYards(benchTrails, liveTrail);
+  const scale = radiusPx / maxYd;
+  return {
+    ctx, cx, cy, scale, maxYd,
+    palette: readPalette(canvas),
+    toScreen: point => [cx + point.right * scale, cy - point.fwd * scale],
+  };
+}
+
+function drawRangeRings({ ctx, cx, cy, scale, maxYd, palette }: Frame): void {
+  ctx.strokeStyle = palette.border; ctx.fillStyle = palette.muted;
+  ctx.font = '11px system-ui, sans-serif'; ctx.lineWidth = 1;
+  for (let yd = 5; yd <= maxYd; yd += 5) {
+    ctx.beginPath(); ctx.arc(cx, cy, yd * scale, 0, 2 * Math.PI); ctx.stroke();
+    ctx.fillText(`${yd}y`, cx + 3, cy - yd * scale + 12);
+  }
+}
+
+function drawReference({ ctx, cx, cy, palette }: Frame): void {
+  ctx.fillStyle = palette.enemy;
+  ctx.beginPath(); ctx.moveTo(cx, cy - 9); ctx.lineTo(cx - 7, cy + 6); ctx.lineTo(cx + 7, cy + 6); ctx.closePath(); ctx.fill();
+}
+
+function strokeTrail({ ctx, toScreen }: Frame, trail: RelPos[]): void {
+  ctx.beginPath();
+  let prev: RelPos | undefined;
+  for (const point of trail) {
+    const [x, y] = toScreen(point);
+    if (prev && point.mapID === prev.mapID) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+    prev = point;
+  }
+  ctx.stroke();
+}
+
+function drawBenchTrails(frame: Frame, benchTrails: RelPos[][]): void {
+  const { ctx, palette } = frame;
+  ctx.strokeStyle = palette.muted; ctx.globalAlpha = 0.25; ctx.lineWidth = 1.5;
+  for (const trail of benchTrails) strokeTrail(frame, trail);
+  ctx.globalAlpha = 1;
+}
+
+function drawBenchNow(frame: Frame, benchNow: RelPos[], read: Readout | null): void {
+  const { ctx, toScreen, palette } = frame;
+  ctx.fillStyle = palette.muted;
+  for (const point of benchNow) { const [x, y] = toScreen(point); ctx.beginPath(); ctx.arc(x, y, 3, 0, 2 * Math.PI); ctx.fill(); }
+  if (!read?.centroid) return;
+  const [x, y] = toScreen(read.centroid);
+  ctx.strokeStyle = palette.ranked; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(x, y, 7, 0, 2 * Math.PI); ctx.stroke();
+}
+
+function drawLive(frame: Frame, liveTrail: RelPos[], read: Readout | null): void {
+  const { ctx, toScreen, palette } = frame;
+  if (liveTrail.length) {
+    ctx.strokeStyle = palette.gold; ctx.globalAlpha = 0.5; ctx.lineWidth = 2;
+    strokeTrail(frame, liveTrail);
+    ctx.globalAlpha = 1;
+  }
+  if (!read?.player) return;
+  const [x, y] = toScreen(read.player);
+  const r = 5;
+  ctx.fillStyle = palette.gold;
+  ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = palette.outline; ctx.lineWidth = 1; ctx.stroke();
 }

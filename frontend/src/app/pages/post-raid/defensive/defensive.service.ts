@@ -127,12 +127,50 @@ export function gapDelayFindings(
 }
 
 
+function usageCountFindings(
+  name: string, uses: number, expected: number, floor: number, majorityUse: boolean, fightDurS: number,
+): AnalysisFinding[] {
+  if (!majorityUse) return [];
+  if (uses === 0 && expected >= 1) {
+    return [{ severity: 'critical', category: 'lost_cooldown', cd_name: name, timestamp_s: undefined,
+      measured: { value: `0 / ${expected}`, unit: 'use(s)' },
+      message: `${name} was never used. Top raiders get ${expected} on a ${fmtClock(fightDurS)} fight.`,
+      details: { remedy: `Use ${name} ${expected}x this fight.` }, occurrences: [] }];
+  }
+  if (uses > 0 && uses < floor) {
+    return [{ severity: 'critical', category: 'lost_cooldown', cd_name: name, timestamp_s: undefined,
+      measured: { value: `${uses} / ${expected}`, unit: 'use(s)' },
+      message: `${name} was used ${uses} times. Top raiders get ${expected}.`,
+      details: { remedy: `Use ${name} ${floor - uses}x more.` }, occurrences: [] }];
+  }
+  return [];
+}
+
+function firstCastFindings(
+  name: string, firstS: number | undefined, defBench: PerDefensiveBenchmark, majorityUse: boolean,
+): AnalysisFinding[] {
+  if (firstS == null || !majorityUse) return [];
+  if (!isOutlierAbove(firstS, defBench.avg_first_cast_s, defBench.stddev_first_cast_s)) return [];
+  const lateS = (firstS - defBench.avg_first_cast_s).toFixed(0);
+  return [{ severity: 'warning', category: 'cooldown_delay', cd_name: name,
+    timestamp_s: firstS,
+    measured: { value: `+${lateS}s`, unit: `top ${fmtClock(defBench.avg_first_cast_s)}` },
+    message: `${name} was first used at ${fmtClock(firstS)}, ${lateS}s later than top raiders. Aim for ${fmtClock(defBench.avg_first_cast_s)}.`,
+    details: { remedy: `Use ${name} earlier.` }, occurrences: [] }];
+}
+
+function usageSuccessFindings(name: string, uses: number, expected: number): AnalysisFinding[] {
+  if (uses === 0) return [];
+  return [{ severity: 'success', category: 'cooldown_usage', cd_name: name,
+    message: `${name} - ${uses}/${expected} uses.`, occurrences: [] }];
+}
+
 export function analyzeOneDefensive(
   defensive: PlayerDefensive,
   defBench: PerDefensiveBenchmark | undefined,
   fightDurS: number,
 ): AnalysisFinding[] {
-  const { name, uses, cast_times_s } = defensive;
+  const { name, uses } = defensive;
 
   if (defensive.talent_gated && uses === 0) return [];
 
@@ -143,41 +181,18 @@ export function analyzeOneDefensive(
   }
 
   const { expected, floor } = benchExpectedUses(fightDurS, defBench.uses_per_min);
-  const issues: AnalysisFinding[] = [];
-
   // A situational defensive most parses skip has a noisy expected count, so flagging it without majority use is a false positive.
   const majorityUse = defensiveUsedShare(defBench) >= MIN_USE_SHARE_FRAC;
+  const castTimesS = defensive.cast_times_s ?? [];
 
-  if (majorityUse && uses === 0 && expected >= 1) {
-    issues.push({ severity: 'critical', category: 'lost_cooldown', cd_name: name, timestamp_s: undefined,
-      measured: { value: `0 / ${expected}`, unit: 'use(s)' },
-      message: `${name} was never used. Top raiders get ${expected} on a ${fmtClock(fightDurS)} fight.`,
-      details: { remedy: `Use ${name} ${expected}x this fight.` }, occurrences: [] });
-  } else if (majorityUse && uses > 0 && uses < floor) {
-    issues.push({ severity: 'critical', category: 'lost_cooldown', cd_name: name, timestamp_s: undefined,
-      measured: { value: `${uses} / ${expected}`, unit: 'use(s)' },
-      message: `${name} was used ${uses} times. Top raiders get ${expected}.`,
-      details: { remedy: `Use ${name} ${floor - uses}x more.` }, occurrences: [] });
-  }
+  const issues = [
+    ...usageCountFindings(name, uses, expected, floor, majorityUse, fightDurS),
+    ...firstCastFindings(name, castTimesS[0], defBench, majorityUse),
+    ...gapDelayFindings(name, castTimesS, defBench),
+  ];
 
-  const suggestions: AnalysisFinding[] = [];
-  if (cast_times_s?.length) {
-    const firstS = cast_times_s[0];
-    if (firstS != null && majorityUse && isOutlierAbove(firstS, defBench.avg_first_cast_s, defBench.stddev_first_cast_s)) {
-      issues.push({ severity: 'warning', category: 'cooldown_delay', cd_name: name,
-        timestamp_s: firstS,
-        measured: { value: `+${(firstS - defBench.avg_first_cast_s).toFixed(0)}s`, unit: `top ${fmtClock(defBench.avg_first_cast_s)}` },
-        message: `${name} was first used at ${fmtClock(firstS)}, ${(firstS - defBench.avg_first_cast_s).toFixed(0)}s later than top raiders. Aim for ${fmtClock(defBench.avg_first_cast_s)}.`,
-        details: { remedy: `Use ${name} earlier.` }, occurrences: [] });
-    }
-    issues.push(...gapDelayFindings(name, cast_times_s, defBench));
-    suggestions.push(...holdSuggestionFindings(name, cast_times_s, defBench.hold_targets));
-  }
-
-  const result = issues.length
-    ? issues
-    : (uses > 0 ? [{ severity: 'success', category: 'cooldown_usage', cd_name: name, message: `${name} - ${uses}/${expected} uses.`, occurrences: [] } as AnalysisFinding] : []);
-  if (uses > 0) result.push(...suggestions);
+  const result = issues.length ? issues : usageSuccessFindings(name, uses, expected);
+  if (uses > 0) result.push(...holdSuggestionFindings(name, castTimesS, defBench.hold_targets));
   return result;
 }
 
@@ -331,40 +346,57 @@ export function buildDefensiveWindows(
   return { windows, anchors, clipAnchors };
 }
 
+function holdsOf(benchmark: PerDefensiveBenchmark | undefined): DefensivePlanRow['holds'] {
+  if (!benchmark?.majority_hold) return [];
+  return Object.entries(benchmark.hold_targets)
+    .sort((a, b) => Number(a[0]) - Number(b[0]))
+    .map(([idx, hold]) => ({ castIndex: Number(idx), targetS: hold.target_s }));
+}
+
+type DefensivePlanUsage = Pick<DefensivePlanRow, 'typicalUses' | 'usedSampleCount' | 'sampleCount' | 'firstCastS'>;
+
+function planUsageOf(benchmark: PerDefensiveBenchmark | undefined): DefensivePlanUsage {
+  if (!benchmark) return { typicalUses: null, usedSampleCount: 0, sampleCount: 0, firstCastS: null };
+  // First cast is a user-only stat; gate it on the same use-share majority the analysis uses.
+  const usedByMajority = defensiveUsedShare(benchmark) >= MIN_USE_SHARE_FRAC;
+  return {
+    // Typical uses is the median over the parses that pressed it at all, so any adoption (not just a majority) yields a number.
+    typicalUses: benchmark.used_sample_count > 0 ? benchmark.median_uses : null,
+    usedSampleCount: benchmark.used_sample_count,
+    sampleCount: benchmark.sample_count,
+    firstCastS: usedByMajority ? benchmark.avg_first_cast_s : null,
+  };
+}
+
+function defensivePlanRow(
+  defensive: DefensivePlanMeta,
+  benchmark: PerDefensiveBenchmark | undefined,
+  windowsS: number[],
+  abilities: AbilityIcons,
+): DefensivePlanRow {
+  const spellId = defensive.spell_id;
+  const ability = abilities[spellId];
+  if (!ability) logWarn('buildDefensivePlanRows: ability id missing from ability map', spellId);
+  return {
+    name: defensive.name,
+    spellId,
+    icon: ability?.icon ?? '',
+    ...planUsageOf(benchmark),
+    windowsS,
+    holds: holdsOf(benchmark),
+    rule: defensive.usage_rule ?? null,
+  };
+}
+
 export function buildDefensivePlanRows(bench: DefensiveBench | null): DefensivePlanRow[] {
   if (!bench?.defensives.length) return [];
-  const benchmarks = bench.per_defensive_benchmarks;
   const windows = bench.defensive_windows;
-  return bench.defensives.map(defensive => {
-    const benchmark = benchmarks[defensive.name];
-    const windowsS = windows
-      .filter(window => window.defensive_name === defensive.name)
-      .map(window => window.time_s)
-      .sort((a, b) => a - b);
-    const holds = benchmark?.majority_hold
-      ? Object.entries(benchmark.hold_targets)
-          .sort((a, b) => Number(a[0]) - Number(b[0]))
-          .map(([idx, hold]) => ({ castIndex: Number(idx), targetS: hold.target_s }))
-      : [];
-    const spellId = defensive.spell_id;
-    const ability = bench.ability_icons[spellId];
-    if (!ability) logWarn('buildDefensivePlanRows: ability id missing from ability map', spellId);
-    // First cast is a user-only stat; gate it on the same use-share majority the analysis uses.
-    const usedByMajority = benchmark != null && defensiveUsedShare(benchmark) >= MIN_USE_SHARE_FRAC;
-    return {
-      name: defensive.name,
-      spellId,
-      icon: ability?.icon ?? '',
-      // Typical uses is the median over the parses that pressed it at all, so any adoption (not just a majority) yields a number.
-      typicalUses: benchmark && benchmark.used_sample_count > 0 ? benchmark.median_uses : null,
-      usedSampleCount: benchmark?.used_sample_count ?? 0,
-      sampleCount: benchmark?.sample_count ?? 0,
-      firstCastS: usedByMajority ? benchmark.avg_first_cast_s : null,
-      windowsS,
-      holds,
-      rule: defensive.usage_rule ?? null,
-    };
-  }).filter(row => row.typicalUses != null || row.firstCastS != null || row.windowsS.length || row.holds.length || row.rule);
+  return bench.defensives.map(defensive => defensivePlanRow(
+    defensive,
+    bench.per_defensive_benchmarks[defensive.name],
+    windows.filter(window => window.defensive_name === defensive.name).map(window => window.time_s).sort((a, b) => a - b),
+    bench.ability_icons,
+  )).filter(row => row.typicalUses != null || row.firstCastS != null || row.windowsS.length || row.holds.length || row.rule);
 }
 
 @Injectable({ providedIn: 'root' })

@@ -85,22 +85,34 @@ export interface AuraSpan {
 /** One aura's spans per target, since a clip is only visible against the application it replaced. */
 export type AuraSpansByTarget = Map<string, AuraSpan[]>;
 
+type AuraSpanEdge = 'open' | 'refresh' | 'close' | null;
+
+function spanEdgeOf(type: string): AuraSpanEdge {
+  if (type === 'applybuff' || type === 'applydebuff') return 'open';
+  if (type === 'refreshbuff' || type === 'refreshdebuff') return 'refresh';
+  if (type === 'removebuff' || type === 'removedebuff') return 'close';
+  return null;
+}
+
+function applySpanEdge(list: AuraSpan[], edge: AuraSpanEdge, timeS: number): void {
+  const tail = list[list.length - 1];
+  const open = tail && tail.endS == null ? tail : null;
+  if (edge === 'open') {
+    if (!open) list.push({ startS: timeS, endS: null, endedByRefresh: false });
+  } else if (edge === 'refresh') {
+    if (open) { open.endS = timeS; open.endedByRefresh = true; }
+    list.push({ startS: timeS, endS: null, endedByRefresh: false });
+  } else if (edge === 'close' && open) {
+    open.endS = timeS;
+  }
+}
+
 export function buildAuraSpansByTarget(events: TimedEvent[], spellId: number): AuraSpansByTarget {
   const spans: AuraSpansByTarget = new Map();
   for (const event of events) {
     if (event.abilityGameID !== spellId) continue;
-    const timeS = event.atS;
     const list = getOrInsert(spans, targetKey(event), (): AuraSpan[] => []);
-    const tail = list[list.length - 1];
-    const open = tail && tail.endS == null ? tail : null;
-    if (event.type === 'applybuff' || event.type === 'applydebuff') {
-      if (!open) list.push({ startS: timeS, endS: null, endedByRefresh: false });
-    } else if (event.type === 'refreshbuff' || event.type === 'refreshdebuff') {
-      if (open) { open.endS = timeS; open.endedByRefresh = true; }
-      list.push({ startS: timeS, endS: null, endedByRefresh: false });
-    } else if (event.type === 'removebuff' || event.type === 'removedebuff') {
-      if (open) open.endS = timeS;
-    }
+    applySpanEdge(list, spanEdgeOf(event.type), event.atS);
   }
   return spans;
 }

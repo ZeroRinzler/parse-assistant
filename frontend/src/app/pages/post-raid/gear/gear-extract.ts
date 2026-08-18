@@ -26,6 +26,16 @@ export function decodeHtmlEntities(text: string): string {
   return text.replace(/&(?:amp|lt|gt|quot|#39);/g, entity => HTML_ENTITIES[entity] ?? entity);
 }
 
+/** A WCL game-name batch, keyed by the alias the query built: `i` plus an item id, `e` plus an enchant id. */
+export type GameNames = Record<string, { id: number; name: string }>;
+
+/** Fills in the names WCL left blank on the gear rows themselves, in place. */
+export function fillGameNames(items: { id: number; name: string }[], prefix: 'i' | 'e', names: GameNames): void {
+  for (const item of items) {
+    if (!item.name && item.id) item.name = decodeHtmlEntities(names[`${prefix}${item.id}`]?.name ?? '');
+  }
+}
+
 export function extractGear(gear: WclGearItem[] | undefined): {
   trinkets: NonNullable<CharacterGear['trinkets']>;
   enchants: NonNullable<CharacterGear['enchants']>;

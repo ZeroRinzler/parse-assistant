@@ -1,10 +1,38 @@
 /** Generic, cross-slice analysis math + formatting helpers that several slices import instead of re-declaring. */
-import { median } from 'd3-array';
+import { deviation, mean, median } from 'd3-array';
 import { AnalysisFinding } from '../../core/models/analysis.models';
 
 /** Round to `decimals` places (default 1). d3-array has no rounding helper. */
 export function round(value: number, decimals = 1): number {
   return Math.round(value * 10 ** decimals) / 10 ** decimals;
+}
+
+/** Rounded mean, or `fallback` when there is nothing to average; the fallback type is the caller's, so a bench field can read 0 or null. */
+export function avgOr<T>(values: number[], fallback: T, decimals = 1): number | T {
+  return values.length ? round(mean(values) ?? 0, decimals) : fallback;
+}
+
+/** Rounded standard deviation, or `fallback` when there is nothing to measure. */
+export function stddevOr<T>(values: number[], fallback: T, decimals = 1): number | T {
+  return values.length ? round(deviation(values) ?? 0, decimals) : fallback;
+}
+
+/** Rounded median, or `fallback` when there is nothing to rank. */
+export function medianOr<T>(values: number[], fallback: T): number | T {
+  return values.length ? round(median(values) ?? 0) : fallback;
+}
+
+/** Gaps between successive casts, per entry: an entry's first cast opens no gap, and gaps never span two entries. */
+export function castGaps(entries: { cast_times_s: number[] }[]): number[] {
+  const gaps: number[] = [];
+  for (const entry of entries) {
+    let prev: number | undefined;
+    for (const timeS of entry.cast_times_s) {
+      if (prev != null) gaps.push(timeS - prev);
+      prev = timeS;
+    }
+  }
+  return gaps;
 }
 
 /** Inserts `makeDefault()` first when `key` is absent, so a caller can group-and-append in one call instead of a has/set guard plus a non-null get. */

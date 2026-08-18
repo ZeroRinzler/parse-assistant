@@ -86,29 +86,37 @@ export interface BucketOptions {
   icon: (name: string) => string;
 }
 
+type FindingBuckets = Record<string, FindingBucket>;
+
+function bucketOf(byName: FindingBuckets, name: string): FindingBucket {
+  return (byName[name] ??= { issues: [], holds: [] });
+}
+
+function bucketIssue(byName: FindingBuckets, finding: AnalysisFinding): void {
+  if (finding.category === 'hold_suggestion' && finding.details?.cd_name) {
+    bucketOf(byName, finding.details.cd_name).holds.push(finding);
+  } else if (finding.cd_name) {
+    bucketOf(byName, finding.cd_name).issues.push(finding);
+  } else {
+    // Surface a nameless finding under an explicit label so the coaching feedback is never dropped.
+    logWarn(UNKNOWN_COOLDOWN_CONTEXT, finding);
+    bucketOf(byName, UNKNOWN_COOLDOWN_LABEL).issues.push(finding);
+  }
+}
+
 export function bucketFindings(
   findings: AnalysisFinding[],
   options: BucketOptions,
 ): FindingEntry[] {
-  const byName: Record<string, FindingBucket> = {};
+  const byName: FindingBuckets = {};
 
   for (const finding of findings) {
-    if (finding.severity === 'success') continue;
-    if (finding.category === 'hold_suggestion' && finding.details?.cd_name) {
-      const name = finding.details.cd_name;
-      (byName[name] ??= { issues: [], holds: [] }).holds.push(finding);
-    } else if (finding.cd_name) {
-      (byName[finding.cd_name] ??= { issues: [], holds: [] }).issues.push(finding);
-    } else {
-      // Surface a nameless finding under an explicit label so the coaching feedback is never dropped.
-      logWarn(UNKNOWN_COOLDOWN_CONTEXT, finding);
-      (byName[UNKNOWN_COOLDOWN_LABEL] ??= { issues: [], holds: [] }).issues.push(finding);
-    }
+    if (finding.severity !== 'success') bucketIssue(byName, finding);
   }
   for (const finding of findings) {
     if (finding.severity !== 'success') continue;
     const name = finding.cd_name;
-    if (name) (byName[name] ??= { issues: [], holds: [] }).success = finding;
+    if (name) bucketOf(byName, name).success = finding;
   }
 
   return Object.entries(byName).map(([name, bucket]) => {

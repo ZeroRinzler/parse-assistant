@@ -5,8 +5,8 @@ import { RulebookDefensive } from '../../../core/models/rulebook.models';
 import { BurstWindow } from '../../../core/models/analysis.models';
 import { PerDefensiveBenchmark } from '../../../core/models/encounter.models';
 import { Result, missing } from '../../../core/result';
-import { mean, median, deviation } from 'd3-array';
-import { round, groupByTime, getOrInsert } from '../../../shared/analysis/analysis-math';
+import { mean, deviation } from 'd3-array';
+import { round, groupByTime, getOrInsert, avgOr, stddevOr, medianOr, castGaps } from '../../../shared/analysis/analysis-math';
 import { HoldWindow, buildHoldTargets, detectHoldWindows } from '../../../shared/analysis/hold-targets';
 import { buildAuraWindows } from '../../../shared/analysis/aura-windows';
 import { TimedEvent, abilityIcons, normalizeAbilityId, relativeS, withRelativeS } from '../../../shared/analysis/wcl-projections';
@@ -118,6 +118,15 @@ export function windowDamageBreakdown(windowHits: WindowHit[]): { spell_id: numb
     .map(([spell_id, damage]) => ({ spell_id, damage }));
 }
 
+function topSourceGameId(windowHits: WindowHit[], gameIdByActorId: Map<number, number>): number | null {
+  const dmgBySource = new Map<number, number>();
+  for (const [, damage, , sourceId] of windowHits) {
+    if (sourceId != null && gameIdByActorId.has(sourceId)) dmgBySource.set(sourceId, (dmgBySource.get(sourceId) ?? 0) + damage);
+  }
+  const topSource = [...dmgBySource.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  return topSource != null ? (gameIdByActorId.get(topSource) ?? null) : null;
+}
+
 // Open buffs run to fight end, never a rulebook duration.
 export function findParseDefensiveWindows(
   damageTaken: TimedEvent[], fightDurationS: number,
@@ -141,15 +150,6 @@ export function findParseDefensiveWindows(
       const windowHits = hits.filter(hit => hit[0] >= startS && hit[0] <= endS);
       const windowDmg = windowHits.reduce((sum, hit) => sum + hit[1], 0);
 
-      const ability_breakdown = windowDamageBreakdown(windowHits);
-
-      const dmgBySource = new Map<number, number>();
-      for (const [, damage, , sourceId] of windowHits) {
-        if (sourceId != null && gameIdByActorId.has(sourceId)) dmgBySource.set(sourceId, (dmgBySource.get(sourceId) ?? 0) + damage);
-      }
-      const topSource = [...dmgBySource.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
-      const refGameId = topSource != null ? (gameIdByActorId.get(topSource) ?? null) : null;
-
       result.push({
         time_s: round(startS),
         window_length_s: round(endS - startS),
@@ -157,8 +157,8 @@ export function findParseDefensiveWindows(
         parse_index: 0,
         defensive_name: defensive.name,
         spell_id: spellId,
-        ref_game_id: refGameId,
-        ability_breakdown,
+        ref_game_id: topSourceGameId(windowHits, gameIdByActorId),
+        ability_breakdown: windowDamageBreakdown(windowHits),
       });
     }
   }
@@ -199,6 +199,14 @@ export function clusterAbilityBreakdown(cluster: ParseDefWindow[]): BurstWindow[
     .slice(0, ABILITY_BREAKDOWN_TOP_N);
 }
 
+function majorityRefGameId(cluster: ParseDefWindow[]): number | null {
+  const refCounts = new Map<number, number>();
+  for (const member of cluster) {
+    if (member.ref_game_id != null) refCounts.set(member.ref_game_id, (refCounts.get(member.ref_game_id) ?? 0) + 1);
+  }
+  return [...refCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+}
+
 export function clusterDefensiveWindows(windows: ParseDefWindow[], sampleCount: number): BurstWindow[] {
   if (!windows.length) return [];
   const byDefensive = new Map<string, ParseDefWindow[]>();
@@ -215,20 +223,14 @@ export function clusterDefensiveWindows(windows: ParseDefWindow[], sampleCount: 
       if (!clusterHead || distinctParses < minParses) continue;
       const damages = cluster.map(member => member.window_damage);
 
-      const refCounts = new Map<number, number>();
-      for (const member of cluster) {
-        if (member.ref_game_id != null) refCounts.set(member.ref_game_id, (refCounts.get(member.ref_game_id) ?? 0) + 1);
-      }
-      const ref_game_id = [...refCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
-
       result.push({
-        time_s: round(median(cluster.map(member => member.time_s)) ?? 0),
+        time_s: medianOr(cluster.map(member => member.time_s), 0),
         ...clusterDamageStats(damages),
-        window_length_s: round(mean(cluster.map(member => member.window_length_s)) ?? 0),
+        window_length_s: avgOr(cluster.map(member => member.window_length_s), 0),
         defensive_name: defensiveName,
         spell_id: clusterHead.spell_id,
         common_cds: [defensiveName],
-        ref_game_id,
+        ref_game_id: majorityRefGameId(cluster),
         ability_breakdown: clusterAbilityBreakdown(cluster),
       });
     }
@@ -236,38 +238,30 @@ export function clusterDefensiveWindows(windows: ParseDefWindow[], sampleCount: 
   return result.sort((a, b) => a.time_s - b.time_s);
 }
 
+function usesPerMinStats(summaries: ParseDefensiveSummary[]): PerDefensiveBenchmark['uses_per_min'] {
+  const perMin = summaries
+    .filter(summary => summary.fight_duration_s > 0 && summary.uses > 0)
+    .map(summary => round(summary.uses / summary.fight_duration_s * 60, 3));
+  return { avg: avgOr(perMin, 0, 3), stddev: stddevOr(perMin, 0, 3) };
+}
+
 // `summaries` is users-only; `totalParses` is every sampled parse, so sample_count and used_sample_count drive the runtime use-share gate.
 export function buildDefensiveBenchmark(
   summaries: ParseDefensiveSummary[], effectiveCd: number, totalParses: number,
 ): PerDefensiveBenchmark {
   const firstCasts = summaries.map(summary => summary.first_cast_s).filter((value): value is number => value != null);
-  const gaps: number[] = [];
-  for (const summary of summaries) {
-    let prev: number | undefined;
-    for (const timeS of summary.cast_times_s) {
-      if (prev != null) gaps.push(timeS - prev);
-      prev = timeS;
-    }
-  }
-  const benchUsesPerMin = summaries
-    .filter(summary => summary.fight_duration_s > 0 && summary.uses > 0)
-    .map(summary => round(summary.uses / summary.fight_duration_s * 60, 3));
+  const gaps = castGaps(summaries);
 
   return {
     sample_count: totalParses,
     used_sample_count: summaries.length,
-    avg_first_cast_s: firstCasts.length ? round((mean(firstCasts) ?? 0)) : 0,
-    stddev_first_cast_s: firstCasts.length ? round((deviation(firstCasts) ?? 0)) : 0,
-    avg_gap_s: gaps.length ? round((mean(gaps) ?? 0)) : null,
-    stddev_gap_s: gaps.length ? round((deviation(gaps) ?? 0)) : null,
+    avg_first_cast_s: avgOr(firstCasts, 0),
+    stddev_first_cast_s: stddevOr(firstCasts, 0),
+    avg_gap_s: avgOr(gaps, null),
+    stddev_gap_s: stddevOr(gaps, null),
     hold_targets: buildHoldTargets(summaries, effectiveCd, totalParses),
-    median_uses: summaries.length ? round(median(summaries.map(summary => summary.uses)) ?? 0) : 0,
-    uses_per_min: benchUsesPerMin.length
-      ? {
-          avg: round(mean(benchUsesPerMin) ?? 0, 3),
-          stddev: round(deviation(benchUsesPerMin) ?? 0, 3),
-        }
-      : { avg: 0, stddev: 0 },
+    median_uses: medianOr(summaries.map(summary => summary.uses), 0),
+    uses_per_min: usesPerMinStats(summaries),
     majority_hold: summaries.filter(summary => summary.cast_pattern === 'hold').length > summaries.length * MEMBER_MAJORITY_FRAC,
   };
 }

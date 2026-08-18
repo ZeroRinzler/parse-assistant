@@ -48,6 +48,10 @@ export class HttpWclTransport implements WclTransport {
       }
       throw error;
     }
+    return this.usableData(body, code);
+  }
+
+  private usableData<TData>(body: GraphQLResponse<TData>, code: string | undefined): TData {
     // A 200 with a GraphQL `errors` array never improves on retry, so it classifies permanent, not transient.
     if (body.errors?.length) {
       const message = body.errors[0]?.message ?? 'WCL GraphQL error';

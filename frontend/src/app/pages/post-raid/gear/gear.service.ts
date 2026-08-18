@@ -6,7 +6,7 @@ import { WclApiService } from '../../../core/services/wcl-api';
 import { logWarn } from '../../../core/log';
 import { Result, ok, permanent } from '../../../core/result';
 import { toLoadError } from '../../../core/http-load-error';
-import { decodeHtmlEntities, extractGear, selectCombatantInfo } from './gear-extract';
+import { GameNames, extractGear, fillGameNames, selectCombatantInfo } from './gear-extract';
 import { talentKeyFromTree } from '../../../shared/gear/talent-key';
 import {
   GearStatus,
@@ -45,7 +45,7 @@ export function emptyGearView(): GearComparisonView {
 // A log with no combatant info is a usable-looking 200 OK, so it is a permanent error, not a placeholder the caller silently discards.
 export function buildCharacterGear(
   event: WclCombatantInfo | null,
-  names: Record<string, { id: number; name: string }>,
+  names: GameNames,
 ): Result<CharacterGear> {
   if (!event?.gear?.length) {
     return permanent('No combatant info in this log.', 'gear.combatant-info');
@@ -53,12 +53,8 @@ export function buildCharacterGear(
   const { trinkets, enchants } = extractGear(event.gear);
   const talent_key = talentKeyFromTree(event.talentTree);
 
-  for (const trinket of trinkets) {
-    if (!trinket.name && trinket.id) trinket.name = decodeHtmlEntities(names[`i${trinket.id}`]?.name ?? '');
-  }
-  for (const enchant of enchants) {
-    if (!enchant.name && enchant.id) enchant.name = decodeHtmlEntities(names[`e${enchant.id}`]?.name ?? '');
-  }
+  fillGameNames(trinkets, 'i', names);
+  fillGameNames(enchants, 'e', names);
 
   return ok({ talent_key, trinkets, enchants });
 }
@@ -130,7 +126,7 @@ export class GearFeatureService {
   ): Promise<Result<CharacterGear>> {
     try {
       const event = selectCombatantInfo(await this.wclApi.getCombatantInfo(reportCode, fightId, playerId), playerId);
-      let names: Record<string, { id: number; name: string }> = {};
+      let names: GameNames = {};
       if (event?.gear?.length) {
         const { trinkets, enchants } = extractGear(event.gear);
         const itemIds = [...new Set(trinkets.filter(trinket => trinket.id).map(trinket => trinket.id))];

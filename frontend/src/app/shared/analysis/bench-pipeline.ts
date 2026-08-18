@@ -42,29 +42,49 @@ export async function benchFromTopParses<TParse, TBench>(
 ): Promise<Result<TBench>> {
   const { spec, encounterId, partition } = query;
   try {
-    const poolCount = slice.candidatePoolCount ?? CANDIDATE_POOL_COUNT;
-    const rankings = toParseRankings(unwrapRankings(await wclApi.getRankings(spec, encounterId, partition)), poolCount);
+    const limits = sliceLimits(slice);
+    const rankings = toParseRankings(
+      unwrapRankings(await wclApi.getRankings(spec, encounterId, partition)), limits.poolCount);
     if (!rankings.length) return missing(slice.noRankingsMessage);
 
-    const sampleTarget = slice.sampleTarget ?? TOP_PARSE_COUNT;
-    const parses: TParse[] = [];
-    let encounterName = '';
-    for (const ranking of rankings) {
-      const accepted = await parseCandidate(wclApi, slice, ranking);
-      if (!accepted) continue;
-      parses.push(accepted.parse);
-      encounterName ||= accepted.encounterName;
-      if (parses.length >= sampleTarget) break;
-    }
-    if (parses.length < (slice.minSamples ?? MIN_SAMPLE_COUNT)) {
-      return missing(slice.tooFewParsesMessage?.(parses.length) ?? slice.noRankingsMessage);
-    }
+    const payload = await collectParses(wclApi, slice, rankings, limits.sampleTarget);
+    const accepted = payload.parses.length;
+    if (accepted < limits.minSamples) return missing(slice.tooFewParsesMessage?.(accepted) ?? slice.noRankingsMessage);
 
-    return ok(await slice.bench({ encounterName, parses }));
+    return ok(await slice.bench(payload));
   } catch (cause) {
     logWarn(`${slice.logSource}.getBench ${spec}:${encounterId}`, cause);
     return toLoadError(cause, slice.errorId);
   }
+}
+
+interface SliceLimits {
+  poolCount: number;
+  sampleTarget: number;
+  minSamples: number;
+}
+
+function sliceLimits<TParse, TBench>(slice: BenchSlice<TParse, TBench>): SliceLimits {
+  return {
+    poolCount: slice.candidatePoolCount ?? CANDIDATE_POOL_COUNT,
+    sampleTarget: slice.sampleTarget ?? TOP_PARSE_COUNT,
+    minSamples: slice.minSamples ?? MIN_SAMPLE_COUNT,
+  };
+}
+
+async function collectParses<TParse, TBench>(
+  wclApi: WclApiService, slice: BenchSlice<TParse, TBench>, rankings: ParseRanking[], sampleTarget: number,
+): Promise<BenchPayload<TParse>> {
+  const parses: TParse[] = [];
+  let encounterName = '';
+  for (const ranking of rankings) {
+    const accepted = await parseCandidate(wclApi, slice, ranking);
+    if (!accepted) continue;
+    parses.push(accepted.parse);
+    encounterName ||= accepted.encounterName;
+    if (parses.length >= sampleTarget) break;
+  }
+  return { encounterName, parses };
 }
 
 // An unfetchable or unbindable report drops the parse, never the bench.

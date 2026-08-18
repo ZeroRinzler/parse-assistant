@@ -32,6 +32,26 @@ function sameMap(a: PosSample, b: PosSample): boolean {
   return a.mapID == null || b.mapID == null || a.mapID === b.mapID;
 }
 
+function interpolateBracket(before: PosSample, after: PosSample, t: number): PosSample {
+  const span = after.t - before.t;
+  const fraction = span > 0 ? (t - before.t) / span : 0;
+  // Coordinates only compare within one mapID, so a bracket straddling a map swap snaps to the nearer sample.
+  if (before.mapID !== after.mapID) return { ...(fraction < 0.5 ? before : after), t };
+  let facing: number | undefined;
+  if (before.facing != null && after.facing != null) {
+    facing = before.facing + angleDelta(before.facing, after.facing) * fraction;
+  } else {
+    facing = before.facing ?? after.facing;
+  }
+  return {
+    t,
+    x: before.x + (after.x - before.x) * fraction,
+    y: before.y + (after.y - before.y) * fraction,
+    facing,
+    mapID: before.mapID,
+  };
+}
+
 /** Returns null when `t` is more than `tolerance` seconds past either end of the timeline. */
 export function positionAt(timeline: ActorTimeline | undefined, t: number, tolerance = 3): PosSample | null {
   const samples = timeline?.samples ?? [];
@@ -43,23 +63,7 @@ export function positionAt(timeline: ActorTimeline | undefined, t: number, toler
   let before = first;
   for (const after of samples) {
     if (after.t < t) { before = after; continue; }
-    const span = after.t - before.t;
-    const fraction = span > 0 ? (t - before.t) / span : 0;
-    // Coordinates only compare within one mapID, so a bracket straddling a map swap snaps to the nearer sample.
-    if (before.mapID !== after.mapID) return { ...(fraction < 0.5 ? before : after), t };
-    let facing: number | undefined;
-    if (before.facing != null && after.facing != null) {
-      facing = before.facing + angleDelta(before.facing, after.facing) * fraction;
-    } else {
-      facing = before.facing ?? after.facing;
-    }
-    return {
-      t,
-      x: before.x + (after.x - before.x) * fraction,
-      y: before.y + (after.y - before.y) * fraction,
-      facing,
-      mapID: before.mapID,
-    };
+    return interpolateBracket(before, after, t);
   }
   // Every sample lies before `t`, so `before` is the timeline's last one.
   return t > before.t + tolerance ? null : { ...before, t };

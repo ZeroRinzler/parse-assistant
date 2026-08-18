@@ -4,7 +4,7 @@ import { CharacterGear, ParseRanking } from '../../../core/models/wcl.models';
 import { EncounterGearStats } from '../../../core/models/encounter.models';
 import { logWarn } from '../../../core/log';
 import { Result } from '../../../core/result';
-import { TRINKET_SLOTS, decodeHtmlEntities, extractGear, selectCombatantInfo } from './gear-extract';
+import { GameNames, TRINKET_SLOTS, extractGear, fillGameNames, selectCombatantInfo } from './gear-extract';
 import { talentKeyFromTree } from '../../../shared/gear/talent-key';
 import { buildTalentDiff } from '../../../shared/gear/gear-comparison';
 import { TalentDataService } from '../../../core/services/talent-data';
@@ -181,24 +181,27 @@ export class GearTransformService implements DataSource<GearBench> {
     if (!event?.gear?.length) return null;
 
     const { trinkets, enchants } = extractGear(event.gear);
-    const itemIds = [...new Set(trinkets.filter(trinket => trinket.id).map(trinket => trinket.id))];
-    const enchantIds = [...new Set(enchants.filter(enchant => enchant.id).map(enchant => enchant.id))];
-    let names: Record<string, { id: number; name: string }> = {};
-    try {
-      names = await this.wclApi.getGameNames(itemIds, enchantIds);
-    } catch (err) {
-      logWarn(`GearTransformService name resolution ${ranking.report_code}:${ranking.fight_id}`, err);
-    }
-    for (const trinket of trinkets) {
-      if (!trinket.name && trinket.id) trinket.name = decodeHtmlEntities(names[`i${trinket.id}`]?.name ?? '');
-    }
-    for (const enchant of enchants) {
-      if (!enchant.name && enchant.id) enchant.name = decodeHtmlEntities(names[`e${enchant.id}`]?.name ?? '');
-    }
+    const names = await this.resolveGameNames(ranking, trinkets, enchants);
+    fillGameNames(trinkets, 'i', names);
+    fillGameNames(enchants, 'e', names);
 
     const characterGear: CharacterGear = {
       talent_key: talentKeyFromTree(event.talentTree), trinkets, enchants,
     };
     return toParseGear(characterGear, ranking, player.id);
+  }
+
+  // A failed name lookup leaves the ids intact, so the parse still benches with blank names.
+  private async resolveGameNames(
+    ranking: ParseRanking, trinkets: { id: number }[], enchants: { id: number }[],
+  ): Promise<GameNames> {
+    const itemIds = [...new Set(trinkets.filter(trinket => trinket.id).map(trinket => trinket.id))];
+    const enchantIds = [...new Set(enchants.filter(enchant => enchant.id).map(enchant => enchant.id))];
+    try {
+      return await this.wclApi.getGameNames(itemIds, enchantIds);
+    } catch (err) {
+      logWarn(`GearTransformService name resolution ${ranking.report_code}:${ranking.fight_id}`, err);
+      return {};
+    }
   }
 }

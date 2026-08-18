@@ -433,17 +433,13 @@ export class PostRaidComponent {
     this.notice.set('');
 
     const fight = this.fights().find(f => f.id === fightId);
-    if (isUnsupportedDifficulty(fight?.difficulty)) { this.notice.set(unsupportedEncounterNotice(fight?.name ?? '', fight?.difficulty)); return; }
+    if (this._noticeUnsupported(fight)) return;
 
     this.loadingAnalysis.set(true);
     this.loadingMsg.set('Fetching player data from Warcraft Logs…');
     try {
-      const groups = await this.wclApi.getPlayerDetails(this.reportCode(), fightId);
-      if (!this.selectionRun.isCurrent(run)) return;
-      this.playerDetailGroups.set(groups);
-      const spec = specOf(groups, playerId);
-      // Unmappable spec is a semantic dead end, not retriable: permanent, not transient.
-      if (!spec) { this._showError(permanent('Could not resolve the selected player\'s spec.', 'post-raid.spec-resolve')); return; }
+      const spec = await this._resolveSpec(run, fightId, playerId);
+      if (!spec) return;
       this.spec.set(spec);
 
       // Marks every card busy before they mount/reload, so the spinner stays up with no gap where the cards render empty.
@@ -460,6 +456,23 @@ export class PostRaidComponent {
     } finally {
       if (this.selectionRun.isCurrent(run)) this.loadingAnalysis.set(false);
     }
+  }
+
+  private _noticeUnsupported(fight: WclFight | undefined): boolean {
+    if (!isUnsupportedDifficulty(fight?.difficulty)) return false;
+    this.notice.set(unsupportedEncounterNotice(fight?.name ?? '', fight?.difficulty));
+    return true;
+  }
+
+  /** Null once the run is superseded or the spec is unresolvable, both already handled here. */
+  private async _resolveSpec(run: number, fightId: number, playerId: number): Promise<string | null> {
+    const groups = await this.wclApi.getPlayerDetails(this.reportCode(), fightId);
+    if (!this.selectionRun.isCurrent(run)) return null;
+    this.playerDetailGroups.set(groups);
+    const spec = specOf(groups, playerId);
+    // Unmappable spec is a semantic dead end, not retriable: permanent, not transient.
+    if (!spec) { this._showError(permanent('Could not resolve the selected player\'s spec.', 'post-raid.spec-resolve')); return null; }
+    return spec;
   }
 
   private _applyAutoPlayer(): void {

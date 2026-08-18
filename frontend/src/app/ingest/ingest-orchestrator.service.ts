@@ -121,6 +121,27 @@ export class IngestOrchestratorService {
     const version = String(INGEST_VERSION);
     console.log(`Ingest version: ${version}`);
 
+    const specWcl = await this.resolveSpecMetas(client);
+
+    console.log('Resolving current raids...');
+    const discovery = await this.discoverContent(client, specWcl);
+    if (!discovery) return;
+    const { encounters, protectedIds } = discovery;
+    console.log(`${encounters.length} live encounters`);
+
+    const specs = await this.orderedSpecsFromDisk();
+    if (!specs.length) {
+      console.log('No known specs (no rulebook.json found). Nothing to do.');
+      publishSummary({ succeeded: [], failed: [], budgetStopped: false });
+      return;
+    }
+
+    const summary = await this.ingestEachSpec(client, specs, encounters, protectedIds, version);
+    this.printRunSummary(summary, specs.length);
+    publishSummary(summary);
+  }
+
+  private async resolveSpecMetas(client: ApiWclClient): Promise<SpecWclMap> {
     // The spec icon is not on WCL, so enrich each meta from that spec's rulebook (its spec_icon stem).
     const classesData = await client.query<ClassesQuery>(CLASSES_Q);
     const metas = mapClassesToSpecMeta(classesData.gameData?.classes ?? []);
@@ -140,28 +161,26 @@ export class IngestOrchestratorService {
     this.specMeta.hydrate(metas);
     await this.dataFile.writeSpecMeta(metas);
     console.log(`Resolved ${metas.length} specs from WCL`);
+    return specWcl;
+  }
 
-    console.log('Resolving current raids...');
-    let discovery: CurrentContent;
+  /** Null means the budget stopped the run at discovery and the summary is already published. */
+  private async discoverContent(client: ApiWclClient, specWcl: SpecWclMap): Promise<CurrentContent | null> {
     try {
-      discovery = await getEncounters(client, specWcl);
+      return await getEncounters(client, specWcl);
     } catch (err) {
       const budgetSummary = discoveryBudgetSummary(err);
       if (!budgetSummary) throw err;
       console.log(`\n[budget] Stopping cleanly at discovery: ${err instanceof Error ? err.message : String(err)}`);
       publishSummary(budgetSummary);
-      return;
+      return null;
     }
-    const { encounters, protectedIds } = discovery;
-    console.log(`${encounters.length} live encounters`);
+  }
 
-    const specs = await this.orderedSpecsFromDisk();
-    if (!specs.length) {
-      console.log('No known specs (no rulebook.json found). Nothing to do.');
-      publishSummary({ succeeded: [], failed: [], budgetStopped: false });
-      return;
-    }
-
+  private async ingestEachSpec(
+    client: ApiWclClient, specs: string[],
+    encounters: IngestEncounter[], protectedIds: Set<number>, version: string,
+  ): Promise<IngestRunSummary> {
     // Isolate each spec so one throw drops only that spec, not the whole run.
     const succeeded: string[] = [];
     const failed: { spec: string; message: string }[] = [];
@@ -176,9 +195,12 @@ export class IngestOrchestratorService {
         failed.push({ spec, message: err instanceof Error ? err.message : String(err) });
       }
     }
+    return { succeeded, failed, budgetStopped };
+  }
 
+  private printRunSummary({ succeeded, failed, budgetStopped }: IngestRunSummary, specCount: number): void {
     console.log('\n=== Ingestion summary ===');
-    console.log(`Specs processed: ${succeeded.length} of ${specs.length}`);
+    console.log(`Specs processed: ${succeeded.length} of ${specCount}`);
     if (budgetStopped) {
       console.log('Stopped early: WCL point budget exhausted; the remaining specs resume next run.');
     }
@@ -190,7 +212,6 @@ export class IngestOrchestratorService {
     } else {
       console.log('No spec-level failures.');
     }
-    publishSummary({ succeeded, failed, budgetStopped });
   }
 
   private async orderedSpecsFromDisk(): Promise<string[]> {

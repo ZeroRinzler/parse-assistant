@@ -3,8 +3,8 @@ import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
 import { RulebookCooldown, RulebookDefensive, RulebookRule } from '../../../core/models/rulebook.models';
 import { PerCdBenchmark, UsesPerMin } from '../../../core/models/encounter.models';
-import { mean, median, deviation, quantile } from 'd3-array';
-import { round, getOrInsert } from '../../../shared/analysis/analysis-math';
+import { mean, deviation, quantile } from 'd3-array';
+import { round, getOrInsert, avgOr, stddevOr, medianOr, castGaps } from '../../../shared/analysis/analysis-math';
 import {
   HoldWindow, HOLD_CONSENSUS_FRAC, buildHoldTargets, detectHoldWindows,
 } from '../../../shared/analysis/hold-targets';
@@ -113,14 +113,7 @@ function benchUsesPerMin(entries: CdSummary[]): UsesPerMin {
 
 export function buildCdBenchmark(entries: CdSummary[], effectiveCd: number): PerCdBenchmark {
   const firstCasts = entries.map(entry => entry.first_cast_s).filter((value): value is number => value != null);
-  const gaps: number[] = [];
-  for (const entry of entries) {
-    let prev: number | undefined;
-    for (const timeS of entry.cast_times_s) {
-      if (prev != null) gaps.push(timeS - prev);
-      prev = timeS;
-    }
-  }
+  const gaps = castGaps(entries);
   const blOffsets = entries.map(entry => entry.bl_offset_s).filter((value): value is number => value != null);
   const blCount = entries.filter(entry => entry.bl_aligned).length;
   const usesPerMin = benchUsesPerMin(entries);
@@ -129,13 +122,13 @@ export function buildCdBenchmark(entries: CdSummary[], effectiveCd: number): Per
   return {
     sample_count: entries.length,
     used_sample_count: entries.filter(entry => entry.total_uses > 0).length,
-    avg_first_cast_s: firstCasts.length ? round((mean(firstCasts) ?? 0)) : 0,
-    stddev_first_cast_s: firstCasts.length ? round((deviation(firstCasts) ?? 0)) : 0,
-    avg_gap_s: gaps.length ? round((mean(gaps) ?? 0)) : null,
-    stddev_gap_s: gaps.length ? round((deviation(gaps) ?? 0)) : null,
-    avg_bl_offset_s: blOffsets.length ? round((mean(blOffsets) ?? 0)) : null,
-    stddev_bl_offset_s: blOffsets.length ? round((deviation(blOffsets) ?? 0)) : null,
-    median_uses: usedUses.length ? round(median(usedUses) ?? 0) : 0,
+    avg_first_cast_s: avgOr(firstCasts, 0),
+    stddev_first_cast_s: stddevOr(firstCasts, 0),
+    avg_gap_s: avgOr(gaps, null),
+    stddev_gap_s: stddevOr(gaps, null),
+    avg_bl_offset_s: avgOr(blOffsets, null),
+    stddev_bl_offset_s: stddevOr(blOffsets, null),
+    median_uses: medianOr(usedUses, 0),
     uses_per_min: usesPerMin,
     bl_pct: entries.length ? Math.round((blCount / entries.length) * 100) : 0,
     majority_hold: entries.filter(entry => entry.cast_pattern === 'hold').length >= entries.length * HOLD_CONSENSUS_FRAC,
@@ -160,8 +153,8 @@ export function computeEfficiencyThresholds(
   }
   return {
     downtimeThresholdS: round(downtimeThresholdS, 3),
-    topAvgEfficiency: efficiencies.length ? round((mean(efficiencies) ?? 0)) : 0,
-    topEfficiencyStddev: efficiencies.length ? round((deviation(efficiencies) ?? 0)) : 0,
+    topAvgEfficiency: avgOr(efficiencies, 0),
+    topEfficiencyStddev: stddevOr(efficiencies, 0),
   };
 }
 

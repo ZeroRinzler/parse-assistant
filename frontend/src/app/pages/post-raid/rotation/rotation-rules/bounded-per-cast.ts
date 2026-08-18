@@ -20,25 +20,39 @@ export interface BoundedCasts {
   farAdvice?: string;
 }
 
+interface Limits { near: number; far: number; }
+
+interface Voice { label: string; phrase: string; advice: string; }
+
+function nearVoice(judged: BoundedCasts, limits: Limits): Voice {
+  const near = judged.scale.format(limits.near);
+  return { label: judged.label(near), phrase: judged.phrase(near), advice: judged.advice(near) };
+}
+
+// A pull with both a near-side and a far-side violation keeps the primary phrasing (and its remedy) live, since the authored action still answers those casts.
+function voiceFor(
+  judged: BoundedCasts, judging: RuleJudging, limits: Limits, violations: { value: number }[],
+): Voice {
+  const { farPhrase, farAdvice, farLabel } = judged;
+  if (!judging.twoSided || farPhrase == null || farAdvice == null || farLabel == null) {
+    return nearVoice(judged, limits);
+  }
+  const allFar = violations.every(({ value }) =>
+    judging.primary === 'below' ? value > limits.far : value < limits.far);
+  if (!allFar) return nearVoice(judged, limits);
+  const far = judged.scale.format(limits.far);
+  return { label: farLabel(far), phrase: farPhrase(far), advice: farAdvice };
+}
+
 export function evaluateBoundedPerCast(
   judged: BoundedCasts, band: RuleBand, judging: RuleJudging, severity: Severity, remedy?: string,
 ): AnalysisFinding | null {
   if (!judged.values.length) return null;
   const { lo, hi } = bandLimits(judged.scale, band);
-  const nearLimit = judging.primary === 'below' ? lo : hi;
-  const farLimit = judging.primary === 'below' ? hi : lo;
+  const limits: Limits = judging.primary === 'below' ? { near: lo, far: hi } : { near: hi, far: lo };
   const violations = judged.values.filter(({ value }) => outOfBand(value, lo, hi, judging));
   if (!exceedsTolerance(violations.length, judged.values.length, band)) return null;
-  const past = (value: number) => judging.primary === 'below' ? value > hi : value < lo;
-  // A pull with both a near-side and a far-side violation keeps the primary phrasing (and its remedy) live, since the authored action still answers those casts.
-  const { farPhrase, farAdvice, farLabel } = judged;
-  const farSide = judging.twoSided && farPhrase != null && farAdvice != null && farLabel != null
-    && violations.every(({ value }) => past(value));
-  const phrase = farSide
-    ? farPhrase(judged.scale.format(farLimit))
-    : judged.phrase(judged.scale.format(nearLimit));
-  const advice = farSide ? farAdvice : judged.advice(judged.scale.format(nearLimit));
-  const label = farSide ? farLabel(judged.scale.format(farLimit)) : judged.label(judged.scale.format(nearLimit));
+  const { label, phrase, advice } = voiceFor(judged, judging, limits, violations);
   const firstViolation = violations[0];
   if (firstViolation == null) return null;
   return {
@@ -55,6 +69,6 @@ export function evaluateBoundedPerCast(
         detail: `${judged.subject} cast at ${label}.`,
       };
     })),
-    occurrenceTarget: judged.advice(judged.scale.format(nearLimit)),
+    occurrenceTarget: judged.advice(judged.scale.format(limits.near)),
   };
 }
