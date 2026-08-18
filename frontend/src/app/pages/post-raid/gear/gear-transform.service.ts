@@ -3,21 +3,17 @@ import { WclApiService } from '../../../core/services/wcl-api';
 import { CharacterGear, ParseRanking } from '../../../core/models/wcl.models';
 import { EncounterGearStats } from '../../../core/models/encounter.models';
 import { logWarn } from '../../../core/log';
-import { Result, ok, missing } from '../../../core/result';
-import { toLoadError } from '../../../core/http-load-error';
+import { Result } from '../../../core/result';
 import { TRINKET_SLOTS, decodeHtmlEntities, extractGear, selectCombatantInfo } from './gear-extract';
 import { talentKeyFromTree } from '../../../shared/gear/talent-key';
 import { buildTalentDiff } from '../../../shared/gear/gear-comparison';
 import { TalentDataService } from '../../../core/services/talent-data';
 import { SpecTalents } from '../../../core/models/talent.models';
-import { findParseActor, toParseRankings, unwrapRankings } from '../../../shared/analysis/wcl-projections';
 import { getOrInsert } from '../../../shared/analysis/analysis-math';
+import { BenchParse, benchFromTopParses } from '../../../shared/analysis/bench-pipeline';
 import { DataSource } from '../../../core/data-source/data-source';
 import { GearBench } from './gear-data-source';
 
-const TOP_PARSE_COUNT = 10;
-// Over-fetch so a private/unfetchable top parse can be backfilled; the loop break caps actual fetches at TOP_PARSE_COUNT.
-const CANDIDATE_POOL_COUNT = TOP_PARSE_COUNT * 2;
 const MAX_TALENT_BUILDS = 3;
 const MAX_TRINKETS_PER_SLOT = 5;
 const MAX_ENCHANTS_PER_SLOT = 3;
@@ -160,72 +156,49 @@ export class GearTransformService implements DataSource<GearBench> {
   private readonly talentData = inject(TalentDataService);
 
   async getBench(spec: string, encounterId: number, partition?: number | null): Promise<Result<GearBench>> {
-    try {
-      const rankings = toParseRankings(unwrapRankings(await this.wclApi.getRankings(spec, encounterId, partition)), CANDIDATE_POOL_COUNT);
-      if (!rankings.length) return missing('Not yet ingested.');
-
-      const parses: ParseGear[] = [];
-      let encounterName = '';
-      for (const ranking of rankings) {
-        const fetched = await this.fetchParseGear(ranking);
-        if (!fetched) continue;
-        parses.push(fetched.gear);
-        encounterName ||= fetched.encounterName;
-        if (parses.length >= TOP_PARSE_COUNT) break;
-      }
-      if (!parses.length) return missing('Not yet ingested.');
-
-      const stats = aggregateParseGear(parses);
-      return ok({
-        spec,
-        encounter_id: encounterId,
-        encounter_name: encounterName,
-        sample_count: parses.length,
-        talent_builds: withTalentDiffs(stats.talent_builds, await this.talentData.getTalents(spec)),
-        trinkets: stats.trinkets,
-        enchants: stats.enchants,
-      });
-    } catch (cause) {
-      logWarn(`GearTransformService bench ${spec}:${encounterId}`, cause);
-      return toLoadError(cause, 'gear.bench');
-    }
+    return benchFromTopParses(this.wclApi, { spec, encounterId, partition }, {
+      logSource: 'GearTransformService',
+      errorId: 'gear.bench',
+      noRankingsMessage: 'Not yet ingested.',
+      parse: parse => this.fetchParseGear(parse),
+      bench: async ({ encounterName, parses }) => {
+        const stats = aggregateParseGear(parses);
+        return {
+          spec,
+          encounter_id: encounterId,
+          encounter_name: encounterName,
+          sample_count: parses.length,
+          talent_builds: withTalentDiffs(stats.talent_builds, await this.talentData.getTalents(spec)),
+          trinkets: stats.trinkets,
+          enchants: stats.enchants,
+        };
+      },
+    });
   }
 
-  private async fetchParseGear(
-    ranking: ParseRanking,
-  ): Promise<{ gear: ParseGear; encounterName: string } | null> {
+  private async fetchParseGear({ ranking, fight, player }: BenchParse): Promise<ParseGear | null> {
+    const event = selectCombatantInfo(await this.wclApi.getCombatantInfo(ranking.report_code, fight.id, player.id), player.id);
+    if (!event?.gear?.length) return null;
+
+    const { trinkets, enchants } = extractGear(event.gear);
+    const itemIds = [...new Set(trinkets.filter(trinket => trinket.id).map(trinket => trinket.id))];
+    const enchantIds = [...new Set(enchants.filter(enchant => enchant.id).map(enchant => enchant.id))];
+    let names: Record<string, { id: number; name: string }> = {};
     try {
-      const report = await this.wclApi.getReport(ranking.report_code);
-      const fight = report.fights.find(entry => entry.id === ranking.fight_id);
-      const player = findParseActor(report.masterData?.actors, ranking);
-      if (!fight || !player) return null;
-
-      const event = selectCombatantInfo(await this.wclApi.getCombatantInfo(ranking.report_code, fight.id, player.id), player.id);
-      if (!event?.gear?.length) return null;
-
-      const { trinkets, enchants } = extractGear(event.gear);
-      const itemIds = [...new Set(trinkets.filter(trinket => trinket.id).map(trinket => trinket.id))];
-      const enchantIds = [...new Set(enchants.filter(enchant => enchant.id).map(enchant => enchant.id))];
-      let names: Record<string, { id: number; name: string }> = {};
-      try {
-        names = await this.wclApi.getGameNames(itemIds, enchantIds);
-      } catch (err) {
-        logWarn(`GearTransformService name resolution ${ranking.report_code}:${ranking.fight_id}`, err);
-      }
-      for (const trinket of trinkets) {
-        if (!trinket.name && trinket.id) trinket.name = decodeHtmlEntities(names[`i${trinket.id}`]?.name ?? '');
-      }
-      for (const enchant of enchants) {
-        if (!enchant.name && enchant.id) enchant.name = decodeHtmlEntities(names[`e${enchant.id}`]?.name ?? '');
-      }
-
-      const characterGear: CharacterGear = {
-        talent_key: talentKeyFromTree(event.talentTree), trinkets, enchants,
-      };
-      return { gear: toParseGear(characterGear, ranking, player.id), encounterName: fight.name };
+      names = await this.wclApi.getGameNames(itemIds, enchantIds);
     } catch (err) {
-      logWarn(`GearTransformService parse ${ranking.report_code}:${ranking.fight_id}`, err);
-      return null;
+      logWarn(`GearTransformService name resolution ${ranking.report_code}:${ranking.fight_id}`, err);
     }
+    for (const trinket of trinkets) {
+      if (!trinket.name && trinket.id) trinket.name = decodeHtmlEntities(names[`i${trinket.id}`]?.name ?? '');
+    }
+    for (const enchant of enchants) {
+      if (!enchant.name && enchant.id) enchant.name = decodeHtmlEntities(names[`e${enchant.id}`]?.name ?? '');
+    }
+
+    const characterGear: CharacterGear = {
+      talent_key: talentKeyFromTree(event.talentTree), trinkets, enchants,
+    };
+    return toParseGear(characterGear, ranking, player.id);
   }
 }

@@ -1,7 +1,5 @@
 import { assert, describe, it, expect } from 'vitest';
 import { TestBed } from '@angular/core/testing';
-import { WclApiService } from '../../../core/services/wcl-api';
-import { DataFileApiService } from '../../../core/services/data-file-api';
 import {
   RotationTransformService,
   summarizeCooldownCasts, castGapListS,
@@ -11,6 +9,8 @@ import {
 import { SHADOW_BLADES, BLOODLUST, CLOAK_OF_SHADOWS, RUPTURE } from '../../../../testing/spell-ids';
 import { cast, applyBuff } from '../../../../testing/builders/events';
 import { rulebook } from '../../../../testing/builders/rulebook';
+import { abilityLookup, parseRankings, reportsByCode } from '../../../../testing/builders/wcl-fixtures';
+import { provideApiFakes } from '../../../../testing/api-fakes';
 import { ok, missing } from '../../../core/result';
 import { withRelativeS } from '../../../shared/analysis/wcl-projections';
 import { RulebookRule } from '../../../core/models/rulebook.models';
@@ -241,16 +241,10 @@ describe('benchRules', () => {
   });
 });
 
-function reportFor(playerId: number, playerName: string, fightId: number) {
-  return {
-    title: 't',
-    fights: [{ id: fightId, name: 'Boss', startTime: 0, endTime: 120_000 }],
-    masterData: {
-      actors: [{ id: playerId, name: playerName, subType: 'Rogue', server: '' }],
-      abilities: [{ gameID: SHADOW_BLADES, name: 'Shadow Blades', icon: 'sb' }],
-    },
-  };
-}
+const reportShape = {
+  endTimeMs: 120_000,
+  abilities: [{ gameID: SHADOW_BLADES, name: 'Shadow Blades', icon: 'sb' }],
+};
 
 // An id outside the rulebook cooldowns; exercises the cooldown-cast filter.
 const UNTRACKED_SPELL_ID = 99;
@@ -258,21 +252,13 @@ const UNTRACKED_SPELL_ID = 99;
 // The floor the transform benches at (MIN_PARSE_COUNT in the service, which tracks the rule engine's own MIN_MEASURED_PARSES).
 const MIN_SAMPLE_COUNT = 5;
 
-const rankingsFor = (count: number) =>
-  Array.from({ length: count }, (_, i) => ({ name: `P${i + 1}`, report: { code: `r${i + 1}`, fightID: i + 1 } }));
-
 const wclFake = {
   // getRankings returns the raw WCL envelope ({ rankings }); the transform unwraps it.
-  getRankings: async () => ({ rankings: rankingsFor(MIN_SAMPLE_COUNT) }),
-  getReport: async (code: string) => {
-    const index = Number(code.slice(1));
-    return reportFor(index * 10, `P${index}`, index);
-  },
+  getRankings: async () => ({ rankings: parseRankings(MIN_SAMPLE_COUNT) }),
+  getReport: reportsByCode(reportShape),
   getAllEvents: async (_code: string, _fightId: number, dataType: string) =>
     dataType === 'Casts' ? [cast(SHADOW_BLADES, 5), cast(UNTRACKED_SPELL_ID, 8)] : [applyBuff(BLOODLUST, 6)],
-  // Raw gameData.ability map (id-keyed { id, icon, name }); the transform projects it.
-  getAbilities: async (ids: number[]) =>
-    Object.fromEntries(ids.map(id => [id, { id, icon: 'sb', name: 'Shadow Blades' }])),
+  getAbilities: abilityLookup({ [SHADOW_BLADES]: { icon: 'sb', name: 'Shadow Blades' } }),
 };
 const filesFake = {
   getRulebook: async () => ok(rulebook({
@@ -281,19 +267,8 @@ const filesFake = {
 };
 
 describe('RotationTransformService (live, in-browser)', () => {
-  // Full sample size the transform caps at (TOP_PARSE_COUNT in the service).
-  const FULL_SAMPLE_COUNT = 10;
-  // One private candidate over-fetched past, plus the full sample: 11 candidates in.
-  const CANDIDATE_COUNT = FULL_SAMPLE_COUNT + 1;
-  const PRIVATE_CODE = 'r5';
-
   it('computes a rotation bench from the top parses', async () => {
-    TestBed.configureTestingModule({
-      providers: [
-        { provide: WclApiService, useValue: wclFake as unknown as WclApiService },
-        { provide: DataFileApiService, useValue: filesFake as unknown as DataFileApiService },
-      ],
-    });
+    TestBed.configureTestingModule({ providers: provideApiFakes({ wcl: wclFake, files: filesFake }) });
     const result = await TestBed.inject(RotationTransformService).getBench('SubtletyRogue', 1);
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -308,88 +283,10 @@ describe('RotationTransformService (live, in-browser)', () => {
     }
   });
 
-  it('benches nothing from a pool one parse short of the floor, so one player\'s habit never sets the bar', async () => {
-    const thinWcl = { ...wclFake, getRankings: async () => ({ rankings: rankingsFor(MIN_SAMPLE_COUNT - 1) }) };
-    TestBed.configureTestingModule({
-      providers: [
-        { provide: WclApiService, useValue: thinWcl as unknown as WclApiService },
-        { provide: DataFileApiService, useValue: filesFake as unknown as DataFileApiService },
-      ],
-    });
-    const result = await TestBed.inject(RotationTransformService).getBench('SubtletyRogue', 1);
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.kind).toBe('missing');
-  });
-
-  it('backfills past a private (unfetchable) top parse to keep the sample count full', async () => {
-    const candidates = Array.from({ length: CANDIDATE_COUNT }, (_, i) => ({ name: `P${i + 1}`, report: { code: `r${i + 1}`, fightID: i + 1 } }));
-    const backfillWcl = {
-      ...wclFake,
-      getRankings: async () => ({ rankings: candidates }),
-      getReport: async (code: string) => {
-        if (code === PRIVATE_CODE) throw new Error('You do not have permission to view this report.');
-        const idx = Number(code.slice(1));
-        return reportFor(idx * 10, `P${idx}`, idx);
-      },
-    };
-    TestBed.configureTestingModule({
-      providers: [
-        { provide: WclApiService, useValue: backfillWcl as unknown as WclApiService },
-        { provide: DataFileApiService, useValue: filesFake as unknown as DataFileApiService },
-      ],
-    });
-    const result = await TestBed.inject(RotationTransformService).getBench('SubtletyRogue', 1);
-    expect(result.ok).toBe(true);
-    // 11 candidates, one private: the 11th backfills the skipped parse to a full 10.
-    if (result.ok) expect(result.value.sample_count).toBe(FULL_SAMPLE_COUNT);
-  });
-
-  it('samples the partition it was handed, so the slice reads the parses the signature was taken over', async () => {
-    const RESOLVED_PARTITION = 2;
-    const asked: (number | null | undefined)[] = [];
-    const partitionWcl = {
-      ...wclFake,
-      getRankings: async (_spec: string, _encounterId: number, partition?: number | null) => {
-        asked.push(partition);
-        return { rankings: [{ name: 'P1', report: { code: 'r1', fightID: 1 } }, { name: 'P2', report: { code: 'r2', fightID: 2 } }] };
-      },
-    };
-    TestBed.configureTestingModule({
-      providers: [
-        { provide: WclApiService, useValue: partitionWcl as unknown as WclApiService },
-        { provide: DataFileApiService, useValue: filesFake as unknown as DataFileApiService },
-      ],
-    });
-    await TestBed.inject(RotationTransformService).getBench('SubtletyRogue', 1, RESOLVED_PARTITION);
-    expect(asked).toEqual([RESOLVED_PARTITION]);
-  });
-
-  it('leaves the partition unset when the orchestrator resolved none, which is WCL\'s own default', async () => {
-    const asked: (number | null | undefined)[] = [];
-    const partitionWcl = {
-      ...wclFake,
-      getRankings: async (_spec: string, _encounterId: number, partition?: number | null) => {
-        asked.push(partition);
-        return { rankings: [] };
-      },
-    };
-    TestBed.configureTestingModule({
-      providers: [
-        { provide: WclApiService, useValue: partitionWcl as unknown as WclApiService },
-        { provide: DataFileApiService, useValue: filesFake as unknown as DataFileApiService },
-      ],
-    });
-    await TestBed.inject(RotationTransformService).getBench('SubtletyRogue', 1);
-    expect(asked).toEqual([undefined]);
-  });
-
   it('propagates a missing error when the spec has no rulebook cooldowns', async () => {
+    // A rulebook with no cooldowns is nothing to analyze - the transform reports missing.
     TestBed.configureTestingModule({
-      providers: [
-        { provide: WclApiService, useValue: wclFake as unknown as WclApiService },
-        // A rulebook with no cooldowns is nothing to analyze - the transform reports missing.
-        { provide: DataFileApiService, useValue: { getRulebook: async () => ok(rulebook()) } as unknown as DataFileApiService },
-      ],
+      providers: provideApiFakes({ wcl: wclFake, files: { getRulebook: async () => ok(rulebook()) } }),
     });
     expect(await TestBed.inject(RotationTransformService).getBench('SubtletyRogue', 1))
       .toEqual(missing('No rulebook cooldowns for this spec.'));

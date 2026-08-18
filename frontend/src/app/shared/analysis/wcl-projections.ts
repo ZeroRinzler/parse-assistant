@@ -83,7 +83,7 @@ export function toParseRankings(raw: WclRawRanking[], count: number): ParseRanki
     }));
 }
 
-type ReportActor = NonNullable<WclReport['masterData']>['actors'][number];
+export type ReportActor = NonNullable<WclReport['masterData']>['actors'][number];
 
 // A rankings row spells a realm "Twisting Nether" where a report actor spells it "Twisting-Nether", so identity is the alphanumerics.
 function realmKey(server: string): string {

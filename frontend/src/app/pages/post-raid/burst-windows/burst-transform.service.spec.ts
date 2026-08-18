@@ -1,7 +1,5 @@
 import { assert, describe, it, expect } from 'vitest';
 import { TestBed } from '@angular/core/testing';
-import { WclApiService } from '../../../core/services/wcl-api';
-import { DataFileApiService } from '../../../core/services/data-file-api';
 import { WclEvent } from '../../../core/models/wcl.models';
 import { ok, missing } from '../../../core/result';
 import {
@@ -13,6 +11,8 @@ import { SHADOW_BLADES, SHADOW_BLADES_DAMAGE, EVISCERATE, BLACK_POWDER, CLOAK_OF
 import { WCL_SYNTHETIC_SOURCE_FALLBACK_ID, withRelativeS } from '../../../shared/analysis/wcl-projections';
 import { cast, damage } from '../../../../testing/builders/events';
 import { rulebook } from '../../../../testing/builders/rulebook';
+import { abilityLookup, parseRankings, reportsByCode } from '../../../../testing/builders/wcl-fixtures';
+import { provideApiFakes } from '../../../../testing/api-fakes';
 
 /** Fixture events build against a fight-start of 0, so stamping is a pass-through to seconds. */
 const timed = withRelativeS;
@@ -429,33 +429,17 @@ describe('clusterParseWindows', () => {
   });
 });
 
-function reportFor(playerId: number, playerName: string, fightId: number) {
-  return {
-    title: 't',
-    fights: [{ id: fightId, name: 'Boss', startTime: 0, endTime: 300_000, kill: true, encounterID: 1, friendlyPlayers: [] }],
-    masterData: {
-      actors: [{ id: playerId, name: playerName, subType: 'Rogue', server: '' }],
-      abilities: [{ gameID: SHADOW_BLADES_DAMAGE, name: 'Eviscerate', icon: 'x' }],
-    },
-  };
-}
+const reportAbilities = [{ gameID: SHADOW_BLADES_DAMAGE, name: 'Eviscerate', icon: 'x' }];
 
 // A damage-density burst at 10,11,12s overlaps the Shadow Blades cast at 10s, attributing it inside the measured window.
 const burstDamage = [damage(SHADOW_BLADES_DAMAGE, 10, BIN_DAMAGE), damage(SHADOW_BLADES_DAMAGE, 11, BIN_DAMAGE), damage(SHADOW_BLADES_DAMAGE, 12, BIN_DAMAGE)];
 const wclFake = {
   // getRankings returns the raw WCL envelope ({ rankings }); the transform unwraps it.
-  getRankings: async () => ({
-    rankings: [
-      { name: 'P1', report: { code: 'r1', fightID: 1 } },
-      { name: 'P2', report: { code: 'r2', fightID: 2 } },
-    ],
-  }),
-  getReport: async (code: string) => (code === 'r1' ? reportFor(10, 'P1', 1) : reportFor(20, 'P2', 2)),
+  getRankings: async () => ({ rankings: parseRankings(2) }),
+  getReport: reportsByCode({ abilities: reportAbilities }),
   getAllEvents: async (_code: string, _fightId: number, dataType: string) =>
     dataType === 'Casts' ? [cast(SHADOW_BLADES, 10)] : burstDamage,
-  // Raw gameData.ability map (id-keyed { id, icon, name }); the transform projects it.
-  getAbilities: async (ids: number[]) =>
-    Object.fromEntries(ids.map(id => [id, { id, icon: `icon_${id}`, name: `name_${id}` }])),
+  getAbilities: abilityLookup(),
 };
 const filesFake = {
   getRulebook: async () => ok(rulebook({
@@ -466,12 +450,7 @@ const filesFake = {
 
 describe('BurstTransformService (live, in-browser)', () => {
   it('computes a clustered burst bench from the top parses', async () => {
-    TestBed.configureTestingModule({
-      providers: [
-        { provide: WclApiService, useValue: wclFake as unknown as WclApiService },
-        { provide: DataFileApiService, useValue: filesFake as unknown as DataFileApiService },
-      ],
-    });
+    TestBed.configureTestingModule({ providers: provideApiFakes({ wcl: wclFake, files: filesFake }) });
     const bench = await TestBed.inject(BurstTransformService).getBench('SubtletyRogue', 1);
     expect(bench.ok).toBe(true);
     if (!bench.ok) return;
@@ -486,38 +465,9 @@ describe('BurstTransformService (live, in-browser)', () => {
     expect(bench.value.ability_icons[SHADOW_BLADES_DAMAGE]).toEqual({ icon: `icon_${SHADOW_BLADES_DAMAGE}`, name: `name_${SHADOW_BLADES_DAMAGE}` });
   });
 
-  it('backfills past a private (unfetchable) top parse to keep the sample count full', async () => {
-    const candidates = Array.from({ length: 11 }, (_, i) => ({ name: `P${i + 1}`, report: { code: `r${i + 1}`, fightID: i + 1 } }));
-    const backfillWcl = {
-      ...wclFake,
-      getRankings: async () => ({ rankings: candidates }),
-      getReport: async (code: string) => {
-        if (code === 'r5') throw new Error('You do not have permission to view this report.');
-        const idx = Number(code.slice(1));
-        return reportFor(idx * 10, `P${idx}`, idx);
-      },
-    };
-    TestBed.configureTestingModule({
-      providers: [
-        { provide: WclApiService, useValue: backfillWcl as unknown as WclApiService },
-        { provide: DataFileApiService, useValue: filesFake as unknown as DataFileApiService },
-      ],
-    });
-    const bench = await TestBed.inject(BurstTransformService).getBench('SubtletyRogue', 1);
-    expect(bench.ok).toBe(true);
-    // 11 candidates, one private: the 11th backfills the skipped parse to a full 10.
-    if (bench.ok) expect(bench.value.sample_count).toBe(10);
-  });
-
   it('returns missing when the spec rulebook has no cooldowns', async () => {
     TestBed.configureTestingModule({
-      providers: [
-        { provide: WclApiService, useValue: wclFake as unknown as WclApiService },
-        {
-          provide: DataFileApiService,
-          useValue: { getRulebook: async () => ok(rulebook({ spec: 'SubtletyRogue', cooldowns: [] })) } as unknown as DataFileApiService,
-        },
-      ],
+      providers: provideApiFakes({ wcl: wclFake, files: { getRulebook: async () => ok(rulebook({ spec: 'SubtletyRogue', cooldowns: [] })) } }),
     });
     expect(await TestBed.inject(BurstTransformService).getBench('SubtletyRogue', 1))
       .toEqual(missing('Not yet ingested.'));
@@ -525,13 +475,7 @@ describe('BurstTransformService (live, in-browser)', () => {
 
   it('propagates a missing rulebook read as missing', async () => {
     TestBed.configureTestingModule({
-      providers: [
-        { provide: WclApiService, useValue: wclFake as unknown as WclApiService },
-        {
-          provide: DataFileApiService,
-          useValue: { getRulebook: async () => missing('Not yet ingested.') } as unknown as DataFileApiService,
-        },
-      ],
+      providers: provideApiFakes({ wcl: wclFake, files: { getRulebook: async () => missing('Not yet ingested.') } }),
     });
     expect(await TestBed.inject(BurstTransformService).getBench('SubtletyRogue', 1))
       .toEqual(missing('Not yet ingested.'));

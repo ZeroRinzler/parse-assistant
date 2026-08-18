@@ -1,19 +1,17 @@
 import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
-import { ParseRanking } from '../../../core/models/wcl.models';
 import { RulebookCooldown, RulebookDefensive, RulebookRule } from '../../../core/models/rulebook.models';
 import { PerCdBenchmark, UsesPerMin } from '../../../core/models/encounter.models';
-import { logWarn } from '../../../core/log';
 import { mean, median, deviation, quantile } from 'd3-array';
 import { round, getOrInsert } from '../../../shared/analysis/analysis-math';
 import {
   HoldWindow, HOLD_CONSENSUS_FRAC, buildHoldTargets, detectHoldWindows,
 } from '../../../shared/analysis/hold-targets';
-import { TimedEvent, abilityIcons, findParseActor, relativeS, toParseRankings, unwrapRankings, withRelativeS } from '../../../shared/analysis/wcl-projections';
+import { TimedEvent, abilityIcons, relativeS, withRelativeS } from '../../../shared/analysis/wcl-projections';
+import { BenchParse, benchFromTopParses } from '../../../shared/analysis/bench-pipeline';
 import { DataSource } from '../../../core/data-source/data-source';
-import { Result, ok, missing } from '../../../core/result';
-import { toLoadError } from '../../../core/http-load-error';
+import { Result, missing } from '../../../core/result';
 import {
   BenchedRule, RuleSample, MIN_MEASURED_PARSES, buildRuleContext, sampleRule, ruleBand, judgeableRules, rulesNeed,
 } from './rotation-rules';
@@ -21,12 +19,8 @@ import { detectBloodlust } from './rotation-bloodlust';
 import { RotationBench } from './rotation-data-source';
 
 
-/** How many top parses to sample. */
-const TOP_PARSE_COUNT = 10;
 /** The rule engine's own floor, so an encounter never benches a parse count every rule band would then reject. */
 const MIN_PARSE_COUNT = MIN_MEASURED_PARSES;
-// Over-fetch so a private/unfetchable top parse can be backfilled by the next-best one.
-const CANDIDATE_POOL_COUNT = TOP_PARSE_COUNT * 2;
 /** BL window: a CD counts as aligned if cast 30s before to 55s after BL start. */
 const BL_WINDOW_BEFORE_S = 30;
 const BL_WINDOW_AFTER_S = 55;
@@ -195,7 +189,6 @@ interface ParseRotation {
   summaries: CdSummary[];
   gapListS: number[];
   durationS: number;
-  encounterName: string;
   ruleSamples: ParseRuleSamples;
 }
 
@@ -222,93 +215,68 @@ export class RotationTransformService implements DataSource<RotationBench> {
     const defensives = rulebook.defensives ?? [];
     const judgeable = judgeableRules(rulebook.rules ?? []);
 
-    try {
-      const rankings = toParseRankings(unwrapRankings(await this.wclApi.getRankings(spec, encounterId, partition)), CANDIDATE_POOL_COUNT);
-      if (!rankings.length) return missing('No top parses for this encounter.');
+    return benchFromTopParses(this.wclApi, { spec, encounterId, partition }, {
+      logSource: 'RotationTransformService',
+      errorId: 'rotation.bench',
+      minSamples: MIN_PARSE_COUNT,
+      noRankingsMessage: 'No top parses for this encounter.',
+      tooFewParsesMessage: usable =>
+        `Only ${usable} usable top parse(s) for this encounter; ${MIN_PARSE_COUNT} are needed to bench it.`,
+      parse: parse => this.parseRotation(parse, cooldowns, judgeable),
+      bench: async ({ encounterName, parses }) => {
+        const { downtimeThresholdS, topAvgEfficiency, topEfficiencyStddev } = computeEfficiencyThresholds(parses);
 
-      const perParse: CdSummary[][] = [];
-      const ruleSamples: ParseRuleSamples[] = [];
-      const gapParses: { gapListS: number[]; durationS: number }[] = [];
-      let encounterName = '';
-      for (const ranking of rankings) {
-        const parse = await this.computeParse(ranking, cooldowns, judgeable);
-        if (!parse) continue;
-        perParse.push(parse.summaries);
-        ruleSamples.push(parse.ruleSamples);
-        gapParses.push({ gapListS: parse.gapListS, durationS: parse.durationS });
-        encounterName ||= parse.encounterName;
-        if (perParse.length >= TOP_PARSE_COUNT) break;
-      }
-      if (perParse.length < MIN_PARSE_COUNT) {
-        return missing(`Only ${perParse.length} usable top parse(s) for this encounter; ${MIN_PARSE_COUNT} are needed to bench it.`);
-      }
-
-      const { downtimeThresholdS, topAvgEfficiency, topEfficiencyStddev } = computeEfficiencyThresholds(gapParses);
-
-      const cd_spell_ids = rotationCdSpellIds(cooldowns, defensives);
-      return ok({
-        spec,
-        encounter_id: encounterId,
-        encounter_name: encounterName,
-        sample_count: perParse.length,
-        downtime_threshold_s: downtimeThresholdS,
-        top_avg_efficiency: topAvgEfficiency,
-        top_efficiency_stddev: topEfficiencyStddev,
-        per_cd_benchmarks: aggregateCdBenchmarks(perParse, cooldowns),
-        major_cooldowns: cooldowns,
-        rules: benchRules(judgeable, ruleSamples),
-        cd_spell_ids,
-        // A real icon for every cooldown + defensive by id, so the map is complete (no fallback).
-        ability_icons: abilityIcons(await this.wclApi.getAbilities(Object.values(cd_spell_ids))),
-      });
-    } catch (cause) {
-      logWarn(`RotationTransformService.getBench ${spec}:${encounterId}`, cause);
-      return toLoadError(cause, 'rotation.bench');
-    }
+        const cd_spell_ids = rotationCdSpellIds(cooldowns, defensives);
+        return {
+          spec,
+          encounter_id: encounterId,
+          encounter_name: encounterName,
+          sample_count: parses.length,
+          downtime_threshold_s: downtimeThresholdS,
+          top_avg_efficiency: topAvgEfficiency,
+          top_efficiency_stddev: topEfficiencyStddev,
+          per_cd_benchmarks: aggregateCdBenchmarks(parses.map(parse => parse.summaries), cooldowns),
+          major_cooldowns: cooldowns,
+          rules: benchRules(judgeable, parses.map(parse => parse.ruleSamples)),
+          cd_spell_ids,
+          // A real icon for every cooldown + defensive by id, so the map is complete (no fallback).
+          ability_icons: abilityIcons(await this.wclApi.getAbilities(Object.values(cd_spell_ids))),
+        };
+      },
+    });
   }
 
-  private async computeParse(
-    ranking: ParseRanking, cooldowns: RulebookCooldown[], rules: RulebookRule[],
-  ): Promise<ParseRotation | null> {
-    try {
-      const report = await this.wclApi.getReport(ranking.report_code);
-      const fight = report.fights.find(entry => entry.id === ranking.fight_id);
-      const player = findParseActor(report.masterData?.actors, ranking);
-      if (!fight || !player) return null;
+  private async parseRotation(
+    { ranking, fight, player }: BenchParse, cooldowns: RulebookCooldown[], rules: RulebookRule[],
+  ): Promise<ParseRotation> {
+    const [casts, buffs, enemyAuras, damage] = await Promise.all([
+      this.wclApi.getAllEvents(ranking.report_code, fight.id, 'Casts', fight.startTime, fight.endTime, player.id, true),
+      this.wclApi.getAllEvents(ranking.report_code, fight.id, 'Buffs', fight.startTime, fight.endTime, player.id),
+      // Same shape and cost as the runtime fetch: raid-wide, so only for a spec that reads enemy auras.
+      rulesNeed(rules, 'enemyAuras')
+        ? this.wclApi.getAllEvents(ranking.report_code, fight.id, 'Debuffs', fight.startTime, fight.endTime, undefined, false, 'Enemies')
+        : Promise.resolve([]),
+      // Target health rides on the damage rows, and only the resource-bearing form carries it.
+      rulesNeed(rules, 'damage')
+        ? this.wclApi.getAllEvents(ranking.report_code, fight.id, 'DamageDone', fight.startTime, fight.endTime, player.id,
+          rulesNeed(rules, 'targetHealth'))
+        : Promise.resolve([]),
+    ]);
 
-      const [casts, buffs, enemyAuras, damage] = await Promise.all([
-        this.wclApi.getAllEvents(ranking.report_code, fight.id, 'Casts', fight.startTime, fight.endTime, player.id, true),
-        this.wclApi.getAllEvents(ranking.report_code, fight.id, 'Buffs', fight.startTime, fight.endTime, player.id),
-        // Same shape and cost as the runtime fetch: raid-wide, so only for a spec that reads enemy auras.
-        rulesNeed(rules, 'enemyAuras')
-          ? this.wclApi.getAllEvents(ranking.report_code, fight.id, 'Debuffs', fight.startTime, fight.endTime, undefined, false, 'Enemies')
-          : Promise.resolve([]),
-        // Target health rides on the damage rows, and only the resource-bearing form carries it.
-        rulesNeed(rules, 'damage')
-          ? this.wclApi.getAllEvents(ranking.report_code, fight.id, 'DamageDone', fight.startTime, fight.endTime, player.id,
-            rulesNeed(rules, 'targetHealth'))
-          : Promise.resolve([]),
-      ]);
-
-      const fightDurS = relativeS(fight.endTime, fight.startTime);
-      const castsTimed = withRelativeS(casts, fight.startTime);
-      const buffsTimed = withRelativeS(buffs, fight.startTime);
-      const blTimeS = detectBloodlust(buffsTimed);
-      const ruleCtx = buildRuleContext({
-        casts: castsTimed, buffs: buffsTimed, damage: withRelativeS(damage, fight.startTime),
-        debuffs: withRelativeS(enemyAuras.filter(event => event.sourceID === player.id), fight.startTime),
-        fightDurationS: fightDurS,
-      });
-      return {
-        summaries: summarizeCooldownCasts(castsTimed, cooldowns, fightDurS, blTimeS),
-        gapListS: castGapListS(castsTimed),
-        durationS: fightDurS,
-        encounterName: fight.name,
-        ruleSamples: rules.map(rule => (rule.condition ? sampleRule(rule.condition, ruleCtx) : { values: [], unmeasuredOut: 0 })),
-      };
-    } catch (err) {
-      logWarn(`RotationTransformService parse ${ranking.report_code}:${ranking.fight_id}`, err);
-      return null;
-    }
+    const fightDurS = relativeS(fight.endTime, fight.startTime);
+    const castsTimed = withRelativeS(casts, fight.startTime);
+    const buffsTimed = withRelativeS(buffs, fight.startTime);
+    const blTimeS = detectBloodlust(buffsTimed);
+    const ruleCtx = buildRuleContext({
+      casts: castsTimed, buffs: buffsTimed, damage: withRelativeS(damage, fight.startTime),
+      debuffs: withRelativeS(enemyAuras.filter(event => event.sourceID === player.id), fight.startTime),
+      fightDurationS: fightDurS,
+    });
+    return {
+      summaries: summarizeCooldownCasts(castsTimed, cooldowns, fightDurS, blTimeS),
+      gapListS: castGapListS(castsTimed),
+      durationS: fightDurS,
+      ruleSamples: rules.map(rule => (rule.condition ? sampleRule(rule.condition, ruleCtx) : { values: [], unmeasuredOut: 0 })),
+    };
   }
 }

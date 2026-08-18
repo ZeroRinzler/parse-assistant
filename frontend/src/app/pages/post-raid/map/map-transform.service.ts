@@ -2,22 +2,17 @@
 import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
-import { WclEvent, WclFight, ParseRanking } from '../../../core/models/wcl.models';
+import { WclEvent, WclFight } from '../../../core/models/wcl.models';
 import { ParsePositions, PlayerPosRow, PosRow } from '../../../core/models/positioning.models';
-import { logWarn } from '../../../core/log';
-import { Result, ok, missing } from '../../../core/result';
-import { toLoadError } from '../../../core/http-load-error';
-import { TimedEvent, findParseActor, relativeS, toParseRankings, unwrapRankings, withRelativeS } from '../../../shared/analysis/wcl-projections';
+import { Result } from '../../../core/result';
+import { TimedEvent, relativeS, withRelativeS } from '../../../shared/analysis/wcl-projections';
+import { BenchParse, benchFromTopParses } from '../../../shared/analysis/bench-pipeline';
 import { posActorId } from './map-positions';
 import { DataSource } from '../../../core/data-source/data-source';
 import { MapData } from './map-data-source';
 
 export { posActorId } from './map-positions';
 
-/** How many top parses to sample (matches the ingest bench). */
-const TOP_PARSE_COUNT = 10;
-// Over-fetches so a private/unfetchable top parse can be backfilled by the next-best one; the break in the loop caps actual fetches at TOP_PARSE_COUNT.
-const CANDIDATE_POOL_COUNT = TOP_PARSE_COUNT * 2;
 /** Fixed resample cadence, seconds (mirrors ingest `POSITIONS_INTERVAL_S`). */
 const POSITIONS_INTERVAL_S = 1.5;
 const MAX_TRACKED_ENEMIES = 5;
@@ -184,63 +179,38 @@ export class MapTransformService implements DataSource<MapData> {
   private readonly dataFiles = inject(DataFileApiService);
 
   async getBench(spec: string, encounterId: number, partition?: number | null): Promise<Result<MapData>> {
-    try {
-      const rankings = toParseRankings(unwrapRankings(await this.wclApi.getRankings(spec, encounterId, partition)), CANDIDATE_POOL_COUNT);
-      if (!rankings.length) return missing('No top parses for this encounter.');
-
-      const parses: ParsePositions[] = [];
-      let encounterName = '';
-      for (const ranking of rankings) {
-        const parse = await this.computeParse(ranking);
-        if (!parse) continue;
-        parses.push(parse.positions);
-        encounterName ||= parse.encounterName;
-        if (parses.length >= TOP_PARSE_COUNT) break;
-      }
-      if (!parses.length) return missing('No fetchable top parses for this encounter.');
-
-      return ok({
+    return benchFromTopParses(this.wclApi, { spec, encounterId, partition }, {
+      logSource: 'MapTransformService',
+      errorId: 'map.bench',
+      noRankingsMessage: 'No top parses for this encounter.',
+      tooFewParsesMessage: () => 'No fetchable top parses for this encounter.',
+      parse: parse => this.parsePositions(parse),
+      bench: ({ encounterName, parses }) => ({
         spec,
         encounter_id: encounterId,
         encounter_name: encounterName,
         interval_s: POSITIONS_INTERVAL_S,
         sample_count: parses.length,
         parses,
-      });
-    } catch (cause) {
-      logWarn('MapTransformService.getBench', cause);
-      return toLoadError(cause, 'map.bench');
-    }
+      }),
+    });
   }
 
-  private async computeParse(
-    ranking: ParseRanking,
-  ): Promise<{ positions: ParsePositions; encounterName: string } | null> {
-    try {
-      const report = await this.wclApi.getReport(ranking.report_code);
-      const fight = report.fights.find(entry => entry.id === ranking.fight_id);
-      const player = findParseActor(report.masterData?.actors, ranking);
-      if (!fight || !player) return null;
+  private async parsePositions({ ranking, report, fight, player }: BenchParse): Promise<ParsePositions> {
+    const enemyMetaById = new Map<number, EnemyMeta>(
+      (report.masterData?.enemies ?? []).map(enemy => [enemy.id, { gameID: enemy.gameID, name: enemy.name }]),
+    );
+    const posEvents = await this.fetchPositionEvents(ranking.report_code, fight, player.id);
 
-      const enemyMetaById = new Map<number, EnemyMeta>(
-        (report.masterData?.enemies ?? []).map(enemy => [enemy.id, { gameID: enemy.gameID, name: enemy.name }]),
-      );
-      const posEvents = await this.fetchPositionEvents(ranking.report_code, fight, player.id);
-
-      const positions = buildParsePositions({
-        reportCode: ranking.report_code,
-        fightId: fight.id,
-        playerName: player.name,
-        playerId: player.id,
-        enemyMetaById,
-        posEvents: withRelativeS(posEvents, fight.startTime),
-        durationS: relativeS(fight.endTime, fight.startTime),
-      });
-      return { positions, encounterName: fight.name };
-    } catch (cause) {
-      logWarn(`MapTransformService parse ${ranking.report_code}:${ranking.fight_id}`, cause);
-      return null;
-    }
+    return buildParsePositions({
+      reportCode: ranking.report_code,
+      fightId: fight.id,
+      playerName: player.name,
+      playerId: player.id,
+      enemyMetaById,
+      posEvents: withRelativeS(posEvents, fight.startTime),
+      durationS: relativeS(fight.endTime, fight.startTime),
+    });
   }
 
   /** The enemy fetch needs `hostilityType: 'Enemies'` because the events query defaults to Friendlies. */

@@ -1,25 +1,20 @@
 import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
-import { ParseRanking, WclReport } from '../../../core/models/wcl.models';
 import { RulebookDefensive } from '../../../core/models/rulebook.models';
 import { BurstWindow } from '../../../core/models/analysis.models';
 import { PerDefensiveBenchmark } from '../../../core/models/encounter.models';
-import { logWarn } from '../../../core/log';
-import { Result, ok, missing } from '../../../core/result';
-import { toLoadError } from '../../../core/http-load-error';
+import { Result, missing } from '../../../core/result';
 import { mean, median, deviation } from 'd3-array';
 import { round, groupByTime, getOrInsert } from '../../../shared/analysis/analysis-math';
 import { HoldWindow, buildHoldTargets, detectHoldWindows } from '../../../shared/analysis/hold-targets';
 import { buildAuraWindows } from '../../../shared/analysis/aura-windows';
-import { TimedEvent, abilityIcons, findParseActor, normalizeAbilityId, relativeS, toParseRankings, unwrapRankings, withRelativeS } from '../../../shared/analysis/wcl-projections';
+import { TimedEvent, abilityIcons, normalizeAbilityId, relativeS, withRelativeS } from '../../../shared/analysis/wcl-projections';
+import { BenchParse, benchFromTopParses } from '../../../shared/analysis/bench-pipeline';
 import { DataSource } from '../../../core/data-source/data-source';
 import { DefensiveBench, DefensivePlanMeta } from './defensive-data-source';
 
 
-const TOP_PARSE_COUNT = 10;
-// Over-fetch so a private/unfetchable top parse can be backfilled; the loop break caps actual fetches at TOP_PARSE_COUNT.
-const CANDIDATE_POOL_COUNT = TOP_PARSE_COUNT * 2;
 const CONSENSUS_FRAC = 0.5;
 const MEMBER_MAJORITY_FRAC = 0.5;
 const CLUSTER_MERGE_S = 20;
@@ -312,82 +307,55 @@ export class DefensiveTransformService implements DataSource<DefensiveBench> {
     const defensives = rulebookResult.value.defensives ?? [];
     if (!defensives.length) return missing(NO_DEFENSIVE_BENCH_MESSAGE);
 
-    try {
-      const rankings = toParseRankings(unwrapRankings(await this.wclApi.getRankings(spec, encounterId, partition)), CANDIDATE_POOL_COUNT);
-      if (!rankings.length) return missing(NO_DEFENSIVE_BENCH_MESSAGE);
+    return benchFromTopParses(this.wclApi, { spec, encounterId, partition }, {
+      logSource: 'DefensiveTransformService',
+      errorId: 'defensive.bench',
+      noRankingsMessage: NO_DEFENSIVE_BENCH_MESSAGE,
+      parse: parse => this.parseDefensives(parse, defensives),
+      bench: async ({ encounterName, parses }) => {
+        const allWindows = parses.flatMap(
+          (parse, parseIndex) => parse.windows.map(window => ({ ...window, parse_index: parseIndex })));
+        const defensiveWindows = clusterDefensiveWindows(allWindows, parses.length);
+        const perDefensiveBenchmarks = aggregateDefensiveBenchmarks(parses.map(parse => parse.summaries), defensives);
+        const cd_spell_ids = defensiveSpellIds(defensives);
+        // A real icon for every defensive + window ability by id (complete, no fallback).
+        const referencedIds = [
+          ...Object.values(cd_spell_ids),
+          ...defensiveWindows.flatMap(window => window.ability_breakdown.map(ability => ability.spell_id)),
+        ];
 
-      const allWindows: ParseDefWindow[] = [];
-      const perParseSummaries: ParseDefensiveSummary[][] = [];
-      let sampleCount = 0;
-      let encounterName = '';
-      for (const ranking of rankings) {
-        const parse = await this.computeParse(ranking, defensives);
-        if (!parse) continue;
-        for (const window of parse.windows) window.parse_index = sampleCount;
-        allWindows.push(...parse.windows);
-        perParseSummaries.push(parse.summaries);
-        encounterName ||= parse.encounterName;
-        sampleCount += 1;
-        if (sampleCount >= TOP_PARSE_COUNT) break;
-      }
-      if (!sampleCount) return missing(NO_DEFENSIVE_BENCH_MESSAGE);
-
-      const defensiveWindows = clusterDefensiveWindows(allWindows, sampleCount);
-      const perDefensiveBenchmarks = aggregateDefensiveBenchmarks(perParseSummaries, defensives);
-      const cd_spell_ids = defensiveSpellIds(defensives);
-      // A real icon for every defensive + window ability by id (complete, no fallback).
-      const referencedIds = [
-        ...Object.values(cd_spell_ids),
-        ...defensiveWindows.flatMap(window => window.ability_breakdown.map(ability => ability.spell_id)),
-      ];
-
-      return ok({
-        spec,
-        encounter_id: encounterId,
-        encounter_name: encounterName,
-        sample_count: sampleCount,
-        per_defensive_benchmarks: perDefensiveBenchmarks,
-        defensive_windows: defensiveWindows,
-        defensives: defensivePlanMeta(defensives),
-        cd_spell_ids,
-        ability_icons: abilityIcons(await this.wclApi.getAbilities(referencedIds)),
-      });
-    } catch (cause) {
-      logWarn('DefensiveTransformService.getBench', cause);
-      return toLoadError(cause, 'defensive.bench');
-    }
+        return {
+          spec,
+          encounter_id: encounterId,
+          encounter_name: encounterName,
+          sample_count: parses.length,
+          per_defensive_benchmarks: perDefensiveBenchmarks,
+          defensive_windows: defensiveWindows,
+          defensives: defensivePlanMeta(defensives),
+          cd_spell_ids,
+          ability_icons: abilityIcons(await this.wclApi.getAbilities(referencedIds)),
+        };
+      },
+    });
   }
 
-  private async computeParse(
-    ranking: ParseRanking, defensives: RulebookDefensive[],
-  ): Promise<{
-    windows: ParseDefWindow[];
-    summaries: ParseDefensiveSummary[];
-    encounterName: string;
-  } | null> {
-    try {
-      const report: WclReport = await this.wclApi.getReport(ranking.report_code);
-      const fight = report.fights.find(entry => entry.id === ranking.fight_id);
-      const player = findParseActor(report.masterData?.actors, ranking);
-      if (!fight || !player) return null;
+  private async parseDefensives(
+    { ranking, report, fight, player }: BenchParse, defensives: RulebookDefensive[],
+  ): Promise<{ windows: ParseDefWindow[]; summaries: ParseDefensiveSummary[] }> {
+    const gameIdByActorId = new Map<number, number>();
+    for (const enemy of report.masterData?.enemies ?? []) gameIdByActorId.set(enemy.id, enemy.gameID);
 
-      const gameIdByActorId = new Map<number, number>();
-      for (const enemy of report.masterData?.enemies ?? []) gameIdByActorId.set(enemy.id, enemy.gameID);
+    const [buffs, casts, dmgTaken] = await Promise.all([
+      this.wclApi.getAllEvents(ranking.report_code, fight.id, 'Buffs', fight.startTime, fight.endTime, player.id),
+      this.wclApi.getAllEvents(ranking.report_code, fight.id, 'Casts', fight.startTime, fight.endTime, player.id),
+      this.wclApi.getAllEvents(ranking.report_code, fight.id, 'DamageTaken', fight.startTime, fight.endTime, player.id),
+    ]);
 
-      const [buffs, casts, dmgTaken] = await Promise.all([
-        this.wclApi.getAllEvents(ranking.report_code, fight.id, 'Buffs', fight.startTime, fight.endTime, player.id),
-        this.wclApi.getAllEvents(ranking.report_code, fight.id, 'Casts', fight.startTime, fight.endTime, player.id),
-        this.wclApi.getAllEvents(ranking.report_code, fight.id, 'DamageTaken', fight.startTime, fight.endTime, player.id),
-      ]);
-
-      const fightDurationS = relativeS(fight.endTime, fight.startTime);
-      const buffWindows = buildAuraWindows(withRelativeS(buffs, fight.startTime));
-      const windows = findParseDefensiveWindows(withRelativeS(dmgTaken, fight.startTime), fightDurationS, buffWindows, defensives, gameIdByActorId);
-      const summaries = summarizeDefensiveCasts(defensives, buffWindows, withRelativeS(casts, fight.startTime), fightDurationS);
-      return { windows, summaries, encounterName: fight.name };
-    } catch (err) {
-      logWarn(`DefensiveTransformService parse ${ranking.report_code}:${ranking.fight_id}`, err);
-      return null;
-    }
+    const fightDurationS = relativeS(fight.endTime, fight.startTime);
+    const buffWindows = buildAuraWindows(withRelativeS(buffs, fight.startTime));
+    return {
+      windows: findParseDefensiveWindows(withRelativeS(dmgTaken, fight.startTime), fightDurationS, buffWindows, defensives, gameIdByActorId),
+      summaries: summarizeDefensiveCasts(defensives, buffWindows, withRelativeS(casts, fight.startTime), fightDurationS),
+    };
   }
 }

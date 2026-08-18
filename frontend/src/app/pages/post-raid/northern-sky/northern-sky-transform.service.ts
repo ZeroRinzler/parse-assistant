@@ -1,12 +1,10 @@
 import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
-import { ParseRanking } from '../../../core/models/wcl.models';
-import { logWarn } from '../../../core/log';
-import { Result, ok, missing } from '../../../core/result';
-import { toLoadError } from '../../../core/http-load-error';
+import { Result, missing } from '../../../core/result';
 import { round } from '../../../shared/analysis/analysis-math';
-import { TimedEvent, abilityIcons, findParseActor, toParseRankings, unwrapRankings, withRelativeS } from '../../../shared/analysis/wcl-projections';
+import { TimedEvent, abilityIcons, withRelativeS } from '../../../shared/analysis/wcl-projections';
+import { BenchParse, benchFromTopParses } from '../../../shared/analysis/bench-pipeline';
 import { DataSource } from '../../../core/data-source/data-source';
 import { NorthernSkyBench, NorthernSkyAbility } from './northern-sky-data-source';
 
@@ -14,6 +12,9 @@ interface ExportAbility { spell_id: number; name: string; kind: NorthernSkyAbili
 
 // Scan this far down the ranking to skip private/unfetchable logs before giving up.
 const CANDIDATE_POOL_COUNT = 10;
+// One real log keeps each cooldown's cast spacing intact, so the export never blends parses.
+const EXPORTED_PARSE_COUNT = 1;
+const NO_EXPORT_MESSAGE = 'Not yet ingested.';
 
 export function cooldownCastTimes(casts: TimedEvent[], spellId: number): number[] {
   return casts
@@ -34,56 +35,40 @@ export class NorthernSkyTransformService implements DataSource<NorthernSkyBench>
       ...(rulebook.value.major_cooldowns ?? []).map(cd => ({ spell_id: cd.spell_id, name: cd.name, kind: 'cooldown' as const })),
       ...(rulebook.value.defensives ?? []).map(def => ({ spell_id: def.spell_id, name: def.name, kind: 'defensive' as const })),
     ].filter(ability => ability.spell_id);
-    if (!abilities.length) return missing('Not yet ingested.');
+    if (!abilities.length) return missing(NO_EXPORT_MESSAGE);
 
-    try {
-      const rankings = toParseRankings(unwrapRankings(await this.wclApi.getRankings(spec, encounterId, partition)), CANDIDATE_POOL_COUNT);
-      // One real log keeps each cooldown's cast spacing intact; take the best usable parse (#1, then backfill).
-      for (const ranking of rankings) {
-        const parse = await this.parseCastTimes(ranking, abilities);
-        if (!parse) continue;
-        const built: NorthernSkyAbility[] = [];
-        for (const ability of abilities) {
-          const cast_times_s = parse.timesBySpellId.get(ability.spell_id) ?? [];
-          if (cast_times_s.length) built.push({ spell_id: ability.spell_id, name: ability.name, icon: '', kind: ability.kind, cast_times_s });
-        }
-        if (!built.length) continue;
-
+    return benchFromTopParses(this.wclApi, { spec, encounterId, partition }, {
+      logSource: 'NorthernSkyTransformService',
+      errorId: 'northern-sky.bench',
+      candidatePoolCount: CANDIDATE_POOL_COUNT,
+      sampleTarget: EXPORTED_PARSE_COUNT,
+      noRankingsMessage: NO_EXPORT_MESSAGE,
+      parse: parse => this.parseCastTimes(parse, abilities),
+      bench: async ({ encounterName, parses }) => {
+        const built = parses[0] ?? [];
         const icons = abilityIcons(await this.wclApi.getAbilities(built.map(entry => entry.spell_id)));
-        for (const entry of built) entry.icon = icons[entry.spell_id]?.icon ?? '';
-        return ok({
+        return {
           spec,
           encounter_id: encounterId,
-          encounter_name: parse.encounterName,
-          abilities: built,
-        });
-      }
-      return missing('Not yet ingested.');
-    } catch (cause) {
-      logWarn('NorthernSkyTransformService.getBench', cause);
-      return toLoadError(cause, 'northern-sky.bench');
-    }
+          encounter_name: encounterName,
+          abilities: built.map(entry => ({ ...entry, icon: icons[entry.spell_id]?.icon ?? '' })),
+        };
+      },
+    });
   }
 
+  // A parse that cast none of the exported abilities is no schedule at all, never an empty export.
   private async parseCastTimes(
-    ranking: ParseRanking,
-    abilities: ExportAbility[],
-  ): Promise<{ timesBySpellId: Map<number, number[]>; encounterName: string } | null> {
-    try {
-      const report = await this.wclApi.getReport(ranking.report_code);
-      const fight = report.fights.find(entry => entry.id === ranking.fight_id);
-      const player = findParseActor(report.masterData?.actors, ranking);
-      if (!fight || !player) return null;
-
-      const casts = withRelativeS(
-        await this.wclApi.getAllEvents(ranking.report_code, fight.id, 'Casts', fight.startTime, fight.endTime, player.id), fight.startTime,
-      );
-      const timesBySpellId = new Map<number, number[]>();
-      for (const ability of abilities) timesBySpellId.set(ability.spell_id, cooldownCastTimes(casts, ability.spell_id));
-      return { timesBySpellId, encounterName: fight.name };
-    } catch (cause) {
-      logWarn(`NorthernSkyTransformService parse ${ranking.report_code}:${ranking.fight_id}`, cause);
-      return null;
+    { ranking, fight, player }: BenchParse, abilities: ExportAbility[],
+  ): Promise<NorthernSkyAbility[] | null> {
+    const casts = withRelativeS(
+      await this.wclApi.getAllEvents(ranking.report_code, fight.id, 'Casts', fight.startTime, fight.endTime, player.id), fight.startTime,
+    );
+    const built: NorthernSkyAbility[] = [];
+    for (const ability of abilities) {
+      const cast_times_s = cooldownCastTimes(casts, ability.spell_id);
+      if (cast_times_s.length) built.push({ spell_id: ability.spell_id, name: ability.name, icon: '', kind: ability.kind, cast_times_s });
     }
+    return built.length ? built : null;
   }
 }

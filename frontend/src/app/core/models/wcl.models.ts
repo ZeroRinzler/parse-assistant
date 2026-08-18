@@ -24,7 +24,7 @@ export interface WclPlayer {
   server: string;
 }
 
-interface WclAbility {
+export interface WclAbility {
   gameID: number;
   name: string;
   icon: string;

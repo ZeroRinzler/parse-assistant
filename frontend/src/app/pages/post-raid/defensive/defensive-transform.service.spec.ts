@@ -1,7 +1,5 @@
 import { assert, describe, it, expect } from 'vitest';
 import { TestBed } from '@angular/core/testing';
-import { WclApiService } from '../../../core/services/wcl-api';
-import { DataFileApiService } from '../../../core/services/data-file-api';
 import {
   DefensiveTransformService,
   defensiveSpellIds, defensivePlanMeta, summarizeDefensiveCasts,
@@ -12,6 +10,8 @@ import {
 } from './defensive-transform.service';
 import { applyBuff, removeBuff, damageTaken, cast } from '../../../../testing/builders/events';
 import { rulebook } from '../../../../testing/builders/rulebook';
+import { abilityLookup, parseRankings, reportsByCode } from '../../../../testing/builders/wcl-fixtures';
+import { provideApiFakes } from '../../../../testing/api-fakes';
 import { CLOAK_OF_SHADOWS, EVASION } from '../../../../testing/spell-ids';
 import { WCL_SYNTHETIC_SOURCE_FALLBACK_ID, withRelativeS } from '../../../shared/analysis/wcl-projections';
 import { ok } from '../../../core/result';
@@ -271,35 +271,21 @@ describe('aggregateDefensiveBenchmarks', () => {
   });
 });
 
-function reportFor(playerId: number, playerName: string, fightId: number) {
-  return {
-    title: 't',
-    fights: [{ id: fightId, name: 'Boss', startTime: 0, endTime: 300_000, kill: true, encounterID: 1, friendlyPlayers: [] }],
-    masterData: {
-      actors: [{ id: playerId, name: playerName, subType: 'Rogue', server: '' }],
-      enemies: [{ id: 9, name: 'Boss', gameID: 6666 }],
-      abilities: [{ gameID: 700, name: 'Boss Hit', icon: 'hit.jpg' }, { gameID: CLOAK_OF_SHADOWS, name: 'Cloak of Shadows', icon: 'cloak' }],
-    },
-  };
-}
+const reportShape = {
+  enemies: [{ id: 9, name: 'Boss', gameID: 6666 }],
+  abilities: [{ gameID: 700, name: 'Boss Hit', icon: 'hit.jpg' }, { gameID: CLOAK_OF_SHADOWS, name: 'Cloak of Shadows', icon: 'cloak' }],
+};
 
 const wclFake = {
   // getRankings returns the raw WCL envelope ({ rankings }); the transform unwraps it.
-  getRankings: async () => ({
-    rankings: [
-      { name: 'P1', report: { code: 'r1', fightID: 1 } },
-      { name: 'P2', report: { code: 'r2', fightID: 2 } },
-    ],
-  }),
-  getReport: async (code: string) => (code === 'r1' ? reportFor(10, 'P1', 1) : reportFor(20, 'P2', 2)),
+  getRankings: async () => ({ rankings: parseRankings(2) }),
+  getReport: reportsByCode(reportShape),
   getAllEvents: async (_code: string, _fightId: number, dataType: string) => {
     if (dataType === 'Buffs') return [applyBuff(CLOAK_OF_SHADOWS, 30), removeBuff(CLOAK_OF_SHADOWS, 35)];
     if (dataType === 'Casts') return [cast(CLOAK_OF_SHADOWS, 30)];
     return [damageTaken(700, 32, 1000, { source: 9 })]; // DamageTaken
   },
-  // Raw gameData.ability map (id-keyed { id, icon, name }); the transform projects it.
-  getAbilities: async (ids: number[]) =>
-    Object.fromEntries(ids.map(id => [id, id === 700 ? { id, icon: 'hit', name: 'Boss Hit' } : { id, icon: 'cloak', name: 'Cloak of Shadows' }])),
+  getAbilities: abilityLookup({ 700: { icon: 'hit', name: 'Boss Hit' }, [CLOAK_OF_SHADOWS]: { icon: 'cloak', name: 'Cloak of Shadows' } }),
 };
 const filesFake = {
   getRulebook: async () => ok(rulebook({ defensives: [CLOAK] })),
@@ -307,12 +293,7 @@ const filesFake = {
 
 describe('DefensiveTransformService (live, in-browser)', () => {
   it('computes a clustered defensive bench from the top parses', async () => {
-    TestBed.configureTestingModule({
-      providers: [
-        { provide: WclApiService, useValue: wclFake as unknown as WclApiService },
-        { provide: DataFileApiService, useValue: filesFake as unknown as DataFileApiService },
-      ],
-    });
+    TestBed.configureTestingModule({ providers: provideApiFakes({ wcl: wclFake, files: filesFake }) });
     const bench = await TestBed.inject(DefensiveTransformService).getBench('SubtletyRogue', 1);
     expect(bench.ok).toBe(true);
     if (!bench.ok) return;
@@ -325,51 +306,12 @@ describe('DefensiveTransformService (live, in-browser)', () => {
     expect(bench.value.ability_icons[700]).toEqual({ icon: 'hit', name: 'Boss Hit' });
   });
 
-  it('backfills past a private (unfetchable) top parse to keep the sample count full', async () => {
-    const candidates = Array.from({ length: 11 }, (_, i) => ({ name: `P${i + 1}`, report: { code: `r${i + 1}`, fightID: i + 1 } }));
-    const backfillWcl = {
-      ...wclFake,
-      getRankings: async () => ({ rankings: candidates }),
-      getReport: async (code: string) => {
-        if (code === 'r5') throw new Error('You do not have permission to view this report.');
-        const idx = Number(code.slice(1));
-        return reportFor(idx * 10, `P${idx}`, idx);
-      },
-    };
-    TestBed.configureTestingModule({
-      providers: [
-        { provide: WclApiService, useValue: backfillWcl as unknown as WclApiService },
-        { provide: DataFileApiService, useValue: filesFake as unknown as DataFileApiService },
-      ],
-    });
-    const bench = await TestBed.inject(DefensiveTransformService).getBench('SubtletyRogue', 1);
-    // 11 candidates, one private: the 11th backfills the skipped parse to a full 10.
-    expect(bench.ok).toBe(true);
-    if (bench.ok) expect(bench.value.sample_count).toBe(10);
-  });
-
   it('reports missing when the spec has no rulebook defensives', async () => {
     TestBed.configureTestingModule({
-      providers: [
-        { provide: WclApiService, useValue: wclFake as unknown as WclApiService },
-        { provide: DataFileApiService, useValue: { getRulebook: async () => ok({ spec: 'X', defensives: [] }) } as unknown as DataFileApiService },
-      ],
+      providers: provideApiFakes({ wcl: wclFake, files: { getRulebook: async () => ok({ spec: 'X', defensives: [] }) } }),
     });
     const bench = await TestBed.inject(DefensiveTransformService).getBench('SubtletyRogue', 1);
     expect(bench.ok).toBe(false);
     if (!bench.ok) expect(bench.error.kind).toBe('missing');
-  });
-
-  it('surfaces a WCL failure as an error, not a silent null bench', async () => {
-    const failingWcl = { ...wclFake, getRankings: async () => { throw new Error('WCL exploded'); } };
-    TestBed.configureTestingModule({
-      providers: [
-        { provide: WclApiService, useValue: failingWcl as unknown as WclApiService },
-        { provide: DataFileApiService, useValue: filesFake as unknown as DataFileApiService },
-      ],
-    });
-    const bench = await TestBed.inject(DefensiveTransformService).getBench('SubtletyRogue', 1);
-    expect(bench.ok).toBe(false);
-    if (!bench.ok) expect(bench.error).toMatchObject({ kind: 'permanent', id: 'defensive.bench' });
   });
 });

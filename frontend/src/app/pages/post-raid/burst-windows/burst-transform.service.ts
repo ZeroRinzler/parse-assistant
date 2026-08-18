@@ -1,22 +1,17 @@
 import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
-import { ParseRanking } from '../../../core/models/wcl.models';
 import { RulebookCooldown, RulebookDefensive } from '../../../core/models/rulebook.models';
 import { BurstWindow } from '../../../core/models/analysis.models';
-import { logWarn } from '../../../core/log';
-import { Result, ok, missing } from '../../../core/result';
-import { toLoadError } from '../../../core/http-load-error';
+import { Result, missing } from '../../../core/result';
 import { mean, median, deviation, quantile } from 'd3-array';
 import { round, groupByTime, getOrInsert } from '../../../shared/analysis/analysis-math';
-import { TimedEvent, abilityIcons, findParseActor, normalizeAbilityId, relativeS, toParseRankings, unwrapRankings, withRelativeS } from '../../../shared/analysis/wcl-projections';
+import { TimedEvent, abilityIcons, normalizeAbilityId, relativeS, withRelativeS } from '../../../shared/analysis/wcl-projections';
+import { BenchParse, benchFromTopParses } from '../../../shared/analysis/bench-pipeline';
 import { DataSource } from '../../../core/data-source/data-source';
 import { BurstBench } from './burst-data-source';
 
 
-const TOP_PARSE_COUNT = 10;
-// Over-fetch so a private/unfetchable top parse can be backfilled by the next-best one.
-const CANDIDATE_POOL_COUNT = TOP_PARSE_COUNT * 2;
 const SIGNIFICANCE_PCT = 0.015;
 const CLUSTER_MIN_FRAC = 0.4;
 const MEMBER_MAJORITY_FRAC = 0.5;
@@ -53,7 +48,7 @@ export interface ParseWindow {
   window_damage: number;
   active_cds: string[];
   ability_breakdown: { spell_id: number; damage: number; casts: number; is_passive: boolean }[];
-  /** Index of the parse this window came from, so clustering counts DISTINCT parses (stamped in getBench). */
+  /** Index of the parse this window came from, so clustering counts DISTINCT parses. */
   parse_index: number;
 }
 
@@ -211,7 +206,7 @@ export function findParseWindows(scan: ParseWindowScan): ParseWindow[] {
       window_damage: windowDmg,
       active_cds,
       ability_breakdown,
-      parse_index: 0, // stamped per-parse in getBench
+      parse_index: 0, // stamped once the parse is accepted
     });
   }
   return windows.sort((a, b) => a.time_s - b.time_s);
@@ -291,75 +286,48 @@ export class BurstTransformService implements DataSource<BurstBench> {
     if (!cooldowns.length) return missing('Not yet ingested.');
     const defensives = rulebook.value.defensives ?? [];
 
-    try {
-      const rankings = toParseRankings(unwrapRankings(await this.wclApi.getRankings(spec, encounterId, partition)), CANDIDATE_POOL_COUNT);
-      if (!rankings.length) return missing('Not yet ingested.');
-
-      const allWindows: ParseWindow[] = [];
-      let sampleCount = 0;
-      let encounterName = '';
-      for (const ranking of rankings) {
-        const parse = await this.computeParseWindows(ranking, cooldowns);
-        if (!parse) continue;
-        // Stamp the parse index so clustering counts distinct parses.
-        for (const window of parse.windows) window.parse_index = sampleCount;
-        allWindows.push(...parse.windows);
-        encounterName ||= parse.encounterName;
-        sampleCount += 1;
-        if (sampleCount >= TOP_PARSE_COUNT) break;
-      }
-      if (!sampleCount) return missing('Not yet ingested.');
-
-      const windows = clusterParseWindows(allWindows, sampleCount);
-      const cd_spell_ids = cdSpellIds(cooldowns, defensives);
-      // Complete over every spell the card renders (header cooldowns and each window ability), so there's no icon fallback.
-      const referencedIds = [
-        ...Object.values(cd_spell_ids),
-        ...windows.flatMap(window => window.ability_breakdown.map(ability => ability.spell_id)),
-      ];
-      return ok({
-        spec,
-        encounter_id: encounterId,
-        encounter_name: encounterName,
-        sample_count: sampleCount,
-        windows,
-        cd_spell_ids,
-        ability_icons: abilityIcons(await this.wclApi.getAbilities(referencedIds)),
-      });
-    } catch (cause) {
-      logWarn('BurstTransformService.getBench', cause);
-      return toLoadError(cause, 'burst.bench');
-    }
+    return benchFromTopParses(this.wclApi, { spec, encounterId, partition }, {
+      logSource: 'BurstTransformService',
+      errorId: 'burst.bench',
+      noRankingsMessage: 'Not yet ingested.',
+      parse: parse => this.parseWindows(parse, cooldowns),
+      bench: async ({ encounterName, parses }) => {
+        const allWindows = parses.flatMap(
+          (windows, parseIndex) => windows.map(window => ({ ...window, parse_index: parseIndex })));
+        const windows = clusterParseWindows(allWindows, parses.length);
+        const cd_spell_ids = cdSpellIds(cooldowns, defensives);
+        // Complete over every spell the card renders (header cooldowns and each window ability), so there's no icon fallback.
+        const referencedIds = [
+          ...Object.values(cd_spell_ids),
+          ...windows.flatMap(window => window.ability_breakdown.map(ability => ability.spell_id)),
+        ];
+        return {
+          spec,
+          encounter_id: encounterId,
+          encounter_name: encounterName,
+          sample_count: parses.length,
+          windows,
+          cd_spell_ids,
+          ability_icons: abilityIcons(await this.wclApi.getAbilities(referencedIds)),
+        };
+      },
+    });
   }
 
-  private async computeParseWindows(
-    ranking: ParseRanking, cooldowns: RulebookCooldown[],
-  ): Promise<{ windows: ParseWindow[]; encounterName: string } | null> {
-    try {
-      const report = await this.wclApi.getReport(ranking.report_code);
-      const fight = report.fights.find(entry => entry.id === ranking.fight_id);
-      const player = findParseActor(report.masterData?.actors, ranking);
-      if (!fight || !player) return null;
+  private async parseWindows({ ranking, report, fight, player }: BenchParse, cooldowns: RulebookCooldown[]): Promise<ParseWindow[]> {
+    // Names only, to attribute casts by ability name inside a parse window.
+    const abilityNames = new Map<number, string>(
+      (report.masterData?.abilities ?? []).map(ability => [ability.gameID, ability.name]),
+    );
+    const [casts, damage] = await Promise.all([
+      this.wclApi.getAllEvents(ranking.report_code, fight.id, 'Casts', fight.startTime, fight.endTime, player.id),
+      this.wclApi.getAllEvents(ranking.report_code, fight.id, 'DamageDone', fight.startTime, fight.endTime, player.id),
+    ]);
 
-      // Names only, to attribute casts by ability name inside a parse window.
-      const abilityNames = new Map<number, string>(
-        (report.masterData?.abilities ?? []).map(ability => [ability.gameID, ability.name]),
-      );
-      const [casts, damage] = await Promise.all([
-        this.wclApi.getAllEvents(ranking.report_code, fight.id, 'Casts', fight.startTime, fight.endTime, player.id),
-        this.wclApi.getAllEvents(ranking.report_code, fight.id, 'DamageDone', fight.startTime, fight.endTime, player.id),
-      ]);
-
-      const castsTimed = withRelativeS(casts, fight.startTime);
-      const timings = cdTimings(castsTimed, cooldowns);
-      const windows = findParseWindows({
-        damage: withRelativeS(damage, fight.startTime), fightLenS: relativeS(fight.endTime, fight.startTime),
-        timings, casts: castsTimed, abilityNames,
-      });
-      return { windows, encounterName: fight.name };
-    } catch (cause) {
-      logWarn(`BurstTransformService parse ${ranking.report_code}:${ranking.fight_id}`, cause);
-      return null;
-    }
+    const castsTimed = withRelativeS(casts, fight.startTime);
+    return findParseWindows({
+      damage: withRelativeS(damage, fight.startTime), fightLenS: relativeS(fight.endTime, fight.startTime),
+      timings: cdTimings(castsTimed, cooldowns), casts: castsTimed, abilityNames,
+    });
   }
 }
