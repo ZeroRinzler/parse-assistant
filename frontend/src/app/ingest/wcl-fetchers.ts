@@ -2,13 +2,16 @@
 
 import { logWarn } from '../core/log';
 import { toParseRankings, unwrapRankings } from '../shared/analysis/wcl-projections';
-import { ENCOUNTERS_Q, RANKINGS_Q, type RankingsQueryVars } from '../core/services/wcl-queries';
-import { MYTHIC_DIFFICULTY, type ParseRanking, type WclRankingsBlob } from '../core/models/wcl.models';
+import { ENCOUNTERS_Q, RANKINGS_Q } from '../core/services/wcl-queries';
+import type {
+  EncountersQuery, RankingsQuery, RankingsQueryVariables,
+} from '../core/services/wcl-operations.generated';
+import { MYTHIC_DIFFICULTY, type ParseRanking } from '../core/models/wcl.models';
 import { BudgetExceededError, type WclQueryClient } from './wcl-client';
 import {
   filterEncounters, groupEncountersByZone, protectedEncounterIds, type SpecWclMap,
 } from './wcl-mappers';
-import type { WclExpansion, IngestEncounter } from './models/wcl.models';
+import type { IngestEncounter } from './models/wcl.models';
 
 // A genuinely live raid has many real parses for any of these; a beta/PTR/test zone has none.
 const PROBE_SPECS = ['FireMage', 'RetributionPaladin', 'FuryWarrior'];
@@ -44,7 +47,9 @@ async function isZoneLive(client: WclQueryClient, zoneEncounters: IngestEncounte
 
 // The probe runs once per zone here, not per spec, so beta/PTR/test zones cost a handful of queries total.
 export async function getEncounters(client: WclQueryClient, specWcl: SpecWclMap): Promise<CurrentContent> {
-  const data = await client.query<{ worldData: { expansions: WclExpansion[] } }>(ENCOUNTERS_Q);
+  const data = await client.query<EncountersQuery>(ENCOUNTERS_Q);
+  // An empty expansion tree would silently protect no encounter and publish an empty summary.
+  if (!data.worldData?.expansions) throw new Error('WCL returned no worldData.expansions.');
   const expansions = data.worldData.expansions;
   const candidates = filterEncounters(expansions);
   const protectedIds = protectedEncounterIds(expansions);
@@ -79,10 +84,10 @@ export async function getRankingsLite(
   const [className, specName] = mapping;
 
   const { rows } = await rankingsFromPartition(partitionIds, async partition => {
-    const variables: RankingsQueryVars = { encounterID: encounterId, className, specName, difficulty: MYTHIC_DIFFICULTY };
+    const variables: RankingsQueryVariables = { encounterID: encounterId, className, specName, difficulty: MYTHIC_DIFFICULTY };
     if (partition != null) variables.partition = partition;
-    const data = await client.query<{ worldData: { encounter: { characterRankings: WclRankingsBlob } } }>(RANKINGS_Q, variables);
-    return toParseRankings(unwrapRankings(data.worldData.encounter.characterRankings), count);
+    const data = await client.query<RankingsQuery>(RANKINGS_Q, variables);
+    return toParseRankings(unwrapRankings(data.worldData?.encounter?.characterRankings), count);
   });
   return rows;
 }

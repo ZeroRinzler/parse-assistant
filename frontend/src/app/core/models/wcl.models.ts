@@ -101,6 +101,9 @@ export interface WclCombatantInfo {
   talentTree?: WclTalentNode[];
 }
 
+// CombatantInfo rows come back through the same `events.data` field as ordinary events, so one type has to cover both.
+export type WclEventData = (WclEvent & WclCombatantInfo)[];
+
 /** One `playerDetails` role entry (dps / healers / tanks / unknown). */
 interface PlayerDetailEntry {
   id: number;
@@ -109,6 +112,8 @@ interface PlayerDetailEntry {
   specs?: { spec: string }[];
 }
 export type PlayerDetailGroups = Record<string, PlayerDetailEntry[]>;
+
+export interface PlayerDetailsBlob { data?: { playerDetails?: PlayerDetailGroups } }
 
 export interface WclRawRanking {
   name?: string;

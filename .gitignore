@@ -20,6 +20,9 @@ data/tmp/
 # bound. See CLAUDE.md and the ingest/deploy workflows.
 frontend/public/data/specs/
 
+# Committing this snapshot of live WCL would park a churning third-party file in git history.
+frontend/schema/
+
 # Scratch checkouts an agent works in; the branch it commits to carries the work.
 .claude/worktrees/
 

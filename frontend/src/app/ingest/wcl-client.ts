@@ -1,6 +1,6 @@
 // An interface (not a concrete class) so tests can inject a fake client with no real OAuth/HTTP.
 export interface WclQueryClient {
-  query<T = unknown>(gql: string, variables?: object): Promise<T>;
+  query<T>(gql: string, variables?: object): Promise<T>;
   assertBudget(margin: number): Promise<void>;
 }
 

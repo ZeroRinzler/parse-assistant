@@ -11,6 +11,7 @@ const local = {
 };
 
 export default defineConfig([
+  { ignores: ['src/**/*.generated.ts'] },
   {
     // Base TypeScript rules for all TS (src/**, e2e/**, playwright.config.ts). Angular-specific
     // rules live in the src-only block below; the plain-JS Node scripts have their own block.
@@ -110,6 +111,8 @@ export default defineConfig([
         setTimeout: 'readonly',
         clearTimeout: 'readonly',
         fetch: 'readonly',
+        URL: 'readonly',
+        URLSearchParams: 'readonly',
       },
     },
     rules: {

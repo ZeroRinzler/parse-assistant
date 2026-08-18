@@ -30,7 +30,8 @@ frontend/        # the entire Angular 22 app
   src/app/pages/ # post-raid (/), pre-fight (/pre), the live/ slice
   src/app/core/  # the two API services, data-source token, models
   src/app/ingest # ingest orchestrator (bundled only by the ingest configuration)
-  scripts/       # ingest-server.js + ingest-headless.mjs - plain Node, zero ingestion logic
+  schema/        # wcl.graphql - the introspected WCL v2 SDL, for browsing available fields; gitignored, written by `npm run schema:pull`
+  scripts/       # ingest-server.js + ingest-headless.mjs + schema-pull.mjs - plain Node, zero ingestion logic
   e2e/           # Playwright happy-path suite (one WCL analysis per run)
   public/data/specs/  # static ingested data - not tracked on main; lives on gh-pages
 .github/workflows/  # deploy-pages, ingest-parses (hourly), test, e2e
@@ -48,6 +49,7 @@ frontend/        # the entire Angular 22 app
 | `npm run e2e` | Playwright e2e suite over both pages (`npm run data:pull` first) |
 | `npm run lint` | `ng lint` over `src/**` then `eslint` over `scripts/**`, `e2e/**`, and the Playwright config |
 | `npm run knip` | Dead-code check: unused files, exports, and dependencies (`knip.json`) |
+| `npm run schema:pull` | Re-introspect the WCL v2 schema and regenerate `wcl-operations.generated.ts` in one run; commit only the regenerated types |
 | `npm run data:pull` | Fetch the shared dataset from `origin/gh-pages` into the ignored working tree |
 | `npm run start:ingest` | Interactive ingestion: the file server + `ng serve --configuration ingest` |
 | `npm run ingest` | Headless ingestion (CI entry) |

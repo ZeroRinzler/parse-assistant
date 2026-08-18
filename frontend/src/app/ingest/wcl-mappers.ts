@@ -1,17 +1,23 @@
 // Ranking selection is the shared `toParseRankings` (shared/analysis/wcl-projections.ts).
 
-import type { WclExpansion, IngestEncounter, WclGameClass } from './models/wcl.models';
+import type { ClassesQuery, EncountersQuery } from '../core/services/wcl-operations.generated';
+import type { IngestEncounter } from './models/wcl.models';
 import type { SpecMeta } from '../core/models/spec-meta.models';
+
+export type WclExpansions = NonNullable<NonNullable<EncountersQuery['worldData']>['expansions']>;
+export type WclGameClasses = NonNullable<NonNullable<ClassesQuery['gameData']>['classes']>;
 
 /** Folder key -> [WCL className, WCL specName] - the small map the discovery fetchers read. */
 export type SpecWclMap = Record<string, [string, string]>;
 
 /** The folder key is `spec.slug + class.slug` (e.g. 'SubtletyRogue'). */
-export function mapClassesToSpecMeta(classes: WclGameClass[]): SpecMeta[] {
+export function mapClassesToSpecMeta(classes: WclGameClasses): SpecMeta[] {
   const metas: SpecMeta[] = [];
   for (const cls of classes) {
+    if (!cls) continue;
     const classIcon = `class_${cls.slug.toLowerCase()}`;
     for (const spec of cls.specs ?? []) {
+      if (!spec) continue;
       const folder = `${spec.slug}${cls.slug}`;
       metas.push({
         spec: folder,
@@ -36,19 +42,22 @@ export function specWclFromMetas(metas: SpecMeta[]): SpecWclMap {
 const EXCLUDE_ZONE_PATTERNS = ['beta', 'ptr', 'mythic+', 'complete raids', 'delves', 'torghast'];
 
 // WCL returns newest expansion first, so only the first expansion's zones are used.
-export function filterEncounters(expansions: WclExpansion[]): IngestEncounter[] {
+export function filterEncounters(expansions: WclExpansions): IngestEncounter[] {
   const result: IngestEncounter[] = [];
   const firstExpansion = expansions[0];
   if (!firstExpansion) return result;
 
   for (const zone of (firstExpansion.zones ?? [])) {
-    if (zone.frozen === true) continue;
+    // WCL omits `frozen` on some zones though the schema declares it non-null, so an absent one has to read as not-frozen.
+    if (!zone || zone.frozen) continue;
     const zoneName = zone.name.toLowerCase();
     if (EXCLUDE_ZONE_PATTERNS.some(pattern => zoneName.includes(pattern))) continue;
     const partitionIds = (zone.partitions ?? [])
+      .filter(partition => partition !== null)
       .map(partition => partition.id)
       .sort((a, b) => b - a);
     for (const encounter of (zone.encounters ?? [])) {
+      if (!encounter) continue;
       result.push({ id: encounter.id, name: encounter.name, zone: zone.name, zoneId: zone.id, partitionIds });
     }
   }
@@ -67,13 +76,15 @@ export function groupEncountersByZone(encounters: IngestEncounter[]): Map<number
 }
 
 // This is the prune-protected set: pruning never deletes on-disk data for an id here, so a live zone that transiently fails its liveness probe is never wiped.
-export function protectedEncounterIds(expansions: WclExpansion[]): Set<number> {
+export function protectedEncounterIds(expansions: WclExpansions): Set<number> {
   const ids = new Set<number>();
   const firstExpansion = expansions[0];
   if (!firstExpansion) return ids;
   for (const zone of (firstExpansion.zones ?? [])) {
-    if (zone.frozen === true) continue;
-    for (const encounter of (zone.encounters ?? [])) ids.add(encounter.id);
+    if (!zone || zone.frozen) continue;
+    for (const encounter of (zone.encounters ?? [])) {
+      if (encounter) ids.add(encounter.id);
+    }
   }
   return ids;
 }

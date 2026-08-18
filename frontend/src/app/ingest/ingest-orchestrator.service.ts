@@ -11,6 +11,7 @@ import { type LoadError } from '../core/result';
 import { toParseRankings, unwrapRankings } from '../shared/analysis/wcl-projections';
 import type { EncounterEntry, SpecEntry } from '../core/models/encounter.models';
 import { RATE_LIMIT_Q, CLASSES_Q } from '../core/services/wcl-queries';
+import type { ClassesQuery, RateLimitQuery } from '../core/services/wcl-operations.generated';
 import { BurstTransformService } from '../pages/post-raid/burst-windows/burst-transform.service';
 import { RotationTransformService } from '../pages/post-raid/rotation/rotation-transform.service';
 import { DefensiveTransformService } from '../pages/post-raid/defensive/defensive-transform.service';
@@ -28,7 +29,7 @@ import {
   type SignatureRanking, type SignedFile, type IngestStamp,
 } from './signature';
 import { formatSpecReport, SELECTED_MARKER, type SpecReportRow } from './spec-report';
-import type { WclRateLimitData, IngestEncounter, WclGameClass } from './models/wcl.models';
+import type { IngestEncounter } from './models/wcl.models';
 
 const TOP_N = 10;
 // Matches the depth the transforms over-fetch to, so a parse that backfills a private top parse is part of the skip key.
@@ -66,16 +67,18 @@ class ApiWclClient implements WclQueryClient {
 
   constructor(private readonly wclApi: WclApiService) {}
 
-  query<T = unknown>(gql: string, variables?: object): Promise<T> {
+  query<T>(gql: string, variables?: object): Promise<T> {
     // These reads are marked uncached (see wclCachingHeaders), so the budget gate sees fresh data.
     return this.wclApi.query<T>(gql, (variables ?? {}));
   }
 
   async assertBudget(margin: number): Promise<void> {
-    const data = await this.query<{ rateLimitData?: WclRateLimitData }>(RATE_LIMIT_Q);
-    const rateLimit = data.rateLimitData ?? {};
-    if (rateLimit.limitPerHour != null) this._limitPerHour = rateLimit.limitPerHour;
-    if (rateLimit.pointsSpentThisHour != null) this._pointsSpentThisHour = rateLimit.pointsSpentThisHour;
+    const data = await this.query<RateLimitQuery>(RATE_LIMIT_Q);
+    const rateLimit = data.rateLimitData;
+    if (rateLimit) {
+      this._limitPerHour = rateLimit.limitPerHour;
+      this._pointsSpentThisHour = rateLimit.pointsSpentThisHour;
+    }
     if (this._limitPerHour == null) return; // unknown - don't block
     const remaining = this._limitPerHour - this._pointsSpentThisHour;
     if (remaining < margin) {
@@ -119,7 +122,7 @@ export class IngestOrchestratorService {
     console.log(`Ingest version: ${version}`);
 
     // The spec icon is not on WCL, so enrich each meta from that spec's rulebook (its spec_icon stem).
-    const classesData = await client.query<{ gameData?: { classes?: WclGameClass[] } }>(CLASSES_Q);
+    const classesData = await client.query<ClassesQuery>(CLASSES_Q);
     const metas = mapClassesToSpecMeta(classesData.gameData?.classes ?? []);
     for (const meta of metas) {
       const rulebook = await this.dataFile.getRulebook(meta.spec);

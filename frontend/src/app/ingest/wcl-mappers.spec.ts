@@ -1,17 +1,26 @@
 import { assert, describe, it, expect } from 'vitest';
-import { filterEncounters, groupEncountersByZone, protectedEncounterIds, mapClassesToSpecMeta, specWclFromMetas } from './wcl-mappers';
-import type { WclExpansion, IngestEncounter, WclGameClass } from './models/wcl.models';
+import {
+  filterEncounters, groupEncountersByZone, protectedEncounterIds, mapClassesToSpecMeta, specWclFromMetas,
+  type WclExpansions, type WclGameClasses,
+} from './wcl-mappers';
+import type { IngestEncounter } from './models/wcl.models';
+
+type WclZone = NonNullable<NonNullable<NonNullable<WclExpansions[number]>['zones']>[number]>;
+
+function zone(over: Partial<WclZone> & Pick<WclZone, 'id' | 'name'>): WclZone {
+  return { frozen: false, partitions: null, encounters: null, ...over };
+}
 
 describe('filterEncounters', () => {
   it('uses only the first expansion, excludes beta/ptr zones, and sorts partitions descending', () => {
-    const expansions: WclExpansion[] = [
+    const expansions: WclExpansions = [
       {
         zones: [
-          { id: 10, name: 'Raid', partitions: [{ id: 1 }, { id: 3 }, { id: 2 }], encounters: [{ id: 100, name: 'Boss 1' }] },
-          { id: 11, name: 'Beta Zone', encounters: [{ id: 200, name: 'Beta Boss' }] },
+          zone({ id: 10, name: 'Raid', partitions: [{ id: 1 }, { id: 3 }, { id: 2 }], encounters: [{ id: 100, name: 'Boss 1' }] }),
+          zone({ id: 11, name: 'Beta Zone', encounters: [{ id: 200, name: 'Beta Boss' }] }),
         ],
       },
-      { zones: [{ id: 20, name: 'Old Raid', encounters: [{ id: 300, name: 'Old Boss' }] }] },
+      { zones: [zone({ id: 20, name: 'Old Raid', encounters: [{ id: 300, name: 'Old Boss' }] })] },
     ];
     const encounters = filterEncounters(expansions);
     expect(encounters).toHaveLength(1);
@@ -24,13 +33,13 @@ describe('filterEncounters', () => {
 
   // Mirrors the real Midnight worldData.
   it('drops frozen zones even when their name matches no exclude pattern, and carries zoneId', () => {
-    const expansions: WclExpansion[] = [
+    const expansions: WclExpansions = [
       {
         zones: [
-          { id: 46, name: 'VS / DR / MQD', frozen: false, encounters: [{ id: 3176, name: 'Imperator Averzian' }] },
-          { id: 53, name: 'The Venomous Abyss', frozen: true, encounters: [{ id: 3470, name: 'Old Boss' }] },
-          { id: 510, name: 'The Venomous Abyss Complete Raid', frozen: true, encounters: [{ id: 3191, name: 'Aggregate' }] },
-          { id: 50, name: 'Sporefall', encounters: [{ id: 3159, name: 'Rotmire' }] }, // frozen omitted -> kept
+          zone({ id: 46, name: 'VS / DR / MQD', frozen: false, encounters: [{ id: 3176, name: 'Imperator Averzian' }] }),
+          zone({ id: 53, name: 'The Venomous Abyss', frozen: true, encounters: [{ id: 3470, name: 'Old Boss' }] }),
+          zone({ id: 510, name: 'The Venomous Abyss Complete Raid', frozen: true, encounters: [{ id: 3191, name: 'Aggregate' }] }),
+          zone({ id: 50, name: 'Sporefall', frozen: undefined, encounters: [{ id: 3159, name: 'Rotmire' }] }),
         ],
       },
     ];
@@ -58,15 +67,15 @@ describe('groupEncountersByZone', () => {
 
 describe('protectedEncounterIds', () => {
   it('collects every non-frozen current-expansion id (ignoring name-exclude/probe), and drops frozen + older expansions', () => {
-    const expansions: WclExpansion[] = [
+    const expansions: WclExpansions = [
       {
         zones: [
-          { id: 46, name: 'VS / DR / MQD', frozen: false, encounters: [{ id: 3176, name: 'A' }, { id: 3177, name: 'B' }] },
-          { id: 47, name: 'Mythic+ Season 1', frozen: false, encounters: [{ id: 112526, name: 'Dungeon' }] }, // name-excluded but still protected
-          { id: 53, name: 'The Venomous Abyss', frozen: true, encounters: [{ id: 3470, name: 'Old' }] },
+          zone({ id: 46, name: 'VS / DR / MQD', frozen: false, encounters: [{ id: 3176, name: 'A' }, { id: 3177, name: 'B' }] }),
+          zone({ id: 47, name: 'Mythic+ Season 1', frozen: false, encounters: [{ id: 112526, name: 'Dungeon' }] }), // name-excluded but still protected
+          zone({ id: 53, name: 'The Venomous Abyss', frozen: true, encounters: [{ id: 3470, name: 'Old' }] }),
         ],
       },
-      { zones: [{ id: 44, name: 'Manaforge Omega', frozen: true, encounters: [{ id: 3129, name: 'Old' }] }] },
+      { zones: [zone({ id: 44, name: 'Manaforge Omega', frozen: true, encounters: [{ id: 3129, name: 'Old' }] })] },
     ];
     const ids = protectedEncounterIds(expansions);
     expect([...ids].sort((a, b) => a - b)).toEqual([3176, 3177, 112526]);
@@ -78,7 +87,7 @@ describe('protectedEncounterIds', () => {
 });
 
 describe('mapClassesToSpecMeta', () => {
-  const classes: WclGameClass[] = [
+  const classes: WclGameClasses = [
     { name: 'Rogue', slug: 'Rogue', specs: [
       { name: 'Assassination', slug: 'Assassination' },
       { name: 'Subtlety', slug: 'Subtlety' },
