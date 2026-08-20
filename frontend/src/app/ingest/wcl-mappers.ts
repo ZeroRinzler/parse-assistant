@@ -75,13 +75,14 @@ export function groupEncountersByZone(encounters: IngestEncounter[]): Map<number
   return groups;
 }
 
-// This is the prune-protected set: pruning never deletes on-disk data for an id here, so a live zone that transiently fails its liveness probe is never wiped.
-export function protectedEncounterIds(expansions: WclExpansions): Set<number> {
+// The prune-protected set covers the current zone and anything newer: older zones stay deletable (that is what phases a previous tier's files out), while a null currentZoneId (no live zone resolved) protects everything so a transient probe failure never wipes data.
+export function protectedEncounterIds(expansions: WclExpansions, currentZoneId: number | null): Set<number> {
   const ids = new Set<number>();
   const firstExpansion = expansions[0];
   if (!firstExpansion) return ids;
   for (const zone of (firstExpansion.zones ?? [])) {
     if (!zone || zone.frozen) continue;
+    if (currentZoneId != null && zone.id < currentZoneId) continue;
     for (const encounter of (zone.encounters ?? [])) {
       if (encounter) ids.add(encounter.id);
     }

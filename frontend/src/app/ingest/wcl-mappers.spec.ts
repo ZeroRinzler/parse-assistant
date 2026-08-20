@@ -66,23 +66,35 @@ describe('groupEncountersByZone', () => {
 });
 
 describe('protectedEncounterIds', () => {
-  it('collects every non-frozen current-expansion id (ignoring name-exclude/probe), and drops frozen + older expansions', () => {
-    const expansions: WclExpansions = [
-      {
-        zones: [
-          zone({ id: 46, name: 'VS / DR / MQD', frozen: false, encounters: [{ id: 3176, name: 'A' }, { id: 3177, name: 'B' }] }),
-          zone({ id: 47, name: 'Mythic+ Season 1', frozen: false, encounters: [{ id: 112526, name: 'Dungeon' }] }), // name-excluded but still protected
-          zone({ id: 53, name: 'The Venomous Abyss', frozen: true, encounters: [{ id: 3470, name: 'Old' }] }),
-        ],
-      },
-      { zones: [zone({ id: 44, name: 'Manaforge Omega', frozen: true, encounters: [{ id: 3129, name: 'Old' }] })] },
-    ];
-    const ids = protectedEncounterIds(expansions);
-    expect([...ids].sort((a, b) => a - b)).toEqual([3176, 3177, 112526]);
+  const expansions: WclExpansions = [
+    {
+      zones: [
+        zone({ id: 46, name: 'VS / DR / MQD', frozen: false, encounters: [{ id: 3176, name: 'A' }, { id: 3177, name: 'B' }] }),
+        zone({ id: 47, name: 'Mythic+ Season 1', frozen: false, encounters: [{ id: 112526, name: 'Dungeon' }] }), // name-excluded but still protected
+        zone({ id: 50, name: 'Sporefall', frozen: false, encounters: [{ id: 3159, name: 'Rotmire' }] }),
+        zone({ id: 53, name: 'The Venomous Abyss', frozen: true, encounters: [{ id: 3470, name: 'Old' }] }),
+      ],
+    },
+    { zones: [zone({ id: 44, name: 'Manaforge Omega', frozen: true, encounters: [{ id: 3129, name: 'Old' }] })] },
+  ];
+
+  it('with no current zone, collects every non-frozen current-expansion id (ignoring name-exclude/probe), and drops frozen + older expansions', () => {
+    const ids = protectedEncounterIds(expansions, null);
+    expect([...ids].sort((a, b) => a - b)).toEqual([3159, 3176, 3177, 112526]);
+  });
+
+  it('with a current zone, unprotects the zones below it (they phase out) but keeps the zone itself (boundary: id 50 is in, 47 is out)', () => {
+    const ids = protectedEncounterIds(expansions, 50);
+    expect([...ids].sort((a, b) => a - b)).toEqual([3159]);
+  });
+
+  it('keeps zones newer than the current one protected', () => {
+    const ids = protectedEncounterIds(expansions, 47);
+    expect([...ids].sort((a, b) => a - b)).toEqual([3159, 112526]);
   });
 
   it('returns an empty set when there are no expansions', () => {
-    expect(protectedEncounterIds([]).size).toBe(0);
+    expect(protectedEncounterIds([], null).size).toBe(0);
   });
 });
 

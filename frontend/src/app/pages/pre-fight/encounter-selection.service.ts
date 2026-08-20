@@ -1,13 +1,8 @@
-/** Pre-fight spec + encounter discovery shell, colocated with its one pure projection so the page shell stays free of the transport. */
+/** Pre-fight spec + encounter discovery shell over the data-file indices. */
 import { Injectable, inject } from '@angular/core';
 import { DataFileApiService } from '../../core/services/data-file-api';
 import { EncounterEntry, SpecEntry } from '../../core/models/encounter.models';
-import { Result, ok } from '../../core/result';
-
-/** Order-preserving, so the dropdown keeps the ingested order. */
-export function benchedEncounters(entries: EncounterEntry[]): EncounterEntry[] {
-  return entries.filter(entry => entry.sample_count > 0);
-}
+import { Result } from '../../core/result';
 
 @Injectable({ providedIn: 'root' })
 export class EncounterSelectionService {
@@ -17,8 +12,8 @@ export class EncounterSelectionService {
     return this.files.getSpecs();
   }
 
-  async getEncounters(spec: string): Promise<Result<EncounterEntry[]>> {
-    const result = await this.files.getEncounters(spec);
-    return result.ok ? ok(benchedEncounters(result.value)) : result;
+  /** Zero-sample entries stay listed: selecting one is what shows the waiting banner while a new raid has no parses yet. */
+  getEncounters(spec: string): Promise<Result<EncounterEntry[]>> {
+    return this.files.getEncounters(spec);
   }
 }

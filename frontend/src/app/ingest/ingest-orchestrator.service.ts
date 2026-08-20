@@ -61,6 +61,13 @@ export function discoveryBudgetSummary(err: unknown): IngestRunSummary | null {
   return null;
 }
 
+/** The index lists the current zone's encounters even at zero samples (they must stay selectable while a new raid waits for parses); an empty `current` (no live zone resolved) keeps the on-disk entries so one bad discovery never blanks the UI. */
+export function encounterIndexEntries(current: IngestEncounter[], onDisk: EncounterEntry[]): EncounterEntry[] {
+  if (!current.length) return onDisk;
+  const samplesById = new Map(onDisk.map(entry => [entry.id, entry.sample_count]));
+  return current.map(encounter => ({ id: encounter.id, name: encounter.name, sample_count: samplesById.get(encounter.id) ?? 0 }));
+}
+
 class ApiWclClient implements WclQueryClient {
   private _limitPerHour: number | null = null;
   private _pointsSpentThisHour = 0;
@@ -127,7 +134,9 @@ export class IngestOrchestratorService {
     const discovery = await this.discoverContent(client, specWcl);
     if (!discovery) return;
     const { encounters, protectedIds } = discovery;
-    console.log(`${encounters.length} live encounters`);
+    console.log(encounters.length
+      ? `Current raid: ${encounters[0]?.zone} (${encounters.length} encounters)`
+      : 'No live raid zone found; keeping the existing data.');
 
     const specs = await this.orderedSpecsFromDisk();
     if (!specs.length) {
@@ -311,7 +320,7 @@ export class IngestOrchestratorService {
     } catch (err) {
       if (err instanceof BudgetExceededError) {
         console.log(`\n[budget] Stopping cleanly: ${err.message}`);
-        await this.rebuildEncountersIndex(spec);
+        await this.rebuildEncountersIndex(spec, encounters);
         await this.rebuildSpecIndex();
         return true;
       }
@@ -320,7 +329,7 @@ export class IngestOrchestratorService {
 
     const pruned = await this.pruneStaleEncounters(spec, protectedIds);
     if (pruned.length) console.log(`  Pruned ${pruned.length} stale encounter(s): ${pruned.join(', ')}`);
-    await this.rebuildEncountersIndex(spec);
+    await this.rebuildEncountersIndex(spec, encounters);
     await this.rebuildSpecIndex();
     console.log(`Ingestion complete for ${spec}.`);
     return false;
@@ -394,23 +403,22 @@ export class IngestOrchestratorService {
     return wroteAny;
   }
 
-  private async rebuildEncountersIndex(spec: string): Promise<EncounterEntry[]> {
+  private async rebuildEncountersIndex(spec: string, current: IngestEncounter[]): Promise<void> {
     const files = await this.dataFile.listSliceFiles(spec, 'burst');
-    const entries: EncounterEntry[] = [];
+    const onDisk: EncounterEntry[] = [];
     for (const file of files.sort()) {
       if (!file.endsWith('.json')) continue;
       const encId = parseInt(file);
       if (!Number.isFinite(encId)) continue;
       const bench = await this.dataFile.getSlice<{ encounter_id?: number; encounter_name?: string; sample_count?: number }>(spec, encId, 'burst');
       if (!bench.ok) continue;
-      entries.push({
+      onDisk.push({
         id: bench.value.encounter_id ?? encId,
         name: bench.value.encounter_name ?? file,
         sample_count: bench.value.sample_count ?? 0,
       });
     }
-    await this.dataFile.writeEncounters(spec, entries);
-    return entries;
+    await this.dataFile.writeEncounters(spec, encounterIndexEntries(current, onDisk));
   }
 
   private async rebuildSpecIndex(): Promise<void> {
@@ -418,7 +426,8 @@ export class IngestOrchestratorService {
     const entries: SpecEntry[] = [];
     for (const spec of specs.sort()) {
       const encounters = await this.dataFile.getEncounters(spec);
-      const count = encounters.ok ? encounters.value.filter(entry => entry.sample_count > 0).length : 0;
+      // Zero-sample encounters count: gating on benched data would hide every spec while a new raid waits for its first Mythic parses.
+      const count = encounters.ok ? encounters.value.length : 0;
       if (count > 0) entries.push({ spec, encounter_count: count });
     }
     await this.dataFile.writeSpecs(entries);
