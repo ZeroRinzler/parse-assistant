@@ -12,12 +12,7 @@ import { toParseRankings, unwrapRankings } from '../../shared/analysis/wcl-proje
 import type { EncounterEntry, SpecEntry } from '../../core/models/encounter.models';
 import { RATE_LIMIT_Q, CLASSES_Q } from '../../core/services/wcl-queries';
 import type { ClassesQuery, RateLimitQuery } from '../../core/services/wcl-operations.generated';
-import { BurstTransformService } from '../../pages/post-raid/burst-windows/burst-transform.service';
-import { RotationTransformService } from '../../pages/post-raid/rotation/rotation-transform.service';
-import { DefensiveTransformService } from '../../pages/post-raid/defensive/defensive-transform.service';
-import { GearTransformService } from '../../pages/post-raid/gear/gear-transform.service';
-import { MapTransformService } from '../../pages/post-raid/map/map-transform.service';
-import { NorthernSkyTransformService } from '../../pages/post-raid/northern-sky/northern-sky-transform.service';
+import { sliceRegistry, type SliceDescriptor } from './slice-registry';
 import { getEncounters, rankingsFromPartition, type CurrentContent } from '../wcl-fetchers';
 import { mapClassesToSpecMeta, specWclFromMetas, type SpecWclMap } from '../wcl-mappers';
 import { type WclQueryClient, BudgetExceededError } from '../wcl-client';
@@ -36,9 +31,6 @@ const TOP_N = 10;
 const SIGNATURE_POOL_COUNT = TOP_N * 2;
 const POINTS_MARGIN = 500;
 const SLICE_CONCURRENCY = 3;
-
-// The skip check reads only `burst`'s source_signature, stamped only when every slice of the encounter produced data.
-const SLICES = ['burst', 'rotation', 'defensive', 'gear', 'northern-sky'] as const;
 
 /** Published on `globalThis.__INGEST_DONE__` - the headless harness's exit signal. */
 export interface IngestRunSummary {
@@ -102,14 +94,7 @@ export class IngestOrchestratorService {
   // The orchestrator needs the transport's inaccessible-code drain, which is ingest-only surface.
   private readonly wclTransport = inject(HttpWclTransport);
   private readonly wclCache = inject(NgHttpCachingService);
-  private readonly transforms = {
-    burst: inject(BurstTransformService),
-    rotation: inject(RotationTransformService),
-    defensive: inject(DefensiveTransformService),
-    gear: inject(GearTransformService),
-    map: inject(MapTransformService),
-    northernSky: inject(NorthernSkyTransformService),
-  };
+  private readonly slices = sliceRegistry();
 
   /** Never rejects: the fire-and-forget app initializer must not see an unhandled rejection. */
   async run(): Promise<void> {
@@ -356,20 +341,17 @@ export class IngestOrchestratorService {
     });
   }
 
-  /** Compute all five slices first, THEN stamp + write: the signature is known only after every transform has fetched. */
+  /** Compute every slice first, THEN stamp + write: the signature is known only after every transform has fetched. */
   private async ingestEncounter(
     spec: string, encounter: IngestEncounter, version: string, poolRows: SignatureRanking[], partition: number | null,
   ): Promise<boolean> {
     const encId = encounter.id;
     const limit = pLimit(SLICE_CONCURRENCY);
-
-    const [burst, rotation, defensive, gear, map, northernSky] = await Promise.all([
-      limit(() => this.transforms.burst.getBench(spec, encId, partition)),
-      limit(() => this.transforms.rotation.getBench(spec, encId, partition)),
-      limit(() => this.transforms.defensive.getBench(spec, encId, partition)),
-      limit(() => this.transforms.gear.getBench(spec, encId, partition)),
-      limit(() => this.transforms.map.getBench(spec, encId, partition)),
-      limit(() => this.transforms.northernSky.getBench(spec, encId, partition)),
+    const [burstSlice, ...siblings] = this.slices;
+    const bench = (slice: SliceDescriptor) => limit(() => slice.transform.getBench(spec, encId, partition));
+    const [burst, rest] = await Promise.all([
+      bench(burstSlice),
+      Promise.all(siblings.map(async slice => ({ slice, result: await bench(slice) }))),
     ]);
 
     const inaccessibleCodes = new Set(this.wclTransport.takeInaccessibleCodes());
@@ -383,34 +365,18 @@ export class IngestOrchestratorService {
         ? `    [${encounter.name}] ${slice}: no data, skipped`
         : `    [${encounter.name}] ${slice}: ${error.kind} (${error.message}), skipped`;
 
-    let wroteAny = false;
-    const writes: Promise<unknown>[] = [];
+    let wroteAny = burst.ok;
+    const writes: Promise<void>[] = [];
     if (burst.ok) {
-      const stamped = stampBurstFile(
-        burst.value, signature, stamp, inaccessibleParses, [burst, rotation, defensive, gear, map, northernSky],
-      );
-      writes.push(this.dataFile.writeSlice(spec, encId, 'burst', stamped));
-      wroteAny = true;
-    } else { console.log(skipNote('burst', burst.error)); }
-    if (rotation.ok) {
-      writes.push(this.dataFile.writeSlice(spec, encId, 'rotation', stampSignature(rotation.value, signature, stamp)));
-      wroteAny = true;
-    } else { console.log(skipNote('rotation', rotation.error)); }
-    if (defensive.ok) {
-      writes.push(this.dataFile.writeSlice(spec, encId, 'defensive', stampSignature(defensive.value, signature, stamp)));
-      wroteAny = true;
-    } else { console.log(skipNote('defensive', defensive.error)); }
-    if (gear.ok) {
-      writes.push(this.dataFile.writeSlice(spec, encId, 'gear', stampSignature(gear.value, signature, stamp)));
-      wroteAny = true;
-    } else { console.log(skipNote('gear', gear.error)); }
-    if (map.ok) {
-      writes.push(this.dataFile.writePositions(spec, encId, stampSignature(map.value, signature, stamp)));
-    } else { console.log(skipNote('positions', map.error)); }
-    if (northernSky.ok) {
-      writes.push(this.dataFile.writeSlice(spec, encId, 'northern-sky', stampSignature(northernSky.value, signature, stamp)));
-      wroteAny = true;
-    } else { console.log(skipNote('northern-sky', northernSky.error)); }
+      const all = [burst, ...rest.map(entry => entry.result)];
+      writes.push(burstSlice.write(spec, encId, stampBurstFile(burst.value, signature, stamp, inaccessibleParses, all)));
+    } else { console.log(skipNote(burstSlice.file, burst.error)); }
+    for (const { slice, result } of rest) {
+      if (result.ok) {
+        writes.push(slice.write(spec, encId, stampSignature(result.value, signature, stamp)));
+        wroteAny ||= slice.countsAsBenchData;
+      } else { console.log(skipNote(slice.file, result.error)); }
+    }
 
     await Promise.all(writes);
     return wroteAny;
@@ -458,7 +424,7 @@ export class IngestOrchestratorService {
       if (!file.endsWith('.json')) continue;
       const encId = parseInt(file);
       if (!Number.isFinite(encId) || protectedIds.has(encId)) continue;
-      for (const slice of [...SLICES, 'positions']) {
+      for (const { file: slice } of this.slices) {
         try {
           await this.dataFile.removeSlice(spec, encId, slice);
         } catch (err) {
