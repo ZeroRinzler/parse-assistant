@@ -1,4 +1,4 @@
-import { deviation, median } from 'd3-array';
+import { deviation, median, rollup } from 'd3-array';
 import { round, fmtClock } from './analysis-math';
 import { CdHoldTargets } from '../../core/models/encounter.models';
 import { AnalysisFinding } from '../../core/models/analysis.models';
@@ -40,15 +40,11 @@ export function detectHoldWindows(castTimesS: number[], effectiveCd: number): Ho
 export function buildHoldTargets(
   entries: HoldWindowSource[], effectiveCd: number, totalSamples = entries.length,
 ): CdHoldTargets {
-  const byIndex = new Map<number, { actuals: number[]; delays: number[] }>();
-  for (const entry of entries) {
-    for (const hold of entry.hold_windows) {
-      const bucket = byIndex.get(hold.cast_index) ?? { actuals: [], delays: [] };
-      bucket.actuals.push(hold.actual_s);
-      bucket.delays.push(hold.delay_s);
-      byIndex.set(hold.cast_index, bucket);
-    }
-  }
+  const byIndex = rollup(
+    entries.flatMap(entry => entry.hold_windows),
+    holds => ({ actuals: holds.map(hold => hold.actual_s), delays: holds.map(hold => hold.delay_s) }),
+    hold => hold.cast_index,
+  );
   const targets: CdHoldTargets = {};
   for (const [castIndex, { actuals, delays }] of byIndex.entries()) {
     if (actuals.length >= Math.max(2, totalSamples * HOLD_CONSENSUS_FRAC)) {

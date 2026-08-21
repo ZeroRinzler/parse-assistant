@@ -3,8 +3,8 @@ import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
 import { RulebookCooldown, RulebookDefensive, RulebookRule } from '../../../core/models/rulebook.models';
 import { PerCdBenchmark, UsesPerMin } from '../../../core/models/encounter.models';
-import { mean, deviation, quantile } from 'd3-array';
-import { round, getOrInsert, avgOr, stddevOr, medianOr, castGaps } from '../../../shared/analysis/analysis-math';
+import { mean, deviation, group, quantile } from 'd3-array';
+import { round, avgOr, stddevOr, medianOr, castGaps } from '../../../shared/analysis/analysis-math';
 import {
   HoldWindow, HOLD_CONSENSUS_FRAC, buildHoldTargets, detectHoldWindows,
 } from '../../../shared/analysis/hold-targets';
@@ -162,12 +162,7 @@ export function aggregateCdBenchmarks(
   perParse: CdSummary[][], cooldowns: RulebookCooldown[],
 ): Record<string, PerCdBenchmark> {
   const cdSecondsByName = new Map(cooldowns.map(cooldown => [cooldown.name, cooldown.cooldown]));
-  const byCd = new Map<string, CdSummary[]>();
-  for (const summaries of perParse) {
-    for (const summary of summaries) {
-      getOrInsert(byCd, summary.name, () => []).push(summary);
-    }
-  }
+  const byCd = group(perParse.flat(), summary => summary.name);
   const result: Record<string, PerCdBenchmark> = {};
   for (const [name, entries] of byCd.entries()) {
     result[name] = buildCdBenchmark(entries, cdSecondsByName.get(name) ?? 90);

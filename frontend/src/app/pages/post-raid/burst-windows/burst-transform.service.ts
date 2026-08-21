@@ -4,7 +4,7 @@ import { DataFileApiService } from '../../../core/services/data-file-api';
 import { RulebookCooldown, RulebookDefensive } from '../../../core/models/rulebook.models';
 import { BurstWindow } from '../../../core/models/analysis.models';
 import { Result, missing } from '../../../core/result';
-import { mean, median, deviation, quantile } from 'd3-array';
+import { mean, median, deviation, extent, greatest, quantile, rollup, rollups } from 'd3-array';
 import { round, groupByTime, getOrInsert } from '../../../shared/analysis/analysis-math';
 import { TimedEvent, abilityIcons, normalizeAbilityId, relativeS, withRelativeS } from '../../../shared/analysis/wcl-projections';
 import { BenchParse, benchFromTopParses } from '../../../shared/analysis/bench-pipeline';
@@ -229,12 +229,8 @@ function windowFromRun(run: BinRun, context: RunWindowContext): ParseWindow | nu
 
 /** Keep each parse's biggest window (by window_damage), so a cluster counts DISTINCT parses. */
 function dedupeByParse(cluster: ParseWindow[]): ParseWindow[] {
-  const byParse = new Map<number, ParseWindow>();
-  for (const window of cluster) {
-    const current = byParse.get(window.parse_index);
-    if (!current || window.window_damage > current.window_damage) byParse.set(window.parse_index, window);
-  }
-  return [...byParse.values()];
+  const biggest = rollup(cluster, windows => greatest(windows, window => window.window_damage), window => window.parse_index);
+  return [...biggest.values()].filter(window => window != null);
 }
 
 /** Keeps an ability only when a majority of the cluster's parses used it, so a single parse's pet cannot invent a row. */
@@ -251,22 +247,23 @@ function clusterAbilityBreakdown(members: ParseWindow[]): BurstWindow['ability_b
   }
   return [...abilityDamage.entries()]
     .filter(([, list]) => list.length >= members.length * MEMBER_MAJORITY_FRAC)
-    .map(([spell_id, list]) => ({
-      spell_id,
-      avg_damage: Math.round((mean(list) ?? 0)),
-      min_damage: Math.round(Math.min(...list)),
-      max_damage: Math.round(Math.max(...list)),
-      avg_casts: Math.round(mean(abilityCasts.get(spell_id) ?? []) ?? 0),
-      is_passive: (abilityPassive.get(spell_id) ?? []).every(Boolean),
-    }))
+    .map(([spell_id, list]) => {
+      const [min = 0, max = 0] = extent(list);
+      return {
+        spell_id,
+        avg_damage: Math.round((mean(list) ?? 0)),
+        min_damage: Math.round(min),
+        max_damage: Math.round(max),
+        avg_casts: Math.round(mean(abilityCasts.get(spell_id) ?? []) ?? 0),
+        is_passive: (abilityPassive.get(spell_id) ?? []).every(Boolean),
+      };
+    })
     .sort((a, b) => b.avg_damage - a.avg_damage)
     .slice(0, 6);
 }
 
 function clusterCommonCds(members: ParseWindow[]): string[] {
-  const cdCounts = new Map<string, number>();
-  for (const member of members) for (const name of member.active_cds) cdCounts.set(name, (cdCounts.get(name) ?? 0) + 1);
-  return [...cdCounts.entries()]
+  return rollups(members.flatMap(member => member.active_cds), names => names.length, name => name)
     .sort((a, b) => b[1] - a[1])
     .filter(([, count]) => count >= members.length * MEMBER_MAJORITY_FRAC)
     .map(([name]) => name);
@@ -279,12 +276,13 @@ export function clusterParseWindows(windows: ParseWindow[], sampleCount: number)
     const members = dedupeByParse(cluster);
     if (members.length < Math.max(2, sampleCount * CLUSTER_MIN_FRAC)) continue;
     const damages = members.map(member => member.window_damage);
+    const [dmgMin = 0, dmgMax = 0] = extent(damages);
     result.push({
       time_s: round(median(members.map(member => member.time_s)) ?? 0),
       dmg_avg: Math.round((mean(damages) ?? 0)),
       dmg_stddev: Math.round((deviation(damages) ?? 0)),
-      dmg_min: Math.round(Math.min(...damages)),
-      dmg_max: Math.round(Math.max(...damages)),
+      dmg_min: Math.round(dmgMin),
+      dmg_max: Math.round(dmgMax),
       common_cds: clusterCommonCds(members),
       window_length_s: round(mean(members.map(member => member.window_length_s)) ?? 0),
       ability_breakdown: clusterAbilityBreakdown(members),

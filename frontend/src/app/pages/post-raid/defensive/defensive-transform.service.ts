@@ -5,7 +5,7 @@ import { RulebookDefensive } from '../../../core/models/rulebook.models';
 import { BurstWindow } from '../../../core/models/analysis.models';
 import { PerDefensiveBenchmark } from '../../../core/models/encounter.models';
 import { Result, missing } from '../../../core/result';
-import { mean, deviation } from 'd3-array';
+import { mean, deviation, extent, group, mode } from 'd3-array';
 import { round, groupByTime, getOrInsert, avgOr, stddevOr, medianOr, castGaps } from '../../../shared/analysis/analysis-math';
 import { HoldWindow, buildHoldTargets, detectHoldWindows } from '../../../shared/analysis/hold-targets';
 import { buildAuraWindows } from '../../../shared/analysis/aura-windows';
@@ -165,11 +165,12 @@ export function findParseDefensiveWindows(
 }
 
 export function clusterDamageStats(damages: number[]): { dmg_avg: number; dmg_stddev: number; dmg_min: number; dmg_max: number } {
+  const [min = 0, max = 0] = extent(damages);
   return {
     dmg_avg: Math.round((mean(damages) ?? 0)),
     dmg_stddev: Math.round((deviation(damages) ?? 0)),
-    dmg_min: Math.round(Math.min(...damages)),
-    dmg_max: Math.round(Math.max(...damages)),
+    dmg_min: Math.round(min),
+    dmg_max: Math.round(max),
   };
 }
 
@@ -187,11 +188,12 @@ export function clusterAbilityBreakdown(cluster: ParseDefWindow[]): BurstWindow[
     .filter(([, byParse]) => byParse.size >= distinctParses * MEMBER_MAJORITY_FRAC)
     .map(([spell_id, byParse]) => {
       const perParseDamage = [...byParse.values()];
+      const [min = 0, max = 0] = extent(perParseDamage);
       return {
         spell_id,
         avg_damage: Math.round((mean(perParseDamage) ?? 0)),
-        min_damage: Math.round(Math.min(...perParseDamage)),
-        max_damage: Math.round(Math.max(...perParseDamage)),
+        min_damage: Math.round(min),
+        max_damage: Math.round(max),
       };
     })
     .sort((a, b) => b.avg_damage - a.avg_damage)
@@ -199,19 +201,13 @@ export function clusterAbilityBreakdown(cluster: ParseDefWindow[]): BurstWindow[
 }
 
 function majorityRefGameId(cluster: ParseDefWindow[]): number | null {
-  const refCounts = new Map<number, number>();
-  for (const member of cluster) {
-    if (member.ref_game_id != null) refCounts.set(member.ref_game_id, (refCounts.get(member.ref_game_id) ?? 0) + 1);
-  }
-  return [...refCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+  const refs = cluster.map(member => member.ref_game_id).filter(ref => ref != null);
+  return refs.length ? mode(refs) : null;
 }
 
 export function clusterDefensiveWindows(windows: ParseDefWindow[], sampleCount: number): BurstWindow[] {
   if (!windows.length) return [];
-  const byDefensive = new Map<string, ParseDefWindow[]>();
-  for (const window of windows) {
-    getOrInsert(byDefensive, window.defensive_name, () => []).push(window);
-  }
+  const byDefensive = group(windows, window => window.defensive_name);
 
   const minParses = Math.max(2, sampleCount * CONSENSUS_FRAC);
   const result: BurstWindow[] = [];
@@ -270,12 +266,7 @@ export function aggregateDefensiveBenchmarks(
   perParseSummaries: ParseDefensiveSummary[][],
   defensives: RulebookDefensive[],
 ): Record<string, PerDefensiveBenchmark> {
-  const byName = new Map<string, ParseDefensiveSummary[]>();
-  for (const parse of perParseSummaries) {
-    for (const summary of parse) {
-      getOrInsert(byName, summary.name, () => []).push(summary);
-    }
-  }
+  const byName = group(perParseSummaries.flat(), summary => summary.name);
 
   // Every sampled parse contributes one array, so the count is the total-parse use-share denominator.
   const totalParses = perParseSummaries.length;

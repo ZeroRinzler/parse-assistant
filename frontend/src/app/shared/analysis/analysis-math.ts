@@ -1,5 +1,5 @@
 /** Generic, cross-slice analysis math + formatting helpers that several slices import instead of re-declaring. */
-import { deviation, mean, median } from 'd3-array';
+import { deviation, least, mean, median, pairs } from 'd3-array';
 import { AnalysisFinding } from '../../core/models/analysis.models';
 
 /** Round to `decimals` places (default 1). d3-array has no rounding helper. */
@@ -24,15 +24,7 @@ export function medianOr<T>(values: number[], fallback: T): number | T {
 
 /** Gaps between successive casts, per entry: an entry's first cast opens no gap, and gaps never span two entries. */
 export function castGaps(entries: { cast_times_s: number[] }[]): number[] {
-  const gaps: number[] = [];
-  for (const entry of entries) {
-    let prev: number | undefined;
-    for (const timeS of entry.cast_times_s) {
-      if (prev != null) gaps.push(timeS - prev);
-      prev = timeS;
-    }
-  }
-  return gaps;
+  return entries.flatMap(entry => pairs(entry.cast_times_s, (prev, next) => next - prev));
 }
 
 /** Inserts `makeDefault()` first when `key` is absent, so a caller can group-and-append in one call instead of a has/set guard plus a non-null get. */
@@ -84,8 +76,7 @@ export function castEfficiencyPct(totalDowntimeS: number, fightDurS: number): nu
 
 /** The value closest to zero (smallest absolute value) - the primary BL offset. */
 export function closestToZero(values: number[]): number {
-  if (values.length === 0) return 0;
-  return values.reduce((best, value) => (Math.abs(value) < Math.abs(best) ? value : best));
+  return least(values, value => Math.abs(value)) ?? 0;
 }
 
 export function benchExpectedUses(
