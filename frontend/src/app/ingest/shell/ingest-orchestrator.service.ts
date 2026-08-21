@@ -137,6 +137,7 @@ export class IngestOrchestratorService {
     console.log(encounters.length
       ? `Current raid: ${encounters[0]?.zone} (${encounters.length} encounters)`
       : 'No live raid zone found; keeping the existing data.');
+    await this.resetStaleSpecData(encounters, protectedIds);
 
     const specs = await this.orderedSpecsFromDisk();
     if (!specs.length) {
@@ -145,7 +146,7 @@ export class IngestOrchestratorService {
       return;
     }
 
-    const summary = await this.ingestEachSpec(client, specs, encounters, protectedIds, version);
+    const summary = await this.ingestEachSpec(client, specs, encounters, version);
     this.printRunSummary(summary, specs.length);
     publishSummary(summary);
   }
@@ -186,9 +187,23 @@ export class IngestOrchestratorService {
     }
   }
 
+  /** Runs before spec selection so a tier flip resets every spec in one pass - resetting only the selected specs would leave them at zero data and permanently re-selected while a new tier waits for its first parses. */
+  private async resetStaleSpecData(encounters: IngestEncounter[], protectedIds: Set<number>): Promise<void> {
+    if (protectedIds.size === 0) {
+      logWarn('resetStaleSpecData', 'empty protected set - skipping the reset (likely a transient WCL failure)');
+      return;
+    }
+    for (const spec of await this.dataFile.listSpecs()) {
+      const pruned = await this.pruneStaleEncounters(spec, protectedIds);
+      if (pruned.length) console.log(`  [${spec}] pruned ${pruned.length} stale encounter(s): ${pruned.join(', ')}`);
+      await this.rebuildEncountersIndex(spec, encounters);
+    }
+    await this.rebuildSpecIndex();
+  }
+
   private async ingestEachSpec(
     client: ApiWclClient, specs: string[],
-    encounters: IngestEncounter[], protectedIds: Set<number>, version: string,
+    encounters: IngestEncounter[], version: string,
   ): Promise<IngestRunSummary> {
     // Isolate each spec so one throw drops only that spec, not the whole run.
     const succeeded: string[] = [];
@@ -196,7 +211,7 @@ export class IngestOrchestratorService {
     let budgetStopped = false;
     for (const spec of specs) {
       try {
-        const budgetExhausted = await this.ingestSpec(client, spec, encounters, protectedIds, version);
+        const budgetExhausted = await this.ingestSpec(client, spec, encounters, version);
         succeeded.push(spec);
         if (budgetExhausted) { budgetStopped = true; break; }
       } catch (err) {
@@ -278,7 +293,7 @@ export class IngestOrchestratorService {
   /** Returns true when the run stopped on the WCL budget (remaining specs resume next run). */
   private async ingestSpec(
     client: ApiWclClient, spec: string,
-    encounters: IngestEncounter[], protectedIds: Set<number>, version: string,
+    encounters: IngestEncounter[], version: string,
   ): Promise<boolean> {
     console.log(`\nIngesting ${spec} - ${encounters.length} encounters (top ${TOP_N})`);
 
@@ -327,8 +342,6 @@ export class IngestOrchestratorService {
       throw err;
     }
 
-    const pruned = await this.pruneStaleEncounters(spec, protectedIds);
-    if (pruned.length) console.log(`  Pruned ${pruned.length} stale encounter(s): ${pruned.join(', ')}`);
     await this.rebuildEncountersIndex(spec, encounters);
     await this.rebuildSpecIndex();
     console.log(`Ingestion complete for ${spec}.`);

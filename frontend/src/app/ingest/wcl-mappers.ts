@@ -39,7 +39,8 @@ export function specWclFromMetas(metas: SpecMeta[]): SpecWclMap {
   return map;
 }
 
-const EXCLUDE_ZONE_PATTERNS = ['beta', 'ptr', 'mythic+', 'complete raids', 'delves', 'torghast'];
+// Singular 'complete raid' on purpose: WCL names the per-tier aggregate zone "X Complete Raid", which the plural form misses.
+const EXCLUDE_ZONE_PATTERNS = ['beta', 'ptr', 'mythic+', 'complete raid', 'delves', 'torghast'];
 
 type WclZone = NonNullable<NonNullable<NonNullable<WclExpansions[number]>['zones']>[number]>;
 

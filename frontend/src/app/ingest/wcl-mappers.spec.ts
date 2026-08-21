@@ -31,6 +31,18 @@ describe('filterEncounters', () => {
     expect(filterEncounters([])).toEqual([]);
   });
 
+  it('drops a non-frozen per-tier "Complete Raid" aggregate zone by name, keeping the real raid', () => {
+    const expansions: WclExpansions = [
+      {
+        zones: [
+          zone({ id: 53, name: 'The Venomous Abyss', frozen: false, encounters: [{ id: 3470, name: 'Boss' }] }),
+          zone({ id: 510, name: 'The Venomous Abyss Complete Raid', frozen: false, encounters: [{ id: 3191, name: 'Aggregate' }] }),
+        ],
+      },
+    ];
+    expect(filterEncounters(expansions).map(encounter => encounter.id)).toEqual([3470]);
+  });
+
   // Mirrors the real Midnight worldData.
   it('drops frozen zones even when their name matches no exclude pattern, and carries zoneId', () => {
     const expansions: WclExpansions = [

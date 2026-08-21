@@ -45,10 +45,12 @@ describe('getEncounters', () => {
       { id: 52, name: 'Dummy Dome', frozen: false, encounters: [{ id: 3591, name: 'Sinister Single' }] },
       { id: 53, name: 'The Venomous Abyss', frozen: true, encounters: [{ id: 3470, name: 'Old' }] },
       { id: 47, name: 'Mythic+ Season 1', frozen: false, encounters: [{ id: 112526, name: 'Dungeon' }] },
+      // Newest zone of all AND fully ranked, so only its name exclusion keeps it from winning the newest-first probe.
+      { id: 510, name: 'Sporefall Complete Raid', frozen: false, encounters: [{ id: 3191, name: 'Aggregate' }] },
     ],
   }];
 
-  const rankingsByEncounter: Record<number, number> = { 3176: 10, 3177: 10, 3159: 10, 3591: 0 };
+  const rankingsByEncounter: Record<number, number> = { 3176: 10, 3177: 10, 3159: 10, 3591: 0, 3191: 10 };
 
   function contentClient(overrides: Partial<FakeHandlers> = {}, probeCounter?: { count: number }): WclQueryClient {
     return fakeClient({
@@ -62,11 +64,11 @@ describe('getEncounters', () => {
     });
   }
 
-  it('makes the newest live zone the whole current content, phasing out an older zone that still has rankings', async () => {
+  it('makes the newest live raid zone the whole current content, past the Complete Raid aggregate and an older zone that still has rankings', async () => {
     const { encounters, protectedIds } = await getEncounters(contentClient(), SPEC_WCL);
     expect(encounters.map(encounter => encounter.id)).toEqual([3159]);
     // Zones at or above the live zone's id stay protected; the phased-out zone 46 (and the older M+ zone) do not.
-    expect([...protectedIds].sort((a, b) => a - b)).toEqual([3159, 3591]);
+    expect([...protectedIds].sort((a, b) => a - b)).toEqual([3159, 3191, 3591]);
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('getEncounters'), expect.stringContaining('Dummy Dome'));
   });
 
@@ -103,7 +105,7 @@ describe('getEncounters', () => {
     });
     const { encounters, protectedIds } = await getEncounters(client, SPEC_WCL);
     expect(encounters).toHaveLength(0);
-    expect([...protectedIds].sort((a, b) => a - b)).toEqual([3159, 3176, 3177, 3591, 112526]);
+    expect([...protectedIds].sort((a, b) => a - b)).toEqual([3159, 3176, 3177, 3191, 3591, 112526]);
   });
 
   it('propagates a BudgetExceededError raised while probing', async () => {
