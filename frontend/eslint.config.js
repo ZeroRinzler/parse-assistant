@@ -3,12 +3,114 @@ import eslint from '@eslint/js';
 import { defineConfig } from 'eslint/config';
 import tseslint from 'typescript-eslint';
 import angular from 'angular-eslint';
+import boundaries from 'eslint-plugin-boundaries';
 import singleLineComment from './eslint-rules/single-line-comment.js';
 import bannedCharacters from './eslint-rules/banned-characters.js';
 
 const local = {
   rules: { 'single-line-comment': singleLineComment, 'banned-characters': bannedCharacters },
 };
+
+const architectureLayers = [
+  { type: 'testing', pattern: 'src/testing', partialMatch: false },
+  { type: 'environments', pattern: 'src/environments', partialMatch: false },
+  { type: 'ingest', pattern: 'src/app/ingest', partialMatch: false },
+  { type: 'core', pattern: 'src/app/core', partialMatch: false },
+  { type: 'shared', pattern: 'src/app/shared', partialMatch: false },
+  { type: 'slice', pattern: 'src/app/pages/post-raid/*', partialMatch: false, capture: ['sliceName'] },
+  { type: 'page', pattern: 'src/app/pages/*', partialMatch: false },
+  { type: 'app-root', pattern: 'src/app', partialMatch: false },
+  { type: 'bootstrap', pattern: 'src', partialMatch: false },
+];
+
+const to = (...types) => types.map((type) => ({ to: { element: { type } } }));
+
+// Last match wins: moving the Pull Overview exception above the general slice policy disables it.
+const layerPolicies = [
+  { from: [{ element: { type: 'core' } }], allow: to('environments', 'testing') },
+  { from: [{ element: { type: 'shared' } }], allow: to('core', 'testing') },
+  { from: [{ element: { type: 'slice' } }], allow: to('core', 'shared', 'testing') },
+  { from: [{ element: { type: 'page' } }], allow: to('core', 'shared', 'slice', 'testing') },
+  { from: [{ element: { type: 'ingest' } }], allow: to('core', 'shared', 'slice', 'testing') },
+  { from: [{ element: { type: 'app-root' } }], allow: to('core', 'shared', 'page', 'environments') },
+  { from: [{ element: { type: 'environments' } }], allow: to('core', 'slice', 'ingest') },
+  { from: [{ element: { type: 'bootstrap' } }], allow: to('core', 'app-root') },
+  { from: [{ element: { type: 'testing' } }], allow: to('core') },
+  {
+    from: [{ element: { type: 'slice', captured: { sliceName: 'pull-overview' } } }],
+    allow: [{ to: { element: { type: 'slice', captured: { sliceName: 'map' } } } }],
+    message: 'Pull Overview reads the Map slice anchor type its own cards emit.',
+  },
+];
+
+// Exactly 3 or 6 hex digits: the trailing guard keeps `#8041`-style id labels out.
+const HEX_COLOR = String.raw`#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3})(?![0-9a-fA-F])`;
+const COLOR_FUNCTION = String.raw`\brgba?\(`;
+const COLOR_LITERAL = `${HEX_COLOR}|${COLOR_FUNCTION}`;
+
+// Anchored at a token start so module specifiers like './class-icon-pipe' are not class names.
+const DESIGN_SYSTEM_CLASS = String.raw`(?:^|\s)(?:badge|fill|icon|chip)-`;
+
+const styleFileMessage =
+  'Zero per-component style files: styling is Angular Material + Tailwind utilities over the tokens in src/styles.scss.';
+const colorMessage =
+  'No hardcoded colors: use a src/styles.scss token through a Tailwind arbitrary value or a badge-* class.';
+const classProductionMessage =
+  'Component TS never produces CSS classes: expose semantic state and let the template pick the class.';
+
+const restrictUiSyntax = [
+  { selector: 'Property[key.name=/^styleUrls?$/]', message: styleFileMessage },
+  { selector: `Literal[value=/${COLOR_LITERAL}/]`, message: colorMessage },
+  { selector: `TemplateElement[value.raw=/${COLOR_LITERAL}/]`, message: colorMessage },
+  { selector: `Literal[value=/${DESIGN_SYSTEM_CLASS}/]`, message: classProductionMessage },
+  { selector: `TemplateElement[value.raw=/${DESIGN_SYSTEM_CLASS}/]`, message: classProductionMessage },
+];
+
+const httpClientImports = [
+  'HttpClient',
+  'HttpBackend',
+  'HttpHandler',
+  'HttpXhrBackend',
+  'httpResource',
+  'provideHttpClient',
+  'withFetch',
+  'withInterceptors',
+  'withInterceptorsFromDi',
+];
+
+const restrictHttpImports = {
+  paths: [
+    {
+      name: '@angular/common/http',
+      importNames: httpClientImports,
+      message:
+        'Only the transports behind WclApiService and DataFileApiService issue HTTP requests. Go through those two API services instead.',
+    },
+  ],
+};
+
+const restrictAngularImports = {
+  patterns: [
+    {
+      group: ['@angular/*', '@angular/*/*'],
+      message: 'This is functional-core code: keep it pure and framework-free, and inject nothing.',
+    },
+  ],
+};
+
+const functionalCoreFiles = [
+  'src/app/core/*.ts',
+  'src/app/core/models/**/*.ts',
+  'src/app/shared/*.ts',
+  'src/app/shared/analysis/**/*.ts',
+  'src/app/shared/gear/**/*.ts',
+  'src/app/ingest/*.ts',
+  'src/app/ingest/models/**/*.ts',
+  // A slice's own folder holds its Angular components and services; only its subfolders are pure math.
+  'src/app/pages/post-raid/*/*/**/*.ts',
+  'src/app/**/*.utils.ts',
+  'src/app/**/*-queries.ts',
+];
 
 export default defineConfig([
   { ignores: ['src/**/*.generated.ts'] },
@@ -94,8 +196,47 @@ export default defineConfig([
       '@angular-eslint/no-uncalled-signals': 'error',
       '@angular-eslint/computed-must-return': 'error',
       '@angular-eslint/use-component-view-encapsulation': 'error',
-      '@angular-eslint/component-max-inline-declarations': ['error', { template: 10 }], // beyond that, templateUrl
+      '@angular-eslint/component-max-inline-declarations': ['error', { template: 10, styles: 0 }], // beyond that, templateUrl
     },
+  },
+  {
+    files: ['src/**/*.ts'],
+    plugins: { boundaries },
+    settings: {
+      'boundaries/elements': architectureLayers,
+      // Imports are extensionless; without .ts the resolver misses every target and every rule below silently passes.
+      'import/resolver': { node: { extensions: ['.ts', '.js', '.json'] } },
+    },
+    rules: {
+      'boundaries/dependencies': ['error', { default: 'disallow', policies: layerPolicies }],
+      'boundaries/no-unknown-dependencies': 'error',
+      'no-restricted-globals': [
+        'error',
+        {
+          name: 'fetch',
+          message: 'Only the transports behind WclApiService and DataFileApiService issue HTTP requests.',
+        },
+        {
+          name: 'XMLHttpRequest',
+          message: 'Only the transports behind WclApiService and DataFileApiService issue HTTP requests.',
+        },
+        { name: 'WebSocket', message: 'Live sync polls through WclApiService; the app opens no sockets.' },
+      ],
+      'no-restricted-syntax': ['error', ...restrictUiSyntax],
+      'max-lines': ['error', { max: 500, skipBlankLines: false, skipComments: false }],
+      complexity: ['error', { max: 10 }],
+      'max-depth': ['error', { max: 3 }],
+    },
+  },
+  {
+    // Every transport/ folder is a chokepoint, so narrowing this to one of them re-bans the other's HttpClient.
+    files: ['src/**/*.ts'],
+    ignores: ['src/app/**/transport/**'],
+    rules: { 'no-restricted-imports': ['error', restrictHttpImports] },
+  },
+  {
+    files: functionalCoreFiles,
+    rules: { 'no-restricted-imports': ['error', restrictAngularImports] },
   },
   {
     // Plain-JS Node scripts (the ingest file server + headless harness). console is
@@ -139,6 +280,7 @@ export default defineConfig([
       '@angular-eslint/template/no-empty-control-flow': 'error',
       '@angular-eslint/template/prefer-built-in-pipes': 'error',
       '@angular-eslint/template/prefer-contextual-for-variables': 'error',
+      'max-lines': ['error', { max: 500, skipBlankLines: false, skipComments: false }],
       'local/single-line-comment': 'error',
       'local/banned-characters': 'error',
     },

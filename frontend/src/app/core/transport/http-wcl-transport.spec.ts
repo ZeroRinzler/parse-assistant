@@ -4,9 +4,9 @@ import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http'
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { NgHttpCachingHeaders } from 'ng-http-caching';
 import { HttpWclTransport } from './http-wcl-transport';
-import { provideWclCaching } from './wcl-caching';
-import { RATE_LIMIT_Q } from './wcl-queries';
-import { WCL_API_URL, WCL_UNUSABLE_STATUS, WclTransportError } from './wcl-transport';
+import { provideWclCaching } from '../services/wcl-caching';
+import { RATE_LIMIT_Q } from '../services/wcl-queries';
+import { WCL_API_URL, WCL_UNUSABLE_STATUS, WclTransportError } from '../services/wcl-transport';
 
 // A generic (default-cached) query, distinct from the volatile/uncached app queries.
 const QUERY = 'query Report($code: String!) { reportData { report(code: $code) { title } } }';

@@ -3,7 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { SpecTalents } from '../models/talent.models';
 import { Result, ok, missing } from '../result';
-import { toLoadError } from '../http-load-error';
+import { toLoadError } from './http-load-error';
 import { logWarn } from '../log';
 
 const DUMP_URL = 'https://www.raidbots.com/static/data/live/talents.json';
@@ -19,15 +19,19 @@ function specKey(tree: RaidbotsTree): string {
   return `${tree.specName}${tree.className}`.replace(/[^A-Za-z]/g, '');
 }
 
+function nodeTalents(node: RaidbotsNode): SpecTalents {
+  const talents: SpecTalents = {};
+  for (const entry of node.entries ?? []) {
+    if (entry.id == null) continue;
+    talents[entry.id] = { name: entry.name ?? '', icon: entry.icon ?? '', ...(entry.spellId ? { spellId: entry.spellId } : {}) };
+  }
+  return talents;
+}
+
 function talentsOf(tree: RaidbotsTree): SpecTalents {
   const talents: SpecTalents = {};
   for (const bucket of NODE_BUCKETS) {
-    for (const node of tree[bucket] ?? []) {
-      for (const entry of node.entries ?? []) {
-        if (entry.id == null) continue;
-        talents[entry.id] = { name: entry.name ?? '', icon: entry.icon ?? '', ...(entry.spellId ? { spellId: entry.spellId } : {}) };
-      }
-    }
+    for (const node of tree[bucket] ?? []) Object.assign(talents, nodeTalents(node));
   }
   return talents;
 }

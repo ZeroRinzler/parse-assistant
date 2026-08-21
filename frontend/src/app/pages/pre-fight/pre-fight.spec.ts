@@ -4,7 +4,7 @@ import { TestBed } from '@angular/core/testing';
 import { FormControl } from '@angular/forms';
 import { EncounterEntry, SpecEntry } from '../../core/models/encounter.models';
 import { Result, ok } from '../../core/result';
-import { CardDeck } from '../../shared/card-deck';
+import { CardDeck } from '../../shared/state/card-deck';
 import { mountVm } from '../../../testing/component-harness';
 import { PreFightComponent, PreFightCardId } from './pre-fight';
 import { EncounterSelectionService } from './encounter-selection.service';

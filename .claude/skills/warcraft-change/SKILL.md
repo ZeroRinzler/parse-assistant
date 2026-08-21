@@ -13,10 +13,10 @@ description: warcraft-learner change contract - what a code change must deliver,
 
 Every change delivers some subset of:
 
-1. **Slice math** - named, pure, total functions colocated in the slice's own `*.service.ts` (or its slice-local module). No Angular, `inject()`, or IO in the pure layer.
+1. **Slice math** - named, pure, total functions colocated in the slice's own `*.service.ts` (or its slice-local module). No `inject()` and no IO in the pure layer.
 2. **Bench shape** - if the change alters what ingestion must bake, update the slice's `*Bench` interface in its `*-data-source.ts` and bump `INGEST_VERSION` (`src/app/ingest/ingest-version.ts`).
 3. **Failure handling** - every fallible load returns `Result<T, LoadError>`; the four render states (content / waiting / transient error / permanent error). No silent swallow.
-4. **UI** - template owns styling, formatting goes through pipes, drill-down uses `wl-finding-occurrences`. No hardcoded colors.
+4. **UI** - template owns styling off the `styles.scss` tokens, formatting goes through pipes, drill-down uses `wl-finding-occurrences`.
 5. **Copy** - message + remedy in the terse analyst voice. Governing skill: **warcraft-writing**.
 6. **Specs** - pure math tested at the lowest altitude, services end-to-end through fakes. Each "triggers" case paired with a "does not trigger at the boundary" case.
 7. **WCL reads** - a new event stream or gear/talent/position field means checking the quirks table first. Governing skill: **warcraft-wcl-data**.
@@ -51,12 +51,11 @@ Deliver: the shell (zero domain services) or leaf (inputs/outputs only), copy pe
 
 ## UI rules (hard)
 
-- **Styling: Angular Material + Tailwind utilities only; zero per-component style files.** The one stylesheet is `frontend/src/styles.scss` (design tokens, `badge-*` / `fill-*` / `seg-*` / `icon-*` / `chip-onplan` classes).
-- **No hardcoded colors anywhere** - only `styles.scss` tokens via Tailwind arbitrary values (`text-[var(--success)]`) or `badge-*` classes.
-- **Component TS never produces CSS classes or style strings**; the template owns all styling. `computed()` exposes semantic state only.
+- **Styling is Angular Material + Tailwind utilities over `frontend/src/styles.scss`** - the one stylesheet, holding the design tokens and the `badge-*` / `fill-*` / `icon-*` / `chip-onplan` classes.
+- **Templates and `styles.scss` reach a color through a token** - a Tailwind arbitrary value (`text-[var(--success)]`) or a `badge-*` class.
+- **`computed()` exposes semantic state only**; the template maps that state to a class.
 - **All formatting goes through Angular pipes** (`FormatDurationPipe`, `FormatDamagePipe`, `DecimalPipe`, `FormatSpecPipe`).
 - **A rule finding's drill-down is `wl-finding-occurrences`** (`shared/components/finding-table/`): populate `occurrences` on the finding and the UI work is done.
-- **External `templateUrl` for anything beyond trivial markup** (roughly <10 lines inline).
 
 ## Failure-handling rules (hard)
 
@@ -93,7 +92,7 @@ Before committing, verify:
 - [ ] Every finding populates `occurrences` (or explains why not)
 - [ ] All copy passes the terse-analyst voice rules in **warcraft-writing**
 - [ ] `npm test`, `npm run lint`, and `npm run build` pass
-- [ ] No hardcoded colors, no CSS classes in component TS, all formatting through pipes
+- [ ] Templates reach every color through a token, and all formatting goes through pipes
 - [ ] Every fallible load returns `Result<T, LoadError>` and renders one `wl-load-state`
 - [ ] Every comment the diff adds passes the CLAUDE.md gate, audited one by one: it names the concrete mistake a reader makes without it, in one line - summaries, narration, restated code, and fixture descriptions are deleted, not kept
 

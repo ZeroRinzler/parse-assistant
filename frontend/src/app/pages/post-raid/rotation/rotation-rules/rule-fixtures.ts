@@ -1,15 +1,15 @@
 import {
   RulebookRule, RuleCondition, CastWithoutPriorCondition, HoldCooldownForAnchorCondition,
-} from '../app/core/models/rulebook.models';
-import { WclEvent } from '../app/core/models/wcl.models';
-import { AnalysisFinding } from '../app/core/models/analysis.models';
-import { withRelativeS } from '../app/shared/analysis/wcl-projections';
+} from '../../../../core/models/rulebook.models';
+import { WclEvent } from '../../../../core/models/wcl.models';
+import { AnalysisFinding } from '../../../../core/models/analysis.models';
+import { withRelativeS } from '../../../../shared/analysis/wcl-projections';
 import {
   BenchedRule, RuleBand, RuleJudging, Severity,
-} from '../app/pages/post-raid/rotation/rotation-rules/engine-core';
-import { RuleContext, buildRuleContext } from '../app/pages/post-raid/rotation/rotation-rules/rule-context';
-import { ruleJudging } from '../app/pages/post-raid/rotation/rotation-rules/engine';
-import { SHADOW_BLADES, SHADOW_DANCE, SECRET_TECHNIQUE } from './spell-ids';
+} from './engine-core';
+import { RuleContext, buildRuleContext } from './rule-context';
+import { ruleJudging } from './engine';
+import { SHADOW_BLADES, SHADOW_DANCE, SECRET_TECHNIQUE } from '../../../../../testing/spell-ids';
 
 /** Each evaluator is called with the judging its own kind declares, so a spec can never assert against a side the table does not use. */
 export function judged<C extends RuleCondition>(

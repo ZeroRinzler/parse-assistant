@@ -4,8 +4,25 @@ import { TimedEvent, targetKey } from './wcl-projections';
 /** Fight-relative seconds; an open end means the aura outlived the fight. */
 export type AuraWindows = Map<number, [number, number | null][]>;
 
+type AuraSpanEdge = 'open' | 'refresh' | 'close';
+
+function spanEdgeOf(type: string): AuraSpanEdge | null {
+  if (type === 'applybuff' || type === 'applydebuff') return 'open';
+  if (type === 'refreshbuff' || type === 'refreshdebuff') return 'refresh';
+  if (type === 'removebuff' || type === 'removedebuff') return 'close';
+  return null;
+}
+
 function lastOpen(spans: [number, number | null][]): [number, number | null] | undefined {
   return [...spans].reverse().find(span => span[1] == null);
+}
+
+function applyWindowEdge(spans: [number, number | null][], edge: AuraSpanEdge, timeS: number): void {
+  if (edge === 'open') { spans.push([timeS, null]); return; }
+  const open = lastOpen(spans);
+  if (open && edge === 'close') open[1] = timeS;
+  // WCL emits no synthetic apply for an aura already up at the pull, so a bare remove or refresh is the only trace it leaves.
+  else if (!open) spans.push([0, edge === 'close' ? timeS : null]);
 }
 
 /** Buffs and debuffs carry the same apply/remove shape, so one call covers either stream. */
@@ -13,19 +30,9 @@ export function buildAuraWindows(events: TimedEvent[]): AuraWindows {
   const windows: AuraWindows = new Map();
   for (const event of events) {
     const spellId = event.abilityGameID;
-    if (!spellId) continue;
-    const timeS = event.atS;
-    if (event.type === 'applybuff' || event.type === 'applydebuff') {
-      getOrInsert(windows, spellId, () => []).push([timeS, null]);
-    // WCL emits no synthetic apply for an aura already up at the pull, so a bare remove or refresh is the only trace it leaves.
-    } else if (event.type === 'removebuff' || event.type === 'removedebuff') {
-      const spans = getOrInsert(windows, spellId, () => []);
-      const open = lastOpen(spans);
-      if (open) open[1] = timeS; else spans.push([0, timeS]);
-    } else if (event.type === 'refreshbuff' || event.type === 'refreshdebuff') {
-      const spans = getOrInsert(windows, spellId, () => []);
-      if (!lastOpen(spans)) spans.push([0, null]);
-    }
+    const edge = spanEdgeOf(event.type);
+    if (!spellId || !edge) continue;
+    applyWindowEdge(getOrInsert(windows, spellId, () => []), edge, event.atS);
   }
   return windows;
 }
@@ -47,20 +54,23 @@ export interface StackTimeline {
 }
 
 /** A bare apply carries no count and means one; every stack event carries the new total, clamped so a reported drop below zero cannot leak through. */
+function stackEdgeOf(event: TimedEvent): { count: number; opens: boolean } | null {
+  const type = event.type;
+  if (type === 'applybuff' || type === 'applydebuff') return { count: Math.max(0, event.stack ?? 1), opens: true };
+  if (type.endsWith('buffstack') || type.endsWith('debuffstack')) return { count: Math.max(0, event.stack ?? 0), opens: false };
+  if (type === 'removebuff' || type === 'removedebuff') return { count: 0, opens: false };
+  return null;
+}
+
 export function buildStackTimeline(events: TimedEvent[], spellId: number): StackTimeline {
   const entries: [number, number][] = [];
   let groundedFromStart = false;
   for (const event of events) {
     if (event.abilityGameID !== spellId) continue;
-    const timeS = event.atS;
-    if (event.type === 'applybuff' || event.type === 'applydebuff') {
-      if (!entries.length) groundedFromStart = true;
-      entries.push([timeS, Math.max(0, event.stack ?? 1)]);
-    } else if (event.type.endsWith('buffstack') || event.type.endsWith('debuffstack')) {
-      entries.push([timeS, Math.max(0, event.stack ?? 0)]);
-    } else if (event.type === 'removebuff' || event.type === 'removedebuff') {
-      entries.push([timeS, 0]);
-    }
+    const edge = stackEdgeOf(event);
+    if (!edge) continue;
+    if (!entries.length && edge.opens) groundedFromStart = true;
+    entries.push([event.atS, edge.count]);
   }
   return { groundedFromStart, entries };
 }
@@ -85,16 +95,7 @@ export interface AuraSpan {
 /** One aura's spans per target, since a clip is only visible against the application it replaced. */
 export type AuraSpansByTarget = Map<string, AuraSpan[]>;
 
-type AuraSpanEdge = 'open' | 'refresh' | 'close' | null;
-
-function spanEdgeOf(type: string): AuraSpanEdge {
-  if (type === 'applybuff' || type === 'applydebuff') return 'open';
-  if (type === 'refreshbuff' || type === 'refreshdebuff') return 'refresh';
-  if (type === 'removebuff' || type === 'removedebuff') return 'close';
-  return null;
-}
-
-function applySpanEdge(list: AuraSpan[], edge: AuraSpanEdge, timeS: number): void {
+function applySpanEdge(list: AuraSpan[], edge: AuraSpanEdge | null, timeS: number): void {
   const tail = list[list.length - 1];
   const open = tail && tail.endS == null ? tail : null;
   if (edge === 'open') {

@@ -1,12 +1,12 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
-import { DataFileTransport } from '../core/services/data-file-transport';
-import { Result, ok, permanent } from '../core/result';
-import { logWarn } from '../core/log';
-import { toLoadError } from '../core/http-load-error';
-import { INGEST_VERSION } from './ingest-version';
-import { isFutureVersion } from './signature';
+import { DataFileTransport } from '../../core/services/data-file-transport';
+import { Result, ok, permanent } from '../../core/result';
+import { logWarn } from '../../core/log';
+import { toLoadError } from '../../core/transport/http-load-error';
+import { INGEST_VERSION } from '../ingest-version';
+import { isFutureVersion } from '../signature';
 
 /** The file server (scripts/ingest-server.js) is dumb file ops; all ingestion semantics stay on this side. */
 export const INGEST_SERVER_URL = 'http://localhost:3000';

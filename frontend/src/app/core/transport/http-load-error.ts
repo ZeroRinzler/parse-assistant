@@ -1,6 +1,6 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Result, missing, transient, permanent } from './result';
-import { WclTransportError } from './services/wcl-transport';
+import { Result, missing, transient, permanent } from '../result';
+import { WclTransportError } from '../services/wcl-transport';
 
 // Status 0 is a network/CORS drop or the status-0 WclTransportError a GraphQL-level failure raises.
 const TRANSIENT_STATUSES = new Set([0, 408, 429, 500, 502, 503, 504]);

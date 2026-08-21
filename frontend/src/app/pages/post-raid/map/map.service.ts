@@ -5,7 +5,7 @@ import { WclEvent, WclFight } from '../../../core/models/wcl.models';
 import { EncounterPositions, ReferenceSelector } from '../../../core/models/positioning.models';
 import { logWarn } from '../../../core/log';
 import { Result, LoadError, permanent } from '../../../core/result';
-import { toLoadError } from '../../../core/http-load-error';
+import { toLoadError } from '../../../core/transport/http-load-error';
 import { TimedEvent, withRelativeS } from '../../../shared/analysis/wcl-projections';
 import { posActorId } from './map-positions';
 import { MAP_DATA_SOURCE, MapData } from './map-data-source';
@@ -219,6 +219,15 @@ export class MapFeatureService {
     this.overlayLoading.set(false);
   }
 
+  // The overlay loaded with no position samples for the player: surface as permanent, not a still-loading map.
+  private _reportMissingPlayerPositions(): void {
+    const failure = permanent('No position data for you in this pull.', 'map.no-player-positions');
+    if (!failure.ok && failure.error.kind === 'permanent') {
+      logWarn(failure.error.id, failure.error.context);
+      this.error.set(failure.error);
+    }
+  }
+
   private async ensureLiveOverlay(): Promise<void> {
     const pending = this.pendingOverlay;
     if (!pending || this.overlayLoaded || this.overlayLoading()) return;
@@ -229,16 +238,8 @@ export class MapFeatureService {
       if (pending.seq !== this.prepareSeq) return; // a newer prepare superseded this deferred overlay
       const overlay = buildLiveOverlay({ positions, events: withRelativeS(events, fight.startTime), playerId, enemies });
       this.live.set(overlay);
-      if (overlay) {
-        this.error.set(null);
-      } else {
-        // The overlay loaded with no position samples for the player: surface as permanent, not a still-loading map.
-        const failure = permanent('No position data for you in this pull.', 'map.no-player-positions');
-        if (!failure.ok && failure.error.kind === 'permanent') {
-          logWarn(failure.error.id, failure.error.context);
-          this.error.set(failure.error);
-        }
-      }
+      if (overlay) this.error.set(null);
+      else this._reportMissingPlayerPositions();
       this.overlayLoaded = true;
     } catch (cause) {
       // Surface a failed overlay read instead of a silently empty map.

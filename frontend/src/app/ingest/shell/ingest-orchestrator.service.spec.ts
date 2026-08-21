@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { discoveryBudgetSummary, encounterIndexEntries } from './ingest-orchestrator.service';
-import { BudgetExceededError } from './wcl-client';
-import type { IngestEncounter } from './models/wcl.models';
-import type { EncounterEntry } from '../core/models/encounter.models';
+import { BudgetExceededError } from '../wcl-client';
+import type { IngestEncounter } from '../models/wcl.models';
+import type { EncounterEntry } from '../../core/models/encounter.models';
 
 describe('discoveryBudgetSummary', () => {
   it('maps a budget exhaustion at discovery to a clean budgetStopped summary: no fatal, no specs failed', () => {

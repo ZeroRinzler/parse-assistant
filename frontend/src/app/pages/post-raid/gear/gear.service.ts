@@ -5,7 +5,7 @@ import { EncounterGearStats } from '../../../core/models/encounter.models';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { logWarn } from '../../../core/log';
 import { Result, ok, permanent } from '../../../core/result';
-import { toLoadError } from '../../../core/http-load-error';
+import { toLoadError } from '../../../core/transport/http-load-error';
 import { GameNames, extractGear, fillGameNames, selectCombatantInfo } from './gear-extract';
 import { talentKeyFromTree } from '../../../shared/gear/talent-key';
 import {

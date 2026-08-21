@@ -13,7 +13,7 @@ import {
   COMBO_POINT_TYPE, FIELD_NEVER, HOLD_WINDOW_S,
   HOLD_DANCE_FOR_BLADES, SECRET_TECH_NEEDS_DANCE,
   band, benched, ruleCtx,
-} from '../../../../../testing/rule-fixtures';
+} from './rule-fixtures';
 import { BenchedRule, RuleSample, RuleStream } from './engine-core';
 import {
   benchedRules, evaluateRules, judgeableRules, ruleBand, ruleLabel, rulesFollowed, rulesNeed,

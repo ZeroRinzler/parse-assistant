@@ -2,7 +2,7 @@ import { WclApiService } from '../../core/services/wcl-api';
 import { ParseRanking, WclFight, WclReport } from '../../core/models/wcl.models';
 import { logWarn } from '../../core/log';
 import { Result, ok, missing } from '../../core/result';
-import { toLoadError } from '../../core/http-load-error';
+import { toLoadError } from '../../core/transport/http-load-error';
 import { ReportActor, findParseActor, toParseRankings, unwrapRankings } from './wcl-projections';
 
 const TOP_PARSE_COUNT = 10;

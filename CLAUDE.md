@@ -56,7 +56,7 @@ frontend/        # the entire Angular 22 app
 
 ## Development workflow router
 
-Load the matching skill(s) **before** you start that step. The `warcraft-*` skills are this project's rules; Angular/TypeScript conventions are enforced by ESLint (`frontend/eslint.config.js`), not by a skill. A skill loads automatically once its `description` matches the task, or you can name it explicitly - either way, load it before starting the row's work, not from memory.
+Load the matching skill(s) **before** you start that step. The `warcraft-*` skills are this project's rules; Angular/TypeScript conventions, the layer boundaries, and the UI styling rules are enforced by ESLint (`frontend/eslint.config.js`), not by a skill. A skill loads automatically once its `description` matches the task, or you can name it explicitly - either way, load it before starting the row's work, not from memory.
 
 | When you are... | Load |
 |---|---|

@@ -5,7 +5,7 @@ import { WclFight, WclReport, WclTableBlob } from '../../../core/models/wcl.mode
 import { logWarn } from '../../../core/log';
 import { parseJson } from '../../../core/json';
 import { Result, ok, permanent } from '../../../core/result';
-import { toLoadError } from '../../../core/http-load-error';
+import { toLoadError } from '../../../core/transport/http-load-error';
 import { TimedEvent, withRelativeS } from '../../../shared/analysis/wcl-projections';
 
 type PullResult = 'kill' | 'wipe';

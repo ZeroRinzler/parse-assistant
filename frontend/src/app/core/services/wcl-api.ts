@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { WclAuthService } from './wcl-auth';
+import { WclAuthService } from '../transport/wcl-auth';
 import { WCL_TRANSPORT, WclTransportError, WCL_UNUSABLE_STATUS } from './wcl-transport';
 import {
   WclReport, WclEvent,
@@ -78,21 +78,13 @@ export class WclApiService {
     );
   }
 
-  async getAllEvents(
-    code: string, fightId: number, dataType: EventDataType,
-    startTime: number, endTime: number, sourceId?: number,
-    includeResources = false, hostilityType?: HostilityType,
+  private async fetchEventPages(
+    gqlString: string, code: string, vars: EventsQueryVariables | ResurrectsQueryVariables,
   ): Promise<WclEvent[]> {
     const events: WclEvent[] = [];
-    let currentStart = startTime;
+    let currentStart = vars.startTime;
     for (;;) {
-      const vars: EventsQueryVariables = {
-        code, fightIDs: [fightId], dataType, startTime: currentStart, endTime,
-      };
-      if (sourceId != null) vars.sourceID = sourceId;
-      if (includeResources) vars.includeResources = true;
-      if (hostilityType) vars.hostilityType = hostilityType;
-      const result = await this.query<EventsQuery>(EVENTS_Q, vars);
+      const result = await this.query<EventsQuery | ResurrectsQuery>(gqlString, { ...vars, startTime: currentStart });
       const page = result.reportData?.report?.events;
       if (!page) throw this.reportUnavailable(code);
       // Element by element: WCL overshoots the requested limit (22k rows in one page on a 34-minute pull), and spreading that many arguments into push overflows the call stack.
@@ -101,6 +93,18 @@ export class WclApiService {
       currentStart = page.nextPageTimestamp;
     }
     return events;
+  }
+
+  async getAllEvents(
+    code: string, fightId: number, dataType: EventDataType,
+    startTime: number, endTime: number, sourceId?: number,
+    includeResources = false, hostilityType?: HostilityType,
+  ): Promise<WclEvent[]> {
+    const vars: EventsQueryVariables = { code, fightIDs: [fightId], dataType, startTime, endTime };
+    if (sourceId != null) vars.sourceID = sourceId;
+    if (includeResources) vars.includeResources = true;
+    if (hostilityType) vars.hostilityType = hostilityType;
+    return this.fetchEventPages(EVENTS_Q, code, vars);
   }
 
   // Returns the events array as WCL returns it (empty when the log carries none); consumers pick the player's event (see `selectCombatantInfo`).
@@ -121,18 +125,8 @@ export class WclApiService {
 
   // WCL has no `Resurrects` data type, so this scans `All` with a server-side `type` filter (only matches come back).
   async getResurrects(code: string, fightId: number, startTime: number, endTime: number): Promise<WclEvent[]> {
-    const events: WclEvent[] = [];
-    let currentStart = startTime;
-    for (;;) {
-      const vars: ResurrectsQueryVariables = { code, fightIDs: [fightId], filter: 'type = "resurrect"', startTime: currentStart, endTime };
-      const result = await this.query<ResurrectsQuery>(RESURRECTS_Q, vars);
-      const page = result.reportData?.report?.events;
-      if (!page) throw this.reportUnavailable(code);
-      for (const event of page.data ?? []) events.push(event);
-      if (!page.nextPageTimestamp) break;
-      currentStart = page.nextPageTimestamp;
-    }
-    return events;
+    const vars: ResurrectsQueryVariables = { code, fightIDs: [fightId], filter: 'type = "resurrect"', startTime, endTime };
+    return this.fetchEventPages(RESURRECTS_Q, code, vars);
   }
 
   // Names may carry HTML entities, so consumers decode them.

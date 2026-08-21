@@ -13,7 +13,7 @@ import { LoadingSpinnerComponent } from '../../shared/components/loading-spinner
 import { BenchEmptyBannerComponent } from '../../shared/components/bench-empty-banner/bench-empty-banner';
 import { LoadStateComponent, RenderableLoadError } from '../../shared/components/load-state/load-state';
 import { ArtIconComponent } from '../../shared/components/art-icon/art-icon';
-import { CardDeck, CardEntry } from '../../shared/card-deck';
+import { CardDeck, CardEntry } from '../../shared/state/card-deck';
 import { FormatSpecPipe } from '../../shared/pipes/format-spec-pipe';
 import { ClassIconPipe } from '../../shared/pipes/class-icon-pipe';
 import { SpecIconPipe } from '../../shared/pipes/spec-icon-pipe';

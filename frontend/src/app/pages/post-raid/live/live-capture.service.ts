@@ -115,6 +115,12 @@ function isPickerDismissal(err: unknown): boolean {
   return err instanceof DOMException && err.name === 'NotAllowedError';
 }
 
+// Insecure context or an unsupported browser leaves `getDisplayMedia` absent (the dom lib overpromises).
+function displayMediaSupported(): boolean {
+  const mediaDevices = navigator.mediaDevices as MediaDevices | undefined;
+  return typeof mediaDevices?.getDisplayMedia === 'function';
+}
+
 @Injectable({ providedIn: 'root' })
 export class LiveCaptureFeatureService {
   // Live-sync on/off. Lives here because this is the only service that reads it.
@@ -152,9 +158,7 @@ export class LiveCaptureFeatureService {
 
   async startRecording(profile: CaptureProfile = DEFAULT_CAPTURE_PROFILE): Promise<void> {
     if (this.isCapturing() || this.isStarting()) return;
-    // Insecure context or an unsupported browser leaves `getDisplayMedia` absent (the dom lib overpromises); say so rather than fail silently.
-    const mediaDevices = navigator.mediaDevices as MediaDevices | undefined;
-    if (typeof mediaDevices?.getDisplayMedia !== 'function') {
+    if (!displayMediaSupported()) {
       this.captureError.set('screen recording is not available in this browser');
       return;
     }
@@ -176,10 +180,7 @@ export class LiveCaptureFeatureService {
       this.cycleSegment();
     } catch (err) {
       // Tear down any half-started capture (an unsupported recorder throws after the stream opens) so the toggle never sticks on "Recording".
-      stream?.getTracks().forEach(track => { track.stop(); });
-      this.stream = null;
-      this.isCapturing.set(false);
-      this.sourceLabel.set('');
+      this._releaseCapture(stream);
       // A dismissed picker is benign; a real failure (unsupported codec, denied by policy) surfaces so the user learns why nothing records.
       if (!isPickerDismissal(err)) this.captureError.set('recording could not start');
       logWarn('LiveCaptureFeatureService.startRecording', err);
@@ -190,8 +191,12 @@ export class LiveCaptureFeatureService {
 
   /** Stop recording and release the display stream; the buffer is kept so covered fights stay clip-able. */
   stopRecording(): void {
+    this._releaseCapture(this.stream);
+  }
+
+  private _releaseCapture(stream: MediaStream | null): void {
     this.isCapturing.set(false);
-    this.stream?.getTracks().forEach(track => { track.stop(); });
+    stream?.getTracks().forEach(track => { track.stop(); });
     this.stream = null;
     this.sourceLabel.set('');
   }

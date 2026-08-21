@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 import { FindingTableComponent, OnPlanChip } from '../../../shared/components/finding-table/finding-table';
 import { LoadStateComponent } from '../../../shared/components/load-state/load-state';
-import { loadResource } from '../../../shared/load-resource';
+import { loadResource } from '../../../shared/state/load-resource';
 import {
   RotationFeatureService, RotationFindingRow, RotationOnPlanChip,
 } from './rotation.service';

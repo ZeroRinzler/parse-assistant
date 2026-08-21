@@ -4,7 +4,7 @@ import { SHADOW_DANCE, SECRET_TECHNIQUE } from '../../../../../../testing/spell-
 import { cast } from '../../../../../../testing/builders/events';
 import {
   PAIR_WINDOW_S, SECRET_TECH_NEEDS_DANCE, band, judged, ruleCtx,
-} from '../../../../../../testing/rule-fixtures';
+} from '../rule-fixtures';
 import { ruleLabel, sampleRule } from '../engine';
 import { evaluateCastWithoutPrior as rawCastWithoutPrior } from './cast-without-prior';
 

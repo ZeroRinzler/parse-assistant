@@ -3,8 +3,8 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { IngestHttpDataFileTransport, INGEST_SERVER_URL } from './ingest-data-file-transport';
-import { INGEST_VERSION } from './ingest-version';
-import { ok, missing } from '../core/result';
+import { INGEST_VERSION } from '../ingest-version';
+import { ok, missing } from '../../core/result';
 
 const REL_PATH = 'SubtletyRogue/burst/3176.json';
 // The file server is rooted at data/, one level above the specs tree the transport addresses.

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { WclApiService } from './wcl-api';
-import { WclAuthService } from './wcl-auth';
+import { WclAuthService } from '../transport/wcl-auth';
 import { DataFileApiService } from './data-file-api';
 import { ok } from '../result';
 import { WclCombatantInfo, MYTHIC_DIFFICULTY } from '../models/wcl.models';

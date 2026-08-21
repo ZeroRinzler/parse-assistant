@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, input, output } f
 import { WindowComparisonComponent } from '../../../shared/components/window-comparison/window-comparison';
 import { LoadStateComponent } from '../../../shared/components/load-state/load-state';
 import { ClipAnchor } from '../../../core/models/capture.models';
-import { loadResource } from '../../../shared/load-resource';
+import { loadResource } from '../../../shared/state/load-resource';
 import { BurstFeatureService, BurstMapAnchor } from './burst.service';
 
 @Component({

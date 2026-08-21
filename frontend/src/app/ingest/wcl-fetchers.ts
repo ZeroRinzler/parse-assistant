@@ -31,6 +31,19 @@ export interface CurrentContent {
 }
 
 // BudgetExceeded propagates (a clean stop); other per-spec probe errors are logged as zero so one flaky spec can't sink a live zone.
+async function probeRankingCount(
+  client: WclQueryClient, probeSpec: string, encounter: IngestEncounter, specWcl: SpecWclMap, difficulty: number,
+): Promise<number> {
+  try {
+    const ranked = await getRankingsLite(client, probeSpec, encounter.id, specWcl, PROBE_COUNT, encounter.partitionIds, difficulty);
+    return ranked.length;
+  } catch (err) {
+    if (err instanceof BudgetExceededError) throw err;
+    logWarn(`getEncounters probe ${encounter.name} (${probeSpec})`, err);
+    return 0;
+  }
+}
+
 async function isZoneLive(client: WclQueryClient, zoneEncounters: IngestEncounter[], specWcl: SpecWclMap): Promise<boolean> {
   const probeEncounter = zoneEncounters[0];
   if (!probeEncounter) return false;
@@ -38,14 +51,8 @@ async function isZoneLive(client: WclQueryClient, zoneEncounters: IngestEncounte
   for (const probeSpec of PROBE_SPECS) {
     await client.assertBudget(PROBE_BUDGET_MARGIN);
     for (const difficulty of PROBE_DIFFICULTIES) {
-      try {
-        const ranked = await getRankingsLite(client, probeSpec, probeEncounter.id, specWcl, PROBE_COUNT, probeEncounter.partitionIds, difficulty);
-        realCount += ranked.length;
-        if (realCount >= LIVE_RANKINGS_THRESHOLD) return true;
-      } catch (err) {
-        if (err instanceof BudgetExceededError) throw err;
-        logWarn(`getEncounters probe ${probeEncounter.name} (${probeSpec})`, err);
-      }
+      realCount += await probeRankingCount(client, probeSpec, probeEncounter, specWcl, difficulty);
+      if (realCount >= LIVE_RANKINGS_THRESHOLD) return true;
     }
   }
   return false;

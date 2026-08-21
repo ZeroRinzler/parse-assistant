@@ -158,6 +158,14 @@ describe('windowSpells', () => {
     ]);
   });
 
+  it('falls back to the placeholder label when the map resolved the id but WCL left it unnamed', () => {
+    // WCL declares every ability field nullable, so a bench can carry a resolved id whose name never arrived.
+    const unnamed = { [SHADOW_BLADES]: { icon: 'ability_sb', name: null as unknown as string } };
+    expect(windowSpells([SHADOW_BLADES], unnamed)).toEqual([
+      { id: SHADOW_BLADES, icon: 'ability_sb', name: `Ability #${SHADOW_BLADES}` },
+    ]);
+  });
+
   it('warns with the missing id so a bug report can reproduce it', () => {
     windowSpells([UNKNOWN_SPELL_ID], abilities);
     // logWarn(context, id) lands as two console.warn args: '[warcraft-learner] <context>:', id.

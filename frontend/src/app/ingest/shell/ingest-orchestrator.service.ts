@@ -2,34 +2,34 @@
 import { Injectable, inject } from '@angular/core';
 import pLimit from 'p-limit';
 import { NgHttpCachingService } from 'ng-http-caching';
-import { WclApiService } from '../core/services/wcl-api';
-import { DataFileApiService } from '../core/services/data-file-api';
-import { HttpWclTransport } from '../core/services/http-wcl-transport';
-import { SpecMetaService } from '../core/services/spec-meta';
-import { logWarn } from '../core/log';
-import { type LoadError } from '../core/result';
-import { toParseRankings, unwrapRankings } from '../shared/analysis/wcl-projections';
-import type { EncounterEntry, SpecEntry } from '../core/models/encounter.models';
-import { RATE_LIMIT_Q, CLASSES_Q } from '../core/services/wcl-queries';
-import type { ClassesQuery, RateLimitQuery } from '../core/services/wcl-operations.generated';
-import { BurstTransformService } from '../pages/post-raid/burst-windows/burst-transform.service';
-import { RotationTransformService } from '../pages/post-raid/rotation/rotation-transform.service';
-import { DefensiveTransformService } from '../pages/post-raid/defensive/defensive-transform.service';
-import { GearTransformService } from '../pages/post-raid/gear/gear-transform.service';
-import { MapTransformService } from '../pages/post-raid/map/map-transform.service';
-import { NorthernSkyTransformService } from '../pages/post-raid/northern-sky/northern-sky-transform.service';
-import { getEncounters, rankingsFromPartition, type CurrentContent } from './wcl-fetchers';
-import { mapClassesToSpecMeta, specWclFromMetas, type SpecWclMap } from './wcl-mappers';
-import { type WclQueryClient, BudgetExceededError } from './wcl-client';
-import { INGEST_VERSION } from './ingest-version';
-import { specsForRun, orderEncountersByMissingFirst, parsePrioritySpecs, type SpecOrderEntry } from './ordering';
+import { WclApiService } from '../../core/services/wcl-api';
+import { DataFileApiService } from '../../core/services/data-file-api';
+import { HttpWclTransport } from '../../core/transport/http-wcl-transport';
+import { SpecMetaService } from '../../core/services/spec-meta';
+import { logWarn } from '../../core/log';
+import { type LoadError } from '../../core/result';
+import { toParseRankings, unwrapRankings } from '../../shared/analysis/wcl-projections';
+import type { EncounterEntry, SpecEntry } from '../../core/models/encounter.models';
+import { RATE_LIMIT_Q, CLASSES_Q } from '../../core/services/wcl-queries';
+import type { ClassesQuery, RateLimitQuery } from '../../core/services/wcl-operations.generated';
+import { BurstTransformService } from '../../pages/post-raid/burst-windows/burst-transform.service';
+import { RotationTransformService } from '../../pages/post-raid/rotation/rotation-transform.service';
+import { DefensiveTransformService } from '../../pages/post-raid/defensive/defensive-transform.service';
+import { GearTransformService } from '../../pages/post-raid/gear/gear-transform.service';
+import { MapTransformService } from '../../pages/post-raid/map/map-transform.service';
+import { NorthernSkyTransformService } from '../../pages/post-raid/northern-sky/northern-sky-transform.service';
+import { getEncounters, rankingsFromPartition, type CurrentContent } from '../wcl-fetchers';
+import { mapClassesToSpecMeta, specWclFromMetas, type SpecWclMap } from '../wcl-mappers';
+import { type WclQueryClient, BudgetExceededError } from '../wcl-client';
+import { INGEST_VERSION } from '../ingest-version';
+import { specsForRun, orderEncountersByMissingFirst, parsePrioritySpecs, type SpecOrderEntry } from '../ordering';
 import {
   encounterSkipKey, signatureAfterFetch, readStoredSignature, readStoredVersion, readStoredIngestedAt, signatureMatches,
   stampSignature, stampBurstFile, readInaccessibleParses,
   type SignatureRanking, type SignedFile, type IngestStamp,
-} from './signature';
-import { formatSpecReport, SELECTED_MARKER, type SpecReportRow } from './spec-report';
-import type { IngestEncounter } from './models/wcl.models';
+} from '../signature';
+import { formatSpecReport, SELECTED_MARKER, type SpecReportRow } from '../spec-report';
+import type { IngestEncounter } from '../models/wcl.models';
 
 const TOP_N = 10;
 // Matches the depth the transforms over-fetch to, so a parse that backfills a private top parse is part of the skip key.

@@ -7,7 +7,7 @@ import { Result } from '../../../core/result';
 import { GameNames, TRINKET_SLOTS, extractGear, fillGameNames, selectCombatantInfo } from './gear-extract';
 import { talentKeyFromTree } from '../../../shared/gear/talent-key';
 import { buildTalentDiff } from '../../../shared/gear/gear-comparison';
-import { TalentDataService } from '../../../core/services/talent-data';
+import { TalentDataService } from '../../../core/transport/talent-data';
 import { SpecTalents } from '../../../core/models/talent.models';
 import { getOrInsert } from '../../../shared/analysis/analysis-math';
 import { BenchParse, benchFromTopParses } from '../../../shared/analysis/bench-pipeline';
@@ -74,61 +74,55 @@ export function aggregateTalents(parses: ParseGear[]): EncounterGearStats['talen
       ({ key, pct: pct(count, total), report_code, fight_id, player_name, source_id, diff: [] }));
 }
 
+interface EquippedItem { slot: number; id: number; name: string; icon?: string }
+
+interface SlotTally {
+  countsBySlot: Map<number, Map<number, number>>;
+  names: Map<number, string>;
+  icons: Map<number, string>;
+}
+
+function tallyBySlot(items: EquippedItem[]): SlotTally {
+  const tally: SlotTally = { countsBySlot: new Map(), names: new Map(), icons: new Map() };
+  for (const item of items) {
+    if (!item.id) continue;
+    const slotMap = getOrInsert(tally.countsBySlot, item.slot, () => new Map<number, number>());
+    slotMap.set(item.id, (slotMap.get(item.id) ?? 0) + 1);
+    // A parse whose name lookup failed stores '', which a later real name replaces.
+    if (!tally.names.get(item.id) && item.name) tally.names.set(item.id, item.name);
+    if (!tally.icons.has(item.id)) tally.icons.set(item.id, item.icon ?? '');
+  }
+  return tally;
+}
+
+function topIds(counter: Map<number, number>, limit: number): [number, number][] {
+  return [...counter.entries()].sort((a, b) => b[1] - a[1]).slice(0, limit);
+}
+
 export function aggregateTrinkets(parses: ParseGear[]): EncounterGearStats['trinkets'] {
   const total = parses.length;
-  const trinketCounters = new Map<number, Map<number, number>>();
-  const trinketNames = new Map<number, string>();
-  const trinketIcons = new Map<number, string>();
-
-  for (const parse of parses) {
-    for (const trinket of parse.trinkets) {
-      const slot = trinket.slot;
-      if ((TRINKET_SLOTS as readonly number[]).includes(slot) && trinket.id) {
-        const slotMap = getOrInsert(trinketCounters, slot, () => new Map<number, number>());
-        slotMap.set(trinket.id, (slotMap.get(trinket.id) ?? 0) + 1);
-        // A parse whose name lookup failed stores '', which a later real name replaces.
-        if (!trinketNames.get(trinket.id) && trinket.name) trinketNames.set(trinket.id, trinket.name);
-        if (!trinketIcons.has(trinket.id)) trinketIcons.set(trinket.id, trinket.icon);
-      }
-    }
-  }
+  const tally = tallyBySlot(parses.flatMap(parse => parse.trinkets.filter(
+    trinket => (TRINKET_SLOTS as readonly number[]).includes(trinket.slot))));
 
   const trinkets: EncounterGearStats['trinkets'] = {};
   for (const slot of TRINKET_SLOTS) {
-    const counter = trinketCounters.get(slot);
+    const counter = tally.countsBySlot.get(slot);
     if (!counter?.size) continue;
-    trinkets[slot] = [...counter.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, MAX_TRINKETS_PER_SLOT)
-      .map(([id, count]) => ({ id, name: trinketNames.get(id) ?? '', icon: trinketIcons.get(id) ?? '', pct: pct(count, total) }));
+    trinkets[slot] = topIds(counter, MAX_TRINKETS_PER_SLOT).map(
+      ([id, count]) => ({ id, name: tally.names.get(id) ?? '', icon: tally.icons.get(id) ?? '', pct: pct(count, total) }));
   }
   return trinkets;
 }
 
 export function aggregateEnchants(parses: ParseGear[]): EncounterGearStats['enchants'] {
   const total = parses.length;
-  const enchantCounters = new Map<number, Map<number, number>>();
-  const enchantNames = new Map<number, string>();
-
-  for (const parse of parses) {
-    for (const enchant of parse.enchants) {
-      const slot = enchant.slot;
-      if (enchant.id) {
-        const slotMap = getOrInsert(enchantCounters, slot, () => new Map<number, number>());
-        slotMap.set(enchant.id, (slotMap.get(enchant.id) ?? 0) + 1);
-        // A parse whose name lookup failed stores '', which a later real name replaces.
-        if (!enchantNames.get(enchant.id) && enchant.name) enchantNames.set(enchant.id, enchant.name);
-      }
-    }
-  }
+  const tally = tallyBySlot(parses.flatMap(parse => parse.enchants));
 
   const enchants: EncounterGearStats['enchants'] = {};
-  for (const [slot, counter] of [...enchantCounters.entries()].sort((a, b) => a[0] - b[0])) {
+  for (const [slot, counter] of [...tally.countsBySlot.entries()].sort((a, b) => a[0] - b[0])) {
     if (!counter.size) continue;
-    enchants[slot] = [...counter.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, MAX_ENCHANTS_PER_SLOT)
-      .map(([id, count]) => ({ id, name: enchantNames.get(id) ?? '', pct: pct(count, total) }));
+    enchants[slot] = topIds(counter, MAX_ENCHANTS_PER_SLOT).map(
+      ([id, count]) => ({ id, name: tally.names.get(id) ?? '', pct: pct(count, total) }));
   }
   return enchants;
 }

@@ -9,13 +9,13 @@ import { ComparisonWindow, WindowStatus, RangeRow } from '../../../core/models/w
 import { ClipAnchor } from '../../../core/models/capture.models';
 import { logWarn } from '../../../core/log';
 import { Result, ok } from '../../../core/result';
-import { toLoadError } from '../../../core/http-load-error';
+import { toLoadError } from '../../../core/transport/http-load-error';
 import { holdSuggestionFindings } from '../../../shared/analysis/hold-targets';
 import { buildAuraWindows } from '../../../shared/analysis/aura-windows';
 import {
   benchExpectedUses, fmtClock, isOutlierAbove, sortBySeverity,
 } from '../../../shared/analysis/analysis-math';
-import { TimedEvent, normalizeAbilityId, relativeS, windowSpells, withRelativeS } from '../../../shared/analysis/wcl-projections';
+import { TimedEvent, normalizeAbilityId, relativeS, resolveAbility, windowSpells, withRelativeS } from '../../../shared/analysis/wcl-projections';
 import {
   DEFENSIVE_DATA_SOURCE, DefensiveBench, DefensivePlanMeta, BakedAbility,
 } from './defensive-data-source';
@@ -274,12 +274,11 @@ export function defensiveDetailRows(
   const playerByAbility: Record<number, { damage: number }> = {};
   for (const ability of playerWindow?.ability_breakdown ?? []) playerByAbility[ability.spell_id] = ability;
   return abilityBreakdown.map(ability => {
-    const baked = abilities[ability.spell_id];
-    if (!baked) logWarn('defensiveDetailRows: ability id missing from ability map', ability.spell_id);
+    const baked = resolveAbility(abilities, ability.spell_id, 'defensiveDetailRows');
     return {
       spellId: ability.spell_id,
-      label: baked?.name ?? `Ability #${ability.spell_id}`,
-      icon: baked?.icon ?? '',
+      label: baked.name,
+      icon: baked.icon,
       playerPct: playerByAbility[ability.spell_id]?.damage ?? null,
       topAvg: ability.avg_damage,
       topMin: ability.min_damage,

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { FillerBelowHealthCondition } from '../../../../../core/models/rulebook.models';
 import { EXECUTE, SLAM, SHADOW_BLADES_DAMAGE } from '../../../../../../testing/spell-ids';
 import { cast, damage } from '../../../../../../testing/builders/events';
-import { band, judged, ruleCtx } from '../../../../../../testing/rule-fixtures';
+import { band, judged, ruleCtx } from '../rule-fixtures';
 import { ruleApplicable, ruleLabel, sampleRule } from '../engine';
 import { evaluateFillerBelowHealth as rawFillerBelowHealth } from './filler-below-health';
 

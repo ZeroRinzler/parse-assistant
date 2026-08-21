@@ -4,7 +4,7 @@ import { GameIconComponent } from '../../../shared/components/game-icon/game-ico
 import { CollapsibleTextComponent } from '../../../shared/components/collapsible-text/collapsible-text';
 import { LoadStateComponent } from '../../../shared/components/load-state/load-state';
 import { FormatDurationPipe } from '../../../shared/pipes/format-duration-pipe';
-import { loadResource } from '../../../shared/load-resource';
+import { loadResource } from '../../../shared/state/load-resource';
 import { RotationFeatureService, CdPlanRow } from './rotation.service';
 
 @Component({

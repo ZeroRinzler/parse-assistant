@@ -41,15 +41,21 @@ export function specWclFromMetas(metas: SpecMeta[]): SpecWclMap {
 
 const EXCLUDE_ZONE_PATTERNS = ['beta', 'ptr', 'mythic+', 'complete raids', 'delves', 'torghast'];
 
+type WclZone = NonNullable<NonNullable<NonNullable<WclExpansions[number]>['zones']>[number]>;
+
 // WCL returns newest expansion first, so only the first expansion's zones are used.
+function liveZones(expansions: WclExpansions): WclZone[] {
+  const zones: WclZone[] = [];
+  for (const zone of (expansions[0]?.zones ?? [])) {
+    // WCL omits `frozen` on some zones though the schema declares it non-null, so an absent one has to read as not-frozen.
+    if (zone && !zone.frozen) zones.push(zone);
+  }
+  return zones;
+}
+
 export function filterEncounters(expansions: WclExpansions): IngestEncounter[] {
   const result: IngestEncounter[] = [];
-  const firstExpansion = expansions[0];
-  if (!firstExpansion) return result;
-
-  for (const zone of (firstExpansion.zones ?? [])) {
-    // WCL omits `frozen` on some zones though the schema declares it non-null, so an absent one has to read as not-frozen.
-    if (!zone || zone.frozen) continue;
+  for (const zone of liveZones(expansions)) {
     const zoneName = zone.name.toLowerCase();
     if (EXCLUDE_ZONE_PATTERNS.some(pattern => zoneName.includes(pattern))) continue;
     const partitionIds = (zone.partitions ?? [])
@@ -78,10 +84,7 @@ export function groupEncountersByZone(encounters: IngestEncounter[]): Map<number
 // The prune-protected set covers the current zone and anything newer: older zones stay deletable (that is what phases a previous tier's files out), while a null currentZoneId (no live zone resolved) protects everything so a transient probe failure never wipes data.
 export function protectedEncounterIds(expansions: WclExpansions, currentZoneId: number | null): Set<number> {
   const ids = new Set<number>();
-  const firstExpansion = expansions[0];
-  if (!firstExpansion) return ids;
-  for (const zone of (firstExpansion.zones ?? [])) {
-    if (!zone || zone.frozen) continue;
+  for (const zone of liveZones(expansions)) {
     if (currentZoneId != null && zone.id < currentZoneId) continue;
     for (const encounter of (zone.encounters ?? [])) {
       if (encounter) ids.add(encounter.id);

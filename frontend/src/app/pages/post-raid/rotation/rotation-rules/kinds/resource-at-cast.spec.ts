@@ -4,7 +4,7 @@ import { BLACK_POWDER, EVISCERATE } from '../../../../../../testing/spell-ids';
 import { cast } from '../../../../../../testing/builders/events';
 import {
   COMBO_POINT_TYPE, MAX_COMBO_POINTS, band, judged, ruleCtx,
-} from '../../../../../../testing/rule-fixtures';
+} from '../rule-fixtures';
 import { ruleApplicable } from '../engine';
 import { evaluateResourceAtCast as rawResourceAtCast } from './resource-at-cast';
 

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { CastAtTargetCountCondition } from '../../../../../core/models/rulebook.models';
 import { BLACK_POWDER, EVISCERATE, RUPTURE } from '../../../../../../testing/spell-ids';
 import { cast, damage } from '../../../../../../testing/builders/events';
-import { band, judged, ruleCtx } from '../../../../../../testing/rule-fixtures';
+import { band, judged, ruleCtx } from '../rule-fixtures';
 import { evaluateCastAtTargetCount as rawCastAtTargetCount } from './cast-at-target-count';
 
 const evaluateCastAtTargetCount = judged(rawCastAtTargetCount);

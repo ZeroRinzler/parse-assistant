@@ -2,7 +2,7 @@ import { assert, describe, it, expect } from 'vitest';
 import { CastAtTargetCountCondition, ResourceAtCastCondition } from '../../../../core/models/rulebook.models';
 import { BLACK_POWDER, EVISCERATE } from '../../../../../testing/spell-ids';
 import { cast, damage } from '../../../../../testing/builders/events';
-import { COMBO_POINT_TYPE, MAX_COMBO_POINTS, band, judged, ruleCtx } from '../../../../../testing/rule-fixtures';
+import { COMBO_POINT_TYPE, MAX_COMBO_POINTS, band, judged, ruleCtx } from './rule-fixtures';
 import { evaluateCastAtTargetCount as rawCastAtTargetCount } from './kinds/cast-at-target-count';
 import { evaluateResourceAtCast as rawResourceAtCast } from './kinds/resource-at-cast';
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { HttpErrorResponse } from '@angular/common/http';
 import { WclApiService } from '../../core/services/wcl-api';
+import { WclTransportError } from '../../core/services/wcl-transport';
 import { ok, missing, transient } from '../../core/result';
 import { FixtureRanking, parseRankings, parseReport, reportsByCode } from '../../../testing/builders/wcl-fixtures';
 import { BenchSlice, benchFromTopParses } from './bench-pipeline';
@@ -124,7 +124,8 @@ describe('benchFromTopParses', () => {
 
   it('surfaces a WCL outage as transient, so the slice reports an outage rather than a repro id', async () => {
     const SERVER_UNREACHABLE_STATUS = 503;
-    const wcl = wclFake({ getRankings: async () => { throw new HttpErrorResponse({ status: SERVER_UNREACHABLE_STATUS }); } });
+    const outage = new WclTransportError(`WCL API error (${SERVER_UNREACHABLE_STATUS})`, SERVER_UNREACHABLE_STATUS);
+    const wcl = wclFake({ getRankings: async () => { throw outage; } });
     const result = await benchFromTopParses(wcl, QUERY, codeSlice());
     expect(result).toEqual(transient('WCL is unreachable right now.'));
   });

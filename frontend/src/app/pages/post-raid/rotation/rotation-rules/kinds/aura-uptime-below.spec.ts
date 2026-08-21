@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { AuraUptimeBelowCondition } from '../../../../../core/models/rulebook.models';
 import { RUPTURE } from '../../../../../../testing/spell-ids';
 import { applyBuff, removeBuff, applyDebuff, removeDebuff } from '../../../../../../testing/builders/events';
-import { RULE_FIGHT_END_S, band, judged, ruleCtx } from '../../../../../../testing/rule-fixtures';
+import { RULE_FIGHT_END_S, band, judged, ruleCtx } from '../rule-fixtures';
 import { ruleApplicable, sampleRule } from '../engine';
 import { evaluateAuraUptimeBelow as rawAuraUptimeBelow } from './aura-uptime-below';
 

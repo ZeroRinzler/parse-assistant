@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { AuraClippedCondition } from '../../../../../core/models/rulebook.models';
 import { MOONFIRE, MOONFIRE_DOT, SHADOW_DANCE } from '../../../../../../testing/spell-ids';
 import { cast, applyDebuff, refreshDebuff, buffWindow } from '../../../../../../testing/builders/events';
-import { band, judged, ruleCtx } from '../../../../../../testing/rule-fixtures';
+import { band, judged, ruleCtx } from '../rule-fixtures';
 import { ruleApplicable, ruleLabel, sampleRule } from '../engine';
 import { evaluateAuraClipped as rawAuraClipped } from './aura-clipped';
 

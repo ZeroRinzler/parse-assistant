@@ -55,6 +55,21 @@ export function collectPositionSamples(events: TimedEvent[]): Map<number, RawPos
 
 interface CadencePoint { t: number; x: number; y: number; nearest: RawPosSample; }
 
+function interpolateAt(
+  before: RawPosSample, after: RawPosSample | undefined, t: number,
+): { x: number; y: number; nearest: RawPosSample } {
+  if (!after || after.t <= before.t || t < before.t) return { x: before.x, y: before.y, nearest: before };
+  const fraction = Math.min(1, Math.max(0, (t - before.t) / (after.t - before.t)));
+  const nearest = fraction < 0.5 ? before : after;
+  // coords compare only within one mapID, so snap to the nearest sample rather than blend across a map swap
+  if (before.mapID !== after.mapID) return { x: nearest.x, y: nearest.y, nearest };
+  return {
+    x: before.x + (after.x - before.x) * fraction,
+    y: before.y + (after.y - before.y) * fraction,
+    nearest,
+  };
+}
+
 function resamplePoints(samples: RawPosSample[], durationS: number, intervalS: number): CadencePoint[] {
   const firstSample = samples[0];
   if (!firstSample) return [];
@@ -72,19 +87,7 @@ function resamplePoints(samples: RawPosSample[], durationS: number, intervalS: n
   for (let t = 0; t <= durationS + 1e-6; t += intervalS) {
     if (t < first - intervalS || t > last + intervalS) continue;
     while (after !== undefined && after.t <= t) { before = after; after = advance(); }
-    let x = before.x, y = before.y, nearest = before;
-    if (after && after.t > before.t && t >= before.t) {
-      const fraction = Math.min(1, Math.max(0, (t - before.t) / (after.t - before.t)));
-      nearest = fraction < 0.5 ? before : after;
-      if (before.mapID === after.mapID) {
-        x = before.x + (after.x - before.x) * fraction;
-        y = before.y + (after.y - before.y) * fraction;
-      } else {
-        // coords compare only within one mapID, so snap to the nearest sample rather than blend across a map swap
-        x = nearest.x;
-        y = nearest.y;
-      }
-    }
+    const { x, y, nearest } = interpolateAt(before, after, t);
     out.push({ t: Math.round(t * DECISECONDS_PER_S) / DECISECONDS_PER_S, x: Math.round(x), y: Math.round(y), nearest });
   }
   return out;

@@ -4,7 +4,7 @@ import { SHADOW_DANCE, SECRET_TECHNIQUE } from '../../../../../../testing/spell-
 import { cast, buffWindow, removeBuff } from '../../../../../../testing/builders/events';
 import {
   DANCE_START_S, DANCE_END_S, FIELD_NEVER, band, judged, ruleCtx,
-} from '../../../../../../testing/rule-fixtures';
+} from '../rule-fixtures';
 import { ruleApplicable, sampleRule } from '../engine';
 import { evaluateCastOutsideBuff as rawCastOutsideBuff } from './cast-outside-buff';
 

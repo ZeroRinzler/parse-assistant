@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import * as z from '../zod-mini';
-import { WclTransportError } from './wcl-transport';
+import { WclTransportError } from '../services/wcl-transport';
 import { environment } from '../../../environments/environment';
 
 const TOKEN_URL = 'https://www.warcraftlogs.com/oauth/token';

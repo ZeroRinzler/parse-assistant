@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { FillerInBuffCondition } from '../../../../../core/models/rulebook.models';
 import { WRATH, STARFIRE, ECLIPSE_SOLAR, SHADOW_DANCE } from '../../../../../../testing/spell-ids';
 import { cast, buffWindow } from '../../../../../../testing/builders/events';
-import { band, judged, ruleCtx } from '../../../../../../testing/rule-fixtures';
+import { band, judged, ruleCtx } from '../rule-fixtures';
 import { ruleApplicable, ruleLabel, sampleRule } from '../engine';
 import { evaluateFillerInBuff as rawFillerInBuff } from './filler-in-buff';
 

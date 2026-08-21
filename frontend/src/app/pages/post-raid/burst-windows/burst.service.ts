@@ -6,8 +6,8 @@ import { ComparisonWindow, WindowStatus, RangeRow } from '../../../core/models/w
 import { ClipAnchor } from '../../../core/models/capture.models';
 import { logWarn } from '../../../core/log';
 import { Result, ok } from '../../../core/result';
-import { toLoadError } from '../../../core/http-load-error';
-import { TimedEvent, normalizeAbilityId, relativeS, windowSpells, withRelativeS } from '../../../shared/analysis/wcl-projections';
+import { toLoadError } from '../../../core/transport/http-load-error';
+import { TimedEvent, normalizeAbilityId, relativeS, resolveAbility, windowSpells, withRelativeS } from '../../../shared/analysis/wcl-projections';
 import { BURST_DATA_SOURCE } from './burst-data-source';
 
 export type AbilityIcons = Record<number, { icon: string; name: string }>;
@@ -63,17 +63,17 @@ export function burstDetailRows(
   const playerByAbility: Record<number, { damage: number; casts?: number }> = {};
   for (const ability of playerWindow?.ability_breakdown ?? []) playerByAbility[ability.spell_id] = ability;
   return abilityBreakdown.map(ability => {
-    const baked = abilities[ability.spell_id];
-    if (!baked) logWarn('burstDetailRows: ability id missing from ability map', ability.spell_id);
+    const baked = resolveAbility(abilities, ability.spell_id, 'burstDetailRows');
+    const player = playerByAbility[ability.spell_id];
     return {
       spellId: ability.spell_id,
-      label: baked?.name ?? `Ability #${ability.spell_id}`,
-      icon: baked?.icon ?? '',
-      playerPct: playerByAbility[ability.spell_id]?.damage ?? null,
+      label: baked.name,
+      icon: baked.icon,
+      playerPct: player?.damage ?? null,
       topAvg: ability.avg_damage,
       topMin: ability.min_damage,
       topMax: ability.max_damage,
-      playerCasts: playerByAbility[ability.spell_id]?.casts ?? null,
+      playerCasts: player?.casts ?? null,
       topCasts: ability.avg_casts ?? null,
       passive: ability.is_passive ?? false,
     };

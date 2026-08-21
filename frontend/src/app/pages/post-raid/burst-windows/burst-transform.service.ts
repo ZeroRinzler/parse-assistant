@@ -182,34 +182,49 @@ export function findParseWindows(scan: ParseWindowScan): ParseWindow[] {
   const castNamesInParse = new Set(castRows.map(([, abilityId]) => nameOf(abilityId)));
 
   const windows: ParseWindow[] = [];
+  const context: RunWindowContext = {
+    hits, total, binCount, damagePerBin, timings, castRows, nameOf, castNamesInParse,
+  };
   for (const run of denseRuns) {
-    const trimmed = trimRunToDamage(run, damagePerBin);
-    if (!trimmed) continue;
-    const windowStartS = trimmed.startBin * BIN_S;
-    const windowEndS = (trimmed.endBin + 1) * BIN_S;
-    // The fight-closing window counts the fight-end hit bucketDamagePerBin clamps into the last bin; interior windows stay half-open.
-    const closesFight = trimmed.endBin === binCount - 1;
-    const windowHits = hits.filter(hit => hit[0] >= windowStartS && (closesFight ? hit[0] <= windowEndS : hit[0] < windowEndS));
-    const windowDmg = windowHits.reduce((sum, hit) => sum + hit[1], 0);
-    if (!windowDmg || windowDmg / total < SIGNIFICANCE_PCT) continue;
-
-    const ability_breakdown = windowAbilityBreakdown(windowHits, castRows, windowStartS, windowEndS, nameOf, castNamesInParse);
-
-    // Attribute (never bound by) the cooldowns whose cast lands inside the window.
-    const active_cds = timings
-      .filter(timing => timing.castTimesS.some(castS => castS >= windowStartS && castS < windowEndS))
-      .map(timing => timing.name);
-
-    windows.push({
-      time_s: round(windowStartS),
-      window_length_s: round(windowEndS - windowStartS),
-      window_damage: windowDmg,
-      active_cds,
-      ability_breakdown,
-      parse_index: 0, // stamped once the parse is accepted
-    });
+    const window = windowFromRun(run, context);
+    if (window) windows.push(window);
   }
   return windows.sort((a, b) => a.time_s - b.time_s);
+}
+
+interface RunWindowContext {
+  hits: DamageHit[];
+  total: number;
+  binCount: number;
+  damagePerBin: number[];
+  timings: CdTiming[];
+  castRows: CastRow[];
+  nameOf: (spellId: number) => string;
+  castNamesInParse: Set<string>;
+}
+
+function windowFromRun(run: BinRun, context: RunWindowContext): ParseWindow | null {
+  const { hits, total, binCount, damagePerBin, timings, castRows, nameOf, castNamesInParse } = context;
+  const trimmed = trimRunToDamage(run, damagePerBin);
+  if (!trimmed) return null;
+  const windowStartS = trimmed.startBin * BIN_S;
+  const windowEndS = (trimmed.endBin + 1) * BIN_S;
+  // The fight-closing window counts the fight-end hit bucketDamagePerBin clamps into the last bin; interior windows stay half-open.
+  const closesFight = trimmed.endBin === binCount - 1;
+  const windowHits = hits.filter(hit => hit[0] >= windowStartS && (closesFight ? hit[0] <= windowEndS : hit[0] < windowEndS));
+  const windowDmg = windowHits.reduce((sum, hit) => sum + hit[1], 0);
+  if (!windowDmg || windowDmg / total < SIGNIFICANCE_PCT) return null;
+  return {
+    time_s: round(windowStartS),
+    window_length_s: round(windowEndS - windowStartS),
+    window_damage: windowDmg,
+    // Attribute (never bound by) the cooldowns whose cast lands inside the window.
+    active_cds: timings
+      .filter(timing => timing.castTimesS.some(castS => castS >= windowStartS && castS < windowEndS))
+      .map(timing => timing.name),
+    ability_breakdown: windowAbilityBreakdown(windowHits, castRows, windowStartS, windowEndS, nameOf, castNamesInParse),
+    parse_index: 0, // stamped once the parse is accepted
+  };
 }
 
 /** Keep each parse's biggest window (by window_damage), so a cluster counts DISTINCT parses. */
@@ -222,6 +237,41 @@ function dedupeByParse(cluster: ParseWindow[]): ParseWindow[] {
   return [...byParse.values()];
 }
 
+/** Keeps an ability only when a majority of the cluster's parses used it, so a single parse's pet cannot invent a row. */
+function clusterAbilityBreakdown(members: ParseWindow[]): BurstWindow['ability_breakdown'] {
+  const abilityDamage = new Map<number, number[]>();
+  const abilityCasts = new Map<number, number[]>();
+  const abilityPassive = new Map<number, boolean[]>();
+  for (const member of members) {
+    for (const ability of member.ability_breakdown) {
+      getOrInsert(abilityDamage, ability.spell_id, () => []).push(ability.damage);
+      getOrInsert(abilityCasts, ability.spell_id, () => []).push(ability.casts);
+      getOrInsert(abilityPassive, ability.spell_id, () => []).push(ability.is_passive);
+    }
+  }
+  return [...abilityDamage.entries()]
+    .filter(([, list]) => list.length >= members.length * MEMBER_MAJORITY_FRAC)
+    .map(([spell_id, list]) => ({
+      spell_id,
+      avg_damage: Math.round((mean(list) ?? 0)),
+      min_damage: Math.round(Math.min(...list)),
+      max_damage: Math.round(Math.max(...list)),
+      avg_casts: Math.round(mean(abilityCasts.get(spell_id) ?? []) ?? 0),
+      is_passive: (abilityPassive.get(spell_id) ?? []).every(Boolean),
+    }))
+    .sort((a, b) => b.avg_damage - a.avg_damage)
+    .slice(0, 6);
+}
+
+function clusterCommonCds(members: ParseWindow[]): string[] {
+  const cdCounts = new Map<string, number>();
+  for (const member of members) for (const name of member.active_cds) cdCounts.set(name, (cdCounts.get(name) ?? 0) + 1);
+  return [...cdCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .filter(([, count]) => count >= members.length * MEMBER_MAJORITY_FRAC)
+    .map(([name]) => name);
+}
+
 export function clusterParseWindows(windows: ParseWindow[], sampleCount: number): BurstWindow[] {
   const result: BurstWindow[] = [];
   for (const cluster of groupByTime(windows, CLUSTER_MERGE_S)) {
@@ -229,46 +279,15 @@ export function clusterParseWindows(windows: ParseWindow[], sampleCount: number)
     const members = dedupeByParse(cluster);
     if (members.length < Math.max(2, sampleCount * CLUSTER_MIN_FRAC)) continue;
     const damages = members.map(member => member.window_damage);
-
-    const abilityDamage = new Map<number, number[]>();
-    const abilityCasts = new Map<number, number[]>();
-    const abilityPassive = new Map<number, boolean[]>();
-    for (const member of members) {
-      for (const ability of member.ability_breakdown) {
-        getOrInsert(abilityDamage, ability.spell_id, () => []).push(ability.damage);
-        getOrInsert(abilityCasts, ability.spell_id, () => []).push(ability.casts);
-        getOrInsert(abilityPassive, ability.spell_id, () => []).push(ability.is_passive);
-      }
-    }
-    const ability_breakdown = [...abilityDamage.entries()]
-      .filter(([, list]) => list.length >= members.length * MEMBER_MAJORITY_FRAC)
-      .map(([spell_id, list]) => ({
-        spell_id,
-        avg_damage: Math.round((mean(list) ?? 0)),
-        min_damage: Math.round(Math.min(...list)),
-        max_damage: Math.round(Math.max(...list)),
-        avg_casts: Math.round(mean(abilityCasts.get(spell_id) ?? []) ?? 0),
-        is_passive: (abilityPassive.get(spell_id) ?? []).every(Boolean),
-      }))
-      .sort((a, b) => b.avg_damage - a.avg_damage)
-      .slice(0, 6);
-
-    const cdCounts = new Map<string, number>();
-    for (const member of members) for (const name of member.active_cds) cdCounts.set(name, (cdCounts.get(name) ?? 0) + 1);
-    const common_cds = [...cdCounts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .filter(([, count]) => count >= members.length * MEMBER_MAJORITY_FRAC)
-      .map(([name]) => name);
-
     result.push({
       time_s: round(median(members.map(member => member.time_s)) ?? 0),
       dmg_avg: Math.round((mean(damages) ?? 0)),
       dmg_stddev: Math.round((deviation(damages) ?? 0)),
       dmg_min: Math.round(Math.min(...damages)),
       dmg_max: Math.round(Math.max(...damages)),
-      common_cds,
+      common_cds: clusterCommonCds(members),
       window_length_s: round(mean(members.map(member => member.window_length_s)) ?? 0),
-      ability_breakdown,
+      ability_breakdown: clusterAbilityBreakdown(members),
     });
   }
   return result.sort((a, b) => a.time_s - b.time_s);

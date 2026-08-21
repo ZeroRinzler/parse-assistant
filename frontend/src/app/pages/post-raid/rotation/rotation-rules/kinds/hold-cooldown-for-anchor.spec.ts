@@ -3,7 +3,7 @@ import { SHADOW_BLADES, SHADOW_DANCE } from '../../../../../../testing/spell-ids
 import { cast } from '../../../../../../testing/builders/events';
 import {
   HOLD_WINDOW_S, HOLD_DANCE_FOR_BLADES, band, judged, ruleCtx,
-} from '../../../../../../testing/rule-fixtures';
+} from '../rule-fixtures';
 import { ruleLabel, sampleRule } from '../engine';
 import { evaluateHoldForAnchor as rawHoldForAnchor } from './hold-cooldown-for-anchor';
 

@@ -5,7 +5,7 @@ import { PerCdBenchmark } from '../../../core/models/encounter.models';
 import { RulebookCooldown } from '../../../core/models/rulebook.models';
 import { logWarn } from '../../../core/log';
 import { Result, ok, permanent } from '../../../core/result';
-import { toLoadError } from '../../../core/http-load-error';
+import { toLoadError } from '../../../core/transport/http-load-error';
 import { holdSuggestionFindings } from '../../../shared/analysis/hold-targets';
 import {
   isOutlierAbove, isOutlierBeyond, isOutlierBelow, castEfficiencyPct,
@@ -203,6 +203,12 @@ export function checkCastEfficiency(
     details: { remedy: `Fill ${totalDtS.toFixed(1)}s of gaps.` }, occurrences: [] };
 }
 
+function cooldownSuccess(cdName: string, actual: number, detail: string): AnalysisFinding | null {
+  return actual > 0
+    ? { severity: 'success', category: 'cooldown_usage', cd_name: cdName, message: `${cdName}${detail}`, occurrences: [] }
+    : null;
+}
+
 /** `castTimesS` are fight-relative seconds, ascending. Null when the cooldown is talent-gated and unused. */
 export function analyzeOneCooldown(
   cd: RulebookCooldown, castTimesS: number[], cdBench: PerCdBenchmark | undefined,
@@ -213,9 +219,7 @@ export function analyzeOneCooldown(
   if (cd.talent_gated && actual === 0) return null;
 
   if (!cdBench) {
-    const success: AnalysisFinding | null = actual > 0
-      ? { severity: 'success', category: 'cooldown_usage', cd_name: cdName, message: `${cdName}: ${actual} casts (no bench data).`, occurrences: [] }
-      : null;
+    const success = cooldownSuccess(cdName, actual, `: ${actual} casts (no bench data).`);
     return { success, scan: { issues: [], holds: [], blAligned: false } };
   }
 
@@ -236,10 +240,8 @@ export function analyzeOneCooldown(
   issues.push(...checkGaps(cdName, castTimesS, cdBench));
   const holds = holdSuggestionFindings(cdName, castTimesS, cdBench.hold_targets);
 
-  const success: AnalysisFinding | null = issues.length || actual === 0
-    ? null
-    : { severity: 'success', category: 'cooldown_usage', cd_name: cdName,
-        message: `${cdName} - ${actual}/${expected} casts${bl.blAligned && wantsBL ? ', BL-aligned' : ''}.`, occurrences: [] };
+  const blNote = bl.blAligned && wantsBL ? ', BL-aligned' : '';
+  const success = issues.length ? null : cooldownSuccess(cdName, actual, ` - ${actual}/${expected} casts${blNote}.`);
   return { success, scan: { issues, holds, blAligned: bl.blAligned } };
 }
 
@@ -304,15 +306,13 @@ export function partitionRotationFindings(findings: AnalysisFinding[]): Partitio
   const ruleFindings: AnalysisFinding[] = [];
   const byName: Record<string, FindingBucket> = {};
   const successNames = new Set<string>();
+  const bucketFor = (name: string): FindingBucket => (byName[name] ??= { issues: [], holds: [] });
   for (const finding of findings) {
     if (finding.severity === 'success') { if (finding.cd_name) successNames.add(finding.cd_name); continue; }
-    if (finding.category === 'hold_suggestion' && finding.details?.cd_name) {
-      (byName[finding.details.cd_name] ??= { issues: [], holds: [] }).holds.push(finding);
-    } else if (finding.category === 'rule_violation' || !finding.cd_name) {
-      ruleFindings.push(finding);
-    } else {
-      (byName[finding.cd_name] ??= { issues: [], holds: [] }).issues.push(finding);
-    }
+    const holdName = finding.category === 'hold_suggestion' ? finding.details?.cd_name : undefined;
+    if (holdName) bucketFor(holdName).holds.push(finding);
+    else if (finding.category === 'rule_violation' || !finding.cd_name) ruleFindings.push(finding);
+    else bucketFor(finding.cd_name).issues.push(finding);
   }
   return { ruleFindings, byName, successNames };
 }

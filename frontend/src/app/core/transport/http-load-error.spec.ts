@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { HttpErrorResponse } from '@angular/common/http';
 import { toLoadError } from './http-load-error';
-import { missing, transient, permanent } from './result';
-import { WclTransportError } from './services/wcl-transport';
+import { missing, transient, permanent } from '../result';
+import { WclTransportError } from '../services/wcl-transport';
 
 const REPRO_ID = 'gear.load';
 

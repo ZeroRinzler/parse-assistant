@@ -2,7 +2,7 @@ import { assert, describe, it, expect } from 'vitest';
 import { OpeningSequenceCondition, RulebookRule } from '../../../../../core/models/rulebook.models';
 import { SHADOW_BLADES, SHADOW_DANCE, SECRET_TECHNIQUE, EVISCERATE } from '../../../../../../testing/spell-ids';
 import { cast } from '../../../../../../testing/builders/events';
-import { band, benched, judged, ruleCtx } from '../../../../../../testing/rule-fixtures';
+import { band, benched, judged, ruleCtx } from '../rule-fixtures';
 import { evaluateRules, ruleApplicable, rulesFollowed } from '../engine';
 import { evaluateOpeningSequence as rawOpeningSequence } from './opening-sequence';
 

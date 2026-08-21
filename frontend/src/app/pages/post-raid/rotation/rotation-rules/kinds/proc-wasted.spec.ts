@@ -4,7 +4,7 @@ import { SHADOW_DANCE, SECRET_TECHNIQUE } from '../../../../../../testing/spell-
 import { cast, applyBuff, buffWindow } from '../../../../../../testing/builders/events';
 import {
   DANCE_START_S, DANCE_END_S, FIELD_NEVER, RULE_FIGHT_END_S, band, judged, ruleCtx,
-} from '../../../../../../testing/rule-fixtures';
+} from '../rule-fixtures';
 import { ruleApplicable, sampleRule } from '../engine';
 import { evaluateProcWasted as rawProcWasted } from './proc-wasted';
 

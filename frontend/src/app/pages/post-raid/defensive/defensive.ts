@@ -5,7 +5,7 @@ import {
 } from '../../../shared/components/finding-table/finding-table';
 import { WindowComparisonComponent } from '../../../shared/components/window-comparison/window-comparison';
 import { LoadStateComponent } from '../../../shared/components/load-state/load-state';
-import { loadResource } from '../../../shared/load-resource';
+import { loadResource } from '../../../shared/state/load-resource';
 import { DefensiveFeatureService, DefensiveMapAnchor, defensiveFindingClipAnchor } from './defensive.service';
 
 @Component({

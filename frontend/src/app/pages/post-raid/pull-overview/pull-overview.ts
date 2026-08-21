@@ -5,7 +5,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { WclFight } from '../../../core/models/wcl.models';
 import { ClipAnchor } from '../../../core/models/capture.models';
 import { MapAnchor } from '../map/map.service';
-import { loadResource } from '../../../shared/load-resource';
+import { loadResource } from '../../../shared/state/load-resource';
 import { FormatDurationPipe } from '../../../shared/pipes/format-duration-pipe';
 import { FormatDamagePipe } from '../../../shared/pipes/format-damage-pipe';
 import { LoadStateComponent } from '../../../shared/components/load-state/load-state';

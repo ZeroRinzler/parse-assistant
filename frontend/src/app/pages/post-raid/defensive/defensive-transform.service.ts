@@ -59,6 +59,14 @@ export interface ParseDefWindow {
   ability_breakdown: { spell_id: number; damage: number }[];
 }
 
+function castTimesOf(spellId: number, castEvents: TimedEvent[]): number[] {
+  const times: number[] = [];
+  for (const cast of castEvents) {
+    if (cast.type === 'cast' && cast.abilityGameID === spellId) times.push(round(cast.atS));
+  }
+  return times;
+}
+
 // Each buff span (or explicit cast for self-buff-less defensives) is one use; hold windows mark casts delayed > 8s past reset.
 export function summarizeDefensiveCasts(
   defensives: RulebookDefensive[],
@@ -70,17 +78,8 @@ export function summarizeDefensiveCasts(
   for (const defensive of defensives) {
     const spellId = defensive.spell_id;
     const cooldownS = defensive.cooldown;
-    const castTimes: number[] = [];
-
-    for (const buffWindow of (buffWindows.get(spellId) ?? [])) castTimes.push(round(buffWindow[0]));
-
-    if (castTimes.length === 0) {
-      for (const cast of castEvents) {
-        if (cast.type === 'cast' && cast.abilityGameID === spellId) {
-          castTimes.push(round(cast.atS));
-        }
-      }
-    }
+    const buffTimes = (buffWindows.get(spellId) ?? []).map(buffWindow => round(buffWindow[0]));
+    const castTimes = buffTimes.length ? buffTimes : castTimesOf(spellId, castEvents);
 
     castTimes.sort((a, b) => a - b);
     const holdWindows = detectHoldWindows(castTimes, cooldownS);

@@ -7,7 +7,7 @@ import { FlyoverPanelComponent } from '../../../shared/components/flyover-panel/
 import { GameIconComponent } from '../../../shared/components/game-icon/game-icon';
 import { LoadStateComponent } from '../../../shared/components/load-state/load-state';
 import { SelectionStore } from '../../../core/services/selection-store';
-import { loadResource } from '../../../shared/load-resource';
+import { loadResource } from '../../../shared/state/load-resource';
 import { NorthernSkyBench } from './northern-sky-data-source';
 import {
   NorthernSkyFeatureService, buildNorthernSkyNote, abilitiesByKind, selectedIds, isAllSelected,

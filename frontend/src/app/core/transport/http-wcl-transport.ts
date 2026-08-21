@@ -1,8 +1,8 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
-import { WclTransport, WclTransportError, WCL_API_URL, WCL_UNUSABLE_STATUS } from './wcl-transport';
-import { wclCachingHeaders } from './wcl-caching';
+import { WclTransport, WclTransportError, WCL_API_URL, WCL_UNUSABLE_STATUS } from '../services/wcl-transport';
+import { wclCachingHeaders } from '../services/wcl-caching';
 
 interface GraphQLResponse<TData> {
   data?: TData;
