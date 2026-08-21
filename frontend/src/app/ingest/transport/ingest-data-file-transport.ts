@@ -6,7 +6,7 @@ import { Result, ok, permanent } from '../../core/result';
 import { logWarn } from '../../core/log';
 import { toLoadError } from '../../core/transport/http-load-error';
 import { INGEST_VERSION } from '../ingest-version';
-import { isFutureVersion } from '../signature';
+import { isFutureVersion } from '../../core/data-source/metadata/stored-metadata';
 
 /** The file server (scripts/ingest-server.js) is dumb file ops; all ingestion semantics stay on this side. */
 export const INGEST_SERVER_URL = 'http://localhost:3000';

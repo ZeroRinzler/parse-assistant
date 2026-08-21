@@ -1,8 +1,8 @@
 // A tailored file is fresh when the ingest version AND the exact top-parse set that produced it are unchanged, folded into one short hash.
-import * as z from '../core/zod-mini';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils.js';
 import { type Result } from '../core/result';
+import { type StampedFile } from '../core/data-source/metadata/stored-metadata';
 
 /** Satisfied by the shared `toParseRankings` selection's rows, so the signature keys on exactly the parses that feed the transforms. */
 export interface SignatureRanking {
@@ -13,19 +13,6 @@ export interface SignatureRanking {
 /** `report_code:fight_id` key - the unit of the parse-set fingerprint and the inaccessible set. */
 export function parseKey(ranking: SignatureRanking): string {
   return `${ranking.report_code}:${ranking.fight_id}`;
-}
-
-export function readInaccessibleParses(file: { inaccessible_parses?: string[] } | null | undefined): Set<string> {
-  return new Set(file?.inaccessible_parses ?? []);
-}
-
-export interface SignedFile {
-  source_signature?: string;
-  ingest_version: number;
-  // Reporting only: never read by the skip check or the work-ordering.
-  ingested_at_s?: number;
-  // Burst-file-only: parses found permission-denied by the producing run, so the next cheap hash check can exclude them.
-  inaccessible_parses?: string[];
 }
 
 export interface IngestStamp {
@@ -63,32 +50,8 @@ export function signatureAfterFetch(
   return { signature, inaccessibleParses };
 }
 
-export function readStoredSignature(file: { source_signature?: string } | null | undefined): string | null {
-  return file?.source_signature ?? null;
-}
-
-export function readStoredVersion(file: SignedFile): number {
-  return file.ingest_version;
-}
-
-export function readStoredIngestedAt(file: SignedFile): number | null {
-  return file.ingested_at_s ?? null;
-}
-
-const VERSIONED_FILE_SCHEMA = z.looseObject({ ingest_version: z.number() });
-
-/** Files with no numeric `ingest_version` (manifests, rulebooks) are never future. */
-export function isFutureVersion(parsed: unknown, currentVersion: number): boolean {
-  const file = VERSIONED_FILE_SCHEMA.safeParse(parsed);
-  return file.success && file.data.ingest_version > currentVersion;
-}
-
-export function signatureMatches(stored: string | null, current: string): boolean {
-  return stored != null && stored === current;
-}
-
 /** `source_signature` drives the skip check; the bare `ingest_version` drives the work-ordering. */
-export function stampSignature<T extends object>(data: T, signature: string, stamp: IngestStamp): T & SignedFile {
+export function stampSignature<T extends object>(data: T, signature: string, stamp: IngestStamp): T & StampedFile {
   return { ...data, source_signature: signature, ingest_version: stamp.version, ingested_at_s: stamp.ingestedAtS };
 }
 
@@ -96,9 +59,9 @@ export function stampSignature<T extends object>(data: T, signature: string, sta
 export function stampBurstFile<T extends object>(
   data: T, signature: string, stamp: IngestStamp, inaccessibleParses: string[],
   sliceResults: readonly Result<unknown>[],
-): T & SignedFile {
+): T & StampedFile {
   const complete = sliceResults.every(result => result.ok || result.error.kind === 'missing');
-  const versioned: T & SignedFile = {
+  const versioned: T & StampedFile = {
     ...data, ingest_version: stamp.version, ingested_at_s: stamp.ingestedAtS, inaccessible_parses: inaccessibleParses,
   };
   return complete ? { ...versioned, source_signature: signature } : versioned;

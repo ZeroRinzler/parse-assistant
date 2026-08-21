@@ -24,10 +24,10 @@ import { type WclQueryClient, BudgetExceededError } from '../wcl-client';
 import { INGEST_VERSION } from '../ingest-version';
 import { specsForRun, orderEncountersByMissingFirst, parsePrioritySpecs, type SpecOrderEntry } from '../ordering';
 import {
-  encounterSkipKey, signatureAfterFetch, readStoredSignature, readStoredVersion, readStoredIngestedAt, signatureMatches,
-  stampSignature, stampBurstFile, readInaccessibleParses,
-  type SignatureRanking, type SignedFile, type IngestStamp,
+  encounterSkipKey, signatureAfterFetch, stampSignature, stampBurstFile,
+  type SignatureRanking, type IngestStamp,
 } from '../signature';
+import { readStoredMetadata, signatureMatches, type StampedFile } from '../../core/data-source/metadata/stored-metadata';
 import { formatSpecReport, SELECTED_MARKER, type SpecReportRow } from '../spec-report';
 import type { IngestEncounter } from '../models/wcl.models';
 
@@ -256,13 +256,13 @@ export class IngestOrchestratorService {
       const burstFiles = (await this.dataFile.listSliceFiles(spec, 'burst'))
         .filter(file => file.endsWith('.json'));
       const stamps = await Promise.all(burstFiles.map(async file => {
-        const slice = await this.dataFile.getSlice<SignedFile>(spec, parseInt(file), 'burst');
-        return slice.ok ? slice.value : null;
+        const slice = await this.dataFile.getSlice<StampedFile>(spec, parseInt(file), 'burst');
+        return readStoredMetadata(slice.ok ? slice.value : null);
       }));
-      const versions = stamps.map(file => (file ? readStoredVersion(file) : null));
+      const versions = stamps.map(stamp => stamp.version);
       const storedVersions = versions.filter((stored): stored is number => stored !== null);
       const storedTimes = stamps
-        .map(file => (file ? readStoredIngestedAt(file) : null))
+        .map(stamp => stamp.ingestedAtS)
         .filter((stored): stored is number => stored !== null);
       const entry: SpecOrderEntry = {
         spec,
@@ -315,10 +315,10 @@ export class IngestOrchestratorService {
           continue;
         }
 
-        const existingResult = await this.dataFile.getSlice<SignedFile>(spec, encounter.id, 'burst');
-        const existing = existingResult.ok ? existingResult.value : null;
-        const skipKey = encounterSkipKey(poolRows, readInaccessibleParses(existing), version, TOP_N);
-        if (signatureMatches(readStoredSignature(existing), skipKey)) {
+        const existingResult = await this.dataFile.getSlice<StampedFile>(spec, encounter.id, 'burst');
+        const existing = readStoredMetadata(existingResult.ok ? existingResult.value : null);
+        const skipKey = encounterSkipKey(poolRows, existing.inaccessibleParses, version, TOP_N);
+        if (signatureMatches(existing.signature, skipKey)) {
           console.log(`  [${encounter.name}] unchanged (signature ${skipKey}), skipped`);
           continue;
         }
