@@ -4,8 +4,6 @@
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
-    "start:empty": "ng serve --configuration empty",
-    "start:ingest": "concurrently -k \"node scripts/ingest-server.js\" \"ng serve --configuration ingest\"",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
@@ -20,7 +18,6 @@
   "private": true,
   "packageManager": "npm@11.13.0",
   "dependencies": {
-    "@angular/animations": "^22.0.1",
     "@angular/cdk": "^22.1.2",
     "@angular/common": "^22.1.1",
     "@angular/compiler": "^22.1.1",
@@ -53,7 +50,6 @@
     "@playwright/test": "^1.62.1",
     "@types/d3-array": "^3.2.2",
     "angular-eslint": "22.1.0",
-    "concurrently": "^10.0.4",
     "cors": "^2.8.6",
     "eslint": "^10.8.1",
     "eslint-plugin-boundaries": "^7.2.0",

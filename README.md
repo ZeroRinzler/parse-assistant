@@ -23,7 +23,6 @@ cd frontend
 npm install
 npm run data:pull   # fetch the generated bench data from the `gh-pages` branch (see below)
 npm start           # Angular dev server on http://localhost:4200
-npm run start:empty # same, but with every encounter's bench emptied (fresh-tier empty states)
 npm run schema:pull # refresh the WCL GraphQL schema and regenerate the typed operations
 ```
 

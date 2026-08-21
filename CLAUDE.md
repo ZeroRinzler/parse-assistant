@@ -51,8 +51,8 @@ frontend/        # the entire Angular 22 app
 | `npm run knip` | Dead-code check: unused files, exports, and dependencies (`knip.json`) |
 | `npm run schema:pull` | Re-introspect the WCL v2 schema and regenerate `wcl-operations.generated.ts` in one run; commit only the regenerated types |
 | `npm run data:pull` | Fetch the shared dataset from `origin/gh-pages` into the ignored working tree |
-| `npm run start:ingest` | Interactive ingestion: the file server + `ng serve --configuration ingest` |
-| `npm run ingest` | Headless ingestion (CI entry) |
+| `node scripts/ingest-server.js` | Ingest file server on :3000; interactive ingestion is this plus `ng serve --configuration ingest` in a second terminal |
+| `npm run ingest` | Headless ingestion (CI entry): starts both of the above, then drives the app in a headless browser |
 
 ## Development workflow router
 
