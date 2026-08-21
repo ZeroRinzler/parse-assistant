@@ -14,8 +14,6 @@ export interface RelPos {
   right: number;
   /** Distance from the reference, yards. */
   dist: number;
-  /** Clock angle around the reference, degrees (0 = directly in front). */
-  angleDeg: number;
   /** The map this relative frame sits on; a trail draws no segment where it changes. */
   mapID?: number;
 }
@@ -79,8 +77,7 @@ export function toReferenceLocal(player: PosSample, ref: PosSample, t = 0): RelP
   const fwd = dx * cos + dy * sin;
   const right = dx * sin - dy * cos;
   const dist = Math.hypot(dx, dy);
-  const angleDeg = (Math.atan2(right, fwd) * 180) / Math.PI;
-  return { t, fwd, right, dist, angleDeg, mapID: player.mapID };
+  return { t, fwd, right, dist, mapID: player.mapID };
 }
 
 export function rowsToTimeline(id: number, rows: PosRow[]): ActorTimeline {

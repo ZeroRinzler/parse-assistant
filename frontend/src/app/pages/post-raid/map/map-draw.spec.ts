@@ -132,7 +132,7 @@ describe('buildParseTimelines / parsePointsAt / parseTrailsOf', () => {
     const points = parsePointsAt(timelines, 3);
     expect(points).toHaveLength(2);
     // player at 500 raw = 5 yd directly ahead of the facing-less boss at the origin.
-    expect(points[0]).toMatchObject({ t: 3, fwd: 5, right: 0, dist: 5, angleDeg: 0 });
+    expect(points[0]).toMatchObject({ t: 3, fwd: 5, right: 0, dist: 5 });
   });
 
   it('builds each prebuilt parse timeline into a relative trail across the window', () => {
