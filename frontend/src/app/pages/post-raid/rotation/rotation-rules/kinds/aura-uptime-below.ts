@@ -1,10 +1,10 @@
 import { round } from '../../../../../shared/analysis/analysis-math';
 import { AnalysisFinding, FindingOccurrence } from '../../../../../core/models/analysis.models';
-import { AuraUptimeBelowCondition } from '../../../../../core/models/rulebook.models';
+import { AuraUptimeBelowCondition, RuleSeverity } from '../../../../../core/models/rulebook.models';
 import { AuraWindows, auraUptimePct } from '../../../../../shared/analysis/aura-windows';
 import { RuleContext } from '../rule-context';
 import {
-  KindSpec, PERCENT_POINTS, RuleBand, RuleJudging, Severity,
+  KindSpec, PERCENT_POINTS, RuleBand, RuleJudging,
   bandLimits, outOfBand, withBand,
 } from '../engine-core';
 
@@ -48,7 +48,7 @@ function uptimeGaps(merged: [number, number][], boundS: number): [number, number
 }
 
 export function evaluateAuraUptimeBelow(
-  cond: AuraUptimeBelowCondition, ctx: RuleContext, band: RuleBand, judging: RuleJudging, severity: Severity, remedy?: string,
+  cond: AuraUptimeBelowCondition, ctx: RuleContext, band: RuleBand, judging: RuleJudging, severity: RuleSeverity, remedy?: string,
 ): AnalysisFinding | null {
   const { lo, hi } = bandLimits(PERCENT_POINTS, band);
   const pct = uptimePct(cond, ctx);

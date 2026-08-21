@@ -1,6 +1,7 @@
 import { round } from '../../../../shared/analysis/analysis-math';
 import { AnalysisFinding, FindingOccurrence } from '../../../../core/models/analysis.models';
-import { PERCENT, RuleBand, RuleJudging, Severity, bandLimits, outOfBand, sampleOccurrences } from './engine-core';
+import { RuleSeverity } from '../../../../core/models/rulebook.models';
+import { PERCENT, RuleBand, RuleJudging, bandLimits, outOfBand, sampleOccurrences } from './engine-core';
 
 /** Shared by both filler kinds so the two can only differ in their gate. */
 export interface FillerSplit {
@@ -28,7 +29,7 @@ export function fillerShare(split: FillerSplit): number | null {
 }
 
 export function fillerFinding(
-  split: FillerSplit, band: RuleBand, judging: RuleJudging, severity: Severity,
+  split: FillerSplit, band: RuleBand, judging: RuleJudging, severity: RuleSeverity,
   spellName: string, where: string, remedy?: string,
 ): AnalysisFinding | null {
   const { lo, hi } = bandLimits(PERCENT, band);

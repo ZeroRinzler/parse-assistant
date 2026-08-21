@@ -1,7 +1,7 @@
 import { AnalysisFinding } from '../../../../../core/models/analysis.models';
-import { ResourceAtCastCondition } from '../../../../../core/models/rulebook.models';
+import { ResourceAtCastCondition, RuleSeverity } from '../../../../../core/models/rulebook.models';
 import { RESOURCE_ACTOR_SOURCE, ResourceRow, RuleContext } from '../rule-context';
-import { KindSpec, PERCENT, RuleBand, RuleJudging, Severity, rawCountScale, withBand } from '../engine-core';
+import { KindSpec, PERCENT, RuleBand, RuleJudging, rawCountScale, withBand } from '../engine-core';
 import { evaluateBoundedPerCast } from '../bounded-per-cast';
 
 /** Only a cast that touches a pool reports it, so a cast that spends nothing reads a neighbour's snapshot back this far. */
@@ -39,7 +39,7 @@ function resourceFractionPerCast(
 const RAW_COUNT_MAX_POOL = 200;
 
 export function evaluateResourceAtCast(
-  cond: ResourceAtCastCondition, ctx: RuleContext, band: RuleBand, judging: RuleJudging, severity: Severity, remedy?: string,
+  cond: ResourceAtCastCondition, ctx: RuleContext, band: RuleBand, judging: RuleJudging, severity: RuleSeverity, remedy?: string,
 ): AnalysisFinding | null {
   const judged = resourceFractionPerCast(cond, ctx);
   const firstJudged = judged[0];

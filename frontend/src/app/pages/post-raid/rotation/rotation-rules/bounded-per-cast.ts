@@ -1,7 +1,8 @@
 import { round } from '../../../../shared/analysis/analysis-math';
 import { AnalysisFinding, FindingOccurrence } from '../../../../core/models/analysis.models';
+import { RuleSeverity } from '../../../../core/models/rulebook.models';
 import {
-  RuleBand, RuleJudging, Scale, Severity,
+  RuleBand, RuleJudging, Scale,
   bandLimits, exceedsTolerance, outOfBand, sampleOccurrences,
 } from './engine-core';
 
@@ -45,7 +46,7 @@ function voiceFor(
 }
 
 export function evaluateBoundedPerCast(
-  judged: BoundedCasts, band: RuleBand, judging: RuleJudging, severity: Severity, remedy?: string,
+  judged: BoundedCasts, band: RuleBand, judging: RuleJudging, severity: RuleSeverity, remedy?: string,
 ): AnalysisFinding | null {
   if (!judged.values.length) return null;
   const { lo, hi } = bandLimits(judged.scale, band);

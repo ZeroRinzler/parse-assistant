@@ -1,8 +1,8 @@
 import { round } from '../../../../../shared/analysis/analysis-math';
 import { AnalysisFinding, FindingOccurrence } from '../../../../../core/models/analysis.models';
-import { OpeningSequenceCondition } from '../../../../../core/models/rulebook.models';
+import { OpeningSequenceCondition, RuleSeverity } from '../../../../../core/models/rulebook.models';
 import { RuleContext, castCount } from '../rule-context';
-import { KindSpec, RuleBand, RuleJudging, SECONDS, Severity, bandLimits, withBand } from '../engine-core';
+import { KindSpec, RuleBand, RuleJudging, SECONDS, bandLimits, withBand } from '../engine-core';
 
 function openerProgress(
   cond: OpeningSequenceCondition, ctx: RuleContext, windowS: number,
@@ -50,7 +50,7 @@ function openingSequenceOccurrences(
 }
 
 export function evaluateOpeningSequence(
-  cond: OpeningSequenceCondition, ctx: RuleContext, band: RuleBand, _judging: RuleJudging, severity: Severity, remedy?: string,
+  cond: OpeningSequenceCondition, ctx: RuleContext, band: RuleBand, _judging: RuleJudging, severity: RuleSeverity, remedy?: string,
 ): AnalysisFinding | null {
   const hi = bandLimits(SECONDS, band).hi;
   const progress = openerProgress(cond, ctx, hi);

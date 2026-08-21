@@ -198,10 +198,10 @@ export class RotationTransformService implements DataSource<RotationBench> {
     const rulebookResult = await this.dataFiles.getRulebook(spec);
     if (!rulebookResult.ok) return rulebookResult;
     const rulebook = rulebookResult.value;
-    const cooldowns = rulebook.major_cooldowns ?? [];
+    const cooldowns = rulebook.major_cooldowns;
     if (!cooldowns.length) return missing('No rulebook cooldowns for this spec.');
-    const defensives = rulebook.defensives ?? [];
-    const judgeable = judgeableRules(rulebook.rules ?? []);
+    const defensives = rulebook.defensives;
+    const judgeable = judgeableRules(rulebook.rules);
 
     return benchFromTopParses(this.wclApi, { spec, encounterId, partition }, {
       logSource: 'RotationTransformService',

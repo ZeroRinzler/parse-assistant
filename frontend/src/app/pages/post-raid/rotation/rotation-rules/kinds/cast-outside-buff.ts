@@ -1,10 +1,10 @@
 import { round } from '../../../../../shared/analysis/analysis-math';
 import { AnalysisFinding, FindingOccurrence } from '../../../../../core/models/analysis.models';
-import { CastOutsideBuffCondition } from '../../../../../core/models/rulebook.models';
+import { CastOutsideBuffCondition, RuleSeverity } from '../../../../../core/models/rulebook.models';
 import { auraUpAt } from '../../../../../shared/analysis/aura-windows';
 import { RuleContext, castCount } from '../rule-context';
 import {
-  KindSpec, PERCENT, RuleBand, RuleJudging, Severity,
+  KindSpec, PERCENT, RuleBand, RuleJudging,
   bandLimits, oneIn, outOfBand, sampleOccurrences, withBand,
 } from '../engine-core';
 
@@ -34,7 +34,7 @@ function offSideShare(cond: CastOutsideBuffCondition, ctx: RuleContext): number 
 }
 
 export function evaluateCastOutsideBuff(
-  cond: CastOutsideBuffCondition, ctx: RuleContext, band: RuleBand, judging: RuleJudging, severity: Severity, remedy?: string,
+  cond: CastOutsideBuffCondition, ctx: RuleContext, band: RuleBand, judging: RuleJudging, severity: RuleSeverity, remedy?: string,
 ): AnalysisFinding | null {
   const { lo, hi } = bandLimits(PERCENT, band);
   const { judged, violations } = castsOffBuffSide(cond, ctx);

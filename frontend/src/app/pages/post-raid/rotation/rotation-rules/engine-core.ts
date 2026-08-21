@@ -1,9 +1,7 @@
 import { round } from '../../../../shared/analysis/analysis-math';
 import { AnalysisFinding, FindingOccurrence } from '../../../../core/models/analysis.models';
-import { RulebookRule, RuleCondition } from '../../../../core/models/rulebook.models';
+import { RulebookRule, RuleCondition, RuleSeverity } from '../../../../core/models/rulebook.models';
 import { RuleContext } from './rule-context';
-
-export type Severity = AnalysisFinding['severity'];
 
 /** Cap on a finding's occurrence strip - a fight can carry far more casts than a chip row should render. */
 const MAX_OCCURRENCES = 24;
@@ -134,7 +132,7 @@ export interface KindSpec<C extends RuleCondition> {
   sample: (cond: C, ctx: RuleContext) => number[];
   unmeasured?: (cond: C, ctx: RuleContext) => number;
   evaluate: (
-    cond: C, ctx: RuleContext, band: RuleBand | null, judging: RuleJudging, severity: Severity, remedy?: string,
+    cond: C, ctx: RuleContext, band: RuleBand | null, judging: RuleJudging, severity: RuleSeverity, remedy?: string,
   ) => AnalysisFinding | null;
   applicable: (cond: C, ctx: RuleContext) => boolean;
   label: (cond: C) => string;
@@ -142,7 +140,7 @@ export interface KindSpec<C extends RuleCondition> {
 
 export function withBand<C extends RuleCondition>(
   evaluate: (
-    cond: C, ctx: RuleContext, band: RuleBand, judging: RuleJudging, severity: Severity, remedy?: string,
+    cond: C, ctx: RuleContext, band: RuleBand, judging: RuleJudging, severity: RuleSeverity, remedy?: string,
   ) => AnalysisFinding | null,
 ): KindSpec<C>['evaluate'] {
   return (cond, ctx, band, judging, severity, remedy) => band && evaluate(cond, ctx, band, judging, severity, remedy);

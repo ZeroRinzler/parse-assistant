@@ -1,21 +1,19 @@
 import {
-  RulebookRule, RuleCondition, CastWithoutPriorCondition, HoldCooldownForAnchorCondition,
+  RulebookRule, RuleCondition, RuleSeverity, CastWithoutPriorCondition, HoldCooldownForAnchorCondition,
 } from '../../../../core/models/rulebook.models';
 import { WclEvent } from '../../../../core/models/wcl.models';
 import { AnalysisFinding } from '../../../../core/models/analysis.models';
 import { withRelativeS } from '../../../../shared/analysis/wcl-projections';
-import {
-  BenchedRule, RuleBand, RuleJudging, Severity,
-} from './engine-core';
+import { BenchedRule, RuleBand, RuleJudging } from './engine-core';
 import { RuleContext, buildRuleContext } from './rule-context';
 import { ruleJudging } from './engine';
 import { SHADOW_BLADES, SHADOW_DANCE, SECRET_TECHNIQUE } from '../../../../../testing/spell-ids';
 
 /** Each evaluator is called with the judging its own kind declares, so a spec can never assert against a side the table does not use. */
 export function judged<C extends RuleCondition>(
-  evaluate: (c: C, ctx: RuleContext, band: RuleBand, judging: RuleJudging, severity: Severity, remedy?: string) => AnalysisFinding | null,
+  evaluate: (c: C, ctx: RuleContext, band: RuleBand, judging: RuleJudging, severity: RuleSeverity, remedy?: string) => AnalysisFinding | null,
 ) {
-  return (c: C, ctx: RuleContext, band: RuleBand, severity: Severity, remedy?: string) =>
+  return (c: C, ctx: RuleContext, band: RuleBand, severity: RuleSeverity, remedy?: string) =>
     evaluate(c, ctx, band, ruleJudging(c), severity, remedy);
 }
 
@@ -27,6 +25,10 @@ export function band(lo: number, hi = lo, tolerance = 0): RuleBand {
 
 // The share kinds judge a violation share against [lo, hi]; a field that never breaks the rule flags any nonzero share.
 export const FIELD_NEVER = band(0);
+
+export function ruleFor(condition: RuleCondition, over: Partial<RulebookRule> = {}): RulebookRule {
+  return { type: 'rotation', severity: 'warning', description: 'authored rule', action: 'authored fix', condition, ...over };
+}
 
 // A rule whose band this encounter measured, so fixtures about something else are not gated on it.
 export function benched(rule: RulebookRule, ruleBandValue: RuleBand | null = band(PAIR_WINDOW_S)): BenchedRule {

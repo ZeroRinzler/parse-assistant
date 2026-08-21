@@ -288,7 +288,7 @@ export class DefensiveTransformService implements DataSource<DefensiveBench> {
   async getBench(spec: string, encounterId: number, partition?: number | null): Promise<Result<DefensiveBench>> {
     const rulebookResult = await this.dataFiles.getRulebook(spec);
     if (!rulebookResult.ok) return rulebookResult;
-    const defensives = rulebookResult.value.defensives ?? [];
+    const defensives = rulebookResult.value.defensives;
     if (!defensives.length) return missing(NO_DEFENSIVE_BENCH_MESSAGE);
 
     return benchFromTopParses(this.wclApi, { spec, encounterId, partition }, {

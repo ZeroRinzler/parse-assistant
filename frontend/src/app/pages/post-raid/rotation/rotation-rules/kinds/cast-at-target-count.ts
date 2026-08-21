@@ -1,7 +1,7 @@
 import { AnalysisFinding } from '../../../../../core/models/analysis.models';
-import { CastAtTargetCountCondition } from '../../../../../core/models/rulebook.models';
+import { CastAtTargetCountCondition, RuleSeverity } from '../../../../../core/models/rulebook.models';
 import { DamageRow, RuleContext } from '../rule-context';
-import { KindSpec, RuleBand, RuleJudging, Severity, WHOLE_STEPS, withBand } from '../engine-core';
+import { KindSpec, RuleBand, RuleJudging, WHOLE_STEPS, withBand } from '../engine-core';
 import { evaluateBoundedPerCast } from '../bounded-per-cast';
 
 /** Enemies damaged this soon after a cast count as engaged for it; an AoE ability lands well inside a GCD or two. */
@@ -26,7 +26,7 @@ function targetCountsPerCast(cond: CastAtTargetCountCondition, ctx: RuleContext)
 }
 
 export function evaluateCastAtTargetCount(
-  cond: CastAtTargetCountCondition, ctx: RuleContext, band: RuleBand, judging: RuleJudging, severity: Severity, remedy?: string,
+  cond: CastAtTargetCountCondition, ctx: RuleContext, band: RuleBand, judging: RuleJudging, severity: RuleSeverity, remedy?: string,
 ): AnalysisFinding | null {
   return evaluateBoundedPerCast({
     values: targetCountsPerCast(cond, ctx).map(({ timeS, targets }) => ({ timeS, value: targets })),

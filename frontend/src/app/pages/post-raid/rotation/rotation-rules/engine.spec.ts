@@ -12,7 +12,7 @@ import { cast } from '../../../../../testing/builders/events';
 import {
   COMBO_POINT_TYPE, FIELD_NEVER, HOLD_WINDOW_S,
   HOLD_DANCE_FOR_BLADES, SECRET_TECH_NEEDS_DANCE,
-  band, benched, ruleCtx,
+  band, benched, ruleCtx, ruleFor,
 } from './rule-fixtures';
 import { BenchedRule, RuleSample, RuleStream } from './engine-core';
 import {
@@ -22,22 +22,15 @@ import {
 describe('rule engine', () => {
   it('evaluateRules names a violated rule by its description, matching how rulesFollowed names it', () => {
     const description = 'Secret Technique always inside Shadow Dance';
-    const rule: RulebookRule = { severity: 'warning', description, condition: SECRET_TECH_NEEDS_DANCE };
+    const rule = ruleFor(SECRET_TECH_NEEDS_DANCE, { description });
     const violated = evaluateRules([benched(rule)], ruleCtx([cast(SECRET_TECHNIQUE, 10)]));
     assert.exists(violated[0]);
     expect(violated[0].label).toBe(description);
     expect(rulesFollowed([benched(rule)], ruleCtx([cast(SHADOW_DANCE, 8), cast(SECRET_TECHNIQUE, 10)]))).toEqual([description]);
   });
 
-  it('evaluateRules falls back to the synthesized label when a rule has no description', () => {
-    const rule: RulebookRule = { severity: 'warning', condition: SECRET_TECH_NEEDS_DANCE };
-    const finding = evaluateRules([benched(rule)], ruleCtx([cast(SECRET_TECHNIQUE, 10)]))[0];
-    assert.exists(finding);
-    expect(finding.label).toBe('Secret Technique without Shadow Dance');
-  });
-
   it('evaluateRules carries the rule type onto the finding', () => {
-    const rule: RulebookRule = { type: 'cooldown_pairing', severity: 'warning', condition: SECRET_TECH_NEEDS_DANCE };
+    const rule = ruleFor(SECRET_TECH_NEEDS_DANCE, { type: 'cooldown_pairing' });
     const findings = evaluateRules([benched(rule)], ruleCtx([cast(SECRET_TECHNIQUE, 10)]));
     assert.exists(findings[0]);
     expect(findings[0].rule_type).toBe('cooldown_pairing');
@@ -46,7 +39,7 @@ describe('rule engine', () => {
 
 describe('rule severity', () => {
   it.each(['critical', 'warning', 'info'] as RuleSeverity[])('carries an authored %s onto the finding', severity => {
-    const rule: RulebookRule = { severity, condition: SECRET_TECH_NEEDS_DANCE };
+    const rule = ruleFor(SECRET_TECH_NEEDS_DANCE, { severity });
     const finding = evaluateRules([benched(rule)], ruleCtx([cast(SECRET_TECHNIQUE, 10)]))[0];
     assert.exists(finding);
     expect(finding.severity).toBe(severity);
@@ -61,12 +54,8 @@ describe('ruleLabel', () => {
 });
 
 describe('rulesFollowed', () => {
-  const pairDanceWithSecretTech: RulebookRule = {
-    severity: 'warning', description: 'Pair Shadow Dance with Secret Technique', condition: SECRET_TECH_NEEDS_DANCE,
-  };
-  const holdDanceForBlades: RulebookRule = {
-    severity: 'critical', description: 'Hold Shadow Dance for Shadow Blades', condition: HOLD_DANCE_FOR_BLADES,
-  };
+  const pairDanceWithSecretTech = ruleFor(SECRET_TECH_NEEDS_DANCE, { description: 'Pair Shadow Dance with Secret Technique' });
+  const holdDanceForBlades = ruleFor(HOLD_DANCE_FOR_BLADES, { severity: 'critical', description: 'Hold Shadow Dance for Shadow Blades' });
 
   it('lists the rule when Shadow Dance is paired with Secret Technique', () => {
     expect(rulesFollowed([benched(pairDanceWithSecretTech)], ruleCtx([cast(SHADOW_DANCE, 10), cast(SECRET_TECHNIQUE, 12)])))
@@ -110,7 +99,7 @@ describe('judgeableRules', () => {
   });
 
   it('keeps every rule that carries a condition', () => {
-    const rule: RulebookRule = { severity: 'warning', description: 'real', condition: SECRET_TECH_NEEDS_DANCE };
+    const rule = ruleFor(SECRET_TECH_NEEDS_DANCE, { description: 'real' });
     expect(judgeableRules([...unconformed, rule])).toEqual([rule]);
   });
 });
@@ -236,14 +225,11 @@ describe('ruleBand', () => {
 });
 
 describe('benchedRules', () => {
-  const needsMagnitude: RulebookRule = { severity: 'warning', description: 'pair', condition: SECRET_TECH_NEEDS_DANCE };
-  const procRule: RulebookRule = {
-    severity: 'warning', description: 'proc',
-    condition: {
-      kind: 'proc_wasted', buff_spell_id: SHADOW_DANCE, buff_spell_name: 'Shadow Dance',
-      spend_spell_ids: [SECRET_TECHNIQUE], spend_spell_names: ['Secret Technique'],
-    },
-  };
+  const needsMagnitude = ruleFor(SECRET_TECH_NEEDS_DANCE, { description: 'pair' });
+  const procRule = ruleFor({
+    kind: 'proc_wasted', buff_spell_id: SHADOW_DANCE, buff_spell_name: 'Shadow Dance',
+    spend_spell_ids: [SECRET_TECHNIQUE], spend_spell_names: ['Secret Technique'],
+  }, { description: 'proc' });
 
   it('keeps a rule whose band this encounter measured', () => {
     expect(benchedRules([benched(needsMagnitude)]).map(entry => entry.rule)).toEqual([needsMagnitude]);
@@ -270,12 +256,9 @@ describe('benchedRules', () => {
 });
 
 describe('rulesNeed', () => {
-  const uptime = (on: 'self' | 'target'): RulebookRule =>
-    ({ severity: 'warning', condition: { kind: 'aura_uptime_below', aura_spell_id: RUPTURE, aura_spell_name: 'Rupture', on } });
-  const targetCount: RulebookRule = {
-    severity: 'warning',
-    condition: { kind: 'cast_at_target_count', spell_id: BLACK_POWDER, spell_name: 'Black Powder', bound: 'min' },
-  };
+  const uptime = (on: 'self' | 'target') =>
+    ruleFor({ kind: 'aura_uptime_below', aura_spell_id: RUPTURE, aura_spell_name: 'Rupture', on });
+  const targetCount = ruleFor({ kind: 'cast_at_target_count', spell_id: BLACK_POWDER, spell_name: 'Black Powder', bound: 'min' });
 
   const cases: { name: string; rules: RulebookRule[]; stream: RuleStream; needed: boolean }[] = [
     { name: 'an on-target uptime rule reads enemy auras', rules: [uptime('target')], stream: 'enemyAuras', needed: true },

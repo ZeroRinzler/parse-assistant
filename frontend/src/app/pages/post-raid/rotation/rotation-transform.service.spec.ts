@@ -195,8 +195,9 @@ describe('aggregateCdBenchmarks', () => {
 describe('benchRules', () => {
   const sample = (values: number[], unmeasuredOut = 0): RuleSample => ({ values, unmeasuredOut });
   const dotUptime = (): RulebookRule => ({
-    severity: 'warning',
+    type: 'rotation', severity: 'warning', description: 'Keep Rupture up on the boss',
     condition: { kind: 'aura_uptime_below', aura_spell_id: RUPTURE, aura_spell_name: 'Rupture', on: 'target' },
+    action: 'Refresh it inside its pandemic window.',
   });
   const ruleA = dotUptime(), ruleB = dotUptime(), ruleC = dotUptime();
 

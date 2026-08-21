@@ -1,11 +1,11 @@
 import { median } from 'd3-array';
 import { round } from '../../../../../shared/analysis/analysis-math';
 import { AnalysisFinding, FindingOccurrence } from '../../../../../core/models/analysis.models';
-import { AuraClippedCondition } from '../../../../../core/models/rulebook.models';
+import { AuraClippedCondition, RuleSeverity } from '../../../../../core/models/rulebook.models';
 import { AuraSpan, AuraSpansByTarget } from '../../../../../shared/analysis/aura-windows';
 import { RuleContext, suspendedAt } from '../rule-context';
 import {
-  KindSpec, RuleBand, RuleJudging, SECONDS, Severity,
+  KindSpec, RuleBand, RuleJudging, SECONDS,
   bandLimits, exceedsTolerance, outOfBand, sampleOccurrences, withBand,
 } from '../engine-core';
 
@@ -41,7 +41,7 @@ function elapsedAtRefresh(cond: AuraClippedCondition, ctx: RuleContext): { timeS
 }
 
 export function evaluateAuraClipped(
-  cond: AuraClippedCondition, ctx: RuleContext, band: RuleBand, judging: RuleJudging, severity: Severity, remedy?: string,
+  cond: AuraClippedCondition, ctx: RuleContext, band: RuleBand, judging: RuleJudging, severity: RuleSeverity, remedy?: string,
 ): AnalysisFinding | null {
   const { lo, hi } = bandLimits(SECONDS, band);
   const judged = elapsedAtRefresh(cond, ctx);

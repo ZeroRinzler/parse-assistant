@@ -160,18 +160,18 @@ export type RuleCondition =
 export type RuleSeverity = 'critical' | 'warning' | 'info';
 
 export interface RulebookRule {
-  type?: string;
+  type: string;
   severity: RuleSeverity;
-  description?: string;
+  description: string;
   condition?: RuleCondition;
-  action?: string;
+  action: string;
 }
 
 export interface Rulebook {
   spec: string;
   /** Required. zamimg spec-icon file stem, e.g. 'ability_stealth'; read from the guide, used for dropdown art. */
   spec_icon: string;
-  major_cooldowns?: RulebookCooldown[];
-  defensives?: RulebookDefensive[];
-  rules?: RulebookRule[];
+  major_cooldowns: RulebookCooldown[];
+  defensives: RulebookDefensive[];
+  rules: RulebookRule[];
 }

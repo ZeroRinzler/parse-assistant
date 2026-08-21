@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { RulebookRule, SpendAtStacksCondition } from '../../../../../core/models/rulebook.models';
+import { SpendAtStacksCondition } from '../../../../../core/models/rulebook.models';
 import { LIGHTNING_BOLT, MAELSTROM_WEAPON, SHADOW_DANCE } from '../../../../../../testing/spell-ids';
 import { cast, applyBuff, removeBuff, applyBuffStack, buffWindow } from '../../../../../../testing/builders/events';
-import { band, benched, judged, ruleCtx } from '../rule-fixtures';
+import { band, benched, judged, ruleCtx, ruleFor } from '../rule-fixtures';
 import { evaluateRules, ruleApplicable, ruleLabel, rulesFollowed, sampleRule } from '../engine';
 import { evaluateSpendAtStacks as rawSpendAtStacks } from './spend-at-stacks';
 
@@ -78,7 +78,7 @@ describe('evaluateSpendAtStacks', () => {
     const PRE_PULL_DROP_S = 5; // the buff was already up at pull; its first trace is this bare remove
     const buffs = [removeBuff(MAELSTROM_WEAPON, PRE_PULL_DROP_S)];
     const ctx = ruleCtx([cast(LIGHTNING_BOLT, PRE_PULL_DROP_S - 1)], { buffs });
-    const rule: RulebookRule = { severity: 'warning', description: 'spend at stacks', condition: spendAtStacks };
+    const rule = ruleFor(spendAtStacks, { description: 'spend at stacks' });
     expect(ruleApplicable(spendAtStacks, ctx)).toBe(false);
     expect(evaluateRules([benched(rule)], ctx)).toEqual([]);
     expect(rulesFollowed([benched(rule)], ctx)).toEqual([]);

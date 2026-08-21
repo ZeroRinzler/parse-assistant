@@ -1,8 +1,8 @@
 import { assert, describe, it, expect } from 'vitest';
-import { OpeningSequenceCondition, RulebookRule } from '../../../../../core/models/rulebook.models';
+import { OpeningSequenceCondition } from '../../../../../core/models/rulebook.models';
 import { SHADOW_BLADES, SHADOW_DANCE, SECRET_TECHNIQUE, EVISCERATE } from '../../../../../../testing/spell-ids';
 import { cast } from '../../../../../../testing/builders/events';
-import { band, benched, judged, ruleCtx } from '../rule-fixtures';
+import { band, benched, judged, ruleCtx, ruleFor } from '../rule-fixtures';
 import { evaluateRules, ruleApplicable, rulesFollowed } from '../engine';
 import { evaluateOpeningSequence as rawOpeningSequence } from './opening-sequence';
 
@@ -57,7 +57,7 @@ describe('evaluateOpeningSequence', () => {
 
   it('is judged on neither side of a pull with none of the sequence spells', () => {
     const ctx = ruleCtx([cast(EVISCERATE, 1)]);
-    const rule: RulebookRule = { severity: 'warning', condition: opener };
+    const rule = ruleFor(opener);
     expect(ruleApplicable(opener, ctx)).toBe(false);
     expect(evaluateRules([benched(rule, band(OPENER_WINDOW_S))], ctx)).toEqual([]);
     expect(rulesFollowed([benched(rule, band(OPENER_WINDOW_S))], ctx)).toEqual([]);
@@ -65,7 +65,7 @@ describe('evaluateOpeningSequence', () => {
 
   it('still flags a first step landing past the window, which is why the gate reads casts and not progress', () => {
     const ctx = ruleCtx([cast(EVISCERATE, 1), cast(SHADOW_BLADES, 30)]);
-    const rule: RulebookRule = { severity: 'warning', condition: opener };
+    const rule = ruleFor(opener);
     const finding = evaluateRules([benched(rule, band(OPENER_WINDOW_S))], ctx)[0];
     assert.exists(finding);
     expect(finding.measured?.value).toBe('0 / 3');

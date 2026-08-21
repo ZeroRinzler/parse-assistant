@@ -1,9 +1,9 @@
 import { quantile } from 'd3-array';
 import { AnalysisFinding } from '../../../../core/models/analysis.models';
-import { RulebookRule, RuleCondition } from '../../../../core/models/rulebook.models';
+import { RulebookRule, RuleCondition, RuleSeverity } from '../../../../core/models/rulebook.models';
 import { RuleContext } from './rule-context';
 import {
-  BenchedRule, RuleBand, RuleDomain, RuleJudging, RuleSample, RuleStream, Severity, outOfBand,
+  BenchedRule, RuleBand, RuleDomain, RuleJudging, RuleSample, RuleStream, outOfBand,
 } from './engine-core';
 import { specFor } from './registry';
 
@@ -114,7 +114,7 @@ export function benchedRules(
 }
 
 function evaluateCondition(
-  cond: RuleCondition, ctx: RuleContext, band: RuleBand | null, severity: Severity, remedy?: string,
+  cond: RuleCondition, ctx: RuleContext, band: RuleBand | null, severity: RuleSeverity, remedy?: string,
 ): AnalysisFinding | null {
   return specFor(cond).evaluate(cond, ctx, band, ruleJudging(cond), severity, remedy);
 }
@@ -132,7 +132,7 @@ export function evaluateRules(benched: BenchedRule[], ctx: RuleContext): Analysi
     if (cond == null || !ruleApplicable(cond, ctx)) continue;
     const finding = evaluateCondition(cond, ctx, band, rule.severity, rule.action);
     // One authored name in both states, so a rule does not read as two different rules.
-    if (finding) findings.push({ ...finding, rule_type: rule.type, label: rule.description ?? finding.label });
+    if (finding) findings.push({ ...finding, rule_type: rule.type, label: rule.description });
   }
   return findings;
 }

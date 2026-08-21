@@ -68,13 +68,16 @@ describe('RotationFeatureService', () => {
       getAllEvents: async (_c: string, _f: number, dataType: string) =>
         dataType === 'Casts' ? [cast(SHADOW_DANCE, 10), cast(SECRET_TECHNIQUE, 30)] : [],
     };
-    const rule: RulebookRule = { severity: 'critical', condition: SECRET_TECH_NEEDS_DANCE };
+    const rule: RulebookRule = {
+      type: 'cooldown_pairing', severity: 'critical', description: 'Secret Technique inside Shadow Dance',
+      condition: SECRET_TECH_NEEDS_DANCE, action: 'Open Shadow Dance, then spend Secret Technique inside it.',
+    };
     const service = withSource(ok(bench({ rules: [benched(rule)] })), wcl);
     const result = await service.loadPlayerView('SubtletyRogue', 1, 'rX', 1, 10);
     expect(result.ok).toBe(true);
     if (result.ok) {
       // The sparse cast fixture also yields a separate cast-efficiency row, so assert on the rule row rather than the count.
-      const ruleRows = result.value.ruleRows.filter(row => row.what === 'Secret Technique without Shadow Dance');
+      const ruleRows = result.value.ruleRows.filter(row => row.what === 'Secret Technique inside Shadow Dance');
       expect(ruleRows).toHaveLength(1);
     }
   });
@@ -120,12 +123,14 @@ describe('RotationFeatureService fetch shape', () => {
   const REPORT = { title: 't', fights: [{ id: 1, name: 'Boss', startTime: 0, endTime: 120_000 }], masterData: { actors: [], abilities: [] } };
   const PLAYER_ID = 10;
   const dotUptime: RulebookRule = {
-    severity: 'warning',
+    type: 'rotation', severity: 'warning', description: 'Keep Rupture up on the boss',
     condition: { kind: 'aura_uptime_below', aura_spell_id: RUPTURE, aura_spell_name: 'Rupture', on: 'target' },
+    action: 'Refresh it inside its pandemic window.',
   };
   const aoeSwitch: RulebookRule = {
-    severity: 'warning',
+    type: 'aoe_switch', severity: 'warning', description: 'Black Powder only into a pack',
     condition: { kind: 'cast_at_target_count', spell_id: BLACK_POWDER, spell_name: 'Black Powder', bound: 'min' },
+    action: 'Save it for the count the field cleaves at.',
   };
 
   function recording(events: WclEvent[] = []) {

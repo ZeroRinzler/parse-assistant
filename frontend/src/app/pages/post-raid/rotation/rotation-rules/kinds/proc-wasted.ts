@@ -1,9 +1,9 @@
 import { round } from '../../../../../shared/analysis/analysis-math';
 import { AnalysisFinding, FindingOccurrence } from '../../../../../core/models/analysis.models';
-import { ProcWastedCondition } from '../../../../../core/models/rulebook.models';
+import { ProcWastedCondition, RuleSeverity } from '../../../../../core/models/rulebook.models';
 import { RuleContext } from '../rule-context';
 import {
-  KindSpec, PERCENT, RuleBand, RuleJudging, Severity,
+  KindSpec, PERCENT, RuleBand, RuleJudging,
   bandLimits, oneIn, outOfBand, sampleOccurrences, withBand,
 } from '../engine-core';
 
@@ -27,7 +27,7 @@ function wastedProcShare(cond: ProcWastedCondition, ctx: RuleContext): number | 
 }
 
 export function evaluateProcWasted(
-  cond: ProcWastedCondition, ctx: RuleContext, band: RuleBand, judging: RuleJudging, severity: Severity, remedy?: string,
+  cond: ProcWastedCondition, ctx: RuleContext, band: RuleBand, judging: RuleJudging, severity: RuleSeverity, remedy?: string,
 ): AnalysisFinding | null {
   const { lo, hi } = bandLimits(PERCENT, band);
   const spans = closedProcSpans(cond, ctx);

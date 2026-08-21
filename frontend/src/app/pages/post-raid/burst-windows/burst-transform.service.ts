@@ -299,9 +299,9 @@ export class BurstTransformService implements DataSource<BurstBench> {
   async getBench(spec: string, encounterId: number, partition?: number | null): Promise<Result<BurstBench>> {
     const rulebook = await this.dataFiles.getRulebook(spec);
     if (!rulebook.ok) return rulebook;
-    const cooldowns = rulebook.value.major_cooldowns ?? [];
+    const cooldowns = rulebook.value.major_cooldowns;
     if (!cooldowns.length) return missing('Not yet ingested.');
-    const defensives = rulebook.value.defensives ?? [];
+    const defensives = rulebook.value.defensives;
 
     return benchFromTopParses(this.wclApi, { spec, encounterId, partition }, {
       logSource: 'BurstTransformService',

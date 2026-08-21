@@ -1,9 +1,9 @@
 import { AnalysisFinding } from '../../../../../core/models/analysis.models';
-import { SpendAtStacksCondition } from '../../../../../core/models/rulebook.models';
+import { SpendAtStacksCondition, RuleSeverity } from '../../../../../core/models/rulebook.models';
 import { stacksAt } from '../../../../../shared/analysis/aura-windows';
 import { RuleContext, suspendedAt } from '../rule-context';
 import {
-  KindSpec, RuleBand, RuleJudging, Scale, Severity, WHOLE_STEPS, rawCountScale, withBand,
+  KindSpec, RuleBand, RuleJudging, Scale, WHOLE_STEPS, rawCountScale, withBand,
 } from '../engine-core';
 import { evaluateBoundedPerCast } from '../bounded-per-cast';
 
@@ -17,7 +17,7 @@ function stackCountsPerCast(cond: SpendAtStacksCondition, ctx: RuleContext): { t
 }
 
 export function evaluateSpendAtStacks(
-  cond: SpendAtStacksCondition, ctx: RuleContext, band: RuleBand, judging: RuleJudging, severity: Severity, remedy?: string,
+  cond: SpendAtStacksCondition, ctx: RuleContext, band: RuleBand, judging: RuleJudging, severity: RuleSeverity, remedy?: string,
 ): AnalysisFinding | null {
   // No declared cap means no domain and no band, so the rule was already dropped; bail rather than judge on a guess.
   const maxStacks = cond.max_stacks;

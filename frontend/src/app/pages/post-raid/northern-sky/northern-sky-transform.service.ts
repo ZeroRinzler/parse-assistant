@@ -32,8 +32,8 @@ export class NorthernSkyTransformService implements DataSource<NorthernSkyBench>
     const rulebook = await this.dataFiles.getRulebook(spec);
     if (!rulebook.ok) return rulebook;
     const abilities: ExportAbility[] = [
-      ...(rulebook.value.major_cooldowns ?? []).map(cd => ({ spell_id: cd.spell_id, name: cd.name, kind: 'cooldown' as const })),
-      ...(rulebook.value.defensives ?? []).map(def => ({ spell_id: def.spell_id, name: def.name, kind: 'defensive' as const })),
+      ...rulebook.value.major_cooldowns.map(cd => ({ spell_id: cd.spell_id, name: cd.name, kind: 'cooldown' as const })),
+      ...rulebook.value.defensives.map(def => ({ spell_id: def.spell_id, name: def.name, kind: 'defensive' as const })),
     ].filter(ability => ability.spell_id);
     if (!abilities.length) return missing(NO_EXPORT_MESSAGE);
 

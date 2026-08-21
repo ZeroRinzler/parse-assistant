@@ -1,8 +1,8 @@
 import { AnalysisFinding } from '../../../../../core/models/analysis.models';
-import { FillerBelowHealthCondition } from '../../../../../core/models/rulebook.models';
+import { FillerBelowHealthCondition, RuleSeverity } from '../../../../../core/models/rulebook.models';
 import { TimedEvent, targetKey } from '../../../../../shared/analysis/wcl-projections';
 import { HealthRow, RuleContext, suspendedAt } from '../rule-context';
-import { KindSpec, PERCENT, RuleBand, RuleJudging, Severity, bandLimits, withBand } from '../engine-core';
+import { KindSpec, PERCENT, RuleBand, RuleJudging, bandLimits, withBand } from '../engine-core';
 import { FillerSplit, fillerFinding, fillerOccurrences, fillerShare, splitFillers } from '../filler-choice';
 
 /** Health is sampled on hits rather than casts, and falls fast in execute range, so a cast reads back only this far. */
@@ -38,7 +38,7 @@ function fillersBelowHealth(cond: FillerBelowHealthCondition, ctx: RuleContext):
 }
 
 export function evaluateFillerBelowHealth(
-  cond: FillerBelowHealthCondition, ctx: RuleContext, band: RuleBand, judging: RuleJudging, severity: Severity, remedy?: string,
+  cond: FillerBelowHealthCondition, ctx: RuleContext, band: RuleBand, judging: RuleJudging, severity: RuleSeverity, remedy?: string,
 ): AnalysisFinding | null {
   const finding = fillerFinding(fillersBelowHealth(cond, ctx), band, judging, severity,
     cond.spell_name, `under ${cond.health_pct}% health`, remedy);

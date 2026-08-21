@@ -1,9 +1,9 @@
 import { round } from '../../../../../shared/analysis/analysis-math';
 import { AnalysisFinding, FindingOccurrence } from '../../../../../core/models/analysis.models';
-import { CastWithoutPriorCondition } from '../../../../../core/models/rulebook.models';
+import { CastWithoutPriorCondition, RuleSeverity } from '../../../../../core/models/rulebook.models';
 import { CastTimes, RuleContext, castCount } from '../rule-context';
 import {
-  KindSpec, RuleBand, RuleJudging, SECONDS, Severity,
+  KindSpec, RuleBand, RuleJudging, SECONDS,
   bandLimits, exceedsTolerance, outOfBand, sampleOccurrences, withBand,
 } from '../engine-core';
 
@@ -38,7 +38,7 @@ function castWithoutPriorOccurrences(
 }
 
 export function evaluateCastWithoutPrior(
-  cond: CastWithoutPriorCondition, ctx: RuleContext, band: RuleBand, judging: RuleJudging, severity: Severity, remedy?: string,
+  cond: CastWithoutPriorCondition, ctx: RuleContext, band: RuleBand, judging: RuleJudging, severity: RuleSeverity, remedy?: string,
 ): AnalysisFinding | null {
   const { lo, hi } = bandLimits(SECONDS, band);
   const castTimes = ctx.castTimes;
