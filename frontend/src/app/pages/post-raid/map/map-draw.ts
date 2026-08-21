@@ -1,4 +1,5 @@
 /** Ported from `positioning-core` so the map components import no domain service - only this slice-local module + `MapFeatureService`. */
+import { bisector } from 'd3-array';
 import { EncounterPositions, ParsePositions, PlayerPosRow, PosRow, ReferenceSelector } from '../../../core/models/positioning.models';
 import { ActorTimeline, PosSample, FACING_OFFSET_RAD } from './map.service';
 
@@ -52,6 +53,8 @@ function interpolateBracket(before: PosSample, after: PosSample, t: number): Pos
   };
 }
 
+const sampleBisector = bisector((sample: PosSample) => sample.t);
+
 /** Returns null when `t` is more than `tolerance` seconds past either end of the timeline. */
 export function positionAt(timeline: ActorTimeline | undefined, t: number, tolerance = 3): PosSample | null {
   const samples = timeline?.samples ?? [];
@@ -59,14 +62,12 @@ export function positionAt(timeline: ActorTimeline | undefined, t: number, toler
   if (!first) return null;
   if (t <= first.t) return t < first.t - tolerance ? null : { ...first, t };
 
-  // Walk to the first sample at or past `t`; `before` trails one behind, so the pair brackets `t`.
-  let before = first;
-  for (const after of samples) {
-    if (after.t < t) { before = after; continue; }
-    return interpolateBracket(before, after, t);
-  }
-  // Every sample lies before `t`, so `before` is the timeline's last one.
-  return t > before.t + tolerance ? null : { ...before, t };
+  // `left` lands on the first sample at or past `t`, so its predecessor is the bracket's lower bound.
+  const index = sampleBisector.left(samples, t);
+  const before = samples[index - 1] ?? first;
+  const after = samples[index];
+  if (!after) return t > before.t + tolerance ? null : { ...before, t };
+  return interpolateBracket(before, after, t);
 }
 
 /** When the reference has no facing, world axes are used (forward = +y). */

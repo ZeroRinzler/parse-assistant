@@ -1,12 +1,12 @@
 import { Pipe, PipeTransform } from '@angular/core';
 
-/** Compact damage formatting: 1_240_000 -> "1.2M", 8_500 -> "9K". */
+const COMPACT = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
+
+/** Compact damage formatting: 1_240_000 -> "1.2M", 8_500 -> "8.5K". */
 @Pipe({ name: 'formatDamage' })
 export class FormatDamagePipe implements PipeTransform {
   transform(value: number | null | undefined): string {
     if (value == null) return '';
-    if (value >= 1e6 || Math.round(value / 1e3) >= 1000) return `${(value / 1e6).toFixed(1)}M`;
-    if (value >= 1e3) return `${Math.round(value / 1e3)}K`;
-    return String(Math.round(value));
+    return COMPACT.format(value);
   }
 }

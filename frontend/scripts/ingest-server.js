@@ -5,6 +5,7 @@ import { rateLimit } from 'express-rate-limit';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import writeFileAtomic from 'write-file-atomic';
 
 const PORT = 3000;
 const DATA_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../public/data');
@@ -17,9 +18,6 @@ const ALLOWED_ORIGINS = ['http://localhost:4200', 'http://127.0.0.1:4200'];
 const ALLOWED_HOSTS = new Set([`localhost:${PORT}`, `127.0.0.1:${PORT}`]);
 
 const REQUESTS_PER_MINUTE = 5_000;
-
-// Monotonic suffix so two concurrent writes to the same path never collide on the temp name.
-let tempWriteCounter = 0;
 
 // A crafted path must never read or write outside the data root.
 function resolveContained(segments) {
@@ -46,15 +44,8 @@ app.put('/api/data/*path', async (req, res) => {
   }
   try {
     await fs.promises.mkdir(path.dirname(full), { recursive: true });
-    // Temp-then-rename so a kill mid-write leaves the previous complete file.
-    const tmp = `${full}.${process.pid}.${tempWriteCounter++}.tmp`;
-    try {
-      await fs.promises.writeFile(tmp, req.body + '\n');
-      await fs.promises.rename(tmp, full);
-    } catch (err) {
-      await fs.promises.rm(tmp, { force: true });
-      throw err;
-    }
+    // Atomic write so a kill mid-write leaves the previous complete file.
+    await writeFileAtomic(full, req.body + '\n');
     res.status(204).end();
   } catch (err) {
     res.status(500).json({ error: String(err) });
