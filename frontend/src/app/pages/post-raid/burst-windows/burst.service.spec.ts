@@ -8,11 +8,12 @@ import {
   BurstFeatureService,
   burstWindowStatus, splitCommonCds, burstMapAnchor, burstClipAnchor, buildBurstView, burstDetailRows, findPlayerBurstWindows,
 } from './burst.service';
-import { SHADOW_BLADES, SHADOW_BLADES_DAMAGE } from '../../../../testing/spell-ids';
-import { cast, damage } from '../../../../testing/builders/events';
 import {
-  WCL_MELEE_EVENT_ABILITY_ID, WOW_AUTO_ATTACK_SPELL_ID, WCL_SYNTHETIC_SOURCE_FALLBACK_ID, withRelativeS,
-} from '../../../shared/analysis/wcl-projections';
+  SHADOW_BLADES, SHADOW_BLADES_DAMAGE,
+  WCL_MELEE_EVENT_ABILITY_ID, WOW_AUTO_ATTACK_SPELL_ID, WCL_SYNTHETIC_SOURCE_FALLBACK_ID,
+} from '../../../../testing/spell-ids';
+import { cast, damage } from '../../../../testing/builders/events';
+import { withRelativeS } from '../../../shared/analysis/wcl-projections';
 
 /** Fixture events build against a fight-start of 0, so stamping is a pass-through to seconds. */
 const timed = withRelativeS;

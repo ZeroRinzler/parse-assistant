@@ -7,10 +7,9 @@ import {
   playerCoveredWindow,
 } from './defensive.service';
 import { damageTaken } from '../../../../testing/builders/events';
-import { CLOAK_OF_SHADOWS } from '../../../../testing/spell-ids';
 import {
-  WCL_MELEE_EVENT_ABILITY_ID, WOW_AUTO_ATTACK_SPELL_ID, WCL_SYNTHETIC_SOURCE_FALLBACK_ID,
-} from '../../../shared/analysis/wcl-projections';
+  CLOAK_OF_SHADOWS, WCL_MELEE_EVENT_ABILITY_ID, WOW_AUTO_ATTACK_SPELL_ID, WCL_SYNTHETIC_SOURCE_FALLBACK_ID,
+} from '../../../../testing/spell-ids';
 import { timed } from './defensive-harness';
 
 describe('computePlayerDefensiveWindows', () => {

@@ -25,11 +25,11 @@ export function withRelativeS(events: WclEvent[], fightStartMs: number): TimedEv
 const ANONYMIZED_NAME = /^Character \d+-\d+$/;
 
 // WCL reports the physical auto-attack as event ability id 1; the real spell is Auto Attack.
-export const WCL_MELEE_EVENT_ABILITY_ID = 1;
-export const WOW_AUTO_ATTACK_SPELL_ID = 6603;
+const WCL_MELEE_EVENT_ABILITY_ID = 1;
+const WOW_AUTO_ATTACK_SPELL_ID = 6603;
 
 // Negative ability ids are WCL's unresolvable synthetic sources (pet melee, environmental); 291807 is the spell "I Don't Know", used as the catch-all.
-export const WCL_SYNTHETIC_SOURCE_FALLBACK_ID = 291807;
+const WCL_SYNTHETIC_SOURCE_FALLBACK_ID = 291807;
 
 export function normalizeAbilityId(id: number): number {
   if (id === WCL_MELEE_EVENT_ABILITY_ID) return WOW_AUTO_ATTACK_SPELL_ID;

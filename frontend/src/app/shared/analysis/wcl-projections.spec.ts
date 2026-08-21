@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach, MockInstance } from 'vitest';
 import {
   abilityIcons, findParseActor, normalizeAbilityId, toParseRankings, unwrapRankings, windowSpells,
-  WCL_SYNTHETIC_SOURCE_FALLBACK_ID,
 } from './wcl-projections';
+import { WCL_SYNTHETIC_SOURCE_FALLBACK_ID } from '../../../testing/spell-ids';
 import { ParseRanking } from '../../core/models/wcl.models';
 
 // A raw ranking row as WCL surfaces it in the characterRankings blob.

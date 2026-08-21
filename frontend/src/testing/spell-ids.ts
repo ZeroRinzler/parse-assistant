@@ -33,3 +33,8 @@ export const SLAM = 1464;
 
 // WCL quirk: Shadow Blades casts as 121471 but its damage rows show up as 279043 - the name is the only bridge between the two.
 export const SHADOW_BLADES_DAMAGE = 279043;
+
+// These mirror the ids `normalizeAbilityId` folds onto, so changing one here without changing it there silently stops asserting its behavior.
+export const WCL_MELEE_EVENT_ABILITY_ID = 1;
+export const WOW_AUTO_ATTACK_SPELL_ID = 6603;
+export const WCL_SYNTHETIC_SOURCE_FALLBACK_ID = 291807;

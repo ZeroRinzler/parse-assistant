@@ -12,8 +12,8 @@ import { applyBuff, removeBuff, damageTaken, cast } from '../../../../testing/bu
 import { rulebook } from '../../../../testing/builders/rulebook';
 import { abilityLookup, parseRankings, reportsByCode } from '../../../../testing/builders/wcl-fixtures';
 import { provideApiFakes } from '../../../../testing/api-fakes';
-import { CLOAK_OF_SHADOWS, EVASION } from '../../../../testing/spell-ids';
-import { WCL_SYNTHETIC_SOURCE_FALLBACK_ID, withRelativeS } from '../../../shared/analysis/wcl-projections';
+import { CLOAK_OF_SHADOWS, EVASION, WCL_SYNTHETIC_SOURCE_FALLBACK_ID } from '../../../../testing/spell-ids';
+import { withRelativeS } from '../../../shared/analysis/wcl-projections';
 import { ok } from '../../../core/result';
 import { buildAuraWindows } from '../../../shared/analysis/aura-windows';
 

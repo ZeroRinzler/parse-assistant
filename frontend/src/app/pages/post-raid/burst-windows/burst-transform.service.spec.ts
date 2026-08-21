@@ -7,8 +7,10 @@ import {
   bucketDamagePerBin, forwardRollingDamage, detectDenseRuns, trimRunToDamage,
   windowAbilityBreakdown, BinRun,
 } from './burst-transform.service';
-import { SHADOW_BLADES, SHADOW_BLADES_DAMAGE, EVISCERATE, BLACK_POWDER, CLOAK_OF_SHADOWS } from '../../../../testing/spell-ids';
-import { WCL_SYNTHETIC_SOURCE_FALLBACK_ID, withRelativeS } from '../../../shared/analysis/wcl-projections';
+import {
+  SHADOW_BLADES, SHADOW_BLADES_DAMAGE, EVISCERATE, BLACK_POWDER, CLOAK_OF_SHADOWS, WCL_SYNTHETIC_SOURCE_FALLBACK_ID,
+} from '../../../../testing/spell-ids';
+import { withRelativeS } from '../../../shared/analysis/wcl-projections';
 import { cast, damage } from '../../../../testing/builders/events';
 import { rulebook } from '../../../../testing/builders/rulebook';
 import { abilityLookup, parseRankings, reportsByCode } from '../../../../testing/builders/wcl-fixtures';
