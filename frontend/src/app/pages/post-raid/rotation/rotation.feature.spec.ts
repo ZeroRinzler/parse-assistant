@@ -1,6 +1,4 @@
 import { assert, describe, it, expect } from 'vitest';
-import { TestBed } from '@angular/core/testing';
-import { WclApiService } from '../../../core/services/wcl-api';
 import { WclTransportError } from '../../../core/services/wcl-transport';
 import { Result, ok, missing, transient } from '../../../core/result';
 import { RulebookRule, CastWithoutPriorCondition } from '../../../core/models/rulebook.models';
@@ -10,7 +8,7 @@ import {
 import { cast, applyBuff, applyDebuff, removeDebuff } from '../../../../testing/builders/events';
 import { WclEvent } from '../../../core/models/wcl.models';
 import { ROTATION_DATA_SOURCE, RotationBench } from './rotation-data-source';
-import { DataSource } from '../../../core/data-source/data-source';
+import { sliceService } from '../../../../testing/service-harness';
 import { BenchedRule, RuleBand } from './rotation-rules';
 import { RotationFeatureService } from './rotation.service';
 import { bench, cdBench } from './rotation-harness';
@@ -46,14 +44,7 @@ const WORKING_WCL = {
 const WCL_UNAVAILABLE_STATUS = 503;
 
 function withSource(bench: Result<RotationBench>, wcl: unknown = WORKING_WCL): RotationFeatureService {
-  const source: DataSource<RotationBench> = { getBench: () => Promise.resolve(bench) };
-  TestBed.configureTestingModule({
-    providers: [
-      { provide: ROTATION_DATA_SOURCE, useValue: source },
-      { provide: WclApiService, useValue: wcl as WclApiService },
-    ],
-  });
-  return TestBed.inject(RotationFeatureService);
+  return sliceService(ROTATION_DATA_SOURCE, RotationFeatureService, bench, wcl);
 }
 
 describe('RotationFeatureService', () => {

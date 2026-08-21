@@ -2,10 +2,10 @@ import { assert, describe, it, expect } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { WclEvent, WclFight } from '../../../core/models/wcl.models';
 import { EncounterPositions } from '../../../core/models/positioning.models';
-import { WclApiService } from '../../../core/services/wcl-api';
 import { Result, ok, missing, transient } from '../../../core/result';
 import { MAP_DATA_SOURCE, MapData } from './map-data-source';
 import { DataSource } from '../../../core/data-source/data-source';
+import { sliceService } from '../../../../testing/service-harness';
 import {
   MapFeatureService, buildActorTimelines, listReferenceEnemies, buildLiveOverlay, resolveLiveReference,
   FACING_OFFSET_RAD,
@@ -258,14 +258,7 @@ const PLAYER_ACTOR_ID = 5;
 describe('MapFeatureService deferred overlay', () => {
   function setup(): { service: MapFeatureService; api: RecordingWclApi } {
     const api = new RecordingWclApi();
-    const source: DataSource<MapData> = { getBench: () => Promise.resolve(ok(sampleData)) };
-    TestBed.configureTestingModule({
-      providers: [
-        { provide: MAP_DATA_SOURCE, useValue: source },
-        { provide: WclApiService, useValue: api as unknown as WclApiService },
-      ],
-    });
-    return { service: TestBed.inject(MapFeatureService), api };
+    return { service: sliceService(MAP_DATA_SOURCE, MapFeatureService, ok(sampleData), api), api };
   }
 
   it('prepare loads the bench but defers the event fetch until the panel opens', async () => {
@@ -368,14 +361,7 @@ describe('MapFeatureService deferred overlay', () => {
     const throwingApi = {
       getAllEvents: () => Promise.reject(new Error('overlay boom')),
     };
-    const source: DataSource<MapData> = { getBench: () => Promise.resolve(ok(sampleData)) };
-    TestBed.configureTestingModule({
-      providers: [
-        { provide: MAP_DATA_SOURCE, useValue: source },
-        { provide: WclApiService, useValue: throwingApi as unknown as WclApiService },
-      ],
-    });
-    const service = TestBed.inject(MapFeatureService);
+    const service = sliceService(MAP_DATA_SOURCE, MapFeatureService, ok(sampleData), throwingApi);
     await service.prepare('code', sampleFight, PLAYER_ACTOR_ID, 'SubtletyRogue', []);
     service.openAt({ timeS: 1 });
     await whenStable();

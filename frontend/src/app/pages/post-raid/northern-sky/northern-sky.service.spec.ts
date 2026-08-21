@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { TestBed } from '@angular/core/testing';
 import { ok, missing } from '../../../core/result';
 import { SHADOW_BLADES, SHADOW_DANCE, EVASION } from '../../../../testing/spell-ids';
+import { sliceService } from '../../../../testing/service-harness';
 import { NORTHERN_SKY_DATA_SOURCE, NorthernSkyBench, NorthernSkyAbility } from './northern-sky-data-source';
 import {
   NorthernSkyFeatureService, buildNorthernSkyNote, abilitiesByKind, selectedIds, isAllSelected,
@@ -143,17 +143,12 @@ describe('isPanelOpen', () => {
 describe('NorthernSkyFeatureService', () => {
   it('returns the bench from its data source', async () => {
     const model = bench({ abilities: [{ spell_id: SHADOW_BLADES, name: 'Shadow Blades', icon: '', kind: 'cooldown', cast_times_s: [10] }] });
-    TestBed.configureTestingModule({
-      providers: [{ provide: NORTHERN_SKY_DATA_SOURCE, useValue: { getBench: async () => ok(model) } }],
-    });
-    const result = await TestBed.inject(NorthernSkyFeatureService).getExport('SubtletyRogue', ENCOUNTER_ID);
-    expect(result).toEqual(ok(model));
+    const service = sliceService(NORTHERN_SKY_DATA_SOURCE, NorthernSkyFeatureService, ok(model));
+    expect(await service.getExport('SubtletyRogue', ENCOUNTER_ID)).toEqual(ok(model));
   });
 
   it('propagates a missing bench so the export waiting state shows', async () => {
-    TestBed.configureTestingModule({
-      providers: [{ provide: NORTHERN_SKY_DATA_SOURCE, useValue: { getBench: async () => missing('Not yet ingested.') } }],
-    });
-    expect(await TestBed.inject(NorthernSkyFeatureService).getExport('SubtletyRogue', ENCOUNTER_ID)).toEqual(missing('Not yet ingested.'));
+    const service = sliceService(NORTHERN_SKY_DATA_SOURCE, NorthernSkyFeatureService, missing('Not yet ingested.'));
+    expect(await service.getExport('SubtletyRogue', ENCOUNTER_ID)).toEqual(missing('Not yet ingested.'));
   });
 });

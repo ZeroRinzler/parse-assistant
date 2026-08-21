@@ -1,9 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { TestBed } from '@angular/core/testing';
 import { CharacterGear, WclCombatantInfo, WclGearItem } from '../../../core/models/wcl.models';
-import { WclApiService } from '../../../core/services/wcl-api';
 import { GEAR_DATA_SOURCE, GearBench } from './gear-data-source';
-import { DataSource } from '../../../core/data-source/data-source';
+import { sliceService } from '../../../../testing/service-harness';
 import { Result, ok, permanent, missing } from '../../../core/result';
 import {
   GearFeatureService, benchToStats, buildGearView, buildBenchGearView,
@@ -121,18 +119,11 @@ describe('emptyGearView', () => {
 });
 
 function configure(bench: Result<GearBench>, gear: CharacterGear | null): GearFeatureService {
-  const source: DataSource<GearBench> = { getBench: () => Promise.resolve(bench) };
   const wclFake = {
     getCombatantInfo: async (): Promise<WclCombatantInfo[]> => (gear ? [toRawEvent(gear)] : []),
     getGameNames: async () => ({}),
   };
-  TestBed.configureTestingModule({
-    providers: [
-      { provide: GEAR_DATA_SOURCE, useValue: source },
-      { provide: WclApiService, useValue: wclFake as unknown as WclApiService },
-    ],
-  });
-  return TestBed.inject(GearFeatureService);
+  return sliceService(GEAR_DATA_SOURCE, GearFeatureService, bench, wclFake);
 }
 
 describe('GearFeatureService', () => {

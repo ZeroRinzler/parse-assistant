@@ -1,8 +1,6 @@
 import { assert, describe, it, expect } from 'vitest';
-import { TestBed } from '@angular/core/testing';
-import { WclApiService } from '../../../core/services/wcl-api';
 import { DEFENSIVE_DATA_SOURCE, DefensiveBench } from './defensive-data-source';
-import { DataSource } from '../../../core/data-source/data-source';
+import { sliceService } from '../../../../testing/service-harness';
 import { DefensiveFeatureService } from './defensive.service';
 import { applyBuff, removeBuff, damageTaken } from '../../../../testing/builders/events';
 import { CLOAK_OF_SHADOWS } from '../../../../testing/spell-ids';
@@ -25,14 +23,7 @@ function fullBench(): DefensiveBench {
 }
 
 function serviceWith(bench: Result<DefensiveBench>, wcl: Record<string, unknown> = {}): DefensiveFeatureService {
-  const source: DataSource<DefensiveBench> = { getBench: () => Promise.resolve(bench) };
-  TestBed.configureTestingModule({
-    providers: [
-      { provide: DEFENSIVE_DATA_SOURCE, useValue: source },
-      { provide: WclApiService, useValue: wcl as unknown as WclApiService },
-    ],
-  });
-  return TestBed.inject(DefensiveFeatureService);
+  return sliceService(DEFENSIVE_DATA_SOURCE, DefensiveFeatureService, bench, wcl);
 }
 
 describe('DefensiveFeatureService.loadAnalysisView (post-raid)', () => {

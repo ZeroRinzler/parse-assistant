@@ -1,11 +1,9 @@
 import { assert, describe, it, expect } from 'vitest';
-import { TestBed } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
 import { BurstWindow, PlayerBurstWindow } from '../../../core/models/analysis.models';
-import { WclApiService } from '../../../core/services/wcl-api';
 import { Result, ok, missing, transient } from '../../../core/result';
 import { BURST_DATA_SOURCE, BurstBench } from './burst-data-source';
-import { DataSource } from '../../../core/data-source/data-source';
+import { sliceService } from '../../../../testing/service-harness';
 import {
   BurstFeatureService,
   burstWindowStatus, splitCommonCds, burstMapAnchor, burstClipAnchor, buildBurstView, burstDetailRows, findPlayerBurstWindows,
@@ -261,14 +259,7 @@ const wclFake = {
 };
 
 function withBench(bench: Result<BurstBench>, wcl: unknown = wclFake): BurstFeatureService {
-  const source: DataSource<BurstBench> = { getBench: () => Promise.resolve(bench) };
-  TestBed.configureTestingModule({
-    providers: [
-      { provide: BURST_DATA_SOURCE, useValue: source },
-      { provide: WclApiService, useValue: wcl as WclApiService },
-    ],
-  });
-  return TestBed.inject(BurstFeatureService);
+  return sliceService(BURST_DATA_SOURCE, BurstFeatureService, bench, wcl);
 }
 
 const benchFixture: BurstBench = {
