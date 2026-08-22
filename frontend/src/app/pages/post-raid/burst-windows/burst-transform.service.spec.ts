@@ -4,11 +4,11 @@ import { WclEvent } from '../../../core/models/wcl.models';
 import { ok, missing } from '../../../core/result';
 import {
   BurstTransformService, cdTimings, findParseWindows, clusterParseWindows, cdSpellIds, ParseWindow,
-  bucketDamagePerBin, forwardRollingDamage, detectDenseRuns, trimRunToDamage,
-  windowAbilityBreakdown, BinRun,
+  BurstDetectorTuning, DEFAULT_BURST_TUNING,
 } from './burst-transform.service';
 import {
   SHADOW_BLADES, SHADOW_BLADES_DAMAGE, EVISCERATE, BLACK_POWDER, CLOAK_OF_SHADOWS, WCL_SYNTHETIC_SOURCE_FALLBACK_ID,
+  RUPTURE, VANISH, SECRET_TECHNIQUE, SHADOW_DANCE,
 } from '../../../../testing/spell-ids';
 import { withRelativeS } from '../../../shared/analysis/wcl-projections';
 import { cast, damage } from '../../../../testing/builders/events';
@@ -19,14 +19,18 @@ import { provideApiFakes } from '../../../../testing/api-fakes';
 /** Fixture events build against a fight-start of 0, so stamping is a pass-through to seconds. */
 const timed = withRelativeS;
 
-function scanWindows(
-  damageEvents: WclEvent[], fightLenS: number,
-  overrides: { timings?: ReturnType<typeof cdTimings>; casts?: WclEvent[]; abilityNames?: Map<number, string> } = {},
-): ParseWindow[] {
+interface ScanOverrides {
+  timings?: ReturnType<typeof cdTimings>;
+  casts?: WclEvent[];
+  abilityNames?: Map<number, string>;
+  tuning?: BurstDetectorTuning;
+}
+
+function scanWindows(damageEvents: WclEvent[], fightLenS: number, overrides: ScanOverrides = {}): ParseWindow[] {
   return findParseWindows({
     damage: timed(damageEvents, 0), fightLenS,
     timings: overrides.timings ?? [], casts: timed(overrides.casts ?? [], 0), abilityNames: overrides.abilityNames ?? new Map<number, string>(),
-  });
+  }, overrides.tuning);
 }
 function uniformDamage(spellId: number, seconds: number, amount: number): WclEvent[] {
   return Array.from({ length: seconds }, (_, i) => damage(spellId, i, amount));
@@ -35,9 +39,16 @@ function uniformDamage(spellId: number, seconds: number, amount: number): WclEve
 const LONG_FIGHT_S = 300;
 const HUNDRED_S_FIGHT_S = 100;
 const BIN_DAMAGE = 1000;
-// DENSITY_THRESHOLD = THRESHOLD_MULT (1.6) x mean rolling damage on a HUNDRED_S_FIGHT carrying TOTAL_DAMAGE.
 const TOTAL_DAMAGE = 1000;
-const DENSITY_THRESHOLD = 48;
+const HUNDRED_S_BIN_COUNT = HUNDRED_S_FIGHT_S / DEFAULT_BURST_TUNING.binS;
+// Mirrors the detector expression, so a tuning edit moves this bar instead of silently un-pinning the boundary tests.
+const MEAN_ROLLING_DAMAGE = (TOTAL_DAMAGE / HUNDRED_S_BIN_COUNT) * DEFAULT_BURST_TUNING.rollBins;
+const DENSITY_THRESHOLD = DEFAULT_BURST_TUNING.thresholdMult * MEAN_ROLLING_DAMAGE;
+
+const SIGNIFICANCE_FIGHT_DAMAGE = 10_000;
+// The smallest window damage the strict `< significancePct` drop keeps, so the pair below pins both sides of it.
+const SIGNIFICANT_SPIKE = SIGNIFICANCE_FIGHT_DAMAGE * DEFAULT_BURST_TUNING.significancePct;
+const SIGNIFICANCE_ANCHOR = SIGNIFICANCE_FIGHT_DAMAGE - SIGNIFICANT_SPIKE;
 
 function burstAt(startS: number): WclEvent[] {
   return [0, 1, 2, 3].map(offset => damage(SHADOW_BLADES_DAMAGE, startS + offset, BIN_DAMAGE));
@@ -56,136 +67,6 @@ describe('cdTimings', () => {
   it('collects per-cooldown cast times in fight-relative seconds (no duration read)', () => {
     const timings = cdTimings(timed([cast(SHADOW_BLADES, 30), cast(SHADOW_BLADES, 10), cast(999, 5)], 0), [{ name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 90 }]);
     expect(timings).toEqual([{ name: 'Shadow Blades', castTimesS: [10, 30] }]);
-  });
-});
-
-describe('bucketDamagePerBin', () => {
-  it('sums hits into their fight-relative bin and clamps out-of-range hits', () => {
-    const FIRST_HIT = 100;
-    const SECOND_HIT = 200;
-    const LATE_HIT = 50;
-    const BIN_COUNT = 3;
-    const hits: [number, number, number][] = [
-      [1, FIRST_HIT, EVISCERATE], [1.5, SECOND_HIT, EVISCERATE], [999, LATE_HIT, EVISCERATE],
-    ];
-    expect(bucketDamagePerBin(hits, BIN_COUNT)).toEqual([0, FIRST_HIT + SECOND_HIT, LATE_HIT]);
-  });
-
-  it('clamps a pre-fight hit (negative offset) into bin 0', () => {
-    const PRE_FIGHT_HIT = 70;
-    expect(bucketDamagePerBin([[-5, PRE_FIGHT_HIT, EVISCERATE]], 2)).toEqual([PRE_FIGHT_HIT, 0]);
-  });
-});
-
-describe('forwardRollingDamage', () => {
-  it('sums each bin with the next rollBins-1, truncating at the array end', () => {
-    const ROLL = 3;
-    const perBin = [1, 2, 3, 4];
-    // bin0:1+2+3=6, bin1:2+3+4=9, bin2:3+4=7, bin3:4=4
-    expect(forwardRollingDamage(perBin, ROLL)).toEqual([6, 9, 7, 4]);
-  });
-
-  it('equals the input when rollBins is 1', () => {
-    expect(forwardRollingDamage([5, 0, 8], 1)).toEqual([5, 0, 8]);
-  });
-});
-
-describe('detectDenseRuns', () => {
-  const THRESHOLD = 10;
-  const MERGE_GAP = 2;
-
-  it('opens a run on the first at-threshold bin (strict >=) and closes it at the last', () => {
-    // Bins 1..2 clear THRESHOLD; bin 0 and 3 do not -> run [1,2].
-    expect(detectDenseRuns([5, THRESHOLD, THRESHOLD, 5], THRESHOLD, MERGE_GAP)).toEqual([{ startBin: 1, endBin: 2 }]);
-  });
-
-  it('treats a bin exactly one below threshold as not dense', () => {
-    expect(detectDenseRuns([THRESHOLD - 1, THRESHOLD - 1], THRESHOLD, MERGE_GAP)).toEqual([]);
-  });
-
-  it('bridges a gap of exactly mergeGapBins sub-threshold bins', () => {
-    // dense, gap, gap, dense -> the 2-bin gap (<= MERGE_GAP) bridges into one run.
-    expect(detectDenseRuns([THRESHOLD, 0, 0, THRESHOLD], THRESHOLD, MERGE_GAP)).toEqual([{ startBin: 0, endBin: 3 }]);
-  });
-
-  it('splits a gap of mergeGapBins+1 sub-threshold bins into two runs', () => {
-    // dense, gap, gap, gap, dense -> the 3-bin gap (> MERGE_GAP) finalizes the first run.
-    expect(detectDenseRuns([THRESHOLD, 0, 0, 0, THRESHOLD], THRESHOLD, MERGE_GAP))
-      .toEqual([{ startBin: 0, endBin: 0 }, { startBin: 4, endBin: 4 }]);
-  });
-
-  it('returns [] when no bin clears the threshold', () => {
-    expect(detectDenseRuns([0, 1, 2], THRESHOLD, MERGE_GAP)).toEqual([]);
-  });
-});
-
-describe('trimRunToDamage', () => {
-  it('snaps a run to the first and last bins that carry damage', () => {
-    // Run spans bins 0..4, but only bins 1..3 carry damage.
-    const run: BinRun = { startBin: 0, endBin: 4 };
-    expect(trimRunToDamage(run, [0, 5, 6, 7, 0])).toEqual({ startBin: 1, endBin: 3 });
-  });
-
-  it('returns null when the run carries no damage at all', () => {
-    expect(trimRunToDamage({ startBin: 0, endBin: 2 }, [0, 0, 0])).toBeNull();
-  });
-
-  it('keeps a fully-dense run unchanged', () => {
-    expect(trimRunToDamage({ startBin: 1, endBin: 2 }, [0, 4, 5, 0])).toEqual({ startBin: 1, endBin: 2 });
-  });
-});
-
-describe('windowAbilityBreakdown', () => {
-  const nameOf = (spellId: number): string => new Map([[EVISCERATE, 'Eviscerate'], [BLACK_POWDER, 'Black Powder']]).get(spellId) ?? `Spell ${spellId}`;
-
-  it('ranks abilities by window damage, counts casts by name, and flags passive abilities', () => {
-    const SB_DMG = 600;
-    const BP_DMG = 400;
-    // Cast counting must key by NAME: SHADOW_BLADES (cast id) and SHADOW_BLADES_DAMAGE (damage id) share one name.
-    const bridgeNameOf = (spellId: number): string =>
-      new Map([[SHADOW_BLADES, 'Shadow Blades'], [SHADOW_BLADES_DAMAGE, 'Shadow Blades'], [BLACK_POWDER, 'Black Powder']]).get(spellId) ?? `Spell ${spellId}`;
-    // DamageHit = [atS, dmg, abilityId]; window is [1s, 3s).
-    const windowHits: [number, number, number][] = [[1, SB_DMG, SHADOW_BLADES_DAMAGE], [1.5, BP_DMG, BLACK_POWDER]];
-    // CastRow = [atS, abilityId]; the Shadow Blades cast carries the CAST id, distinct from the damage id.
-    const castRows: [number, number][] = [[1.2, SHADOW_BLADES], [9, BLACK_POWDER]];
-    const castNamesInParse = new Set(['Shadow Blades']);
-    const breakdown = windowAbilityBreakdown(windowHits, castRows, 1, 3, bridgeNameOf, castNamesInParse);
-    expect(breakdown).toEqual([
-      { spell_id: SHADOW_BLADES_DAMAGE, damage: SB_DMG, casts: 1, is_passive: false },
-      // Black Powder was never cast in the parse -> passive, and 0 in-window casts.
-      { spell_id: BLACK_POWDER, damage: BP_DMG, casts: 0, is_passive: true },
-    ]);
-  });
-
-  it('excludes a cast exactly on the half-open window end', () => {
-    const HIT_DMG = 500;
-    const windowHits: [number, number, number][] = [[1, HIT_DMG, EVISCERATE]];
-    // A cast at exactly endS (3) is excluded; one just inside (2.999) counts.
-    const castRows: [number, number][] = [[3, EVISCERATE], [2.999, EVISCERATE]];
-    const breakdown = windowAbilityBreakdown(windowHits, castRows, 1, 3, nameOf, new Set(['Eviscerate']));
-    assert.exists(breakdown[0]);
-    expect(breakdown[0].casts).toBe(1);
-  });
-
-  it('caps the breakdown at the top 6 abilities by damage', () => {
-    const ABILITY_COUNT = 8;
-    // Eight abilities, descending damage; only the top 6 survive.
-    const windowHits: [number, number, number][] = Array.from(
-      { length: ABILITY_COUNT }, (_, index) => [1, (ABILITY_COUNT - index) * 100, index + 1] as [number, number, number],
-    );
-    const breakdown = windowAbilityBreakdown(windowHits, [], 1, 3, nameOf, new Set());
-    expect(breakdown).toHaveLength(6);
-    assert.exists(breakdown[0]);
-    expect(breakdown[0].damage).toBe(ABILITY_COUNT * 100);
-  });
-
-  it('folds distinct synthetic ids that normalize together into one summed row', () => {
-    const SYNTH_A = -3, SYNTH_B = -7;  // distinct negatives, both normalize to the synthetic catch-all
-    const DMG_A = 600, DMG_B = 400;
-    const windowHits: [number, number, number][] = [[1, DMG_A, SYNTH_A], [1.5, DMG_B, SYNTH_B]];
-    expect(windowAbilityBreakdown(windowHits, [], 1, 3, nameOf, new Set())).toEqual([
-      { spell_id: WCL_SYNTHETIC_SOURCE_FALLBACK_ID, damage: DMG_A + DMG_B, casts: 0, is_passive: true },
-    ]);
   });
 });
 
@@ -244,18 +125,54 @@ describe('findParseWindows', () => {
     expect(windows[1]).toMatchObject({ time_s: 16, window_length_s: 1 });
   });
 
+  it('splits the bridged pair into two windows under a tuning with no merge gap', () => {
+    const noMergeGap: BurstDetectorTuning = { ...DEFAULT_BURST_TUNING, mergeGapBins: 0 };
+    // The same t=10/t=15 spikes the default bridges: at mergeGapBins 0 the gap closes the first run instead.
+    const spikes = [damage(EVISCERATE, 10, BIN_DAMAGE), damage(BLACK_POWDER, 15, BIN_DAMAGE)];
+    const windows = scanWindows(spikes, HUNDRED_S_FIGHT_S, { tuning: noMergeGap });
+    expect(windows).toHaveLength(2);
+    expect(windows[0]).toMatchObject({ time_s: 10, window_length_s: 1, window_damage: BIN_DAMAGE });
+    expect(windows[1]).toMatchObject({ time_s: 15, window_length_s: 1, window_damage: BIN_DAMAGE });
+  });
+
+  it('floors the density bar at the rateQuantile rolling bin when the mean-multiple arm is lower', () => {
+    const FLAT_FIGHT_S = 10;
+    const FLAT_BIN_DAMAGE = 100;
+    // Only a full-width forward roll clears the 66th-percentile bar; the trailing rolls truncate and fall under it.
+    const FULL_ROLL_BINS = FLAT_FIGHT_S - (DEFAULT_BURST_TUNING.rollBins - 1);
+    const quantileFloorOnly: BurstDetectorTuning = { ...DEFAULT_BURST_TUNING, thresholdMult: 0 };
+    const flat = uniformDamage(SHADOW_BLADES_DAMAGE, FLAT_FIGHT_S, FLAT_BIN_DAMAGE);
+    const windows = scanWindows(flat, FLAT_FIGHT_S, { tuning: quantileFloorOnly });
+    expect(windows).toHaveLength(1);
+    expect(windows[0]).toMatchObject({
+      time_s: 0, window_length_s: FULL_ROLL_BINS, window_damage: FULL_ROLL_BINS * FLAT_BIN_DAMAGE,
+    });
+  });
+
+  it('sums two hits landing inside one bin into that bin\'s window', () => {
+    const FIRST_HIT = 600;
+    const SECOND_HIT = 400;
+    // The 10.5s hit floors into bin 10 rather than rounding into bin 11, so one bin carries both.
+    const windows = scanWindows([
+      damage(EVISCERATE, 10, FIRST_HIT), damage(EVISCERATE, 10.5, SECOND_HIT), damage(BLACK_POWDER, 50, TOTAL_DAMAGE),
+    ], HUNDRED_S_FIGHT_S);
+    expect(windows.find(window => window.time_s === 10))
+      .toMatchObject({ window_length_s: 1, window_damage: FIRST_HIT + SECOND_HIT });
+  });
+
   it('drops a dense window below the significance share of fight damage', () => {
-    // Spike of BIN_DAMAGE beside a 100x anchor: BIN_DAMAGE / (101 * BIN_DAMAGE) < SIGNIFICANCE_PCT -> dropped.
+    // Spike of BIN_DAMAGE beside a 100x anchor: 1 of 101 shares, far under significancePct -> dropped.
     const windows = scanWindows([damage(EVISCERATE, 10, BIN_DAMAGE), damage(BLACK_POWDER, 500, 100 * BIN_DAMAGE)], 1_000);
     expect(windows.some(window => window.time_s === 10)).toBe(false);
   });
 
   it('keeps a dense window exactly at the significance share (strict), dropping one just below', () => {
-    // Spike beside a 9850 anchor on a 1000-bin fight. 150 / 10000 = 1.5% = SIGNIFICANCE_PCT exactly -> kept (strict <).
-    const atBoundary = scanWindows([damage(EVISCERATE, 10, 150), damage(BLACK_POWDER, 500, 9850)], 1_000);
-    expect(atBoundary.some(window => window.time_s === 10 && window.window_damage === 150)).toBe(true);
-    // 149 / 9999 = 1.49% < 1.5% -> dropped, so the strict boundary is pinned on both sides.
-    const belowBoundary = scanWindows([damage(EVISCERATE, 10, 149), damage(BLACK_POWDER, 500, 9850)], 1_000);
+    const atBoundary = scanWindows(
+      [damage(EVISCERATE, 10, SIGNIFICANT_SPIKE), damage(BLACK_POWDER, 500, SIGNIFICANCE_ANCHOR)], 1_000);
+    expect(atBoundary.some(window => window.time_s === 10 && window.window_damage === SIGNIFICANT_SPIKE)).toBe(true);
+    // One below the boundary spike against the same anchor drops under significancePct, pinning the strict side.
+    const belowBoundary = scanWindows(
+      [damage(EVISCERATE, 10, SIGNIFICANT_SPIKE - 1), damage(BLACK_POWDER, 500, SIGNIFICANCE_ANCHOR)], 1_000);
     expect(belowBoundary.some(window => window.time_s === 10)).toBe(false);
   });
 
@@ -323,6 +240,54 @@ describe('findParseWindows', () => {
     const windows = scanWindows(burstAt(10), LONG_FIGHT_S, { casts: [cast(SHADOW_BLADES_DAMAGE, 10)], abilityNames: names });
     assert.exists(windows[0]);
     expect(windows[0].ability_breakdown[0]).toMatchObject({ spell_id: SHADOW_BLADES_DAMAGE, is_passive: false });
+  });
+
+  it('ranks window abilities by damage and counts casts through the shared ability name', () => {
+    const BLACK_POWDER_DMG = 400;
+    // Shadow Blades casts as one id and deals damage as another, so only the shared name bridges cast to damage.
+    const names = new Map([
+      [SHADOW_BLADES, 'Shadow Blades'], [SHADOW_BLADES_DAMAGE, 'Shadow Blades'], [BLACK_POWDER, 'Black Powder'],
+    ]);
+    const windows = scanWindows([...burstAt(10), damage(BLACK_POWDER, 11, BLACK_POWDER_DMG)], LONG_FIGHT_S,
+      { casts: [cast(SHADOW_BLADES, 10)], abilityNames: names });
+    assert.exists(windows[0]);
+    expect(windows[0].ability_breakdown).toEqual([
+      { spell_id: SHADOW_BLADES_DAMAGE, damage: 4 * BIN_DAMAGE, casts: 1, is_passive: false },
+      { spell_id: BLACK_POWDER, damage: BLACK_POWDER_DMG, casts: 0, is_passive: true },
+    ]);
+  });
+
+  it('counts a cast just inside the window end but not one exactly on it', () => {
+    const names = new Map([[SHADOW_BLADES, 'Shadow Blades'], [SHADOW_BLADES_DAMAGE, 'Shadow Blades']]);
+    // Window is [10s, 14s): the 13.999s cast counts, the 14s cast sits on the half-open end.
+    const windows = scanWindows(burstAt(10), LONG_FIGHT_S,
+      { casts: [cast(SHADOW_BLADES, 13.999), cast(SHADOW_BLADES, 14)], abilityNames: names });
+    assert.exists(windows[0]);
+    expect(windows[0].ability_breakdown[0]).toMatchObject({ spell_id: SHADOW_BLADES_DAMAGE, casts: 1 });
+  });
+
+  it('caps a window breakdown at the top 6 abilities by damage', () => {
+    const TOP_ABILITY_ROWS = 6;
+    const ranked = [
+      SHADOW_BLADES_DAMAGE, EVISCERATE, BLACK_POWDER, RUPTURE, VANISH, SECRET_TECHNIQUE, SHADOW_DANCE, CLOAK_OF_SHADOWS,
+    ];
+    const hits = ranked.map((spellId, index) => damage(spellId, 10, (ranked.length - index) * BIN_DAMAGE));
+    const windows = scanWindows(hits, LONG_FIGHT_S);
+    assert.exists(windows[0]);
+    expect(windows[0].ability_breakdown.map(ability => ability.spell_id)).toEqual(ranked.slice(0, TOP_ABILITY_ROWS));
+  });
+
+  it('folds distinct synthetic ids that normalize together into one breakdown row', () => {
+    const SYNTHETIC_A = -3;
+    const SYNTHETIC_B = -7;
+    const DMG_A = 600;
+    const DMG_B = 400;
+    const windows = scanWindows([
+      damage(SYNTHETIC_A, 10, DMG_A), damage(SYNTHETIC_B, 10.5, DMG_B), damage(BLACK_POWDER, 50, TOTAL_DAMAGE),
+    ], HUNDRED_S_FIGHT_S);
+    expect(windows.find(window => window.time_s === 10)?.ability_breakdown).toEqual([
+      { spell_id: WCL_SYNTHETIC_SOURCE_FALLBACK_ID, damage: DMG_A + DMG_B, casts: 0, is_passive: true },
+    ]);
   });
 });
 

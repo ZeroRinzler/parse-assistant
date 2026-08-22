@@ -12,16 +12,27 @@ import { DataSource } from '../../../core/data-source/data-source';
 import { BurstBench } from './burst-data-source';
 
 
-const SIGNIFICANCE_PCT = 0.015;
 const CLUSTER_MIN_FRAC = 0.4;
 const MEMBER_MAJORITY_FRAC = 0.5;
 const CLUSTER_MERGE_S = 15;
 
-const BIN_S = 1;
-const ROLL_BINS = 3;
-const THRESHOLD_MULT = 1.6;
-const RATE_QUANTILE = 0.66;
-const MERGE_GAP_BINS = 2;
+export interface BurstDetectorTuning {
+  binS: number;
+  rollBins: number;
+  thresholdMult: number;
+  rateQuantile: number;
+  mergeGapBins: number;
+  significancePct: number;
+}
+
+export const DEFAULT_BURST_TUNING: BurstDetectorTuning = {
+  binS: 1,
+  rollBins: 3,
+  thresholdMult: 1.6,
+  rateQuantile: 0.66,
+  mergeGapBins: 2,
+  significancePct: 0.015,
+};
 
 export function cdSpellIds(cooldowns: RulebookCooldown[], defensives: RulebookDefensive[]): Record<string, number> {
   const map: Record<string, number> = {};
@@ -53,7 +64,7 @@ export interface ParseWindow {
 }
 
 /** Bin-index span, inclusive on both ends. */
-export interface BinRun {
+interface BinRun {
   startBin: number;
   endBin: number;
 }
@@ -62,22 +73,22 @@ export interface BinRun {
 type DamageHit = [number, number, number];
 
 /** A hit before/after the fight span clamps into the first/last bin. */
-export function bucketDamagePerBin(hits: DamageHit[], binCount: number): number[] {
+function bucketDamagePerBin(hits: DamageHit[], binCount: number, binS: number): number[] {
   const dmgByBin = new Map<number, number>();
   for (const [atS, hitDamage] of hits) {
-    const binIndex = Math.min(Math.max(Math.floor(atS / BIN_S), 0), binCount - 1);
+    const binIndex = Math.min(Math.max(Math.floor(atS / binS), 0), binCount - 1);
     dmgByBin.set(binIndex, (dmgByBin.get(binIndex) ?? 0) + hitDamage);
   }
   return Array.from({ length: binCount }, (_, binIndex) => dmgByBin.get(binIndex) ?? 0);
 }
 
-export function forwardRollingDamage(damagePerBin: number[], rollBins: number): number[] {
+function forwardRollingDamage(damagePerBin: number[], rollBins: number): number[] {
   return damagePerBin.map((_, binIndex) =>
     damagePerBin.slice(binIndex, binIndex + rollBins).reduce((sum, dmg) => sum + dmg, 0));
 }
 
 // A bin is dense at rolling damage >= densityThreshold (strict); runs bridge across up to mergeGapBins sub-threshold bins.
-export function detectDenseRuns(rollingDamage: number[], densityThreshold: number, mergeGapBins: number): BinRun[] {
+function detectDenseRuns(rollingDamage: number[], densityThreshold: number, mergeGapBins: number): BinRun[] {
   const denseRuns: BinRun[] = [];
   let runStartBin = -1;
   let runEndBin = -1;
@@ -99,8 +110,8 @@ export function detectDenseRuns(rollingDamage: number[], densityThreshold: numbe
   return denseRuns;
 }
 
-// Snaps to the bins that actually carry damage: the rolling rate can flag up to ROLL_BINS-1 damage-free bins before a burst.
-export function trimRunToDamage(run: BinRun, damagePerBin: number[]): BinRun | null {
+// Snaps to the bins that actually carry damage: the rolling rate can flag up to rollBins-1 damage-free bins before a burst.
+function trimRunToDamage(run: BinRun, damagePerBin: number[]): BinRun | null {
   let windowStartBin = run.startBin;
   let windowEndBin = run.endBin;
   while (windowStartBin <= windowEndBin && damagePerBin[windowStartBin] === 0) windowStartBin++;
@@ -113,7 +124,7 @@ export function trimRunToDamage(run: BinRun, damagePerBin: number[]): BinRun | n
 type CastRow = [number, number];
 
 // Casts are attributed by ability NAME because a damage event's id often differs from the cast id.
-export function windowAbilityBreakdown(
+function windowAbilityBreakdown(
   windowHits: DamageHit[],
   castRows: CastRow[],
   startS: number,
@@ -152,7 +163,7 @@ export interface ParseWindowScan {
 }
 
 // Windows are the parse's damage-density bursts, not cooldown-duration spans.
-export function findParseWindows(scan: ParseWindowScan): ParseWindow[] {
+export function findParseWindows(scan: ParseWindowScan, tuning: BurstDetectorTuning = DEFAULT_BURST_TUNING): ParseWindow[] {
   const { damage, fightLenS, timings, casts, abilityNames } = scan;
   const hits = damage
     .filter(event => event.type === 'damage' && (event.amount ?? 0) + (event.absorbed ?? 0) > 0)
@@ -162,16 +173,17 @@ export function findParseWindows(scan: ParseWindowScan): ParseWindow[] {
   const total = hits.reduce((sum, hit) => sum + hit[1], 0);
   if (!total) return [];
 
-  const binCount = Math.ceil(fightLenS / BIN_S);
+  const binCount = Math.ceil(fightLenS / tuning.binS);
   if (binCount < 2) return [];
-  const damagePerBin = bucketDamagePerBin(hits, binCount);
-  const rollingDamage = forwardRollingDamage(damagePerBin, ROLL_BINS);
+  const damagePerBin = bucketDamagePerBin(hits, binCount, tuning.binS);
+  const rollingDamage = forwardRollingDamage(damagePerBin, tuning.rollBins);
 
-  // Threshold floors at RATE_QUANTILE so a spiky parse must beat its own typical bin, not just its mean.
-  const meanRollingDamage = (total / binCount) * ROLL_BINS;
-  const densityThreshold = Math.max(THRESHOLD_MULT * meanRollingDamage, quantile(rollingDamage, RATE_QUANTILE) ?? 0);
+  // Threshold floors at the rateQuantile bin so a spiky parse must beat its own typical bin, not just its mean.
+  const meanRollingDamage = (total / binCount) * tuning.rollBins;
+  const densityThreshold = Math.max(
+    tuning.thresholdMult * meanRollingDamage, quantile(rollingDamage, tuning.rateQuantile) ?? 0);
 
-  const denseRuns = detectDenseRuns(rollingDamage, densityThreshold, MERGE_GAP_BINS);
+  const denseRuns = detectDenseRuns(rollingDamage, densityThreshold, tuning.mergeGapBins);
   if (!denseRuns.length) return [];
 
   const castRows = casts
@@ -183,7 +195,7 @@ export function findParseWindows(scan: ParseWindowScan): ParseWindow[] {
 
   const windows: ParseWindow[] = [];
   const context: RunWindowContext = {
-    hits, total, binCount, damagePerBin, timings, castRows, nameOf, castNamesInParse,
+    hits, total, binCount, damagePerBin, timings, castRows, nameOf, castNamesInParse, tuning,
   };
   for (const run of denseRuns) {
     const window = windowFromRun(run, context);
@@ -201,19 +213,20 @@ interface RunWindowContext {
   castRows: CastRow[];
   nameOf: (spellId: number) => string;
   castNamesInParse: Set<string>;
+  tuning: BurstDetectorTuning;
 }
 
 function windowFromRun(run: BinRun, context: RunWindowContext): ParseWindow | null {
-  const { hits, total, binCount, damagePerBin, timings, castRows, nameOf, castNamesInParse } = context;
+  const { hits, total, binCount, damagePerBin, timings, castRows, nameOf, castNamesInParse, tuning } = context;
   const trimmed = trimRunToDamage(run, damagePerBin);
   if (!trimmed) return null;
-  const windowStartS = trimmed.startBin * BIN_S;
-  const windowEndS = (trimmed.endBin + 1) * BIN_S;
+  const windowStartS = trimmed.startBin * tuning.binS;
+  const windowEndS = (trimmed.endBin + 1) * tuning.binS;
   // The fight-closing window counts the fight-end hit bucketDamagePerBin clamps into the last bin; interior windows stay half-open.
   const closesFight = trimmed.endBin === binCount - 1;
   const windowHits = hits.filter(hit => hit[0] >= windowStartS && (closesFight ? hit[0] <= windowEndS : hit[0] < windowEndS));
   const windowDmg = windowHits.reduce((sum, hit) => sum + hit[1], 0);
-  if (!windowDmg || windowDmg / total < SIGNIFICANCE_PCT) return null;
+  if (!windowDmg || windowDmg / total < tuning.significancePct) return null;
   return {
     time_s: round(windowStartS),
     window_length_s: round(windowEndS - windowStartS),
