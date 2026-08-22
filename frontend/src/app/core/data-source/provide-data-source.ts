@@ -2,7 +2,6 @@ import { InjectionToken, Provider, Type, inject } from '@angular/core';
 import { DataFileApiService } from '../services/data-file-api';
 import { DataSource } from './data-source';
 import { FileDataSource } from './file-data-source';
-import { EmptyDataSource } from './empty-data-source';
 
 // A typo in this union would silently bind a token to a directory that 404s to a `missing` result, masking a misconfiguration as un-ingested data.
 export type SliceDir = 'burst' | 'rotation' | 'defensive' | 'gear' | 'positions' | 'northern-sky';
@@ -17,6 +16,3 @@ export function provideLiveDataSource<T>(token: InjectionToken<DataSource<T>>, l
   return { provide: token, useExisting: liveImpl };
 }
 
-export function provideEmptyDataSource<T>(token: InjectionToken<DataSource<T>>): Provider {
-  return { provide: token, useFactory: () => new EmptyDataSource<T>() };
-}

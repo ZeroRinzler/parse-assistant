@@ -10,7 +10,6 @@ export const VANISH = 1856;
 
 export const CLOAK_OF_SHADOWS = 31224;
 export const EVASION = 5277;
-export const FEINT = 1966;
 
 export const EVISCERATE = 196819;
 export const BLACK_POWDER = 319175;
