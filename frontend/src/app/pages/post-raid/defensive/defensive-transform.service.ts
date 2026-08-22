@@ -10,7 +10,7 @@ import { round, groupByTime, getOrInsert, avgOr, stddevOr, medianOr, castGaps } 
 import { HoldWindow, buildHoldTargets, detectHoldWindows } from '../../../shared/analysis/hold-targets';
 import { buildAuraWindows } from '../../../shared/analysis/aura-windows';
 import { TimedEvent, abilityIcons, normalizeAbilityId, relativeS, withRelativeS } from '../../../shared/analysis/wcl-projections';
-import { BenchParse, benchFromTopParses } from '../../../shared/analysis/bench-pipeline';
+import { BenchParse, benchFromTopParses, benchHeader } from '../../../shared/analysis/bench-pipeline';
 import { DataSource } from '../../../core/data-source/data-source';
 import { DefensiveBench, DefensivePlanMeta } from './defensive-data-source';
 
@@ -309,10 +309,7 @@ export class DefensiveTransformService implements DataSource<DefensiveBench> {
         ];
 
         return {
-          spec,
-          encounter_id: encounterId,
-          encounter_name: encounterName,
-          sample_count: parses.length,
+          ...benchHeader(spec, encounterId, encounterName, parses.length),
           per_defensive_benchmarks: perDefensiveBenchmarks,
           defensive_windows: defensiveWindows,
           defensives: defensivePlanMeta(defensives),

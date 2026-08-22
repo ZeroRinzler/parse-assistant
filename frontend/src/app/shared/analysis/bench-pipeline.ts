@@ -22,6 +22,17 @@ interface BenchPayload<TParse> {
   parses: TParse[];
 }
 
+interface BenchHeader {
+  spec: string;
+  encounter_id: number;
+  encounter_name: string;
+  sample_count: number;
+}
+
+export function benchHeader(spec: string, encounterId: number, encounterName: string, sampleCount: number): BenchHeader {
+  return { spec, encounter_id: encounterId, encounter_name: encounterName, sample_count: sampleCount };
+}
+
 export interface BenchSlice<TParse, TBench> {
   logSource: string;
   errorId: string;

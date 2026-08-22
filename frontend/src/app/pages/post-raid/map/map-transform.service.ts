@@ -6,7 +6,7 @@ import { WclEvent, WclFight } from '../../../core/models/wcl.models';
 import { ParsePositions, PlayerPosRow, PosRow } from '../../../core/models/positioning.models';
 import { Result } from '../../../core/result';
 import { TimedEvent, relativeS, withRelativeS } from '../../../shared/analysis/wcl-projections';
-import { BenchParse, benchFromTopParses } from '../../../shared/analysis/bench-pipeline';
+import { BenchParse, benchFromTopParses, benchHeader } from '../../../shared/analysis/bench-pipeline';
 import { posActorId } from './map-positions';
 import { DataSource } from '../../../core/data-source/data-source';
 import { MapData } from './map-data-source';
@@ -189,11 +189,8 @@ export class MapTransformService implements DataSource<MapData> {
       tooFewParsesMessage: () => 'No fetchable top parses for this encounter.',
       parse: parse => this.parsePositions(parse),
       bench: ({ encounterName, parses }) => ({
-        spec,
-        encounter_id: encounterId,
-        encounter_name: encounterName,
+        ...benchHeader(spec, encounterId, encounterName, parses.length),
         interval_s: POSITIONS_INTERVAL_S,
-        sample_count: parses.length,
         parses,
       }),
     });

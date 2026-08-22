@@ -7,7 +7,7 @@ import { Result, missing } from '../../../core/result';
 import { mean, median, deviation, extent, greatest, quantile, rollup, rollups } from 'd3-array';
 import { round, groupByTime, getOrInsert } from '../../../shared/analysis/analysis-math';
 import { TimedEvent, abilityIcons, normalizeAbilityId, relativeS, withRelativeS } from '../../../shared/analysis/wcl-projections';
-import { BenchParse, benchFromTopParses } from '../../../shared/analysis/bench-pipeline';
+import { BenchParse, benchFromTopParses, benchHeader } from '../../../shared/analysis/bench-pipeline';
 import { DataSource } from '../../../core/data-source/data-source';
 import { BurstBench } from './burst-data-source';
 
@@ -319,10 +319,7 @@ export class BurstTransformService implements DataSource<BurstBench> {
           ...windows.flatMap(window => window.ability_breakdown.map(ability => ability.spell_id)),
         ];
         return {
-          spec,
-          encounter_id: encounterId,
-          encounter_name: encounterName,
-          sample_count: parses.length,
+          ...benchHeader(spec, encounterId, encounterName, parses.length),
           windows,
           cd_spell_ids,
           ability_icons: abilityIcons(await this.wclApi.getAbilities(referencedIds)),
