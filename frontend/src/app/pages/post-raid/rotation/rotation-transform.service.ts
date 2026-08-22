@@ -2,14 +2,13 @@ import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
 import { RulebookCooldown, RulebookDefensive, RulebookRule } from '../../../core/models/rulebook.models';
-import { PerCdBenchmark, UsesPerMin } from '../../../core/models/encounter.models';
-import { mean, deviation, group, quantile } from 'd3-array';
+import { PerCdBenchmark } from '../../../core/models/encounter.models';
+import { group, quantile } from 'd3-array';
 import {
-  round, avgOr, stddevOr, medianOr, castGaps, castEfficiencyPct, closestToZero,
+  round, avgOr, stddevOr, castEfficiencyPct, closestToZero,
 } from '../../../shared/analysis/analysis-math';
-import {
-  HoldWindow, HOLD_CONSENSUS_FRAC, buildHoldTargets, detectHoldWindows,
-} from '../../../shared/analysis/hold-targets';
+import { HoldWindow, detectHoldWindows } from '../../../shared/analysis/hold-targets';
+import { buildCadenceBenchmark } from '../../../shared/analysis/cast-cadence';
 import { TimedEvent, abilityIcons, relativeS, withRelativeS } from '../../../shared/analysis/wcl-projections';
 import { BenchParse, benchFromTopParses, benchHeader } from '../../../shared/analysis/bench-pipeline';
 import { DataSource } from '../../../core/data-source/data-source';
@@ -96,43 +95,16 @@ export function castGapListS(castEvents: TimedEvent[]): number[] {
   return gaps.sort((a, b) => a - b);
 }
 
-function benchUsesPerMin(entries: CdSummary[]): UsesPerMin {
-  const usesPerMin: number[] = [];
-  for (const entry of entries) {
-    if (entry.fight_duration_s > 0 && entry.cast_times_s.length) {
-      usesPerMin.push(round((entry.cast_times_s.length / entry.fight_duration_s) * 60, 3));
-    }
-  }
-  if (!usesPerMin.length) return { avg: 0, stddev: 0 };
-  return {
-    avg: round((mean(usesPerMin) ?? 0), 3),
-    stddev: round((deviation(usesPerMin) ?? 0), 3),
-  };
-}
-
-
 export function buildCdBenchmark(entries: CdSummary[], effectiveCd: number): PerCdBenchmark {
-  const firstCasts = entries.map(entry => entry.first_cast_s).filter((value): value is number => value != null);
-  const gaps = castGaps(entries);
+  const users = entries.filter(entry => entry.total_uses > 0);
   const blOffsets = entries.map(entry => entry.bl_offset_s).filter((value): value is number => value != null);
   const blCount = entries.filter(entry => entry.bl_aligned).length;
-  const usesPerMin = benchUsesPerMin(entries);
-  const usedUses = entries.map(entry => entry.total_uses).filter(uses => uses > 0);
 
   return {
-    sample_count: entries.length,
-    used_sample_count: entries.filter(entry => entry.total_uses > 0).length,
-    avg_first_cast_s: avgOr(firstCasts, 0),
-    stddev_first_cast_s: stddevOr(firstCasts, 0),
-    avg_gap_s: avgOr(gaps, null),
-    stddev_gap_s: stddevOr(gaps, null),
+    ...buildCadenceBenchmark(users, effectiveCd, entries.length),
     avg_bl_offset_s: avgOr(blOffsets, null),
     stddev_bl_offset_s: stddevOr(blOffsets, null),
-    median_uses: medianOr(usedUses, 0),
-    uses_per_min: usesPerMin,
     bl_pct: entries.length ? Math.round((blCount / entries.length) * 100) : 0,
-    majority_hold: entries.filter(entry => entry.cast_pattern === 'hold').length >= entries.length * HOLD_CONSENSUS_FRAC,
-    hold_targets: buildHoldTargets(entries, effectiveCd),
   };
 }
 

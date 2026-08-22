@@ -8,9 +8,13 @@ import { Result, ok, permanent } from '../../../core/result';
 import { toLoadError } from '../../../core/transport/http-load-error';
 import { holdSuggestionFindings } from '../../../shared/analysis/hold-targets';
 import {
-  isOutlierAbove, isOutlierBeyond, isOutlierBelow, castEfficiencyPct,
+  isOutlierBeyond, isOutlierBelow, castEfficiencyPct,
   closestToZero, benchExpectedUses, fmtClock, sortBySeverity,
 } from '../../../shared/analysis/analysis-math';
+import {
+  CadenceVoice, cadencePlanUsage, checkFirstCastDelay, checkGaps, checkLostUses, holdsOf, usedByMajority,
+} from '../../../shared/analysis/cast-cadence';
+import { CAT_LABEL } from '../../../shared/components/finding-table/finding-table.utils';
 import { TimedEvent, relativeS, withRelativeS } from '../../../shared/analysis/wcl-projections';
 import {
   buildRuleContext, evaluateRules, rulesFollowed, rulesNeed, benchedRules, RULE_TYPE_LABEL,
@@ -78,11 +82,14 @@ const BL_WINDOW_TRAIL_S = 15;
 /** A cooldown counts as Bloodlust-aligned when at least this share (%) of top parses align it. */
 const BL_CONSENSUS_PCT = 50;
 
-const MIN_USE_SHARE_FRAC = 0.5;
-
-function usedShare(bench: PerCdBenchmark): number {
-  return bench.used_sample_count / bench.sample_count;
-}
+const ROTATION_VOICE: CadenceVoice = {
+  unit: 'cast(s)',
+  firstCastPhrase: 'opened at',
+  gapNoun: 'casts',
+  underuseRemedy: (name, missing) => `Press ${name} ${missing}x more, sooner off cooldown.`,
+  firstCastRemedy: name => `Open with ${name} earlier.`,
+  gapRemedy: (name, avgGapS) => `Press ${name} sooner, about every ${avgGapS.toFixed(0)}s.`,
+};
 
 export interface RotationScanInput {
   fightDurationS: number;
@@ -93,37 +100,6 @@ export interface RotationScanInput {
 }
 
 interface CooldownScan { issues: AnalysisFinding[]; holds: AnalysisFinding[]; blAligned: boolean; }
-
-export function checkLostUses(
-  cdName: string, actual: number, expected: number, floor: number, fightDurS: number,
-): AnalysisFinding | null {
-  if (actual === 0 && expected >= 1) return {
-    severity: 'critical', category: 'lost_cooldown', cd_name: cdName,
-    measured: { value: `0 / ${expected}`, unit: 'cast(s)' },
-    message: `${cdName} was never used. Top raiders get ${expected} on a ${fmtClock(fightDurS)} fight.`,
-    details: { remedy: `Use ${cdName} ${expected}x this fight.` }, occurrences: [] };
-  if (actual > 0 && actual < floor) return {
-    severity: 'critical', category: 'lost_cooldown', cd_name: cdName,
-    measured: { value: `${actual} / ${expected}`, unit: 'cast(s)' },
-    message: `${cdName} was used ${actual} times. Top raiders get ${expected}.`,
-    details: { remedy: `Press ${cdName} ${floor - actual}x more, sooner off cooldown.` }, occurrences: [] };
-  return null;
-}
-
-export function checkFirstCastDelay(
-  cdName: string, castTimesS: number[], cdBench: PerCdBenchmark,
-): AnalysisFinding | null {
-  const firstS = castTimesS[0];
-  if (firstS == null) return null;
-  if (!isOutlierAbove(firstS, cdBench.avg_first_cast_s, cdBench.stddev_first_cast_s)) return null;
-  const lateS = (firstS - cdBench.avg_first_cast_s).toFixed(0);
-  return {
-    severity: 'warning', category: 'cooldown_delay', cd_name: cdName,
-    timestamp_s: firstS,
-    measured: { value: `+${lateS}s`, unit: `top ${fmtClock(cdBench.avg_first_cast_s)}` },
-    message: `${cdName} opened at ${fmtClock(firstS)}, ${lateS}s later than top raiders. Aim for ${fmtClock(cdBench.avg_first_cast_s)}.`,
-    details: { remedy: `Open with ${cdName} earlier.` }, occurrences: [] };
-}
 
 export function checkBloodlustAlignment(
   cdName: string, castTimesS: number[], cdBench: PerCdBenchmark, blTimeS: number | null, wantsBL: boolean,
@@ -156,25 +132,6 @@ export function checkBloodlustAlignment(
   }
   return { blAligned, findings };
 }
-
-export function checkGaps(cdName: string, castTimesS: number[], cdBench: PerCdBenchmark): AnalysisFinding[] {
-  const findings: AnalysisFinding[] = [];
-  if (cdBench.avg_gap_s == null || cdBench.stddev_gap_s == null) return findings;
-  let prevS: number | undefined;
-  for (const timeS of castTimesS) {
-    const gap = prevS != null ? timeS - prevS : null;
-    prevS = timeS;
-    if (gap == null) continue;
-    if (isOutlierAbove(gap, cdBench.avg_gap_s, cdBench.stddev_gap_s)) findings.push({
-      severity: 'warning', category: 'cooldown_delay', cd_name: cdName,
-      timestamp_s: timeS,
-      measured: { value: `${gap.toFixed(0)}s`, unit: `avg ${cdBench.avg_gap_s.toFixed(0)}s` },
-      message: `${cdName} sat ${gap.toFixed(0)}s between casts at ${fmtClock(timeS)}. Top raiders average ${cdBench.avg_gap_s.toFixed(0)}s.`,
-      details: { remedy: `Press ${cdName} sooner, about every ${cdBench.avg_gap_s.toFixed(0)}s.` }, occurrences: [] });
-  }
-  return findings;
-}
-
 
 export function checkCastEfficiency(
   castTimesS: number[], fightDurS: number, bench: RotationBench,
@@ -229,15 +186,15 @@ export function analyzeOneCooldown(
 
   const issues: AnalysisFinding[] = [];
   // A situational cd most parses skip has a noisy expected count and a meaningless avg_first_cast_s, so flagging it would punish the player for correctly matching the parses.
-  if (usedShare(cdBench) >= MIN_USE_SHARE_FRAC) {
-    const lost = checkLostUses(cdName, actual, expected, floor, fightDurS);
+  if (usedByMajority(cdBench)) {
+    const lost = checkLostUses(ROTATION_VOICE, cdName, actual, expected, floor, fightDurS);
     if (lost) issues.push(lost);
-    const lateOpener = checkFirstCastDelay(cdName, castTimesS, cdBench);
+    const lateOpener = checkFirstCastDelay(ROTATION_VOICE, cdName, castTimesS, cdBench);
     if (lateOpener) issues.push(lateOpener);
   }
   const bl = checkBloodlustAlignment(cdName, castTimesS, cdBench, blTimeS, wantsBL);
   issues.push(...bl.findings);
-  issues.push(...checkGaps(cdName, castTimesS, cdBench));
+  issues.push(...checkGaps(ROTATION_VOICE, cdName, castTimesS, cdBench));
   const holds = holdSuggestionFindings(cdName, castTimesS, cdBench.hold_targets);
 
   const blNote = bl.blAligned && wantsBL ? ', BL-aligned' : '';
@@ -274,14 +231,6 @@ export function analyzeRotationFindings(input: RotationScanInput): AnalysisFindi
   sortBySeverity(findings);
   return findings;
 }
-
-const CAT_LABEL: Record<string, string> = {
-  lost_cooldown: 'lost cast',
-  cooldown_delay: 'held',
-  cooldown_alignment: 'BL miss',
-  cast_efficiency: 'downtime',
-  hold_suggestion: 'hold',
-};
 
 interface FindingBucket { issues: AnalysisFinding[]; holds: AnalysisFinding[]; }
 
@@ -386,28 +335,18 @@ export function bucketRotationFindings(
   };
 }
 
-function holdsOf(cdBench: PerCdBenchmark | undefined): CdPlanRow['holds'] {
-  if (!cdBench?.majority_hold) return [];
-  return Object.entries(cdBench.hold_targets)
-    .sort((a, b) => Number(a[0]) - Number(b[0]))
-    .map(([idx, target]) => ({ castIndex: Number(idx), targetS: target.target_s }));
-}
-
 type CdPlanUsage = Pick<
   CdPlanRow, 'firstCastS' | 'typicalUses' | 'usedSampleCount' | 'sampleCount' | 'usesPerMin' | 'bloodlust' | 'bloodlustPct'
 >;
 
-// First cast and uses/min are user-only stats; gate them on the same use-share majority the analysis uses.
+// Uses/min is a user-only stat; gate it on the same use-share majority the analysis uses.
 function cdPlanUsageOf(cdBench: PerCdBenchmark | undefined): CdPlanUsage {
-  if (!cdBench) return { firstCastS: null, typicalUses: null, usedSampleCount: 0, sampleCount: 0, usesPerMin: null, bloodlust: false, bloodlustPct: null };
-  const usedByMajority = usedShare(cdBench) >= MIN_USE_SHARE_FRAC;
+  const usage = cadencePlanUsage(cdBench);
+  if (!cdBench) return { ...usage, usesPerMin: null, bloodlust: false, bloodlustPct: null };
   const alignedWithBl = cdBench.bl_pct >= BL_CONSENSUS_PCT;
   return {
-    firstCastS: usedByMajority ? cdBench.avg_first_cast_s : null,
-    // Typical uses is the median over the parses that pressed it at all, so any adoption (not just a majority) yields a number.
-    typicalUses: cdBench.used_sample_count > 0 ? cdBench.median_uses : null,
-    usedSampleCount: cdBench.used_sample_count, sampleCount: cdBench.sample_count,
-    usesPerMin: usedByMajority ? cdBench.uses_per_min.avg : null,
+    ...usage,
+    usesPerMin: usedByMajority(cdBench) ? cdBench.uses_per_min.avg : null,
     bloodlust: alignedWithBl, bloodlustPct: alignedWithBl ? cdBench.bl_pct : null,
   };
 }

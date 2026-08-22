@@ -6,8 +6,9 @@ import { BurstWindow } from '../../../core/models/analysis.models';
 import { PerDefensiveBenchmark } from '../../../core/models/encounter.models';
 import { Result, missing } from '../../../core/result';
 import { mean, deviation, extent, group, mode } from 'd3-array';
-import { round, groupByTime, getOrInsert, avgOr, stddevOr, medianOr, castGaps } from '../../../shared/analysis/analysis-math';
-import { HoldWindow, buildHoldTargets, detectHoldWindows } from '../../../shared/analysis/hold-targets';
+import { round, groupByTime, getOrInsert, avgOr, medianOr } from '../../../shared/analysis/analysis-math';
+import { HoldWindow, detectHoldWindows } from '../../../shared/analysis/hold-targets';
+import { buildCadenceBenchmark } from '../../../shared/analysis/cast-cadence';
 import { buildAuraWindows } from '../../../shared/analysis/aura-windows';
 import { TimedEvent, abilityIcons, normalizeAbilityId, relativeS, withRelativeS } from '../../../shared/analysis/wcl-projections';
 import { BenchParse, benchFromTopParses, benchHeader } from '../../../shared/analysis/bench-pipeline';
@@ -41,7 +42,6 @@ export interface ParseDefensiveSummary {
   name: string;
   cast_times_s: number[];
   first_cast_s: number | null;
-  uses: number;
   fight_duration_s: number;
   hold_windows: HoldWindow[];
   cast_pattern: 'hold' | 'on_cooldown';
@@ -90,7 +90,6 @@ export function summarizeDefensiveCasts(
         name: defensive.name,
         cast_times_s: castTimes,
         first_cast_s: firstCastS,
-        uses: castTimes.length,
         fight_duration_s: fightDurationS,
         hold_windows: holdWindows,
         cast_pattern: holdWindows.length ? 'hold' : 'on_cooldown',
@@ -233,34 +232,6 @@ export function clusterDefensiveWindows(windows: ParseDefWindow[], sampleCount: 
   return result.sort((a, b) => a.time_s - b.time_s);
 }
 
-function usesPerMinStats(summaries: ParseDefensiveSummary[]): PerDefensiveBenchmark['uses_per_min'] {
-  const perMin = summaries
-    .filter(summary => summary.fight_duration_s > 0 && summary.uses > 0)
-    .map(summary => round(summary.uses / summary.fight_duration_s * 60, 3));
-  return { avg: avgOr(perMin, 0, 3), stddev: stddevOr(perMin, 0, 3) };
-}
-
-// `summaries` is users-only; `totalParses` is every sampled parse, so sample_count and used_sample_count drive the runtime use-share gate.
-export function buildDefensiveBenchmark(
-  summaries: ParseDefensiveSummary[], effectiveCd: number, totalParses: number,
-): PerDefensiveBenchmark {
-  const firstCasts = summaries.map(summary => summary.first_cast_s).filter((value): value is number => value != null);
-  const gaps = castGaps(summaries);
-
-  return {
-    sample_count: totalParses,
-    used_sample_count: summaries.length,
-    avg_first_cast_s: avgOr(firstCasts, 0),
-    stddev_first_cast_s: stddevOr(firstCasts, 0),
-    avg_gap_s: avgOr(gaps, null),
-    stddev_gap_s: stddevOr(gaps, null),
-    hold_targets: buildHoldTargets(summaries, effectiveCd, totalParses),
-    median_uses: medianOr(summaries.map(summary => summary.uses), 0),
-    uses_per_min: usesPerMinStats(summaries),
-    majority_hold: summaries.filter(summary => summary.cast_pattern === 'hold').length > summaries.length * MEMBER_MAJORITY_FRAC,
-  };
-}
-
 /** Aggregate per-parse summaries into the per-defensive benchmarks. */
 export function aggregateDefensiveBenchmarks(
   perParseSummaries: ParseDefensiveSummary[][],
@@ -275,7 +246,7 @@ export function aggregateDefensiveBenchmarks(
   for (const defensive of defensives) {
     const summaries = byName.get(defensive.name);
     if (!summaries?.length) continue; // no sampled parse used this defensive
-    perDefensiveBenchmarks[defensive.name] = buildDefensiveBenchmark(summaries, defensive.cooldown, totalParses);
+    perDefensiveBenchmarks[defensive.name] = buildCadenceBenchmark(summaries, defensive.cooldown, totalParses);
   }
   return perDefensiveBenchmarks;
 }

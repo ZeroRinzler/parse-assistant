@@ -3,7 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import {
   DefensiveTransformService,
   defensiveSpellIds, defensivePlanMeta, summarizeDefensiveCasts,
-  findParseDefensiveWindows, clusterDefensiveWindows, buildDefensiveBenchmark,
+  findParseDefensiveWindows, clusterDefensiveWindows,
   aggregateDefensiveBenchmarks,
   windowDamageBreakdown, clusterDamageStats, clusterAbilityBreakdown,
   ParseDefWindow, ParseDefensiveSummary,
@@ -58,15 +58,16 @@ describe('summarizeDefensiveCasts', () => {
     ], 0));
     const summaries = summarizeDefensiveCasts([CLOAK], windows, [], FIGHT_DUR_S);
     expect(summaries).toHaveLength(1);
-    expect(summaries[0]).toMatchObject({ name: 'Cloak of Shadows', uses: 2, first_cast_s: FIRST_USE_S, cast_pattern: 'hold' });
+    expect(summaries[0]).toMatchObject({ name: 'Cloak of Shadows', cast_times_s: [FIRST_USE_S, SECOND_USE_S], first_cast_s: FIRST_USE_S, cast_pattern: 'hold' });
     // cast_index is 1-based (the 2nd use), matching rotation + the runtime's -1 decode.
     assert.exists(summaries[0]);
     expect(summaries[0].hold_windows).toEqual([{ cast_index: HELD_INDEX, actual_s: SECOND_USE_S, delay_s: EXPECTED_DELAY_S }]);
   });
 
   it('falls back to explicit casts when no buff windows exist', () => {
-    const summaries = summarizeDefensiveCasts([CLOAK], new Map(), timed([cast(CLOAK_OF_SHADOWS, 12)], 0), 300);
-    expect(summaries[0]).toMatchObject({ uses: 1, first_cast_s: 12, cast_pattern: 'on_cooldown' });
+    const CAST_S = 12;
+    const summaries = summarizeDefensiveCasts([CLOAK], new Map(), timed([cast(CLOAK_OF_SHADOWS, CAST_S)], 0), FIGHT_DUR_S);
+    expect(summaries[0]).toMatchObject({ cast_times_s: [CAST_S], first_cast_s: CAST_S, cast_pattern: 'on_cooldown' });
   });
 });
 
@@ -222,45 +223,11 @@ describe('clusterDefensiveWindows', () => {
   });
 });
 
-describe('buildDefensiveBenchmark', () => {
-  it('derives first-cast / gap / uses-per-min and the total/used sample split', () => {
-    const TOTAL_PARSES = 3;   // 2 users of 3 sampled parses
-    const FIRST_A_S = 10, SECOND_A_S = 140;   // gap 130
-    const FIRST_B_S = 20, SECOND_B_S = 160;   // gap 140
-    const EXPECTED_AVG_FIRST_CAST_S = (FIRST_A_S + FIRST_B_S) / 2;                 // 15
-    const EXPECTED_AVG_GAP_S = ((SECOND_A_S - FIRST_A_S) + (SECOND_B_S - FIRST_B_S)) / 2; // 135
-    const USERS = 2;
-    const USES_A = 2, USES_B = 3;
-    const summaries: ParseDefensiveSummary[] = [
-      { name: 'C', cast_times_s: [FIRST_A_S, SECOND_A_S], first_cast_s: FIRST_A_S, uses: USES_A, fight_duration_s: FIGHT_DUR_S, hold_windows: [], cast_pattern: 'on_cooldown' },
-      { name: 'C', cast_times_s: [FIRST_B_S, SECOND_B_S], first_cast_s: FIRST_B_S, uses: USES_B, fight_duration_s: FIGHT_DUR_S, hold_windows: [], cast_pattern: 'on_cooldown' },
-    ];
-    const benchmark = buildDefensiveBenchmark(summaries, CLOAK.cooldown, TOTAL_PARSES);
-    expect(benchmark.sample_count).toBe(TOTAL_PARSES);   // total parses
-    expect(benchmark.used_sample_count).toBe(USERS);     // users-only
-    expect(benchmark.avg_first_cast_s).toBe(EXPECTED_AVG_FIRST_CAST_S);
-    expect(benchmark.avg_gap_s).toBe(EXPECTED_AVG_GAP_S);
-    // uses/min per parse: 2/300*60 = 0.4 and 3/300*60 = 0.6 -> mean 0.5.
-    expect(benchmark.uses_per_min).toMatchObject({ avg: 0.5 });
-  });
-
-  const userSummary = (uses: number): ParseDefensiveSummary =>
-    ({ name: 'C', cast_times_s: [10], first_cast_s: 10, uses, fight_duration_s: FIGHT_DUR_S, hold_windows: [], cast_pattern: 'on_cooldown' });
-
-  it('keeps median_uses steady against a single outlier', () => {
-    const TYPICAL_USES = 3;
-    const OUTLIER_USES = 20;  // one parse spiking far above the rest
-    const summaries = [userSummary(TYPICAL_USES), userSummary(TYPICAL_USES), userSummary(TYPICAL_USES), userSummary(OUTLIER_USES)];
-    const benchmark = buildDefensiveBenchmark(summaries, CLOAK.cooldown, summaries.length);
-    expect(benchmark.median_uses).toBe(TYPICAL_USES);
-  });
-});
-
 describe('aggregateDefensiveBenchmarks', () => {
   it('builds per-defensive benchmarks with total vs used sample counts', () => {
-    const USES_A = 1, USES_B = 3;
-    const parseA: ParseDefensiveSummary[] = [{ name: 'Cloak of Shadows', cast_times_s: [10], first_cast_s: 10, uses: USES_A, fight_duration_s: FIGHT_DUR_S, hold_windows: [], cast_pattern: 'on_cooldown' }];
-    const parseB: ParseDefensiveSummary[] = [{ name: 'Cloak of Shadows', cast_times_s: [20], first_cast_s: 20, uses: USES_B, fight_duration_s: FIGHT_DUR_S, hold_windows: [], cast_pattern: 'on_cooldown' }];
+    const FIRST_A_S = 10, FIRST_B_S = 20;
+    const parseA: ParseDefensiveSummary[] = [{ name: 'Cloak of Shadows', cast_times_s: [FIRST_A_S], first_cast_s: FIRST_A_S, fight_duration_s: FIGHT_DUR_S, hold_windows: [], cast_pattern: 'on_cooldown' }];
+    const parseB: ParseDefensiveSummary[] = [{ name: 'Cloak of Shadows', cast_times_s: [FIRST_B_S], first_cast_s: FIRST_B_S, fight_duration_s: FIGHT_DUR_S, hold_windows: [], cast_pattern: 'on_cooldown' }];
     const parseC: ParseDefensiveSummary[] = []; // this parse never used Cloak
     const TOTAL_PARSES = 3, USERS = 2;
     const out = aggregateDefensiveBenchmarks([parseA, parseB, parseC], [CLOAK]);

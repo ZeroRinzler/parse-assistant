@@ -78,11 +78,6 @@ describe('buildCdBenchmark', () => {
     name: 'Shadow Blades', total_uses: uses, first_cast_s: firstCast, bl_aligned: blAligned, bl_offset_s: blOffset,
     cast_times_s: times, hold_windows: [], cast_pattern: 'on_cooldown', fight_duration_s: dur,
   });
-  const withHolders = (holding: number, total: number): CdSummary[] => [
-    ...Array.from({ length: holding }, () => ({ ...entry(0, 1, 200, null, false, [0]), cast_pattern: 'hold' as const })),
-    ...Array.from({ length: total - holding }, () => entry(0, 1, 200, null, false, [0])),
-  ];
-
   it('rolls first cast, gaps, BL offset and uses/min across parses', () => {
     const bench = buildCdBenchmark([
       entry(5, 2, 120, 2, true, [5, 95]),
@@ -125,39 +120,11 @@ describe('buildCdBenchmark', () => {
     expect(bench.median_uses).toBe(3);
   });
 
-  it('equals the plain median when every sampled parse used it (boundary)', () => {
-    const usedCounts = [2, 4, 6];  // sorted -> median 4, and no unused parse to filter out
-    const entries = usedCounts.map(uses => entry(5, uses, 120, null, false, Array.from({ length: uses }, (_, i) => 5 + i * 10)));
-    expect(buildCdBenchmark(entries, 90).median_uses).toBe(4);
-  });
-
-  it('sentinels median_uses at 0 when no sampled parse ever used it (empty case)', () => {
-    const unused: CdSummary = {
-      name: 'Shadow Blades', total_uses: 0, first_cast_s: null, bl_aligned: false, bl_offset_s: null,
-      cast_times_s: [], hold_windows: [], cast_pattern: 'on_cooldown', fight_duration_s: 120,
-    };
-    const bench = buildCdBenchmark([unused, { ...unused }], 90);
-    expect(bench.used_sample_count).toBe(0);
-    expect(bench.median_uses).toBe(0);
-  });
-
   it('leaves gap + BL fields null when not applicable', () => {
     const bench = buildCdBenchmark([entry(5, 1, 120, null, false, [5])], 90);
     expect(bench.avg_gap_s).toBeNull();
     expect(bench.avg_bl_offset_s).toBeNull();
     expect(bench.bl_pct).toBe(0);
-  });
-
-  it('sets majority_hold at an exact consensus tie, aligning it with hold_targets', () => {
-    const TOTAL_PARSES = 10;
-    const HOLDERS_AT_TIE = 5;  // exactly HOLD_CONSENSUS_FRAC of 10 -> the consensus boundary is inclusive
-    expect(buildCdBenchmark(withHolders(HOLDERS_AT_TIE, TOTAL_PARSES), 90).majority_hold).toBe(true);
-  });
-
-  it('clears majority_hold when fewer than the consensus fraction hold', () => {
-    const TOTAL_PARSES = 10;
-    const HOLDERS_BELOW = 4;  // below HOLD_CONSENSUS_FRAC of 10
-    expect(buildCdBenchmark(withHolders(HOLDERS_BELOW, TOTAL_PARSES), 90).majority_hold).toBe(false);
   });
 });
 

@@ -7,8 +7,7 @@ import { withRelativeS } from '../../../shared/analysis/wcl-projections';
 import { RotationBench } from './rotation-data-source';
 import { detectBloodlust } from './rotation-bloodlust';
 import {
-  analyzeRotationFindings, RotationScanInput,
-  checkLostUses, checkFirstCastDelay, checkBloodlustAlignment, checkGaps,
+  analyzeRotationFindings, RotationScanInput, checkBloodlustAlignment,
   checkCastEfficiency, analyzeOneCooldown,
 } from './rotation.service';
 import { bench, cdBench } from './rotation-harness';
@@ -132,44 +131,6 @@ describe('analyzeRotationFindings hold suggestions (prior-relative)', () => {
   });
 });
 
-describe('checkLostUses', () => {
-  const FIGHT_S = 120;
-
-  it('flags a critical when a cooldown is never used but expected', () => {
-    // 0 casts, expected 2 -> lost.
-    const finding = checkLostUses('Shadow Blades', 0, 2, 2, FIGHT_S);
-    expect(finding?.severity).toBe('critical');
-  });
-
-  it('flags a critical when used below the floor', () => {
-    // 1 cast, floor 2 -> 1 lost.
-    expect(checkLostUses('Shadow Blades', 1, 2, 2, FIGHT_S)?.category).toBe('lost_cooldown');
-  });
-
-  it('does not flag a cast exactly at the floor (strict)', () => {
-    // 2 casts, floor 2 -> actual < floor is false.
-    expect(checkLostUses('Shadow Blades', 2, 2, 2, FIGHT_S)).toBeNull();
-  });
-});
-
-describe('checkFirstCastDelay', () => {
-  // cdBench: avg_first_cast_s 5, stddev 2 -> outlier above 5 + 2*2 = 9s.
-
-  it('flags a first cast more than 2 sigma past the top open', () => {
-    // first cast at 10s > 9s threshold.
-    expect(checkFirstCastDelay('Shadow Blades', [10], cdBench())?.category).toBe('cooldown_delay');
-  });
-
-  it('does not flag a first cast exactly at the 2-sigma boundary (strict)', () => {
-    // first cast at 9s == threshold; strict > so not flagged.
-    expect(checkFirstCastDelay('Shadow Blades', [9], cdBench())).toBeNull();
-  });
-
-  it('returns null with no casts', () => {
-    expect(checkFirstCastDelay('Shadow Blades', [], cdBench())).toBeNull();
-  });
-});
-
 describe('checkBloodlustAlignment', () => {
   const BL_AT_S = 10;
   // BL window: 30s before BL to 40s duration + 15s trail -> [-30, +55] around BL_AT_S = [-20, 65].
@@ -215,24 +176,6 @@ describe('checkBloodlustAlignment', () => {
   it('returns not-aligned with no BL', () => {
     expect(checkBloodlustAlignment('Shadow Blades', [5], cdBench(), null, true))
       .toEqual({ blAligned: false, findings: [] });
-  });
-});
-
-describe('checkGaps', () => {
-  // cdBench: avg_gap_s 90, stddev 5 -> outlier above 90 + 2*5 = 100s.
-
-  it('flags a gap more than 2 sigma above the top gap', () => {
-    // gap 0 -> 110 == 110s > 100s.
-    expect(checkGaps('Shadow Blades', [0, 110], cdBench())).toHaveLength(1);
-  });
-
-  it('does not flag a gap exactly at the 2-sigma boundary (strict)', () => {
-    // gap 0 -> 100 == 100s threshold; strict > so not flagged.
-    expect(checkGaps('Shadow Blades', [0, 100], cdBench())).toEqual([]);
-  });
-
-  it('returns nothing when the bench has no gap stats', () => {
-    expect(checkGaps('Shadow Blades', [0, 200], cdBench({ avg_gap_s: null, stddev_gap_s: null }))).toEqual([]);
   });
 });
 

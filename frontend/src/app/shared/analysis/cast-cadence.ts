@@ -1,0 +1,134 @@
+/** Cadence: the benched timing pattern of a pressable ability, and the findings coached against it. */
+import { AnalysisFinding } from '../../core/models/analysis.models';
+import { CadenceBenchmark } from '../../core/models/encounter.models';
+import { avgOr, stddevOr, medianOr, castGaps, round, fmtClock, isOutlierAbove } from './analysis-math';
+import { HoldWindow, HOLD_CONSENSUS_FRAC, buildHoldTargets } from './hold-targets';
+
+/** One user parse's cadence for one ability. Rows are users-only; `totalParses` carries the non-users. */
+export interface CadenceEntry {
+  cast_times_s: number[];
+  first_cast_s: number | null;
+  fight_duration_s: number;
+  hold_windows: HoldWindow[];
+  cast_pattern: 'hold' | 'on_cooldown';
+}
+
+/** The per-slice voice of the shared findings: it changes the words, never the math. */
+export interface CadenceVoice {
+  /** Measured-value unit for use counts: 'cast(s)' | 'use(s)'. */
+  unit: string;
+  /** 'opened at' | 'was first used at' in the late-opener message. */
+  firstCastPhrase: string;
+  /** 'casts' | 'uses' in the gap message. */
+  gapNoun: string;
+  underuseRemedy(name: string, missing: number): string;
+  firstCastRemedy(name: string): string;
+  gapRemedy(name: string, avgGapS: number): string;
+}
+
+export function buildCadenceBenchmark(users: CadenceEntry[], effectiveCd: number, totalParses: number): CadenceBenchmark {
+  const firstCasts = users.map(user => user.first_cast_s).filter((value): value is number => value != null);
+  const gaps = castGaps(users);
+  const perMin = users
+    .filter(user => user.fight_duration_s > 0 && user.cast_times_s.length > 0)
+    .map(user => round(user.cast_times_s.length / user.fight_duration_s * 60, 3));
+
+  return {
+    sample_count: totalParses,
+    used_sample_count: users.length,
+    avg_first_cast_s: avgOr(firstCasts, 0),
+    stddev_first_cast_s: stddevOr(firstCasts, 0),
+    avg_gap_s: avgOr(gaps, null),
+    stddev_gap_s: stddevOr(gaps, null),
+    hold_targets: buildHoldTargets(users, effectiveCd, totalParses),
+    median_uses: medianOr(users.map(user => user.cast_times_s.length), 0),
+    uses_per_min: { avg: avgOr(perMin, 0, 3), stddev: stddevOr(perMin, 0, 3) },
+    majority_hold: users.length > 0
+      && users.filter(user => user.cast_pattern === 'hold').length >= users.length * HOLD_CONSENSUS_FRAC,
+  };
+}
+
+/** A situational ability most top parses skip has a noisy expected count, so the user-only checks and plan stats gate on this. */
+const MIN_USE_SHARE_FRAC = 0.5;
+
+export function usedByMajority(bench: CadenceBenchmark): boolean {
+  return bench.used_sample_count / bench.sample_count >= MIN_USE_SHARE_FRAC;
+}
+
+export function checkLostUses(
+  voice: CadenceVoice, name: string, actual: number, expected: number, floor: number, fightDurS: number,
+): AnalysisFinding | null {
+  if (actual === 0 && expected >= 1) return {
+    severity: 'critical', category: 'lost_cooldown', cd_name: name,
+    measured: { value: `0 / ${expected}`, unit: voice.unit },
+    message: `${name} was never used. Top raiders get ${expected} on a ${fmtClock(fightDurS)} fight.`,
+    details: { remedy: `Use ${name} ${expected}x this fight.` }, occurrences: [] };
+  if (actual > 0 && actual < floor) return {
+    severity: 'critical', category: 'lost_cooldown', cd_name: name,
+    measured: { value: `${actual} / ${expected}`, unit: voice.unit },
+    message: `${name} was used ${actual} times. Top raiders get ${expected}.`,
+    details: { remedy: voice.underuseRemedy(name, floor - actual) }, occurrences: [] };
+  return null;
+}
+
+export function checkFirstCastDelay(
+  voice: CadenceVoice, name: string, castTimesS: number[], bench: CadenceBenchmark,
+): AnalysisFinding | null {
+  const firstS = castTimesS[0];
+  if (firstS == null) return null;
+  if (!isOutlierAbove(firstS, bench.avg_first_cast_s, bench.stddev_first_cast_s)) return null;
+  const lateS = (firstS - bench.avg_first_cast_s).toFixed(0);
+  return {
+    severity: 'warning', category: 'cooldown_delay', cd_name: name,
+    timestamp_s: firstS,
+    measured: { value: `+${lateS}s`, unit: `top ${fmtClock(bench.avg_first_cast_s)}` },
+    message: `${name} ${voice.firstCastPhrase} ${fmtClock(firstS)}, ${lateS}s later than top raiders. Aim for ${fmtClock(bench.avg_first_cast_s)}.`,
+    details: { remedy: voice.firstCastRemedy(name) }, occurrences: [] };
+}
+
+export function checkGaps(
+  voice: CadenceVoice, name: string, castTimesS: number[], bench: CadenceBenchmark,
+): AnalysisFinding[] {
+  const findings: AnalysisFinding[] = [];
+  if (bench.avg_gap_s == null || bench.stddev_gap_s == null) return findings;
+  const avgGapS = bench.avg_gap_s;
+  let prevS: number | undefined;
+  for (const timeS of castTimesS) {
+    const gap = prevS != null ? timeS - prevS : null;
+    prevS = timeS;
+    if (gap == null) continue;
+    if (isOutlierAbove(gap, avgGapS, bench.stddev_gap_s)) findings.push({
+      severity: 'warning', category: 'cooldown_delay', cd_name: name,
+      timestamp_s: timeS,
+      measured: { value: `${gap.toFixed(0)}s`, unit: `avg ${avgGapS.toFixed(0)}s` },
+      message: `${name} sat ${gap.toFixed(0)}s between ${voice.gapNoun} at ${fmtClock(timeS)}. Top raiders average ${avgGapS.toFixed(0)}s.`,
+      details: { remedy: voice.gapRemedy(name, avgGapS) }, occurrences: [] });
+  }
+  return findings;
+}
+
+export function holdsOf(bench: CadenceBenchmark | undefined): { castIndex: number; targetS: number }[] {
+  if (!bench?.majority_hold) return [];
+  return Object.entries(bench.hold_targets)
+    .sort((a, b) => Number(a[0]) - Number(b[0]))
+    .map(([idx, target]) => ({ castIndex: Number(idx), targetS: target.target_s }));
+}
+
+export interface CadencePlanUsage {
+  typicalUses: number | null;
+  usedSampleCount: number;
+  sampleCount: number;
+  firstCastS: number | null;
+}
+
+// First cast is a user-only stat; gate it on the same use-share majority the analysis uses.
+export function cadencePlanUsage(bench: CadenceBenchmark | undefined): CadencePlanUsage {
+  if (!bench) return { typicalUses: null, usedSampleCount: 0, sampleCount: 0, firstCastS: null };
+  return {
+    // Typical uses is the median over the parses that pressed it at all, so any adoption (not just a majority) yields a number.
+    typicalUses: bench.used_sample_count > 0 ? bench.median_uses : null,
+    usedSampleCount: bench.used_sample_count,
+    sampleCount: bench.sample_count,
+    firstCastS: usedByMajority(bench) ? bench.avg_first_cast_s : null,
+  };
+}

@@ -5,7 +5,7 @@ export const UNKNOWN_COOLDOWN_LABEL = 'Unknown cooldown';
 
 const UNKNOWN_COOLDOWN_CONTEXT = 'finding-table.unknown-cooldown';
 
-const CAT_LABEL: Record<string, string> = {
+export const CAT_LABEL: Record<string, string> = {
   lost_cooldown: 'lost cast',
   cooldown_delay: 'held',
   cooldown_alignment: 'BL miss',

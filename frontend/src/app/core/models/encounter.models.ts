@@ -11,7 +11,7 @@ export interface EncounterEntry {
   sample_count: number;
 }
 
-export interface UsesPerMin {
+interface UsesPerMin {
   avg: number;
   stddev: number;
 }
@@ -36,28 +36,11 @@ interface CdHoldTarget extends HoldTarget {
 
 export type CdHoldTargets = Record<string, CdHoldTarget>;
 
-export interface PerCdBenchmark {
-  avg_first_cast_s: number;
-  stddev_first_cast_s: number;
-  avg_gap_s: number | null;
-  stddev_gap_s: number | null;
-  avg_bl_offset_s: number | null;
-  stddev_bl_offset_s: number | null;
-  // A median: one outlier parse cannot move it.
-  median_uses: number;
-  uses_per_min: UsesPerMin;
-  bl_pct: number;
-  majority_hold: boolean;
-  hold_targets: CdHoldTargets;
-  sample_count: number;
-  // Drives the use-share gate, so a situational cd most top parses skip is not flagged as "unused".
-  used_sample_count: number;
-}
-
-export interface PerDefensiveBenchmark {
+/** The cadence of one pressable ability: its benched timing pattern across the top parses. */
+export interface CadenceBenchmark {
   /** Total top parses sampled (NOT users-only, so `used_sample_count` is comparable). */
   sample_count: number;
-  /** Parses (of `sample_count`) that used this defensive at least once (use-share gate). */
+  /** Parses (of `sample_count`) that used this ability at least once (use-share gate). */
   used_sample_count: number;
   avg_first_cast_s: number;
   stddev_first_cast_s: number;
@@ -67,8 +50,17 @@ export interface PerDefensiveBenchmark {
   // A median: one outlier parse cannot move it.
   median_uses: number;
   uses_per_min: UsesPerMin;
+  /** At least half of the parses that press it hold it (ties count as holds). */
   majority_hold: boolean;
 }
+
+export interface PerCdBenchmark extends CadenceBenchmark {
+  avg_bl_offset_s: number | null;
+  stddev_bl_offset_s: number | null;
+  bl_pct: number;
+}
+
+export type PerDefensiveBenchmark = CadenceBenchmark;
 
 export interface EncounterGearStats {
   talent_builds: { key: string; pct: number; report_code: string; fight_id: number; player_name: string; source_id: number; diff?: TalentDiff[] }[];

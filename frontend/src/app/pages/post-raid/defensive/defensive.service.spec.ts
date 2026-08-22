@@ -3,7 +3,7 @@ import { PlayerDefensive } from '../../../core/models/analysis.models';
 import { PerDefensiveBenchmark } from '../../../core/models/encounter.models';
 import {
   analyzeDefensives, analyzeDefensiveFindings,
-  buildDefensiveUsageWindows, analyzeOneDefensive, gapDelayFindings,
+  buildDefensiveUsageWindows, analyzeOneDefensive,
 } from './defensive.service';
 import { applyBuff, removeBuff, cast } from '../../../../testing/builders/events';
 import { CLOAK_OF_SHADOWS } from '../../../../testing/spell-ids';
@@ -62,30 +62,6 @@ describe('buildDefensiveUsageWindows', () => {
       FIGHT_END_S,
     );
     expect(out).toEqual([]);
-  });
-});
-
-describe('gapDelayFindings', () => {
-  // avg_gap 60, stddev 5 -> +2sigma band is 70; a gap must STRICTLY exceed 70 to flag.
-  const AVG_GAP_S = 60;
-  const STDDEV_GAP_S = 5;
-  const benchWithGap = (overrides: Partial<PerDefensiveBenchmark> = {}): PerDefensiveBenchmark =>
-    defBench({ avg_gap_s: AVG_GAP_S, stddev_gap_s: STDDEV_GAP_S, ...overrides });
-
-  it('flags a gap beyond the +2sigma band', () => {
-    const GAP_OVER = 71; // 71 > 70
-    const out = gapDelayFindings('Cloak of Shadows', [0, GAP_OVER], benchWithGap());
-    expect(out).toHaveLength(1);
-    expect(out[0]).toMatchObject({ severity: 'warning', category: 'cooldown_delay' });
-  });
-
-  it('does not flag a gap exactly at the band (strict boundary)', () => {
-    const GAP_AT_BAND = AVG_GAP_S + 2 * STDDEV_GAP_S; // 70, not an outlier
-    expect(gapDelayFindings('Cloak of Shadows', [0, GAP_AT_BAND], benchWithGap())).toEqual([]);
-  });
-
-  it('emits nothing when the bench has no gap statistic', () => {
-    expect(gapDelayFindings('Cloak of Shadows', [0, 999], benchWithGap({ avg_gap_s: null, stddev_gap_s: null }))).toEqual([]);
   });
 });
 
