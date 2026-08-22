@@ -1,23 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { discoveryBudgetSummary, encounterIndexEntries } from './ingest-orchestrator.service';
-import { BudgetExceededError } from '../wcl-client';
+import { encounterIndexEntries } from './ingest-orchestrator.service';
 import type { IngestEncounter } from '../models/wcl.models';
 import type { EncounterEntry } from '../../core/models/encounter.models';
-
-describe('discoveryBudgetSummary', () => {
-  it('maps a budget exhaustion at discovery to a clean budgetStopped summary: no fatal, no specs failed', () => {
-    const summary = discoveryBudgetSummary(new BudgetExceededError('WCL budget low'));
-    expect(summary).not.toBeNull();
-    expect(summary?.budgetStopped).toBe(true);
-    expect(summary?.fatal).toBeUndefined();
-    expect(summary?.failed).toEqual([]);
-    expect(summary?.succeeded).toEqual([]);
-  });
-
-  it('returns null for any non-budget error so it propagates to the fatal handler', () => {
-    expect(discoveryBudgetSummary(new Error('worldData request failed'))).toBeNull();
-  });
-});
 
 describe('encounterIndexEntries', () => {
   const SAMPLED_COUNT = 25;

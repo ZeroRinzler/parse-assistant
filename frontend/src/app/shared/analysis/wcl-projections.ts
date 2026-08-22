@@ -71,11 +71,6 @@ export function abilityIcons(
   return icons;
 }
 
-export function countRecentParses(rankings: ParseRanking[], sinceS: number): number {
-  return rankings.filter(ranking => ranking.started_at_s >= sinceS).length;
-}
-
-/** Stamps `started_at_s` so nothing past this point handles WCL's milliseconds; an undated row dates to the epoch, never to now. */
 export function toParseRankings(raw: WclRawRanking[], count: number): ParseRanking[] {
   return raw
     .filter(ranking => ranking.report?.code && !ANONYMIZED_NAME.test(ranking.name ?? ''))
@@ -85,7 +80,6 @@ export function toParseRankings(raw: WclRawRanking[], count: number): ParseRanki
       server: ranking.server?.name ?? '',
       report_code: ranking.report?.code ?? '',
       fight_id: ranking.report?.fightID ?? 0,
-      started_at_s: ranking.startTime != null ? Math.floor(ranking.startTime / 1000) : 0,
     }));
 }
 

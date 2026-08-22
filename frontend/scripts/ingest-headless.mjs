@@ -90,9 +90,10 @@ async function main() {
   const page = await context.newPage();
   page.on('console', message => console.log(`[app] ${message.text()}`));
   page.on('pageerror', err => console.error(`[app] pageerror: ${err.message}`));
-  const prioritySpecs = process.env.PRIORITY_SPECS;
-  const appUrl = prioritySpecs ? `${APP_URL}?prioritySpecs=${encodeURIComponent(prioritySpecs)}` : APP_URL;
-  await page.goto(appUrl);
+  const params = new URLSearchParams();
+  if (process.env.CURRENT_RAIDS) params.set('currentRaids', process.env.CURRENT_RAIDS);
+  if (process.env.PRIORITY_SPECS) params.set('prioritySpecs', process.env.PRIORITY_SPECS);
+  await page.goto(params.size ? `${APP_URL}?${params}` : APP_URL);
 
   // Bound the wait so a bootstrap failure fails fast instead of hanging the job and stalling the shared gh-pages group.
   try {

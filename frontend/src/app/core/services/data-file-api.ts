@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { Rulebook } from '../models/rulebook.models';
-import { CurrentRaid, EncounterEntry, SpecEntry } from '../models/encounter.models';
+import { EncounterEntry, SpecEntry } from '../models/encounter.models';
 import { SpecMeta } from '../models/spec-meta.models';
 import { EncounterPositions } from '../models/positioning.models';
 import { DATA_FILE_TRANSPORT } from './data-file-transport';
@@ -33,9 +33,7 @@ export class DataFileApiService {
     return foldMissingToEmpty(await this.io.readJson<SpecMeta[]>('spec-meta.json'));
   }
 
-  async getCurrentRaids(): Promise<Result<CurrentRaid[]>> {
-    return foldMissingToEmpty(await this.io.readJson<CurrentRaid[]>('current-raids.json'));
-  }
+
 
   async getEncounters(spec: string): Promise<Result<EncounterEntry[]>> {
     return foldMissingToEmpty(await this.io.readJson<EncounterEntry[]>(`${spec}/encounters.json`));
@@ -53,9 +51,7 @@ export class DataFileApiService {
     return this.io.writeJson(`${spec}/encounters.json`, entries);
   }
 
-  writeCurrentRaids(raids: CurrentRaid[]): Promise<void> {
-    return this.io.writeJson('current-raids.json', raids);
-  }
+
 
   writeSpecs(entries: SpecEntry[]): Promise<void> {
     return this.io.writeJson('index.json', entries);

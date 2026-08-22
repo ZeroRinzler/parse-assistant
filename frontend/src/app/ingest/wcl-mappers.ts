@@ -1,14 +1,10 @@
-// Ranking selection is the shared `toParseRankings` (shared/analysis/wcl-projections.ts).
-
+import { logWarn } from '../core/log';
 import type { ClassesQuery, EncountersQuery } from '../core/services/wcl-operations.generated';
 import type { IngestEncounter } from './models/wcl.models';
 import type { SpecMeta } from '../core/models/spec-meta.models';
 
 export type WclExpansions = NonNullable<NonNullable<EncountersQuery['worldData']>['expansions']>;
 export type WclGameClasses = NonNullable<NonNullable<ClassesQuery['gameData']>['classes']>;
-
-/** Folder key -> [WCL className, WCL specName] - the small map the discovery fetchers read. */
-export type SpecWclMap = Record<string, [string, string]>;
 
 /** The folder key is `spec.slug + class.slug` (e.g. 'SubtletyRogue'). */
 export function mapClassesToSpecMeta(classes: WclGameClasses): SpecMeta[] {
@@ -33,51 +29,37 @@ export function mapClassesToSpecMeta(classes: WclGameClasses): SpecMeta[] {
   return metas;
 }
 
-export function specWclFromMetas(metas: SpecMeta[]): SpecWclMap {
-  const map: SpecWclMap = {};
-  for (const meta of metas) map[meta.spec] = [meta.className, meta.specName];
-  return map;
+export function parseRaidNames(raw: string | null | undefined): string[] {
+  return (raw ?? '').split(',').map(name => name.trim()).filter(name => name.length > 0);
 }
-
-// Singular 'complete raid' on purpose: WCL names the per-tier aggregate zone "X Complete Raid", which the plural form misses.
-const EXCLUDE_ZONE_PATTERNS = ['beta', 'ptr', 'mythic+', 'complete raid', 'delves', 'torghast'];
 
 type WclZone = NonNullable<NonNullable<NonNullable<WclExpansions[number]>['zones']>[number]>;
 
-// WCL returns newest expansion first, so only the first expansion's zones are used.
-function liveZones(expansions: WclExpansions): WclZone[] {
-  const zones: WclZone[] = [];
-  for (const zone of (expansions[0]?.zones ?? [])) {
+const zoneKey = (name: string): string => name.trim().toLowerCase();
+
+/** WCL keeps a frozen copy of a raid under the same name, with different encounter ids. */
+function currentZoneNamed(expansions: WclExpansions, name: string): WclZone | null {
+  const matches = (expansions[0]?.zones ?? [])
     // WCL omits `frozen` on some zones though the schema declares it non-null, so an absent one has to read as not-frozen.
-    if (zone && !zone.frozen) zones.push(zone);
-  }
-  return zones;
+    .filter(zone => zone && !zone.frozen && zoneKey(zone.name) === zoneKey(name));
+  return matches.sort((a, b) => (b?.id ?? 0) - (a?.id ?? 0))[0] ?? null;
 }
 
-export function filterEncounters(expansions: WclExpansions): IngestEncounter[] {
+export function encountersForRaids(expansions: WclExpansions, raidNames: string[]): IngestEncounter[] {
   const result: IngestEncounter[] = [];
-  for (const zone of liveZones(expansions)) {
-    const zoneName = zone.name.toLowerCase();
-    if (EXCLUDE_ZONE_PATTERNS.some(pattern => zoneName.includes(pattern))) continue;
+  for (const name of raidNames) {
+    const zone = currentZoneNamed(expansions, name);
+    if (!zone) {
+      logWarn('encountersForRaids', `no current WCL zone named "${name}" - check the CURRENT_RAIDS variable`);
+      continue;
+    }
     const partitionIds = (zone.partitions ?? [])
       .filter(partition => partition !== null)
       .map(partition => partition.id)
       .sort((a, b) => b - a);
     for (const encounter of (zone.encounters ?? [])) {
-      if (!encounter) continue;
-      result.push({ id: encounter.id, name: encounter.name, zone: zone.name, zoneId: zone.id, partitionIds });
+      if (encounter) result.push({ id: encounter.id, name: encounter.name, zone: zone.name, zoneId: zone.id, partitionIds });
     }
   }
   return result;
-}
-
-// Keyed by zone id, since zones can share a name - e.g. a live and a PTR copy of the same raid.
-export function groupEncountersByZone(encounters: IngestEncounter[]): Map<number, IngestEncounter[]> {
-  const groups = new Map<number, IngestEncounter[]>();
-  for (const encounter of encounters) {
-    const group = groups.get(encounter.zoneId);
-    if (group) group.push(encounter);
-    else groups.set(encounter.zoneId, [encounter]);
-  }
-  return groups;
 }

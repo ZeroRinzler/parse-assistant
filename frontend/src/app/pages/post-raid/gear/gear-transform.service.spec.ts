@@ -50,7 +50,7 @@ describe('talentKeyFromTree', () => {
 });
 
 describe('toParseGear', () => {
-  const ranking = { player: 'Ann', server: 'Area 52', report_code: 'rep1', fight_id: 3, started_at_s: 0 };
+  const ranking = { player: 'Ann', server: 'Area 52', report_code: 'rep1', fight_id: 3 };
 
   it('reduces a found CharacterGear to its fingerprint tagged with the parse identity', () => {
     const gear: CharacterGear = {

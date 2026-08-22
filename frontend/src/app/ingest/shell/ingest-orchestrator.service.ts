@@ -13,8 +13,8 @@ import type { EncounterEntry, SpecEntry } from '../../core/models/encounter.mode
 import { RATE_LIMIT_Q, CLASSES_Q } from '../../core/services/wcl-queries';
 import type { ClassesQuery, RateLimitQuery } from '../../core/services/wcl-operations.generated';
 import { sliceRegistry, type SliceDescriptor } from './slice-registry';
-import { getEncounters, rankingsFromPartition, type CurrentContent } from '../wcl-fetchers';
-import { mapClassesToSpecMeta, specWclFromMetas, type SpecWclMap } from '../wcl-mappers';
+import { getEncounters, rankingsFromPartition } from '../wcl-fetchers';
+import { mapClassesToSpecMeta, parseRaidNames } from '../wcl-mappers';
 import { type WclQueryClient, BudgetExceededError } from '../wcl-client';
 import { INGEST_VERSION } from '../ingest-version';
 import { specsForRun, orderEncountersByMissingFirst, parsePrioritySpecs, type SpecOrderEntry } from '../ordering';
@@ -48,12 +48,7 @@ function publishSummary(summary: IngestRunSummary): void {
   (globalThis as { __INGEST_DONE__?: IngestRunSummary }).__INGEST_DONE__ = summary;
 }
 
-export function discoveryBudgetSummary(err: unknown): IngestRunSummary | null {
-  if (err instanceof BudgetExceededError) return { succeeded: [], failed: [], budgetStopped: true };
-  return null;
-}
-
-/** The index lists the current zone's encounters even at zero samples (they must stay selectable while a new raid waits for parses); an empty `current` (no live zone resolved) keeps the on-disk entries so one bad discovery never blanks the UI. */
+/** Zero-sample encounters stay listed, or a new raid's bosses are not selectable until its first parses land. */
 export function encounterIndexEntries(current: IngestEncounter[], onDisk: EncounterEntry[]): EncounterEntry[] {
   if (!current.length) return onDisk;
   const samplesById = new Map(onDisk.map(entry => [entry.id, entry.sample_count]));
@@ -113,18 +108,16 @@ export class IngestOrchestratorService {
     const version = String(INGEST_VERSION);
     console.log(`Ingest version: ${version}`);
 
-    const specWcl = await this.resolveSpecMetas(client);
+    await this.resolveSpecMetas(client);
 
-    console.log('Resolving current raids...');
-    const discovery = await this.discoverContent(client, specWcl);
-    if (!discovery) return;
-    const { encounters, protectedIds, zones, reset } = discovery;
-    console.log(zones.length
-      ? `Current raids: ${zones.map(raid => raid.zone_name).join(', ')} (${encounters.length} encounters)${reset ? ' - raid set changed, resetting the dataset' : ''}`
-      : 'No current raid on record and none detected; leaving the existing data alone.');
-    if (reset) await this.resetStaleSpecData(protectedIds);
+    const raidNames = parseRaidNames(new URLSearchParams(globalThis.location.search).get('currentRaids'));
+    console.log(raidNames.length
+      ? `Current raids (CURRENT_RAIDS): ${raidNames.join(', ')}`
+      : 'CURRENT_RAIDS is unset - nothing to ingest, nothing pruned.');
+    const { encounters, protectedIds } = await getEncounters(client, raidNames);
+    console.log(`${encounters.length} encounters`);
+    await this.pruneRetiredRaids(protectedIds);
     await this.refreshIndices(encounters);
-    if (zones.length) await this.dataFile.writeCurrentRaids(zones);
 
     const specs = await this.orderedSpecsFromDisk();
     if (!specs.length) {
@@ -138,7 +131,7 @@ export class IngestOrchestratorService {
     publishSummary(summary);
   }
 
-  private async resolveSpecMetas(client: ApiWclClient): Promise<SpecWclMap> {
+  private async resolveSpecMetas(client: ApiWclClient): Promise<void> {
     // The spec icon is not on WCL, so enrich each meta from that spec's rulebook (its spec_icon stem).
     const classesData = await client.query<ClassesQuery>(CLASSES_Q);
     const metas = mapClassesToSpecMeta(classesData.gameData?.classes ?? []);
@@ -154,35 +147,17 @@ export class IngestOrchestratorService {
         meta.specIcon = '';
       }
     }
-    const specWcl: SpecWclMap = specWclFromMetas(metas);
     this.specMeta.hydrate(metas);
     await this.dataFile.writeSpecMeta(metas);
     console.log(`Resolved ${metas.length} specs from WCL`);
-    return specWcl;
   }
 
-  /** Null means the budget stopped the run at discovery and the summary is already published. */
-  private async discoverContent(client: ApiWclClient, specWcl: SpecWclMap): Promise<CurrentContent | null> {
-    const stored = await this.dataFile.getCurrentRaids();
-    // Reading a failure as "no record" would retire every recorded raid and prune its data.
-    if (!stored.ok) throw new Error(`Cannot read the recorded raids: ${stored.error.message}`);
-    try {
-      return await getEncounters(client, specWcl, stored.value.map(raid => raid.zone_id), nowS());
-    } catch (err) {
-      const budgetSummary = discoveryBudgetSummary(err);
-      if (!budgetSummary) throw err;
-      console.log(`\n[budget] Stopping cleanly at discovery: ${err instanceof Error ? err.message : String(err)}`);
-      publishSummary(budgetSummary);
-      return null;
-    }
-  }
 
-  /** Runs before spec selection: resetting only the selected specs leaves them at zero data and permanently re-selected. */
-  private async resetStaleSpecData(protectedIds: Set<number>): Promise<void> {
-    if (protectedIds.size === 0) {
-      logWarn('resetStaleSpecData', 'empty protected set - skipping the reset (likely a transient WCL failure)');
-      return;
-    }
+
+  /** Pruning only the selected specs would leave them at zero data and permanently re-selected. */
+  private async pruneRetiredRaids(protectedIds: Set<number>): Promise<void> {
+    // An unset CURRENT_RAIDS names no raid, which must not read as "prune everything".
+    if (protectedIds.size === 0) return;
     for (const spec of await this.dataFile.listSpecs()) {
       const pruned = await this.pruneStaleEncounters(spec, protectedIds);
       if (pruned.length) console.log(`  [${spec}] pruned ${pruned.length} stale encounter(s): ${pruned.join(', ')}`);
@@ -423,12 +398,7 @@ export class IngestOrchestratorService {
     await this.dataFile.writeSpecs(entries);
   }
 
-  /** An empty protected set (a transient worldData failure) never deletes anything. */
   private async pruneStaleEncounters(spec: string, protectedIds: Set<number>): Promise<number[]> {
-    if (protectedIds.size === 0) {
-      logWarn('pruneStaleEncounters', 'empty protected set - skipping prune (likely a transient WCL failure)');
-      return [];
-    }
     const removed: number[] = [];
     const files = await this.dataFile.listSliceFiles(spec, 'burst');
     for (const file of files) {

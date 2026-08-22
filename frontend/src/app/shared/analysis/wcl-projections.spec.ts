@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach, MockInstance } from 'vitest';
 import {
-  abilityIcons, countRecentParses, findParseActor, normalizeAbilityId, toParseRankings, unwrapRankings, windowSpells,
+  abilityIcons, findParseActor, normalizeAbilityId, toParseRankings, unwrapRankings, windowSpells,
 } from './wcl-projections';
 import { WCL_SYNTHETIC_SOURCE_FALLBACK_ID } from '../../../testing/spell-ids';
 import { ParseRanking } from '../../core/models/wcl.models';
@@ -38,17 +38,7 @@ describe('unwrapRankings', () => {
 
   it('composes with toParseRankings to yield fetchable parses', () => {
     const blob = JSON.stringify({ rankings: [rankingRow('Keep', 'r1', 3)] });
-    expect(toParseRankings(unwrapRankings(blob), 10)).toEqual([{ player: 'Keep', server: '', report_code: 'r1', fight_id: 3, started_at_s: 0 }]);
-  });
-});
-
-describe('countRecentParses', () => {
-  const SINCE_S = 1_000;
-  const at = (startedAtS: number): ParseRanking =>
-    ({ player: 'P', server: '', report_code: 'r', fight_id: 1, started_at_s: startedAtS });
-
-  it('counts parses started at or after the cutoff (boundary: exactly the cutoff counts, one second earlier does not)', () => {
-    expect(countRecentParses([at(SINCE_S), at(SINCE_S - 1), at(SINCE_S + 1)], SINCE_S)).toBe(2);
+    expect(toParseRankings(unwrapRankings(blob), 10)).toEqual([{ player: 'Keep', server: '', report_code: 'r1', fight_id: 3 }]);
   });
 });
 
@@ -56,8 +46,8 @@ describe('toParseRankings', () => {
   it('maps raw rankings to fetchable parses and caps at count', () => {
     const raw = [rankingRow('P1', 'r1', 1), rankingRow('P2', 'r2', 2), rankingRow('P3', 'r3', 3)];
     expect(toParseRankings(raw, 2)).toEqual([
-      { player: 'P1', server: '', report_code: 'r1', fight_id: 1, started_at_s: 0 },
-      { player: 'P2', server: '', report_code: 'r2', fight_id: 2, started_at_s: 0 },
+      { player: 'P1', server: '', report_code: 'r1', fight_id: 1 },
+      { player: 'P2', server: '', report_code: 'r2', fight_id: 2 },
     ]);
   });
 
@@ -72,7 +62,7 @@ describe('toParseRankings', () => {
       { name: 'NoReport', report: { fightID: 2 } }, // report code missing -> unfetchable
       rankingRow('Keep', 'r3', 3),
     ];
-    expect(toParseRankings(raw, 10)).toEqual([{ player: 'Keep', server: '', report_code: 'r3', fight_id: 3, started_at_s: 0 }]);
+    expect(toParseRankings(raw, 10)).toEqual([{ player: 'Keep', server: '', report_code: 'r3', fight_id: 3 }]);
   });
 });
 
@@ -80,7 +70,7 @@ describe('findParseActor', () => {
   const RANKED_NAME = 'Keep';
   const TWIN_ID = 20;
   const actor = (id: number, name: string, server: string) => ({ id, name, subType: 'Rogue', server });
-  const ranked = (server: string): ParseRanking => ({ player: RANKED_NAME, server, report_code: 'r1', fight_id: 1, started_at_s: 0 });
+  const ranked = (server: string): ParseRanking => ({ player: RANKED_NAME, server, report_code: 'r1', fight_id: 1 });
 
   it('binds the one actor carrying the ranked name', () => {
     const actors = [actor(10, 'Other', AREA_52), actor(TWIN_ID, RANKED_NAME, TWISTING_NETHER)];
