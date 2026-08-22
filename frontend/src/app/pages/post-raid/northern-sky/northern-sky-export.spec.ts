@@ -8,9 +8,8 @@ import { NorthernSkyFeatureService } from './northern-sky.service';
 import { NorthernSkyAbility, NorthernSkyBench } from './northern-sky-data-source';
 import { SHADOW_BLADES, EVASION } from '../../../../testing/spell-ids';
 import { whenStable } from '../../../../testing/when-stable';
+import { NORTHERN_SKY_ENCOUNTER_ID, NORTHERN_SKY_SPEC, bench } from './northern-sky-harness';
 
-const SPEC = 'SubtletyRogue';
-const ENCOUNTER_ID = 3009;
 const CAST_TIMES_S = [10, 30];
 
 function ability(spellId: number, kind: NorthernSkyAbility['kind']): NorthernSkyAbility {
@@ -19,15 +18,11 @@ function ability(spellId: number, kind: NorthernSkyAbility['kind']): NorthernSky
 
 const POPULATED_ABILITIES = [ability(SHADOW_BLADES, 'cooldown'), ability(EVASION, 'defensive')];
 
-function bench(over: Partial<NorthernSkyBench> = {}): NorthernSkyBench {
-  return { spec: SPEC, encounter_id: ENCOUNTER_ID, encounter_name: 'Boss', abilities: [], ...over };
-}
-
 function mount(getExport: () => Promise<Result<NorthernSkyBench>>, copySucceeds = true) {
   const feature = { getExport } as unknown as NorthernSkyFeatureService;
   const selection = { loadNorthernSky: () => null, saveNorthernSky: () => undefined } as unknown as SelectionStore;
   const clipboard = { copy: () => copySucceeds } as unknown as Clipboard;
-  return mountVm(NorthernSkyExportComponent, { spec: SPEC, encounterId: ENCOUNTER_ID }, [
+  return mountVm(NorthernSkyExportComponent, { spec: NORTHERN_SKY_SPEC, encounterId: NORTHERN_SKY_ENCOUNTER_ID }, [
     { provide: NorthernSkyFeatureService, useValue: feature },
     { provide: SelectionStore, useValue: selection },
     { provide: Clipboard, useValue: clipboard },

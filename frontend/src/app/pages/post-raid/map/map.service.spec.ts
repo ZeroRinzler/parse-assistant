@@ -185,13 +185,13 @@ describe('MapFeatureService', () => {
   });
 
   it('surfaces a transient bench failure as an error rather than a silent empty map', async () => {
-    const outage = transient('WCL is unreachable right now.');
+    const outage = transient('WCL outage');
     const { service } = withResult(outage);
     const result = await service.loadBench('SubtletyRogue', 3144);
     expect(result).toEqual(outage);
     expect(service.positions()).toBeNull();
     expect(service.ready()).toBe(false);
-    if (!outage.ok) expect(service.error()).toEqual(outage.error);
+    expect(service.error()?.kind).toBe('transient');
   });
 
   it('openAt sets the panel state and opens it', () => {

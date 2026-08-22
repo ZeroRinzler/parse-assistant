@@ -1,11 +1,12 @@
 import { assert, describe, it, expect } from 'vitest';
 import { WclTransportError } from '../../../core/services/wcl-transport';
-import { Result, ok, missing, transient } from '../../../core/result';
+import { Result, ok, missing } from '../../../core/result';
 import { RulebookRule, CastWithoutPriorCondition } from '../../../core/models/rulebook.models';
 import {
   SHADOW_BLADES, SHADOW_DANCE, SECRET_TECHNIQUE, BLOODLUST, RUPTURE, BLACK_POWDER,
 } from '../../../../testing/spell-ids';
 import { cast, applyBuff, applyDebuff, removeDebuff } from '../../../../testing/builders/events';
+import { wclReport } from '../../../../testing/builders/wcl-fixtures';
 import { WclEvent } from '../../../core/models/wcl.models';
 import { ROTATION_DATA_SOURCE, RotationBench } from './rotation-data-source';
 import { sliceService } from '../../../../testing/service-harness';
@@ -31,12 +32,12 @@ const SECRET_TECH_NEEDS_DANCE: CastWithoutPriorCondition = {
   required_spell_id: SHADOW_DANCE, required_spell_name: 'Shadow Dance',
 };
 
+const FIGHT_END_MS = 120_000;
+const REPORT = wclReport({ endTimeMs: FIGHT_END_MS, actors: [] });
+
 // Resolves a valid (empty) player log, so a test's outcome is driven by the bench Result rather than an incidental transport throw.
 const WORKING_WCL = {
-  getReport: async () => ({
-    title: 't', fights: [{ id: 1, name: 'Boss', startTime: 0, endTime: 120_000 }],
-    masterData: { actors: [], abilities: [] },
-  }),
+  getReport: async () => REPORT,
   getAllEvents: async () => [],
 };
 
@@ -59,12 +60,13 @@ describe('RotationFeatureService', () => {
     const failingWcl = { getReport: async () => { throw new WclTransportError('WCL down', WCL_UNAVAILABLE_STATUS); } };
     const service = withSource(ok(bench()), failingWcl);
     const result = await service.loadPlayerView('SubtletyRogue', 1, 'rX', 1, 10);
-    expect(result).toEqual(transient('WCL is unreachable right now.'));
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.kind).toBe('transient');
   });
 
   it('evaluates the rotation rules baked into the bench', async () => {
     const wcl = {
-      getReport: async () => ({ title: 't', fights: [{ id: 1, name: 'Boss', startTime: 0, endTime: 120_000 }], masterData: { actors: [], abilities: [] } }),
+      getReport: async () => REPORT,
       getAllEvents: async (_c: string, _f: number, dataType: string) =>
         dataType === 'Casts' ? [cast(SHADOW_DANCE, 10), cast(SECRET_TECHNIQUE, 30)] : [],
     };
@@ -84,9 +86,8 @@ describe('RotationFeatureService', () => {
 
   it('computes player findings from the player log', async () => {
     const wcl = {
-      getReport: async () => ({
-        title: 't', fights: [{ id: 1, name: 'Boss', startTime: 0, endTime: 120_000 }],
-        masterData: { actors: [], abilities: [{ gameID: SHADOW_BLADES, name: 'Shadow Blades', icon: 'sb' }] },
+      getReport: async () => wclReport({
+        endTimeMs: FIGHT_END_MS, actors: [], abilities: [{ gameID: SHADOW_BLADES, name: 'Shadow Blades', icon: 'sb' }],
       }),
       getAllEvents: async (_c: string, _f: number, dataType: string) =>
         dataType === 'Casts' ? [cast(SHADOW_BLADES, 6)] : [applyBuff(BLOODLUST, 6)],
@@ -120,7 +121,6 @@ describe('RotationFeatureService', () => {
 });
 
 describe('RotationFeatureService fetch shape', () => {
-  const REPORT = { title: 't', fights: [{ id: 1, name: 'Boss', startTime: 0, endTime: 120_000 }], masterData: { actors: [], abilities: [] } };
   const PLAYER_ID = 10;
   const dotUptime: RulebookRule = {
     type: 'rotation', severity: 'warning', description: 'Keep Rupture up on the boss',

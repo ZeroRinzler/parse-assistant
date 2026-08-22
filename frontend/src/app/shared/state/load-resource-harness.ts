@@ -2,6 +2,7 @@ import { assert, vi } from 'vitest';
 import { OutputEmitterRef, WritableSignal, provideZonelessChangeDetection, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Result } from '../../core/result';
+import { Deferred, deferred } from '../../../testing/deferred';
 import { LoadResource, loadResource } from './load-resource';
 
 export const LOAD_CONTEXT = 'feature.loadView';
@@ -11,22 +12,6 @@ export const FIRST_VALUE = 'first view';
 export const SECOND_VALUE = 'second view';
 export const EMPTY_VALUE = '';
 export const OUTAGE_MESSAGE = 'WCL is unreachable right now.';
-
-interface Deferred<T> {
-  promise: Promise<T>;
-  resolve: (value: T) => void;
-  reject: (reason: unknown) => void;
-}
-
-function deferred<T>(): Deferred<T> {
-  let resolve!: (value: T) => void;
-  let reject!: (reason: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
-}
 
 interface HarnessOptions {
   availableWhen?: (value: string) => boolean;

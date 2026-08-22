@@ -7,7 +7,7 @@ import {
   RawPosSample, EnemyMeta,
 } from './map-transform.service';
 import { withRelativeS } from '../../../shared/analysis/wcl-projections';
-import { parseRankings, parseReport } from '../../../../testing/builders/wcl-fixtures';
+import { parseRankings, wclReport } from '../../../../testing/builders/wcl-fixtures';
 import { provideApiFakes } from '../../../../testing/api-fakes';
 
 /** Fixture events build against a fight-start of 0, so stamping is a pass-through to seconds. */
@@ -301,7 +301,7 @@ describe('MapTransformService.getBench', () => {
   const BOSS_GAME_ID = 100;
   const EXPECTED_FETCH_COUNT = 2;          // player casts + enemy casts, nothing else
 
-  const report = parseReport({
+  const report = wclReport({
     playerId: PLAYER_ACTOR_ID, fightId: FIGHT_ID, endTimeMs: SIX_SEC_MS, encounterId: ENCOUNTER_ID,
     enemies: [{ id: BOSS_ACTOR_ID, name: 'Boss', gameID: BOSS_GAME_ID }],
   });

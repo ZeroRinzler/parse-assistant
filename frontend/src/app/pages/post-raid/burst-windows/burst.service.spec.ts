@@ -1,13 +1,14 @@
 import { assert, describe, it, expect } from 'vitest';
 import { HttpErrorResponse } from '@angular/common/http';
 import { BurstWindow, PlayerBurstWindow } from '../../../core/models/analysis.models';
-import { Result, ok, missing, transient } from '../../../core/result';
+import { Result, ok, missing } from '../../../core/result';
 import { BURST_DATA_SOURCE, BurstBench } from './burst-data-source';
 import { sliceService } from '../../../../testing/service-harness';
 import {
   BurstFeatureService,
   burstWindowStatus, splitCommonCds, burstMapAnchor, burstClipAnchor, buildBurstView, burstDetailRows, findPlayerBurstWindows,
 } from './burst.service';
+import { wclReport } from '../../../../testing/builders/wcl-fixtures';
 import {
   SHADOW_BLADES, SHADOW_BLADES_DAMAGE,
   WCL_MELEE_EVENT_ABILITY_ID, WOW_AUTO_ATTACK_SPELL_ID, WCL_SYNTHETIC_SOURCE_FALLBACK_ID,
@@ -17,6 +18,12 @@ import { withRelativeS } from '../../../shared/analysis/wcl-projections';
 
 /** Fixture events build against a fight-start of 0, so stamping is a pass-through to seconds. */
 const timed = withRelativeS;
+
+function first<T>(items: readonly T[]): T {
+  const [head] = items;
+  assert.exists(head);
+  return head;
+}
 
 // A melee auto-attack (event id 1) folds onto Auto Attack; synthetic negatives fold onto the "I Don't Know" fallback.
 const MELEE_HIT = 300;
@@ -75,18 +82,16 @@ describe('burstDetailRows', () => {
   it('labels an ability whose spell id is missing from the ability map with a placeholder and empty icon', () => {
     // SHADOW_BLADES_DAMAGE is intentionally left out of the ability map, so the guarded lookup must not throw.
     const breakdown = [{ spell_id: SHADOW_BLADES_DAMAGE, avg_damage: 600, min_damage: 400, max_damage: 800, count: 5, avg_casts: 2 }];
-    const rows = burstDetailRows(breakdown, null, {});
-    assert.exists(rows[0]);
-    expect(rows[0].label).toBe(`Ability #${SHADOW_BLADES_DAMAGE}`);
-    assert.exists(rows[0]);
-    expect(rows[0].icon).toBe('');
+    const row = first(burstDetailRows(breakdown, null, {}));
+    expect(row.label).toBe(`Ability #${SHADOW_BLADES_DAMAGE}`);
+    expect(row.icon).toBe('');
   });
 
   it('joins the player normalized melee and synthetic damage onto the bench auto-attack and fallback rows', () => {
     const window: BurstWindow = {
       time_s: 10, window_length_s: 20, dmg_avg: 0, dmg_min: 0, dmg_max: 0, dmg_stddev: 0, common_cds: [], ability_breakdown: [],
     };
-    const [playerWindow] = findPlayerBurstWindows(
+    const playerWindow = first(findPlayerBurstWindows(
       [window],
       timed([
         damage(WCL_MELEE_EVENT_ABILITY_ID, 12, MELEE_HIT),
@@ -95,7 +100,7 @@ describe('burstDetailRows', () => {
       ], 0),
       [],
       new Map(),
-    );
+    ));
     const benchBreakdown = [
       { spell_id: WOW_AUTO_ATTACK_SPELL_ID, avg_damage: 500, min_damage: 400, max_damage: 800, count: 5, avg_casts: 0 },
       { spell_id: WCL_SYNTHETIC_SOURCE_FALLBACK_ID, avg_damage: 200, min_damage: 100, max_damage: 300, count: 5, avg_casts: 0 },
@@ -104,7 +109,6 @@ describe('burstDetailRows', () => {
       [WOW_AUTO_ATTACK_SPELL_ID]: { icon: 'aa', name: 'Auto Attack' },
       [WCL_SYNTHETIC_SOURCE_FALLBACK_ID]: { icon: 'idk', name: 'Synthetic' },
     };
-    assert.exists(playerWindow);
     const rows = burstDetailRows(benchBreakdown, playerWindow, abilities);
     const melee = rows.find(row => row.spellId === WOW_AUTO_ATTACK_SPELL_ID);
     assert.exists(melee);
@@ -132,12 +136,10 @@ describe('buildBurstView', () => {
     ];
     const view = buildBurstView([window], player, 300, { 'Shadow Blades': SHADOW_BLADES }, abilities);
     expect(view.windows).toHaveLength(1);
-    assert.exists(view.windows[0]);
-    expect(view.windows[0].overview.playerPct).toBe(950);
-    assert.exists(view.windows[0]);
-    expect(view.windows[0].spells).toEqual([{ id: SHADOW_BLADES, icon: 'sb', name: 'Shadow Blades' }]);
-    assert.exists(view.windows[0]);
-    expect(view.windows[0].detailRows[0]).toMatchObject({ spellId: SHADOW_BLADES_DAMAGE, label: 'Eviscerate', icon: 'evis', playerPct: 550, topAvg: 600 });
+    const burstWindow = first(view.windows);
+    expect(burstWindow.overview.playerPct).toBe(950);
+    expect(burstWindow.spells).toEqual([{ id: SHADOW_BLADES, icon: 'sb', name: 'Shadow Blades' }]);
+    expect(burstWindow.detailRows[0]).toMatchObject({ spellId: SHADOW_BLADES_DAMAGE, label: 'Eviscerate', icon: 'evis', playerPct: 550, topAvg: 600 });
     expect(view.anchors[0]).toEqual({ timeS: 10, windowLengthS: 20 });
     expect(view.clipAnchors[0]).toEqual({ timeS: 10, windowLengthS: 20, key: 'burst-0' });
   });
@@ -150,33 +152,23 @@ describe('buildBurstView', () => {
       ],
     };
     const view = buildBurstView([passiveWindow], [], 300, {}, abilities, true);
-    assert.exists(view.windows[0]);
-    assert.exists(view.windows[0].detailRows[0]);
-    expect(view.windows[0].detailRows[0].passive).toBe(true);
+    expect(first(first(view.windows).detailRows).passive).toBe(true);
     // The default (non-passive) bench ability stays passive=false.
-    const benchWindow = buildBurstView([window], [], 300, {}, abilities, true).windows[0];
-    assert.exists(benchWindow);
-    const detailRow = benchWindow.detailRows[0];
-    assert.exists(detailRow);
-    expect(detailRow.passive).toBe(false);
+    const benchWindow = first(buildBurstView([window], [], 300, {}, abilities, true).windows);
+    expect(first(benchWindow.detailRows).passive).toBe(false);
   });
 
   it('mutes and drops player data for a window the fight never reached', () => {
-    const view = buildBurstView([window], [], 5, {}, abilities);
-    assert.exists(view.windows[0]);
-    expect(view.windows[0].status).toBe('muted');
-    assert.exists(view.windows[0]);
-    expect(view.windows[0].overview.playerPct).toBeNull();
+    const burstWindow = first(buildBurstView([window], [], 5, {}, abilities).windows);
+    expect(burstWindow.status).toBe('muted');
+    expect(burstWindow.overview.playerPct).toBeNull();
   });
 
   it('bench-only marks windows neutral info (no player overlay) instead of muted', () => {
-    const view = buildBurstView([window], [], Number.POSITIVE_INFINITY, {}, abilities, true);
-    assert.exists(view.windows[0]);
-    expect(view.windows[0].status).toBe('info');
-    assert.exists(view.windows[0]);
-    expect(view.windows[0].statusIcon).toBe('insights');
-    assert.exists(view.windows[0]);
-    expect(view.windows[0].overview.playerPct).toBeNull();
+    const burstWindow = first(buildBurstView([window], [], Number.POSITIVE_INFINITY, {}, abilities, true).windows);
+    expect(burstWindow.status).toBe('info');
+    expect(burstWindow.statusIcon).toBe('insights');
+    expect(burstWindow.overview.playerPct).toBeNull();
   });
 });
 
@@ -194,11 +186,10 @@ describe('findPlayerBurstWindows', () => {
       new Map([[SHADOW_BLADES_DAMAGE, 'Shadow Blades'], [SHADOW_BLADES, 'Shadow Blades']]),
     );
     // (500 + 100 absorbed) + 400 = 1000; the id-1 hit at 999s is outside the [10, 30) window.
-    assert.exists(out[0]);
-    expect(out[0].window_damage).toBe(1000);
-    assert.exists(out[0]);
-    assert.exists(out[0].ability_breakdown);
-    expect(out[0].ability_breakdown[0]).toMatchObject({ spell_id: SHADOW_BLADES_DAMAGE, damage: 1000, casts: 2 });
+    const playerWindow = first(out);
+    expect(playerWindow.window_damage).toBe(1000);
+    assert.exists(playerWindow.ability_breakdown);
+    expect(playerWindow.ability_breakdown[0]).toMatchObject({ spell_id: SHADOW_BLADES_DAMAGE, damage: 1000, casts: 2 });
   });
 
   it('folds synthetic damage ids onto their normalized spells, summing raw ids that collapse together', () => {
@@ -213,9 +204,8 @@ describe('findPlayerBurstWindows', () => {
       [],
       new Map(),
     );
-    assert.exists(out[0]);
-    assert.exists(out[0].ability_breakdown);
-    const breakdown = out[0].ability_breakdown;
+    const breakdown = first(out).ability_breakdown;
+    assert.exists(breakdown);
     expect(breakdown.find(row => row.spell_id === WOW_AUTO_ATTACK_SPELL_ID)?.damage).toBe(2 * MELEE_HIT);
     expect(breakdown.find(row => row.spell_id === WCL_SYNTHETIC_SOURCE_FALLBACK_ID)?.damage).toBe(2 * SYNTHETIC_HIT);
     // No raw synthetic id survives as its own row.
@@ -224,8 +214,7 @@ describe('findPlayerBurstWindows', () => {
 
   it('excludes an event at exactly the window end (half-open)', () => {
     const out = findPlayerBurstWindows([window], timed([damage(SHADOW_BLADES_DAMAGE, 30, 800)], 0), [], new Map());
-    assert.exists(out[0]);
-    expect(out[0].window_damage).toBe(0);
+    expect(first(out).window_damage).toBe(0);
   });
 
   it('keeps a low-ranked ability the player used so the bench join surfaces its damage', () => {
@@ -242,18 +231,14 @@ describe('findPlayerBurstWindows', () => {
       new Map([[SHADOW_BLADES_DAMAGE, 'Eviscerate']]),
     );
     const benchBreakdown = [{ spell_id: SHADOW_BLADES_DAMAGE, avg_damage: 600, min_damage: 400, max_damage: 800, count: 5, avg_casts: 2 }];
-    assert.exists(out[0]);
-    const rows = burstDetailRows(benchBreakdown, out[0], { [SHADOW_BLADES_DAMAGE]: { icon: 'evis', name: 'Eviscerate' } });
-    assert.exists(rows[0]);
-    expect(rows[0].playerPct).toBe(BENCH_HIT_DAMAGE);
+    const rows = burstDetailRows(benchBreakdown, first(out), { [SHADOW_BLADES_DAMAGE]: { icon: 'evis', name: 'Eviscerate' } });
+    expect(first(rows).playerPct).toBe(BENCH_HIT_DAMAGE);
   });
 });
 
 const wclFake = {
-  getReport: async () => ({
-    title: 't',
-    fights: [{ id: 1, name: 'Boss', startTime: 0, endTime: 300_000, kill: true, encounterID: 1, friendlyPlayers: [] }],
-    masterData: { actors: [], abilities: [{ gameID: SHADOW_BLADES_DAMAGE, name: 'Eviscerate', icon: 'inv' }] },
+  getReport: async () => wclReport({
+    actors: [], abilities: [{ gameID: SHADOW_BLADES_DAMAGE, name: 'Eviscerate', icon: 'inv' }],
   }),
   getAllEvents: async (_code: string, _fightId: number, dataType: string) =>
     dataType === 'Casts' ? [cast(SHADOW_BLADES, 11)] : [damage(SHADOW_BLADES_DAMAGE, 12, 950)],
@@ -293,12 +278,10 @@ describe('BurstFeatureService', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.windows).toHaveLength(1);
-    assert.exists(result.value.windows[0]);
-    expect(result.value.windows[0].overview.playerPct).toBeNull();
-    assert.exists(result.value.windows[0]);
-    expect(result.value.windows[0].status).toBe('info');
-    assert.exists(result.value.windows[0]);
-    expect(result.value.windows[0].statusIcon).toBe('insights');
+    const burstWindow = first(result.value.windows);
+    expect(burstWindow.overview.playerPct).toBeNull();
+    expect(burstWindow.status).toBe('info');
+    expect(burstWindow.statusIcon).toBe('insights');
     expect(result.value.anchors[0]).toEqual({ timeS: 10, windowLengthS: 20 });
   });
 
@@ -307,18 +290,17 @@ describe('BurstFeatureService', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.windows).toHaveLength(1);
-    assert.exists(result.value.windows[0]);
-    expect(result.value.windows[0].overview.playerPct).toBe(950);
-    assert.exists(result.value.windows[0]);
-    assert.exists(result.value.windows[0].detailRows[0]);
-    expect(result.value.windows[0].detailRows[0].label).toBe('Eviscerate');
+    const burstWindow = first(result.value.windows);
+    expect(burstWindow.overview.playerPct).toBe(950);
+    expect(first(burstWindow.detailRows).label).toBe('Eviscerate');
     expect(result.value.anchors[0]).toEqual({ timeS: 10, windowLengthS: 20 });
   });
 
   it('surfaces a WCL failure in the player view as a transient error (no silent bench-only fallback)', async () => {
     const failingWcl = { getReport: async () => { throw new HttpErrorResponse({ status: HTTP_SERVICE_UNAVAILABLE }); } };
     const result = await withBench(ok(benchFixture), failingWcl).loadPlayerView('SubtletyRogue', 1, 'rep', 1, 10);
-    expect(result).toEqual(transient('WCL is unreachable right now.'));
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.kind).toBe('transient');
   });
 
   it('returns an ok informational view when the selected fight is not in the report (live sync)', async () => {
@@ -328,9 +310,8 @@ describe('BurstFeatureService', () => {
     if (!result.ok) return;
     expect(result.value.windows).toHaveLength(1);
     // No player overlay: the informational bench-only view (benchOnly=true) shows the neutral info glyph.
-    assert.exists(result.value.windows[0]);
-    expect(result.value.windows[0].status).toBe('info');
-    assert.exists(result.value.windows[0]);
-    expect(result.value.windows[0].overview.playerPct).toBeNull();
+    const burstWindow = first(result.value.windows);
+    expect(burstWindow.status).toBe('info');
+    expect(burstWindow.overview.playerPct).toBeNull();
   });
 });

@@ -8,6 +8,7 @@ import {
   dpsFromTable, abilityNameMap, buildDeathRows, wipeTimeS,
 } from './pull-overview.service';
 import { withRelativeS } from '../../../shared/analysis/wcl-projections';
+import { wclReport } from '../../../../testing/builders/wcl-fixtures';
 
 const PLAYER_ID = 5;
 const OTHER_PLAYER = 9;
@@ -47,16 +48,14 @@ function fight(over: Partial<WclFight> = {}): WclFight {
 }
 
 function report(): WclReport {
-  return {
-    title: 'log', startTime: 0, fights: [fight()],
-    masterData: {
-      actors: [],
-      abilities: [
-        { gameID: OVERWHELMING_BLAST, name: 'Overwhelming Blast', icon: '' },
-        { gameID: FROST_BOMB, name: 'Frost Bomb', icon: '' },
-      ],
-    },
-  };
+  return wclReport({
+    fights: [fight()],
+    actors: [],
+    abilities: [
+      { gameID: OVERWHELMING_BLAST, name: 'Overwhelming Blast', icon: '' },
+      { gameID: FROST_BOMB, name: 'Frost Bomb', icon: '' },
+    ],
+  });
 }
 
 describe('dpsFromTable', () => {

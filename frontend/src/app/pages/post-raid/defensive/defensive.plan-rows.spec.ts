@@ -1,19 +1,9 @@
 import { assert, describe, it, expect } from 'vitest';
-import { DefensiveBench } from './defensive-data-source';
 import { buildDefensivePlanRows } from './defensive.service';
 import { CLOAK_OF_SHADOWS } from '../../../../testing/spell-ids';
-import { CLOAK_META, defBench } from './defensive-harness';
+import { CLOAK_META, benchWith, defBench } from './defensive-harness';
 
 describe('buildDefensivePlanRows', () => {
-  function benchWith(overrides: Partial<DefensiveBench>): DefensiveBench {
-    return {
-      spec: 'SubtletyRogue', encounter_id: 1, encounter_name: 'Boss', sample_count: 5,
-      per_defensive_benchmarks: {}, defensive_windows: [],
-      defensives: [], cd_spell_ids: {}, ability_icons: {},
-      ...overrides,
-    };
-  }
-
   it('returns [] when the bench is null or has no defensives', () => {
     expect(buildDefensivePlanRows(null)).toEqual([]);
     expect(buildDefensivePlanRows(benchWith({}))).toEqual([]);

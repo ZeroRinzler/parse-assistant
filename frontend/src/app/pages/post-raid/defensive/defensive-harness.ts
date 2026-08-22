@@ -1,6 +1,7 @@
 import { PerDefensiveBenchmark } from '../../../core/models/encounter.models';
 import { CLOAK_OF_SHADOWS } from '../../../../testing/spell-ids';
 import { withRelativeS } from '../../../shared/analysis/wcl-projections';
+import { DefensiveBench } from './defensive-data-source';
 
 /** Fixture events build against a fight-start of 0, so stamping is a pass-through to seconds. */
 export const timed = withRelativeS;
@@ -14,4 +15,30 @@ export function defBench(overrides: Partial<PerDefensiveBenchmark> = {}): PerDef
     majority_hold: false,
     ...overrides,
   };
+}
+
+export function benchWith(overrides: Partial<DefensiveBench> = {}): DefensiveBench {
+  return {
+    spec: 'SubtletyRogue', encounter_id: 1, encounter_name: 'Boss', sample_count: 5,
+    per_defensive_benchmarks: {}, defensive_windows: [],
+    defensives: [], cd_spell_ids: {}, ability_icons: {},
+    ...overrides,
+  };
+}
+
+export const BOSS_HIT_SPELL_ID = 700;
+export const WINDOW_REF_GAME_ID = 6666;
+
+export function fullBench(): DefensiveBench {
+  return benchWith({
+    per_defensive_benchmarks: { 'Cloak of Shadows': defBench() },
+    defensive_windows: [{
+      time_s: 30, window_length_s: 5, dmg_avg: 1000, dmg_min: 800, dmg_max: 1200, dmg_stddev: 100,
+      defensive_name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS, ref_game_id: WINDOW_REF_GAME_ID, common_cds: ['Cloak of Shadows'],
+      ability_breakdown: [{ spell_id: BOSS_HIT_SPELL_ID, avg_damage: 600, min_damage: 400, max_damage: 800 }],
+    }],
+    defensives: [CLOAK_META],
+    cd_spell_ids: { 'Cloak of Shadows': CLOAK_OF_SHADOWS },
+    ability_icons: { [CLOAK_OF_SHADOWS]: { icon: 'cloak', name: 'Cloak of Shadows' }, [BOSS_HIT_SPELL_ID]: { icon: 'hit', name: 'Boss Hit' } },
+  });
 }

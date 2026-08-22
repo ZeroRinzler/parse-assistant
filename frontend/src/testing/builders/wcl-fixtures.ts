@@ -1,18 +1,11 @@
-import { WclAbility, WclRawAbility } from '../../app/core/models/wcl.models';
+import { WclAbility, WclFight, WclRawAbility, WclReport } from '../../app/core/models/wcl.models';
 
 interface FixtureActor { id: number; name: string; subType: string; server: string }
 interface FixtureEnemy { id: number; name: string; gameID: number }
 
-export interface FixtureReport {
-  title: string;
-  fights: {
-    id: number; name: string; startTime: number; endTime: number;
-    kill: boolean; encounterID: number; friendlyPlayers: number[];
-  }[];
-  masterData: { actors: FixtureActor[]; enemies: FixtureEnemy[]; abilities: WclAbility[] };
-}
-
 export interface ReportOverrides {
+  startTimeMs?: number;
+  fights?: WclFight[];
   playerId?: number;
   playerName?: string;
   fightId?: number;
@@ -29,27 +22,42 @@ const DEFAULT_FIGHT_ID = 1;
 const DEFAULT_FIGHT_NAME = 'Boss';
 const DEFAULT_ENCOUNTER_ID = 1;
 const DEFAULT_FIGHT_END_MS = 300_000;
+const MS_PER_S = 1000;
 const ACTOR_ID_PER_PARSE = 10;
 
-export function parseReport(over: ReportOverrides = {}): FixtureReport {
-  const playerId = over.playerId ?? DEFAULT_PLAYER_ID;
-  const playerName = over.playerName ?? DEFAULT_PLAYER_NAME;
+function defaultFight(over: ReportOverrides): WclFight {
+  const endTime = over.endTimeMs ?? DEFAULT_FIGHT_END_MS;
+  return {
+    id: over.fightId ?? DEFAULT_FIGHT_ID,
+    name: DEFAULT_FIGHT_NAME,
+    startTime: 0,
+    endTime,
+    kill: true,
+    encounterID: over.encounterId ?? DEFAULT_ENCOUNTER_ID,
+    attempt: 1,
+    duration_s: endTime / MS_PER_S,
+    friendlyPlayers: [],
+    fightPercentage: 0,
+  };
+}
+
+function defaultMasterData(over: ReportOverrides): NonNullable<WclReport['masterData']> {
+  return {
+    actors: over.actors ?? [{
+      id: over.playerId ?? DEFAULT_PLAYER_ID, name: over.playerName ?? DEFAULT_PLAYER_NAME, subType: 'Rogue', server: '',
+    }],
+    enemies: over.enemies ?? [],
+    abilities: over.abilities ?? [],
+  };
+}
+
+/** `fights` replaces the default pull wholesale, so `fightId` / `endTimeMs` / `encounterId` are ignored beside it. */
+export function wclReport(over: ReportOverrides = {}): WclReport {
   return {
     title: 't',
-    fights: [{
-      id: over.fightId ?? DEFAULT_FIGHT_ID,
-      name: DEFAULT_FIGHT_NAME,
-      startTime: 0,
-      endTime: over.endTimeMs ?? DEFAULT_FIGHT_END_MS,
-      kill: true,
-      encounterID: over.encounterId ?? DEFAULT_ENCOUNTER_ID,
-      friendlyPlayers: [],
-    }],
-    masterData: {
-      actors: over.actors ?? [{ id: playerId, name: playerName, subType: 'Rogue', server: '' }],
-      enemies: over.enemies ?? [],
-      abilities: over.abilities ?? [],
-    },
+    startTime: over.startTimeMs ?? 0,
+    fights: over.fights ?? [defaultFight(over)],
+    masterData: defaultMasterData(over),
   };
 }
 
@@ -76,12 +84,12 @@ const PRIVATE_REPORT_ERROR = 'You do not have permission to view this report.';
 /** Decodes the codes {@link rankingRow} mints, so the two must change together. */
 export function reportsByCode(
   over: ReportOverrides & { privateCode?: string } = {},
-): (code: string) => Promise<FixtureReport> {
+): (code: string) => Promise<WclReport> {
   const { privateCode, ...reportOver } = over;
   return async (code: string) => {
     if (code === privateCode) throw new Error(PRIVATE_REPORT_ERROR);
     const index = Number(code.slice(1));
-    return parseReport({
+    return wclReport({
       playerId: index * ACTOR_ID_PER_PARSE, playerName: `P${index}`, fightId: index, ...reportOver,
     });
   };

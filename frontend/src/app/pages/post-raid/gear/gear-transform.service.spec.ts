@@ -8,7 +8,7 @@ import {
   aggregateTalents, aggregateTrinkets, aggregateEnchants,
 } from './gear-transform.service';
 import { talentKeyFromTree, parseTalentKey } from '../../../shared/gear/talent-key';
-import { parseRankings, parseReport, rankingRow, reportsByCode } from '../../../../testing/builders/wcl-fixtures';
+import { parseRankings, wclReport, rankingRow, reportsByCode } from '../../../../testing/builders/wcl-fixtures';
 import { provideApiFakes } from '../../../../testing/api-fakes';
 
 // Per-slot caps mirrored from the transform service; the boundary tests build one more than the cap.
@@ -212,7 +212,7 @@ describe('withTalentDiffs', () => {
 
   it('leaves builds untouched whether the spec has no dump entry or the dump failed to load', () => {
     expect(withTalentDiffs(builds(), missing('No talent data for this spec.'))).toEqual(builds());
-    expect(withTalentDiffs(builds(), transient('WCL is unreachable right now.'))).toEqual(builds());
+    expect(withTalentDiffs(builds(), transient('WCL outage'))).toEqual(builds());
   });
 });
 
@@ -288,7 +288,7 @@ describe('GearTransformService (live, in-browser)', () => {
     const DECOY_ID = 10;
     const RANKED_ID = 11;
     const RANKED_TALENT_ENTRY = 651;
-    const twinReport = parseReport({
+    const twinReport = wclReport({
       actors: [
         { id: DECOY_ID, name: TWIN_NAME, subType: 'Rogue', server: 'Twisting Nether' },
         { id: RANKED_ID, name: TWIN_NAME, subType: 'Rogue', server: 'Area 52' },

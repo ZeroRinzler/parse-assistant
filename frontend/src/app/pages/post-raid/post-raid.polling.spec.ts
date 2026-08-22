@@ -1,16 +1,14 @@
 import { describe, it, expect, vi } from 'vitest';
-import { Signal, WritableSignal, provideZonelessChangeDetection } from '@angular/core';
+import { Signal, WritableSignal } from '@angular/core';
 import { FormControl } from '@angular/forms';
 import { TestBed } from '@angular/core/testing';
-import { EMPTY, Subscription } from 'rxjs';
+import { Subscription } from 'rxjs';
 import { WclFight, WclPlayer, WclReport } from '../../core/models/wcl.models';
-import { WclApiService } from '../../core/services/wcl-api';
-import { SelectionStore } from '../../core/services/selection-store';
-import { LiveReportSyncService } from '../../core/services/live-report-sync';
-import { MapFeatureService } from './map/map.service';
+import { deferred } from '../../../testing/deferred';
+import { wclReport } from '../../../testing/builders/wcl-fixtures';
 import { LiveCaptureFeatureService } from './live/live-capture.service';
 import { PostRaidComponent } from './post-raid';
-import { fight, player } from './post-raid-harness';
+import { fight, player, postRaidProviders } from './post-raid-harness';
 
 interface PollHandle {
   _pollOnce(): Promise<void>;
@@ -37,30 +35,14 @@ describe('PostRaidComponent live-sync poll', () => {
   const pull2 = () => fight({ id: NEW_PULL_ID, encounterID: BOSS_ENCOUNTER_ID, startTime: 3000, endTime: 4000, name: 'Pull 2' });
 
   function report(fights: WclFight[]): WclReport {
-    return {
-      title: '', startTime: 0, fights,
-      masterData: { actors: [{ id: PLAYER_ID, name: PLAYER_NAME, subType: 'Rogue', server: '' }], enemies: [], abilities: [] },
-    };
-  }
-
-  function defer<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
-    let resolve!: (value: T) => void;
-    const promise = new Promise<T>(res => { resolve = res; });
-    return { promise, resolve };
+    return wclReport({ fights, actors: [{ id: PLAYER_ID, name: PLAYER_NAME, subType: 'Rogue', server: '' }] });
   }
 
   function mountPostRaid() {
     const wcl = { getReport: vi.fn(), getReportFights: vi.fn(), getPlayerDetails: vi.fn() };
-    const mapFeature = { clear: vi.fn(), prepare: vi.fn().mockResolvedValue(undefined), openAt: vi.fn(), ready: vi.fn().mockReturnValue(false) };
-    const selectionStore = { loadPostRaid: vi.fn().mockReturnValue(null), savePostRaid: vi.fn() };
     TestBed.configureTestingModule({
-      providers: [
-        provideZonelessChangeDetection(),
-        { provide: WclApiService, useValue: wcl },
-        { provide: MapFeatureService, useValue: mapFeature },
-        { provide: SelectionStore, useValue: selectionStore },
-        { provide: LiveReportSyncService, useValue: { pollTriggers: () => EMPTY } },
-      ],
+      // The real live-capture service, last so it wins over the harness fake: these tests drive its live switch.
+      providers: [...postRaidProviders(wcl), LiveCaptureFeatureService],
     });
     // Construct viewless (the shell template needs feature data-source tokens this harness omits) and drive _pollOnce directly.
     const comp = TestBed.runInInjectionContext(() => new PostRaidComponent()) as unknown as PollHandle & { _pollingSub: Subscription };
@@ -79,7 +61,7 @@ describe('PostRaidComponent live-sync poll', () => {
 
   it('drops an in-flight poll when live sync is switched off before its report fetch resolves', async () => {
     const { comp, wcl, liveCapture } = mountPostRaid();
-    const pendingReport = defer<WclReport>();
+    const pendingReport = deferred<WclReport>();
     const fightsProbe = Promise.resolve([pull1(), pull2()]);
     wcl.getReportFights.mockReturnValue(fightsProbe);
     wcl.getReport.mockReturnValue(pendingReport.promise);
@@ -106,7 +88,7 @@ describe('PostRaidComponent live-sync poll', () => {
 
   it('skips the report fetch and drops the poll when the report is switched before the probe resolves', async () => {
     const { comp, wcl, liveCapture } = mountPostRaid();
-    const pendingProbe = defer<WclFight[]>();
+    const pendingProbe = deferred<WclFight[]>();
     wcl.getReportFights.mockReturnValue(pendingProbe.promise);
     wcl.getReport.mockResolvedValue(report([pull1(), pull2()]));
     seedLoaded(comp, liveCapture);

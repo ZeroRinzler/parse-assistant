@@ -1,16 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { FormControl } from '@angular/forms';
 import { TestBed } from '@angular/core/testing';
-import { EMPTY } from 'rxjs';
 import { PlayerDetailGroups, WclFight, WclReport } from '../../core/models/wcl.models';
-import { WclApiService } from '../../core/services/wcl-api';
 import { SelectionStore } from '../../core/services/selection-store';
-import { LiveReportSyncService } from '../../core/services/live-report-sync';
-import { MapFeatureService } from './map/map.service';
-import { LiveCaptureFeatureService } from './live/live-capture.service';
+import { wclReport } from '../../../testing/builders/wcl-fixtures';
 import { PostRaidComponent, unsupportedEncounterNotice } from './post-raid';
-import { fight, postRaidProviders } from './post-raid-harness';
+import { fight, loadReport, postRaidProviders } from './post-raid-harness';
 
 describe('PostRaidComponent sticky player name', () => {
   const REPORT_CODE = 'grBQ3vTHXAtPa4JK';                         // a valid 16-character report code
@@ -27,49 +22,29 @@ describe('PostRaidComponent sticky player name', () => {
   };
 
   function report(): WclReport {
-    return {
-      title: 'Test', startTime: 0,
+    return wclReport({
       fights: [fight({
         id: 10, name: 'Boss', encounterID: BOSS_ENCOUNTER_ID, startTime: 0, endTime: 10_000, kill: true,
         friendlyPlayers: [FALLBACK_PLAYER.id, PICKED_PLAYER.id],
       })],
-      masterData: {
-        actors: [FALLBACK_PLAYER, PICKED_PLAYER].map(p => ({ id: p.id, name: p.name, subType: p.spec, server: '' })),
-        enemies: [], abilities: [],
-      },
-    };
+      actors: [FALLBACK_PLAYER, PICKED_PLAYER].map(p => ({ id: p.id, name: p.name, subType: p.spec, server: '' })),
+    });
   }
-
-  const noop = (): void => undefined;
 
   function mount(): { component: PostRaidComponent & Record<string, unknown>; store: SelectionStore } {
     const wclApi = {
       getReport: () => Promise.resolve(report()),
       getReportFights: () => Promise.resolve(report().fights),
       getPlayerDetails: () => Promise.resolve(groups),
-    } as unknown as WclApiService;
-    const mapFeature = { clear: noop, prepare: () => Promise.resolve() } as unknown as MapFeatureService;
-    const liveCapture = { liveEnabled: signal(false), clear: noop, prepare: noop, setStatus: noop } as unknown as LiveCaptureFeatureService;
-    const liveSync = { pollTriggers: () => EMPTY } as unknown as LiveReportSyncService;
+    };
     TestBed.configureTestingModule({
-      providers: [
-        provideZonelessChangeDetection(),
-        PostRaidComponent,
-        { provide: WclApiService, useValue: wclApi },
-        { provide: MapFeatureService, useValue: mapFeature },
-        { provide: LiveCaptureFeatureService, useValue: liveCapture },
-        { provide: LiveReportSyncService, useValue: liveSync },
-      ],
+      // The real store, last so it wins over the harness fake: these tests assert on what the page persisted.
+      providers: [...postRaidProviders(wclApi), SelectionStore],
     });
     return {
       component: TestBed.inject(PostRaidComponent) as PostRaidComponent & Record<string, unknown>,
       store: TestBed.inject(SelectionStore),
     };
-  }
-
-  async function loadReport(component: Record<string, unknown>): Promise<void> {
-    (component['reportControl'] as FormControl<string>).setValue(REPORT_CODE);
-    await (component['loadReport'] as () => Promise<void>)();
   }
 
   beforeEach(() => { localStorage.clear(); });
@@ -78,7 +53,7 @@ describe('PostRaidComponent sticky player name', () => {
     const { component, store } = mount();
     store.savePostRaid({ playerName: ABSENT_STICKY_NAME });
 
-    await loadReport(component);
+    await loadReport(component, REPORT_CODE);
 
     // The sticky character is absent, so the page auto-selects the alphabetical fallback...
     expect((component['selectedPlayerId'] as () => number | null)()).toBe(FALLBACK_PLAYER.id);
@@ -89,7 +64,7 @@ describe('PostRaidComponent sticky player name', () => {
   it('persists the player name when the user explicitly picks one', async () => {
     const { component, store } = mount();
     store.savePostRaid({ playerName: ABSENT_STICKY_NAME });
-    await loadReport(component);
+    await loadReport(component, REPORT_CODE);
 
     (component['playerControl']).setValue(PICKED_PLAYER.id);
     await (component['onPlayerChange'])();
@@ -110,46 +85,24 @@ describe('PostRaidComponent fight selection from URL', () => {
   };
 
   function report(): WclReport {
-    return {
-      title: 'Test', startTime: 0,
+    return wclReport({
       fights: [
         fight({ id: EARLIER_FIGHT_ID, name: 'Boss', encounterID: BOSS_ENCOUNTER_ID, startTime: 0, endTime: 10_000, friendlyPlayers: [PLAYER.id] }),
         fight({ id: LATEST_FIGHT_ID, name: 'Boss', encounterID: BOSS_ENCOUNTER_ID, startTime: 20_000, endTime: 30_000, friendlyPlayers: [PLAYER.id] }),
       ],
-      masterData: { actors: [{ id: PLAYER.id, name: PLAYER.name, subType: PLAYER.spec, server: '' }], enemies: [], abilities: [] },
-    };
+      actors: [{ id: PLAYER.id, name: PLAYER.name, subType: PLAYER.spec, server: '' }],
+    });
   }
-
-  const noop = (): void => undefined;
 
   function mount(): PostRaidComponent & Record<string, unknown> {
     const wclApi = {
       getReport: () => Promise.resolve(report()),
       getReportFights: () => Promise.resolve(report().fights),
       getPlayerDetails: () => Promise.resolve(groups),
-    } as unknown as WclApiService;
-    const mapFeature = { clear: noop, prepare: () => Promise.resolve() } as unknown as MapFeatureService;
-    const liveCapture = { liveEnabled: signal(false), clear: noop, prepare: noop, setStatus: noop } as unknown as LiveCaptureFeatureService;
-    const liveSync = { pollTriggers: () => EMPTY } as unknown as LiveReportSyncService;
-    TestBed.configureTestingModule({
-      providers: [
-        provideZonelessChangeDetection(),
-        PostRaidComponent,
-        { provide: WclApiService, useValue: wclApi },
-        { provide: MapFeatureService, useValue: mapFeature },
-        { provide: LiveCaptureFeatureService, useValue: liveCapture },
-        { provide: LiveReportSyncService, useValue: liveSync },
-      ],
-    });
+    };
+    TestBed.configureTestingModule({ providers: [...postRaidProviders(wclApi)] });
     return TestBed.inject(PostRaidComponent) as PostRaidComponent & Record<string, unknown>;
   }
-
-  async function loadReport(component: Record<string, unknown>, input: string): Promise<void> {
-    (component['reportControl'] as FormControl<string>).setValue(input);
-    await (component['loadReport'] as () => Promise<void>)();
-  }
-
-  beforeEach(() => { localStorage.clear(); });
 
   it('selects the fight named in the pasted URL instead of the latest pull', async () => {
     const component = mount();
@@ -247,28 +200,20 @@ describe('PostRaidComponent keystone fight', () => {
   };
 
   function mixedReport(): WclReport {
-    return {
-      title: 'Mixed night', startTime: 0,
+    return wclReport({
       fights: [
         fight({ ...DUNGEON_FIGHT, startTime: 0, endTime: 10_000, kill: true, friendlyPlayers: [PLAYER.id] }),
         fight({ ...RAID_FIGHT, startTime: 20_000, endTime: 30_000, kill: true, friendlyPlayers: [PLAYER.id] }),
       ],
-      masterData: {
-        actors: [{ id: PLAYER.id, name: PLAYER.name, subType: PLAYER.spec, server: '' }],
-        enemies: [], abilities: [],
-      },
-    };
+      actors: [{ id: PLAYER.id, name: PLAYER.name, subType: PLAYER.spec, server: '' }],
+    });
   }
 
   function mount(): { vm: Record<string, unknown>; prepareMap: ReturnType<typeof vi.fn>; getPlayerDetails: ReturnType<typeof vi.fn> } {
     const getPlayerDetails = vi.fn(() => Promise.resolve(groups));
-    const wclApi = { getReport: () => Promise.resolve(mixedReport()), getPlayerDetails } as unknown as WclApiService;
+    const wclApi = { getReport: () => Promise.resolve(mixedReport()), getPlayerDetails };
     const prepareMap = vi.fn(() => Promise.resolve());
-    TestBed.configureTestingModule({
-      providers: [
-        ...postRaidProviders(wclApi, prepareMap),
-      ],
-    });
+    TestBed.configureTestingModule({ providers: [...postRaidProviders(wclApi, prepareMap)] });
     return { vm: TestBed.inject(PostRaidComponent) as unknown as Record<string, unknown>, prepareMap, getPlayerDetails };
   }
 
@@ -277,15 +222,10 @@ describe('PostRaidComponent keystone fight', () => {
     await (vm['onFightChange'] as () => Promise<void>)();
   }
 
-  async function load(vm: Record<string, unknown>): Promise<void> {
-    (vm['reportControl'] as FormControl<string>).setValue(REPORT_CODE);
-    await (vm['loadReport'] as () => Promise<void>)();
-  }
-
   it('lists the keystone fight and analyzes the raid pull the report also holds', async () => {
     const { vm, prepareMap } = mount();
 
-    await load(vm);
+    await loadReport(vm, REPORT_CODE);
 
     expect((vm['fights'] as () => WclFight[])().map(f => f.id)).toEqual([DUNGEON_FIGHT.id, RAID_FIGHT.id]);
     expect((vm['selectedFightId'] as () => number | null)()).toBe(RAID_FIGHT.id);
@@ -296,7 +236,7 @@ describe('PostRaidComponent keystone fight', () => {
 
   it('stops at the notice and fetches nothing when the keystone fight is selected', async () => {
     const { vm, prepareMap, getPlayerDetails } = mount();
-    await load(vm);
+    await loadReport(vm, REPORT_CODE);
     prepareMap.mockClear();
     getPlayerDetails.mockClear();
 
@@ -312,7 +252,7 @@ describe('PostRaidComponent keystone fight', () => {
 
   it('clears the notice when the selection moves back to the raid pull', async () => {
     const { vm } = mount();
-    await load(vm);
+    await loadReport(vm, REPORT_CODE);
     await selectFight(vm, DUNGEON_FIGHT.id);
 
     await selectFight(vm, RAID_FIGHT.id);

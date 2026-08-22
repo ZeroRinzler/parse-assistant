@@ -1,10 +1,12 @@
-import { vi } from 'vitest';
+import { assert, vi } from 'vitest';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
+import { FormControl } from '@angular/forms';
 import { EMPTY } from 'rxjs';
-import { WclFight, WclPlayer } from '../../core/models/wcl.models';
+import { PlayerDetailGroups, WclFight, WclPlayer, WclReport } from '../../core/models/wcl.models';
 import { WclApiService } from '../../core/services/wcl-api';
 import { SelectionStore } from '../../core/services/selection-store';
 import { LiveReportSyncService } from '../../core/services/live-report-sync';
+import { Deferred, deferred } from '../../../testing/deferred';
 import { MapFeatureService } from './map/map.service';
 import { LiveCaptureFeatureService } from './live/live-capture.service';
 import { PostRaidComponent } from './post-raid';
@@ -25,4 +27,54 @@ export function postRaidProviders(wclApi: unknown, prepareMap = vi.fn(() => Prom
     { provide: LiveReportSyncService, useValue: { pollTriggers: () => EMPTY } },
     { provide: SelectionStore, useValue: { loadPostRaid: () => null, savePostRaid: vi.fn() } },
   ];
+}
+
+interface ReportLoadHandle {
+  reportControl: FormControl<string>;
+  loadReport(): Promise<void>;
+}
+
+export function loadReport(vm: unknown, input: string): Promise<void> {
+  const handle = vm as ReportLoadHandle;
+  handle.reportControl.setValue(input);
+  return handle.loadReport();
+}
+
+export interface ParkedWclApi {
+  getReport(code: string): Promise<WclReport>;
+  getPlayerDetails(code: string, fightId: number): Promise<PlayerDetailGroups>;
+  settleReport(code: string, report: WclReport): Promise<void>;
+  settleDetails(fightId: number, groups: PlayerDetailGroups): void;
+}
+
+function take<K, T>(pending: Map<K, Deferred<T>>, key: K): Deferred<T> {
+  const parked = pending.get(key);
+  assert.exists(parked);
+  return parked;
+}
+
+export function parkedWclApi(): ParkedWclApi {
+  const reports = new Map<string, Deferred<WclReport>>();
+  const details = new Map<number, Deferred<PlayerDetailGroups>>();
+  return {
+    getReport(code) {
+      const parked = deferred<WclReport>();
+      reports.set(code, parked);
+      return parked.promise;
+    },
+    getPlayerDetails(_code, fightId) {
+      const parked = deferred<PlayerDetailGroups>();
+      details.set(fightId, parked);
+      return parked.promise;
+    },
+    async settleReport(code, report) {
+      const parked = take(reports, code);
+      parked.resolve(report);
+      // Awaiting the parked fetch resumes the caller first, so the load has moved on by the time this returns.
+      await parked.promise;
+    },
+    settleDetails(fightId, groups) {
+      take(details, fightId).resolve(groups);
+    },
+  };
 }

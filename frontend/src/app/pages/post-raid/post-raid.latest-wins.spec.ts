@@ -1,15 +1,14 @@
-import { assert, describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { Signal, WritableSignal } from '@angular/core';
 import { FormControl } from '@angular/forms';
 import { TestBed } from '@angular/core/testing';
 import { PlayerDetailGroups, WclFight, WclPlayer, WclReport } from '../../core/models/wcl.models';
+import { wclReport } from '../../../testing/builders/wcl-fixtures';
 import { PostRaidComponent, unsupportedEncounterNotice } from './post-raid';
-import { fight, player, postRaidProviders } from './post-raid-harness';
+import { ParkedWclApi, fight, loadReport, parkedWclApi, player, postRaidProviders } from './post-raid-harness';
 
 interface SelectionHandle {
   onFightChange(): Promise<void>;
-  loadReport(): Promise<void>;
-  reportControl: FormControl<string>;
   reportCode: WritableSignal<string>;
   fights: WritableSignal<WclFight[]>;
   players: WritableSignal<WclPlayer[]>;
@@ -47,41 +46,14 @@ describe('PostRaidComponent selection latest-wins', () => {
     fight({ id: LATER_PULL_ID, name: 'Boss', encounterID: BOSS_ENCOUNTER_ID, difficulty: RAID_MYTHIC_DIFFICULTY, startTime: 30_000, endTime: 40_000, friendlyPlayers: [PLAYER_ID] }),
   ];
 
-  class FakeWclApi {
-    private readonly detailResolvers = new Map<number, (groups: PlayerDetailGroups) => void>();
-    private reportResolver: ((report: WclReport) => void) | null = null;
-    private reportFetch: Promise<WclReport> | null = null;
-    getReport(): Promise<WclReport> {
-      this.reportFetch = new Promise(resolve => { this.reportResolver = resolve; });
-      return this.reportFetch;
-    }
-    getPlayerDetails(_code: string, fightId: number): Promise<PlayerDetailGroups> {
-      return new Promise(resolve => this.detailResolvers.set(fightId, resolve));
-    }
-    /** Awaiting the parked fetch resumes the caller first, so the load has moved on by the time this returns. */
-    async settleReport(): Promise<void> {
-      const resolve = this.reportResolver;
-      assert.exists(resolve);
-      resolve({
-        title: '', startTime: 0, fights: pulls(),
-        masterData: { actors: [{ id: PLAYER_ID, name: PLAYER_NAME, subType: CLASS_NAME, server: '' }], enemies: [], abilities: [] },
-      });
-      await this.reportFetch;
-    }
-    settleDetails(fightId: number, groups: PlayerDetailGroups): void {
-      const resolve = this.detailResolvers.get(fightId);
-      assert.exists(resolve);
-      resolve(groups);
-    }
-  }
+  const loadedReport = (): WclReport => wclReport({
+    fights: pulls(),
+    actors: [{ id: PLAYER_ID, name: PLAYER_NAME, subType: CLASS_NAME, server: '' }],
+  });
 
-  function setup(): { api: FakeWclApi; vm: SelectionHandle } {
-    const api = new FakeWclApi();
-    TestBed.configureTestingModule({
-      providers: [
-        ...postRaidProviders(api),
-      ],
-    });
+  function setup(): { api: ParkedWclApi; vm: SelectionHandle } {
+    const api = parkedWclApi();
+    TestBed.configureTestingModule({ providers: [...postRaidProviders(api)] });
     const vm = TestBed.inject(PostRaidComponent) as unknown as SelectionHandle;
     vm.reportCode.set(REPORT_CODE);
     vm.fights.set(pulls());
@@ -144,14 +116,13 @@ describe('PostRaidComponent selection latest-wins', () => {
     const { api, vm } = setup();
 
     const earlier = selectFight(vm, EARLIER_PULL_ID);
-    vm.reportControl.setValue(REPORT_CODE);
-    const loading = vm.loadReport();
+    const loading = loadReport(vm, REPORT_CODE);
 
     api.settleDetails(EARLIER_PULL_ID, EARLIER_DETAILS);
     await earlier;
     expect(vm.spec()).toBe('');
 
-    await api.settleReport();
+    await api.settleReport(REPORT_CODE, loadedReport());
     api.settleDetails(LATER_PULL_ID, LATER_DETAILS);
     await Promise.all([earlier, loading]);
 
@@ -169,68 +140,31 @@ describe('PostRaidComponent loadReport latest-wins', () => {
   const REPORT_B_START = 2_000;
   const EXPECTED_SPEC = 'SubtletyRogue';
 
-  const reportB: WclReport = {
-    title: 'B', startTime: REPORT_B_START,
+  const reportB: WclReport = wclReport({
+    startTimeMs: REPORT_B_START,
     fights: [fight({ id: FIGHT_B_ID, encounterID: ENCOUNTER_ID, startTime: 0, endTime: 10_000, friendlyPlayers: [PLAYER_B_ID] })],
-    masterData: { actors: [{ id: PLAYER_B_ID, name: 'Bee', subType: 'Rogue', server: '' }], enemies: [], abilities: [] },
-  };
-  const reportA: WclReport = {
-    title: 'A', startTime: REPORT_A_START, fights: [],
-    masterData: { actors: [], enemies: [], abilities: [] },
-  };
+    actors: [{ id: PLAYER_B_ID, name: 'Bee', subType: 'Rogue', server: '' }],
+  });
+  const reportA: WclReport = wclReport({ startTimeMs: REPORT_A_START, fights: [], actors: [] });
   const detailsB: PlayerDetailGroups = { dps: [{ id: PLAYER_B_ID, type: 'Rogue', name: 'Bee', specs: [{ spec: 'Subtlety' }] }] };
 
-  class FakeWclApi {
-    private readonly reportResolvers = new Map<string, (report: WclReport) => void>();
-    private readonly reportFetches = new Map<string, Promise<WclReport>>();
-    private readonly playerDetailResolvers: ((groups: PlayerDetailGroups) => void)[] = [];
-    getReport(code: string): Promise<WclReport> {
-      const fetch = new Promise<WclReport>(resolve => this.reportResolvers.set(code, resolve));
-      this.reportFetches.set(code, fetch);
-      return fetch;
-    }
-    getPlayerDetails(): Promise<PlayerDetailGroups> {
-      return new Promise(resolve => this.playerDetailResolvers.push(resolve));
-    }
-    /** Awaiting the parked fetch resumes the caller first, so the load has moved on by the time this returns. */
-    async settleReport(code: string, report: WclReport): Promise<void> {
-      const resolve = this.reportResolvers.get(code);
-      assert.exists(resolve);
-      resolve(report);
-      await this.reportFetches.get(code);
-    }
-    settlePlayerDetails(groups: PlayerDetailGroups): void {
-      const resolve = this.playerDetailResolvers.shift();
-      assert.exists(resolve);
-      resolve(groups);
-    }
-  }
-
   // Constructs the shell directly (no view attached) so loadReport runs without rendering the card templates.
-  function setup(): { api: FakeWclApi; vm: Record<string, unknown> } {
-    const api = new FakeWclApi();
-    TestBed.configureTestingModule({
-      providers: [
-        ...postRaidProviders(api),
-      ],
-    });
+  function setup(): { api: ParkedWclApi; vm: Record<string, unknown> } {
+    const api = parkedWclApi();
+    TestBed.configureTestingModule({ providers: [...postRaidProviders(api)] });
     return { api, vm: TestBed.inject(PostRaidComponent) as unknown as Record<string, unknown> };
   }
 
   it('keeps the newer report and its spinner when a slower earlier load resolves late', async () => {
     const { api, vm } = setup();
-    const reportControl = vm['reportControl'] as FormControl<string>;
-    const loadReport = () => (vm['loadReport'] as () => Promise<void>)();
     const reportCode = vm['reportCode'] as () => string;
     const loadingReport = vm['loadingReport'] as () => boolean;
     const reportStartTime = vm['reportStartTime'] as () => number;
     const fights = vm['fights'] as () => WclFight[];
     const spec = vm['spec'] as () => string;
 
-    reportControl.setValue(CODE_A);
-    const loadA = loadReport(); // parks on getReport(A)
-    reportControl.setValue(CODE_B);
-    const loadB = loadReport(); // parks on getReport(B)
+    const loadA = loadReport(vm, CODE_A);
+    const loadB = loadReport(vm, CODE_B);
 
     // B's report resolves first and advances to its still-pending spec resolve.
     await api.settleReport(CODE_B, reportB);
@@ -246,7 +180,7 @@ describe('PostRaidComponent loadReport latest-wins', () => {
     expect(loadingReport()).toBe(true); // A's finally did not clear B's in-flight spinner
 
     // B finishes: its own finally clears the spinner and its spec lands.
-    api.settlePlayerDetails(detailsB);
+    api.settleDetails(FIGHT_B_ID, detailsB);
     await loadB;
     expect(loadingReport()).toBe(false);
     expect(spec()).toBe(EXPECTED_SPEC);
