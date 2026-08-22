@@ -2,11 +2,13 @@ export interface SpecReportRow {
   spec: string;
   version: number | null;
   ingestedAtS: number | null;
+  checkedCount: number;
   emptyCount: number;
   selected: boolean;
 }
 
 export const SELECTED_MARKER = '*';
+const NEVER_CHECKED = 'never checked';
 const UNKNOWN = '?';
 
 const MINUTE_S = 60;
@@ -24,17 +26,29 @@ function formatAge(ageS: number): string {
   return AGE.format(-age, 'second');
 }
 
+// Keyed on the checked count, not on a null stamp: this is the exact condition that sorts a spec first.
+function noteCell(row: SpecReportRow): string {
+  if (row.checkedCount === 0) return NEVER_CHECKED;
+  return row.emptyCount > 0 ? `${row.emptyCount} empty` : '';
+}
+
+function ageCell(row: SpecReportRow, nowS: number): string {
+  if (row.checkedCount === 0) return '';
+  return row.ingestedAtS != null ? formatAge(nowS - row.ingestedAtS) : UNKNOWN;
+}
+
 export function formatSpecReport(rows: readonly SpecReportRow[], nowS: number): string {
   const cells = rows.map(row => ({
     marker: row.selected ? SELECTED_MARKER : ' ',
     spec: row.spec,
-    version: `v${row.version ?? UNKNOWN}`,
-    age: row.ingestedAtS != null ? formatAge(nowS - row.ingestedAtS) : UNKNOWN,
-    empty: row.emptyCount > 0 ? `  ${row.emptyCount} empty` : '',
+    version: row.version != null ? `v${row.version}` : '',
+    age: ageCell(row, nowS),
+    note: noteCell(row),
   }));
   const specWidth = Math.max(0, ...cells.map(cell => cell.spec.length));
   const versionWidth = Math.max(0, ...cells.map(cell => cell.version.length));
+  const ageWidth = Math.max(0, ...cells.map(cell => cell.age.length));
   return cells
-    .map(cell => `${cell.marker} ${cell.spec.padEnd(specWidth)}  ${cell.version.padEnd(versionWidth)}  ${cell.age}${cell.empty}`)
+    .map(cell => `${cell.marker} ${cell.spec.padEnd(specWidth)}  ${cell.version.padEnd(versionWidth)}  ${cell.age.padStart(ageWidth)}  ${cell.note}`.trimEnd())
     .join('\n');
 }

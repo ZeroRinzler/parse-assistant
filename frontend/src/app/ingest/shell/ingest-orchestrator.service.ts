@@ -268,11 +268,12 @@ export class IngestOrchestratorService {
       spec,
       version: displayBySpec.get(spec)?.displayVersion ?? null,
       ingestedAtS: displayBySpec.get(spec)?.displayIngestedAtS ?? null,
+      checkedCount: displayBySpec.get(spec)?.entry.checkedCount ?? 0,
       emptyCount: displayBySpec.get(spec)?.emptyCount ?? 0,
       selected: selectedSpecs.has(spec),
     }));
     console.log(
-      `Specs (old version first, ${SELECTED_MARKER} = ingested this run):\n${formatSpecReport(rows, nowS())}`,
+      `Specs (never checked first, then oldest version, ${SELECTED_MARKER} = ingested this run):\n${formatSpecReport(rows, nowS())}`,
     );
     return selected;
   }

@@ -10,6 +10,8 @@ const READY_POLL_MS = 500;
 const DONE_POLL_MS = 1_000;
 const DONE_TIMEOUT_MS = 15 * 60_000;
 const KILL_GRACE_MS = 5_000;
+const RESOURCE_FAILURE = 'Failed to load resource';
+const NOT_FOUND = /\b404\b/;
 
 const children = [];
 
@@ -70,6 +72,13 @@ async function waitForHttp(url, name) {
   }
 }
 
+// A 404 from the file store is its "not written yet" answer, not an error.
+function appConsoleLine(message) {
+  const text = message.text();
+  if (!text.startsWith(RESOURCE_FAILURE)) return text;
+  return NOT_FOUND.test(text) ? null : `${text} ${message.location().url}`;
+}
+
 async function launchBrowser() {
   try {
     return await chromium.launch();
@@ -88,7 +97,10 @@ async function main() {
   browser = await launchBrowser();
   const context = await browser.newContext();
   const page = await context.newPage();
-  page.on('console', message => console.log(`[app] ${message.text()}`));
+  page.on('console', message => {
+    const line = appConsoleLine(message);
+    if (line) console.log(`[app] ${line}`);
+  });
   page.on('pageerror', err => console.error(`[app] pageerror: ${err.message}`));
   const params = new URLSearchParams();
   if (process.env.CURRENT_RAIDS) params.set('currentRaids', process.env.CURRENT_RAIDS);
