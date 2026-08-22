@@ -27,125 +27,166 @@ function fakeClient(handlers: FakeHandlers): WclQueryClient {
   };
 }
 
-// Build `count` non-anonymous ranking rows (each has a report, so toParseRankings keeps it).
-const ranks = (count: number): WclRawRanking[] =>
-  Array.from({ length: count }, (_unused, index) => ({ name: `P${index}`, report: { code: `r${index}`, fightID: index } }));
+const NOW_S = 1_760_000_000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// WCL dates a ranking in milliseconds, so a fixture pull `ageDays` old is stamped in them too.
+const ranks = (count: number, ageDays = 1): WclRawRanking[] =>
+  Array.from({ length: count }, (_unused, index) => ({
+    name: `P${index}`, report: { code: `r${index}`, fightID: index }, startTime: NOW_S * 1000 - ageDays * DAY_MS,
+  }));
 
 describe('getEncounters', () => {
-  // The spy keeps the runner output clean and lets the drop tests assert on the warning.
+  // The retire test asserts on the warning; the log spy only keeps the runner output clean.
   let warnSpy: MockInstance<typeof console.warn>;
-  beforeEach(() => { warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined); });
-  afterEach(() => { warnSpy.mockRestore(); });
+  let logSpy: MockInstance<typeof console.log>;
+  beforeEach(() => {
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+  });
+  afterEach(() => { warnSpy.mockRestore(); logSpy.mockRestore(); });
 
-  // Modeled on the real Midnight worldData.
+  const ABYSS = 53, SPOREFALL = 50, DUMMY = 52, FINISHED = 46;
+
+  const finishedZone = { id: FINISHED, name: 'VS / DR / MQD', frozen: false, encounters: [{ id: 3176, name: 'Imperator' }, { id: 3177, name: 'Vorasius' }] };
+
+  // Modeled on the real Midnight worldData, which really does run two raids at once alongside a still-ranked finished tier.
   const expansions = [{
     id: 7, name: 'Midnight', zones: [
-      { id: 46, name: 'VS / DR / MQD', frozen: false, encounters: [{ id: 3176, name: 'Imperator' }, { id: 3177, name: 'Vorasius' }] },
-      { id: 50, name: 'Sporefall', frozen: false, encounters: [{ id: 3159, name: 'Rotmire' }] },
-      { id: 52, name: 'Dummy Dome', frozen: false, encounters: [{ id: 3591, name: 'Sinister Single' }] },
-      { id: 53, name: 'The Venomous Abyss', frozen: true, encounters: [{ id: 3470, name: 'Old' }] },
+      finishedZone,
+      { id: SPOREFALL, name: 'Sporefall', frozen: false, encounters: [{ id: 3159, name: 'Rotmire' }] },
+      { id: DUMMY, name: 'Dummy Dome', frozen: false, encounters: [{ id: 3591, name: 'Sinister Single' }] },
+      { id: ABYSS, name: 'The Venomous Abyss', frozen: false, encounters: [{ id: 3470, name: "Nek'zali" }, { id: 3445, name: 'Sentinels' }] },
+      { id: 54, name: 'The Venomous Abyss', frozen: true, encounters: [{ id: 3480, name: 'Frozen copy' }] },
       { id: 47, name: 'Mythic+ Season 1', frozen: false, encounters: [{ id: 112526, name: 'Dungeon' }] },
-      // Newest zone of all AND fully ranked, so only its name exclusion keeps it from winning the newest-first probe.
-      { id: 510, name: 'Sporefall Complete Raid', frozen: false, encounters: [{ id: 3191, name: 'Aggregate' }] },
+      { id: 510, name: 'The Venomous Abyss Complete Raid', frozen: false, encounters: [{ id: 3191, name: 'Aggregate' }] },
     ],
   }];
 
-  const rankingsByEncounter: Record<number, number> = { 3176: 10, 3177: 10, 3159: 10, 3591: 0, 3191: 10 };
+  const STALE_DAYS = 30;
+  const rankingsByEncounter: Record<number, WclRawRanking[]> = {
+    3470: ranks(10), 3445: ranks(10), 3159: ranks(10), 3191: ranks(10), 112526: ranks(10),
+    3176: ranks(10, STALE_DAYS), 3177: ranks(10, STALE_DAYS), 3591: [],
+  };
 
-  function contentClient(overrides: Partial<FakeHandlers> = {}, probeCounter?: { count: number }): WclQueryClient {
+  function contentClient(overrides: Partial<FakeHandlers> = {}, probed?: number[]): WclQueryClient {
     return fakeClient({
       query: (gql, vars) => {
         if (gql.includes('expansions')) return { worldData: { expansions } };
-        if (probeCounter) probeCounter.count++;
         const encounterID = (vars as { encounterID: number }).encounterID;
-        return { worldData: { encounter: { name: 'Boss', characterRankings: { rankings: ranks(rankingsByEncounter[encounterID] ?? 0) } } } };
+        probed?.push(encounterID);
+        return { worldData: { encounter: { name: 'Boss', characterRankings: { rankings: rankingsByEncounter[encounterID] ?? [] } } } };
       },
       ...overrides,
     });
   }
 
-  it('makes the newest live raid zone the whole current content, past the Complete Raid aggregate and an older zone that still has rankings', async () => {
-    const { encounters, protectedIds } = await getEncounters(contentClient(), SPEC_WCL);
-    expect(encounters.map(encounter => encounter.id)).toEqual([3159]);
-    // Zones at or above the live zone's id stay protected; the phased-out zone 46 (and the older M+ zone) do not.
-    expect([...protectedIds].sort((a, b) => a - b)).toEqual([3159, 3191, 3591]);
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('getEncounters'), expect.stringContaining('Dummy Dome'));
-  });
-
-  it('probes newest zone first and stops at the first live one, leaving older zones unqueried', async () => {
-    const probeCounter = { count: 0 };
-    await getEncounters(contentClient({}, probeCounter), SPEC_WCL);
-    // Zone 52 has no rankings, so all 3 probe specs run all 3 difficulties (9); zone 50 early-exits on its first Mythic probe (1); zone 46 is never probed.
-    expect(probeCounter.count).toBe(10);
-  });
-
-  it('detects a just-opened raid with Heroic parses but no Mythic kills yet', async () => {
-    const difficultiesTried: number[] = [];
-    const client = fakeClient({
-      query: (gql, vars) => {
-        if (gql.includes('expansions')) {
-          return { worldData: { expansions: [{ id: 7, name: 'Midnight', zones: [{ id: 60, name: 'New Raid', frozen: false, encounters: [{ id: 9100, name: 'First Boss' }] }] }] } };
-        }
-        const difficulty = (vars as { difficulty: number }).difficulty;
-        difficultiesTried.push(difficulty);
-        return { worldData: { encounter: { name: 'First Boss', characterRankings: { rankings: difficulty === HEROIC_DIFFICULTY ? ranks(10) : [] } } } };
-      },
+  describe('with no raid on record', () => {
+    it('adopts every raid being progressed right now, newest first, and leaves the finished tier behind', async () => {
+      const { encounters, protectedIds, zones, reset } = await getEncounters(contentClient(), SPEC_WCL, [], NOW_S);
+      expect(zones).toEqual([
+        { zone_id: ABYSS, zone_name: 'The Venomous Abyss' },
+        { zone_id: SPOREFALL, zone_name: 'Sporefall' },
+      ]);
+      expect(encounters.map(encounter => encounter.id)).toEqual([3470, 3445, 3159]);
+      expect([...protectedIds].sort((a, b) => a - b)).toEqual([3159, 3445, 3470]);
+      expect(reset).toBe(true);
     });
-    const { encounters } = await getEncounters(client, SPEC_WCL);
-    expect(encounters.map(encounter => encounter.id)).toEqual([9100]);
-    expect(difficultiesTried).toEqual([MYTHIC_DIFFICULTY, HEROIC_DIFFICULTY]);
-  });
 
-  it('keeps every candidate protected when no zone at all is live', async () => {
-    const client = contentClient({
-      query: (gql) => {
-        if (gql.includes('expansions')) return { worldData: { expansions } };
-        return { worldData: { encounter: { name: 'Boss', characterRankings: { rankings: [] } } } };
-      },
+    it('never adopts a finished tier, however many real parses it still ranks (boundary: same count, only older)', async () => {
+      const onlyFinished = [{ id: 7, name: 'Midnight', zones: [finishedZone] }];
+      const client = contentClient({ query: (gql, vars) => {
+        if (gql.includes('expansions')) return { worldData: { expansions: onlyFinished } };
+        const encounterID = (vars as { encounterID: number }).encounterID;
+        return { worldData: { encounter: { name: 'Boss', characterRankings: { rankings: rankingsByEncounter[encounterID] ?? [] } } } };
+      } });
+      const { encounters, zones, reset } = await getEncounters(client, SPEC_WCL, [], NOW_S);
+      expect(encounters).toHaveLength(0);
+      expect(zones).toEqual([]);
+      expect(reset).toBe(false);
     });
-    const { encounters, protectedIds } = await getEncounters(client, SPEC_WCL);
-    expect(encounters).toHaveLength(0);
-    expect([...protectedIds].sort((a, b) => a - b)).toEqual([3159, 3176, 3177, 3191, 3591, 112526]);
-  });
 
-  it('propagates a BudgetExceededError raised while probing', async () => {
-    const client = contentClient({ assertBudget: () => { throw new BudgetExceededError('low'); } });
-    await expect(getEncounters(client, SPEC_WCL)).rejects.toThrow(BudgetExceededError);
-  });
-
-  it('drops a zone whose only parses are privacy-anonymized (the "Dummy Dome" case)', async () => {
-    const anonymized: WclRawRanking[] = Array.from({ length: 8 }, (_unused, index) => ({
-      name: `Character 13600${index}-1163300${index}`, report: { code: `r${index}`, fightID: index },
-    }));
-    const client = fakeClient({
-      query: (gql) => {
-        if (gql.includes('expansions')) {
-          return { worldData: { expansions: [{ id: 7, name: 'Midnight', zones: [{ id: 52, name: 'Dummy Dome', frozen: false, encounters: [{ id: 3591, name: 'Sinister Single' }] }] }] } };
-        }
-        return { worldData: { encounter: { name: 'Sinister Single', characterRankings: { rankings: anonymized } } } };
-      },
+    it('detects a just-opened raid with Heroic parses but no Mythic kills yet', async () => {
+      const difficultiesTried: number[] = [];
+      const client = fakeClient({
+        query: (gql, vars) => {
+          if (gql.includes('expansions')) {
+            return { worldData: { expansions: [{ id: 7, name: 'Midnight', zones: [{ id: 60, name: 'New Raid', frozen: false, encounters: [{ id: 9100, name: 'First Boss' }] }] }] } };
+          }
+          const difficulty = (vars as { difficulty: number }).difficulty;
+          difficultiesTried.push(difficulty);
+          return { worldData: { encounter: { name: 'First Boss', characterRankings: { rankings: difficulty === HEROIC_DIFFICULTY ? ranks(10) : [] } } } };
+        },
+      });
+      const { encounters } = await getEncounters(client, SPEC_WCL, [], NOW_S);
+      expect(encounters.map(encounter => encounter.id)).toEqual([9100]);
+      expect(difficultiesTried).toEqual([MYTHIC_DIFFICULTY, HEROIC_DIFFICULTY]);
     });
-    const { encounters } = await getEncounters(client, SPEC_WCL);
-    expect(encounters).toHaveLength(0);
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('getEncounters'), expect.stringContaining('Dummy Dome'));
+
+    it('adopts nothing when a zone\'s only parses are privacy-anonymized (the "Dummy Dome" case)', async () => {
+      const anonymized: WclRawRanking[] = Array.from({ length: 8 }, (_unused, index) => ({
+        name: `Character 13600${index}-1163300${index}`, report: { code: `r${index}`, fightID: index }, startTime: NOW_S * 1000,
+      }));
+      const client = fakeClient({
+        query: (gql) => {
+          if (gql.includes('expansions')) {
+            return { worldData: { expansions: [{ id: 7, name: 'Midnight', zones: [{ id: DUMMY, name: 'Dummy Dome', frozen: false, encounters: [{ id: 3591, name: 'Sinister Single' }] }] }] } };
+          }
+          return { worldData: { encounter: { name: 'Sinister Single', characterRankings: { rankings: anonymized } } } };
+        },
+      });
+      expect((await getEncounters(client, SPEC_WCL, [], NOW_S)).encounters).toHaveLength(0);
+    });
+
+    it('adopts nothing from a zone that stays below the liveness threshold', async () => {
+      const client = fakeClient({
+        query: (gql, vars) => {
+          if (gql.includes('expansions')) {
+            return { worldData: { expansions: [{ id: 7, name: 'Midnight', zones: [{ id: 60, name: 'Thin Raid', frozen: false, encounters: [{ id: 9001, name: 'Boss' }] }] }] } };
+          }
+          // Only the first probe spec returns parses, and just 2 at Mythic alone - below the threshold of 3.
+          const className = (vars as { className: string }).className;
+          const difficulty = (vars as { difficulty: number }).difficulty;
+          const rankings = className === 'Mage' && difficulty === MYTHIC_DIFFICULTY ? ranks(2) : [];
+          return { worldData: { encounter: { name: 'Boss', characterRankings: { rankings } } } };
+        },
+      });
+      expect((await getEncounters(client, SPEC_WCL, [], NOW_S)).encounters).toHaveLength(0);
+    });
   });
 
-  it('drops a zone whose probe stays below the liveness threshold', async () => {
-    const client = fakeClient({
-      query: (gql, vars) => {
-        if (gql.includes('expansions')) {
-          return { worldData: { expansions: [{ id: 7, name: 'Midnight', zones: [{ id: 60, name: 'Thin Raid', frozen: false, encounters: [{ id: 9001, name: 'Boss' }] }] }] } };
-        }
-        // Only the first probe spec (Mage) returns parses, and just 2 at Mythic alone - below the threshold of 3.
-        const className = (vars as { className: string }).className;
-        const difficulty = (vars as { difficulty: number }).difficulty;
-        const rankings = className === 'Mage' && difficulty === MYTHIC_DIFFICULTY ? ranks(2) : [];
-        return { worldData: { encounter: { name: 'Boss', characterRankings: { rankings } } } };
-      },
+  describe('with raids already on record', () => {
+    it('keeps them without probing them, so a run that cannot confirm one changes nothing', async () => {
+      const probed: number[] = [];
+      const { encounters, zones, reset } = await getEncounters(
+        contentClient({}, probed), SPEC_WCL, [ABYSS, SPOREFALL], NOW_S);
+      expect(zones.map(raid => raid.zone_id)).toEqual([ABYSS, SPOREFALL]);
+      expect(encounters.map(encounter => encounter.id)).toEqual([3470, 3445, 3159]);
+      expect(reset).toBe(false);
+      expect([...new Set(probed)].sort((a, b) => a - b)).toEqual([3176, 3591]);
     });
-    const { encounters } = await getEncounters(client, SPEC_WCL);
-    expect(encounters).toHaveLength(0);
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('getEncounters'), expect.stringContaining('Thin Raid'));
+
+    it('lets a second raid join an existing one instead of replacing it, protecting both', async () => {
+      const { zones, protectedIds, reset } = await getEncounters(contentClient(), SPEC_WCL, [SPOREFALL], NOW_S);
+      expect(zones.map(raid => raid.zone_id)).toEqual([ABYSS, SPOREFALL]);
+      expect([...protectedIds].sort((a, b) => a - b)).toEqual([3159, 3445, 3470]);
+      expect(reset).toBe(true);
+    });
+
+    it('retires a recorded raid WCL has frozen or dropped, and stops protecting its encounters', async () => {
+      const RETIRED = 44;
+      const { zones, protectedIds, reset } = await getEncounters(
+        contentClient(), SPEC_WCL, [ABYSS, SPOREFALL, RETIRED], NOW_S);
+      expect(zones.map(raid => raid.zone_id)).toEqual([ABYSS, SPOREFALL]);
+      expect([...protectedIds].sort((a, b) => a - b)).toEqual([3159, 3445, 3470]);
+      expect(reset).toBe(true);
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('getEncounters'), expect.stringContaining(String(RETIRED)));
+    });
+
+    it('propagates a BudgetExceededError raised while probing', async () => {
+      const client = contentClient({ assertBudget: () => { throw new BudgetExceededError('low'); } });
+      await expect(getEncounters(client, SPEC_WCL, [], NOW_S)).rejects.toThrow(BudgetExceededError);
+    });
   });
 });
 

@@ -118,11 +118,13 @@ export class IngestOrchestratorService {
     console.log('Resolving current raids...');
     const discovery = await this.discoverContent(client, specWcl);
     if (!discovery) return;
-    const { encounters, protectedIds } = discovery;
-    console.log(encounters.length
-      ? `Current raid: ${encounters[0]?.zone} (${encounters.length} encounters)`
-      : 'No live raid zone found; keeping the existing data.');
-    await this.resetStaleSpecData(encounters, protectedIds);
+    const { encounters, protectedIds, zones, reset } = discovery;
+    console.log(zones.length
+      ? `Current raids: ${zones.map(raid => raid.zone_name).join(', ')} (${encounters.length} encounters)${reset ? ' - raid set changed, resetting the dataset' : ''}`
+      : 'No current raid on record and none detected; leaving the existing data alone.');
+    if (reset) await this.resetStaleSpecData(protectedIds);
+    await this.refreshIndices(encounters);
+    if (zones.length) await this.dataFile.writeCurrentRaids(zones);
 
     const specs = await this.orderedSpecsFromDisk();
     if (!specs.length) {
@@ -161,8 +163,11 @@ export class IngestOrchestratorService {
 
   /** Null means the budget stopped the run at discovery and the summary is already published. */
   private async discoverContent(client: ApiWclClient, specWcl: SpecWclMap): Promise<CurrentContent | null> {
+    const stored = await this.dataFile.getCurrentRaids();
+    // Reading a failure as "no record" would retire every recorded raid and prune its data.
+    if (!stored.ok) throw new Error(`Cannot read the recorded raids: ${stored.error.message}`);
     try {
-      return await getEncounters(client, specWcl);
+      return await getEncounters(client, specWcl, stored.value.map(raid => raid.zone_id), nowS());
     } catch (err) {
       const budgetSummary = discoveryBudgetSummary(err);
       if (!budgetSummary) throw err;
@@ -172,8 +177,8 @@ export class IngestOrchestratorService {
     }
   }
 
-  /** Runs before spec selection so a tier flip resets every spec in one pass - resetting only the selected specs would leave them at zero data and permanently re-selected while a new tier waits for its first parses. */
-  private async resetStaleSpecData(encounters: IngestEncounter[], protectedIds: Set<number>): Promise<void> {
+  /** Runs before spec selection: resetting only the selected specs leaves them at zero data and permanently re-selected. */
+  private async resetStaleSpecData(protectedIds: Set<number>): Promise<void> {
     if (protectedIds.size === 0) {
       logWarn('resetStaleSpecData', 'empty protected set - skipping the reset (likely a transient WCL failure)');
       return;
@@ -181,6 +186,12 @@ export class IngestOrchestratorService {
     for (const spec of await this.dataFile.listSpecs()) {
       const pruned = await this.pruneStaleEncounters(spec, protectedIds);
       if (pruned.length) console.log(`  [${spec}] pruned ${pruned.length} stale encounter(s): ${pruned.join(', ')}`);
+    }
+  }
+
+  /** Every run, so samples ingested for a spec that is not selected again still surface in its index. */
+  private async refreshIndices(encounters: IngestEncounter[]): Promise<void> {
+    for (const spec of await this.dataFile.listSpecs()) {
       await this.rebuildEncountersIndex(spec, encounters);
     }
     await this.rebuildSpecIndex();

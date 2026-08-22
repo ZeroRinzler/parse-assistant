@@ -76,6 +76,7 @@ export interface ParseRanking {
   server: string;
   report_code: string;
   fight_id: number;
+  started_at_s: number;
 }
 
 export interface WclGearItem {
@@ -117,6 +118,7 @@ export interface WclRawRanking {
   name?: string;
   server?: { name?: string };
   report?: { code?: string; fightID?: number };
+  startTime?: number;
 }
 
 // Either a JSON blob (string) or an already-parsed object; consumers unwrap both forms (see `unwrapRankings`).

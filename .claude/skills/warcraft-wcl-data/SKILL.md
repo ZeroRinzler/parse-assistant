@@ -29,6 +29,8 @@ Non-obvious things that have caused bugs - read before touching gear extraction 
 | **Weapon slots are 15/16 (since Midnight)** | Gear array has 17 entries (0-16). Weapons at index 15 (MH) and 16 (OH). Index 14 is Back/Cloak. |
 | **Trinket slots are 12 and 13** | Confirmed from `encounterRankings` responses. |
 | **`permanentEnchant` is a string** | Numeric ID returned as string. `permanentEnchantName` is never populated. Enchant names resolved via `gameData.enchant(id)` in the gear transform service. |
+| **A ranking's `startTime` is epoch ms; the partition decides which parses you see** | Without an explicit partition WCL answers from its default, whose top parses can be months old. Query partitions newest-first (`rankingsFromPartition`) or a current raid reads as dead. |
+| **Several raids are current at once** | More than one non-frozen raid zone carries fresh parses, and a finished tier stays non-frozen and ranked for months. Neither `frozen` nor zone id separates them; parse recency does. |
 | **Two incompatible talent formats** | `characterRankings` -> old format (`{talentID, points}` list) -> `v1:` key. `encounterRankings` -> Midnight format (nested `nodeId` dict) -> `v2:` key. ID spaces are incompatible; cannot compare directly. |
 | **Resolving the talent key** | Both the bench and the analyzed player's `v2:` talent key come from each parse's CombatantInfo `talentTree` (the nested `nodeID` dict, via `talentKeyFromTree` in `gear-extract.ts`), so they are the same format and compare directly. |
 | **`server.region` may be a string** | In `characterRankings` JSON blob, `server.region` is sometimes `"EU"` (string) rather than `{slug: "eu"}`. Handle both forms. |
