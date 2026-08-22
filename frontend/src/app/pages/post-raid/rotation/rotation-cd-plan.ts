@@ -1,16 +1,12 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
-import { DecimalPipe } from '@angular/common';
-import { GameIconComponent } from '../../../shared/components/game-icon/game-icon';
-import { CollapsibleTextComponent } from '../../../shared/components/collapsible-text/collapsible-text';
-import { LoadStateComponent } from '../../../shared/components/load-state/load-state';
-import { FormatDurationPipe } from '../../../shared/pipes/format-duration-pipe';
+import { PlanTableComponent } from '../../../shared/components/plan-table/plan-table';
 import { loadResource } from '../../../shared/state/load-resource';
 import { RotationFeatureService, CdPlanRow } from './rotation.service';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-rotation-cd-plan',
-  imports: [DecimalPipe, GameIconComponent, CollapsibleTextComponent, LoadStateComponent, FormatDurationPipe],
+  imports: [PlanTableComponent],
   templateUrl: './rotation-cd-plan.html',
 })
 export class RotationCdPlanComponent {
@@ -19,7 +15,7 @@ export class RotationCdPlanComponent {
   readonly spec = input.required<string>();
   readonly encounterId = input.required<number>();
 
-  protected readonly title = 'Cooldown plan';
+  protected readonly heading = 'Cooldown plan';
   protected readonly subtitle = 'Offensive cooldown usage across top parses.';
 
   readonly busyChange = output<boolean>();

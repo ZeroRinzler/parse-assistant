@@ -1,0 +1,64 @@
+@if (state() === 'unavailable') {
+  <wl-load-state [heading]="heading()" [subtitle]="subtitle()" [error]="error()"></wl-load-state>
+} @else if (state() === 'rows') {
+  <div class="bg-[var(--surface)] border border-[var(--border)] rounded-[10px] overflow-hidden">
+    <div class="px-4 pt-3 pb-2">
+      <div class="text-[17px] font-semibold text-[var(--text)]">{{ heading() }}</div>
+      <div class="text-xs text-[var(--muted)] mt-0.5">{{ subtitle() }}</div>
+    </div>
+
+    <!-- Column labels (desktop only; mobile uses inline labels per cell) -->
+    <div class="hidden md:grid grid-cols-[1fr_190px_200px] gap-[14px] px-4 pb-1">
+      <div></div>
+      <div class="text-[10px] uppercase tracking-widest text-[var(--muted)] text-right">Plan</div>
+      <div class="text-[10px] uppercase tracking-widest text-[var(--muted)] pl-[14px]">How to use</div>
+    </div>
+
+    @for (row of rows(); track row.name) {
+      <div class="grid grid-cols-1 md:grid-cols-[1fr_190px_200px] gap-3 md:gap-[14px] items-start md:items-center px-4 py-[10px] border-t border-[var(--border)]">
+        <div class="flex items-center gap-[11px] min-w-0 flex-wrap">
+          @if (row.spellId; as spellId) {
+            <wl-game-icon [id]="spellId" [icon]="row.icon" [name]="row.name"></wl-game-icon>
+          } @else {
+            <span class="text-sm text-[var(--text)] whitespace-nowrap">{{ row.name }}</span>
+          }
+          @if (row.bloodlust) {
+            <span class="inline-flex items-center gap-1.5 bg-[var(--gold)]/10 border border-[var(--gold)]/35 rounded-[4px] px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.5px] text-[var(--gold)] whitespace-nowrap">Bloodlust</span>
+          }
+        </div>
+
+        <div class="flex flex-col items-start md:items-end gap-1.5">
+          <div class="flex flex-wrap items-baseline gap-x-4 gap-y-1 md:flex-col md:items-end md:gap-1.5">
+            <span class="flex items-baseline gap-1.5">
+              <span class="font-mono text-[10px] uppercase tracking-[0.5px] text-[var(--muted)]">First use</span>
+              <span class="font-mono text-[13px] text-[var(--accent)] tabular-nums">{{ row.firstCastS | formatDuration }}</span>
+            </span>
+            <span class="flex flex-wrap items-baseline gap-1.5">
+              <span class="font-mono text-[10px] uppercase tracking-[0.5px] text-[var(--muted)]">Typical uses</span>
+              @if (row.sampleCount) {
+                <span class="font-mono text-[12.5px] text-[var(--text)] tabular-nums">{{ row.typicalUses != null ? (row.typicalUses | number:'1.0-1') : 'None' }}</span>
+                <span class="font-mono text-[10px] text-[var(--muted)] tabular-nums">{{ row.usedSampleCount }}/{{ row.sampleCount }} parses</span>
+              } @else {
+                <span class="font-mono text-[12.5px] text-[var(--muted)]">-</span>
+              }
+            </span>
+          </div>
+          <div class="flex flex-wrap items-baseline gap-1.5 md:justify-end">
+            <span class="font-mono text-[10px] uppercase tracking-[0.5px] text-[var(--muted)]">Holds</span>
+              @for (hold of row.holds; track hold.castIndex) {
+                <span class="font-mono text-[13px] text-[var(--accent)] bg-[var(--surface-alt)] border border-[var(--border)] rounded-[4px] px-1.5 py-px whitespace-nowrap tabular-nums">{{ hold.targetS | formatDuration }}</span>
+              }
+            @empty {
+              <span class="font-mono text-[12.5px] text-[var(--muted)]">None</span>
+            }
+          </div>
+        </div>
+
+        <div class="text-[13px] text-[var(--muted)] leading-[1.45] border-t md:border-t-0 md:border-l border-[var(--border)] pt-2.5 md:pt-0 pl-0 md:pl-[14px]">
+          <span class="md:hidden block font-mono text-[10px] uppercase tracking-wider text-[var(--muted)] mb-1">How to use</span>
+          <wl-collapsible-text>{{ row.rule }}</wl-collapsible-text>
+        </div>
+      </div>
+    }
+  </div>
+}
