@@ -15,7 +15,8 @@ export function parsePrioritySpecs(raw: string | null | undefined): readonly str
 
 export interface SpecOrderEntry {
   spec: string;
-  dataCount: number;
+  /** Encounters with a bench plus those checked and found to have no Mythic parses. */
+  checkedCount: number;
   onCurrentVersion: boolean;
 }
 
@@ -26,7 +27,7 @@ export function orderSpecsByVersion(
   random: () => number = Math.random,
 ): string[] {
   const group = (entry: SpecOrderEntry): number =>
-    entry.dataCount === 0 ? 0 : entry.onCurrentVersion ? 2 : 1;
+    entry.checkedCount === 0 ? 0 : entry.onCurrentVersion ? 2 : 1;
   const priorityRank = new Map(prioritySpecs.map((spec, index) => [spec, index] as const));
   const priority = (entry: SpecOrderEntry): number => priorityRank.get(entry.spec) ?? prioritySpecs.length;
   // One fixed random key per entry keeps the comparator a valid total order, unlike calling random() inside it.
@@ -55,16 +56,16 @@ export function specsForRun(
   return { ordered, selected: ordered.slice(0, SPEC_LIMIT) };
 }
 
-/** So a partially ingested spec fills its remaining bosses before re-checking the ones already done. */
+/** So a partially ingested spec fills the bosses it has never been checked against before re-checking the ones already settled. */
 export function orderEncountersByMissingFirst<T extends { id: number }>(
   encounters: readonly T[],
-  presentIds: ReadonlySet<number>,
+  checkedIds: ReadonlySet<number>,
 ): T[] {
   return encounters
     .map((encounter, index) => ({ encounter, index }))
     .sort(
       (a, b) =>
-        Number(presentIds.has(a.encounter.id)) - Number(presentIds.has(b.encounter.id)) ||
+        Number(checkedIds.has(a.encounter.id)) - Number(checkedIds.has(b.encounter.id)) ||
         a.index - b.index,
     )
     .map(item => item.encounter);

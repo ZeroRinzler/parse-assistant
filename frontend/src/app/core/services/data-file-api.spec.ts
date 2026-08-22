@@ -73,6 +73,12 @@ describe('DataFileApiService reads', () => {
       .toEqual(transient('WCL is unreachable right now.'));
   });
 
+  it('reads the ingest state at {spec}/ingest-state.json', async () => {
+    const transport = new RecordingTransport(ok({ empty_encounter_ids: [] }));
+    await withTransport(transport).getIngestState(SPEC);
+    expect(transport.reads).toEqual(['SubtletyRogue/ingest-state.json']);
+  });
+
   it('reads a rulebook at {spec}/rulebook.json', async () => {
     const transport = new RecordingTransport(ok({ spec: SPEC }));
     await withTransport(transport).getRulebook(SPEC);
@@ -136,6 +142,12 @@ describe('DataFileApiService writes and listing', () => {
     expect(transport.writes).toEqual([['SubtletyRogue/burst/3176.json', data]]);
   });
 
+  it('writes the ingest state to {spec}/ingest-state.json', async () => {
+    const transport = new RecordingTransport();
+    const data = { ingest_version: 26, ingested_at_s: 1787332065, empty_encounter_ids: [ENCOUNTER_ID] };
+    await withTransport(transport).writeIngestState(SPEC, data);
+    expect(transport.writes).toEqual([['SubtletyRogue/ingest-state.json', data]]);
+  });
 
   it('writes the spec manifest to index.json', async () => {
     const transport = new RecordingTransport();

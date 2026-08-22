@@ -2,6 +2,7 @@ export interface SpecReportRow {
   spec: string;
   version: number | null;
   ingestedAtS: number | null;
+  emptyCount: number;
   selected: boolean;
 }
 
@@ -29,10 +30,11 @@ export function formatSpecReport(rows: readonly SpecReportRow[], nowS: number): 
     spec: row.spec,
     version: `v${row.version ?? UNKNOWN}`,
     age: row.ingestedAtS != null ? formatAge(nowS - row.ingestedAtS) : UNKNOWN,
+    empty: row.emptyCount > 0 ? `  ${row.emptyCount} empty` : '',
   }));
   const specWidth = Math.max(0, ...cells.map(cell => cell.spec.length));
   const versionWidth = Math.max(0, ...cells.map(cell => cell.version.length));
   return cells
-    .map(cell => `${cell.marker} ${cell.spec.padEnd(specWidth)}  ${cell.version.padEnd(versionWidth)}  ${cell.age}`)
+    .map(cell => `${cell.marker} ${cell.spec.padEnd(specWidth)}  ${cell.version.padEnd(versionWidth)}  ${cell.age}${cell.empty}`)
     .join('\n');
 }

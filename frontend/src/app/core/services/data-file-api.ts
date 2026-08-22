@@ -39,6 +39,15 @@ export class DataFileApiService {
     return foldMissingToEmpty(await this.io.readJson<EncounterEntry[]>(`${spec}/encounters.json`));
   }
 
+  // Typed `unknown` both ways: the shape belongs to the ingest layer, which core may not import.
+  getIngestState(spec: string): Promise<Result<unknown>> {
+    return this.io.readJson<unknown>(`${spec}/ingest-state.json`);
+  }
+
+  writeIngestState(spec: string, data: unknown): Promise<void> {
+    return this.io.writeJson(`${spec}/ingest-state.json`, data);
+  }
+
   writeSlice(spec: string, encounterId: number, slice: string, data: unknown): Promise<void> {
     return this.io.writeJson(`${spec}/${slice}/${encounterId}.json`, data);
   }

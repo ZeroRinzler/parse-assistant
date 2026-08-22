@@ -5,16 +5,16 @@ import {
 } from './ordering';
 
 const entry = (over: Partial<SpecOrderEntry> & { spec: string }): SpecOrderEntry => ({
-  dataCount: 5,
+  checkedCount: 5,
   onCurrentVersion: true,
   ...over,
 });
 
 describe('orderSpecsByVersion', () => {
-  it('puts empty specs first, then old-version, then current-version', () => {
+  it('puts never-checked specs first, then old-version, then current-version', () => {
     const order = orderSpecsByVersion([
       entry({ spec: 'Current', onCurrentVersion: true }),
-      entry({ spec: 'Empty', dataCount: 0, onCurrentVersion: false }),
+      entry({ spec: 'Empty', checkedCount: 0, onCurrentVersion: false }),
       entry({ spec: 'Old', onCurrentVersion: false }),
     ], []);
     expect(order).toEqual(['Empty', 'Old', 'Current']);
@@ -77,7 +77,7 @@ describe('orderSpecsByVersion', () => {
     const order = orderSpecsByVersion(
       [
         entry({ spec: 'SubtletyRogue', onCurrentVersion: true }),
-        entry({ spec: 'EmptySpec', dataCount: 0, onCurrentVersion: false }),
+        entry({ spec: 'EmptySpec', checkedCount: 0, onCurrentVersion: false }),
         entry({ spec: 'OldSpec', onCurrentVersion: false }),
       ],
       ['SubtletyRogue'],
@@ -108,6 +108,28 @@ describe('orderSpecsByVersion', () => {
     expect(ordered).toHaveLength(SPEC_LIMIT + 3);
     expect(ordered.slice(0, SPEC_LIMIT)).toEqual(selected);
     expect([...ordered].sort()).toEqual(entries.map(item => item.spec).sort());
+  });
+
+  it('ranks a spec whose checked encounters are all empty with the specs that have data', () => {
+    const order = orderSpecsByVersion(
+      [
+        entry({ spec: 'Benched', onCurrentVersion: true }),
+        entry({ spec: 'CheckedEmpty', checkedCount: 9, onCurrentVersion: true }),
+        entry({ spec: 'NeverChecked', checkedCount: 0, onCurrentVersion: false }),
+      ],
+      [],
+      () => 0,
+    );
+    expect(order[0]).toBe('NeverChecked');
+    expect(order.slice(1).sort()).toEqual(['Benched', 'CheckedEmpty']);
+  });
+
+  it('keeps a spec with nothing checked ahead of one with a single checked encounter', () => {
+    const order = orderSpecsByVersion([
+      entry({ spec: 'OneChecked', checkedCount: 1, onCurrentVersion: true }),
+      entry({ spec: 'NoneChecked', checkedCount: 0, onCurrentVersion: true }),
+    ], []);
+    expect(order).toEqual(['NoneChecked', 'OneChecked']);
   });
 
   it('pins a custom priority list in order, ahead of the randomized rest', () => {

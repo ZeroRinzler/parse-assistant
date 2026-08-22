@@ -11,7 +11,6 @@ import { NorthernSkyTransformService } from '../../pages/post-raid/northern-sky/
 
 export interface SliceDescriptor {
   readonly file: string;
-  readonly countsAsBenchData: boolean;
   readonly transform: { getBench(spec: string, encId: number, partition: number | null): Promise<Result<object>> };
   readonly write: (spec: string, encId: number, data: object) => Promise<void>;
 }
@@ -23,7 +22,7 @@ export type SliceRegistry = readonly [SliceDescriptor, ...SliceDescriptor[]];
 export function sliceRegistry(): SliceRegistry {
   const dataFile = inject(DataFileApiService);
   const bench = (file: string, transform: SliceDescriptor['transform']): SliceDescriptor => ({
-    file, transform, countsAsBenchData: true,
+    file, transform,
     write: (spec, encId, data) => dataFile.writeSlice(spec, encId, file, data),
   });
   return [
@@ -32,7 +31,7 @@ export function sliceRegistry(): SliceRegistry {
     bench('defensive', inject(DefensiveTransformService)),
     bench('gear', inject(GearTransformService)),
     {
-      file: 'positions', transform: inject(MapTransformService), countsAsBenchData: false,
+      file: 'positions', transform: inject(MapTransformService),
       write: (spec, encId, data) => dataFile.writePositions(spec, encId, data as EncounterPositions),
     },
     bench('northern-sky', inject(NorthernSkyTransformService)),

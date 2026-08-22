@@ -14,9 +14,9 @@ async function pick(label: string, option: string): Promise<void> {
 test.beforeAll(async ({ browser }) => {
   page = await browser.newPage();
   await page.goto('/pre');
-  await pick('Class', 'Rogue');
-  await pick('Spec', 'Subtlety');
-  await pick('Encounter', 'Crown of the Cosmos');
+  await pick('Class', 'Warrior');
+  await pick('Spec', 'Arms');
+  await pick('Encounter', "Nek'zali the Soulcoiler");
 });
 
 test.afterAll(async () => {
@@ -24,9 +24,9 @@ test.afterAll(async () => {
 });
 
 test('selecting class, spec, and encounter loads that spec\'s plan', async () => {
-  await expect(page.getByRole('combobox', { name: 'Class' })).toContainText('Rogue');
-  await expect(page.getByRole('combobox', { name: 'Spec' })).toContainText('Subtlety');
-  await expect(page.getByRole('combobox', { name: 'Encounter' })).toContainText('Crown of the Cosmos');
+  await expect(page.getByRole('combobox', { name: 'Class' })).toContainText('Warrior');
+  await expect(page.getByRole('combobox', { name: 'Spec' })).toContainText('Arms');
+  await expect(page.getByRole('combobox', { name: 'Encounter' })).toContainText("Nek'zali the Soulcoiler");
   const cooldownPlan = page.locator('wl-rotation-cd-plan');
   await showsEntity(cooldownPlan);
   await shows(cooldownPlan, CLOCK);

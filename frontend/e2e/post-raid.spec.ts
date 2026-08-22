@@ -3,8 +3,8 @@ import {
   findingRows, shows, showsEntity, showsFindingRows, showsOnPlan, CD_CHIP, CLOCK, DAMAGE, PERCENT, RATIO,
 } from './support';
 
-const REPORT_URL = 'https://www.warcraftlogs.com/reports/YkVMTyfmFLtXZ1NQ?fight=last';
-const PLAYER_NAME = 'Elsahr';
+const REPORT_URL = 'https://www.warcraftlogs.com/reports/fGDk8PmvBzdhtQga?fight=last';
+const PLAYER_NAME = 'Rolexes';
 // Mirrors POST_RAID_KEY in core/services/selection-store.ts.
 const STICKY_PLAYER_KEY = 'wl.sel.postRaid';
 
@@ -43,12 +43,12 @@ test.afterAll(async () => {
 
 test('analyzing the report selects the last pull and the sticky player', async () => {
   const fight = page.getByRole('combobox', { name: 'Fight' });
-  await expect(fight).toContainText('Crown of the Cosmos');
+  await expect(fight).toContainText("Nek'zali the Soulcoiler");
   await expect(fight).toContainText('Kill');
   await expect(fight).toContainText(CLOCK);
   const player = page.getByRole('combobox', { name: 'Player' });
   await expect(player).toContainText(PLAYER_NAME);
-  await expect(player.getByAltText('Subtlety Rogue')).toBeVisible();
+  await expect(player.getByAltText('Shadow Priest')).toBeVisible();
 });
 
 test('following the latest pull hands the fight selection to the live poll', async () => {

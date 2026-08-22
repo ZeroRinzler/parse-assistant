@@ -23,6 +23,9 @@ import {
   type SignatureRanking, type IngestStamp,
 } from '../signature';
 import { readStoredMetadata, signatureMatches, type StampedFile } from '../../core/data-source/metadata/stored-metadata';
+import {
+  readIngestState, nextIngestState, prunedIngestState, encounterIdsFromFiles, type SpecIngestState,
+} from '../ingest-state';
 import { formatSpecReport, SELECTED_MARKER, type SpecReportRow } from '../spec-report';
 import type { IngestEncounter } from '../models/wcl.models';
 
@@ -31,6 +34,14 @@ const TOP_N = 10;
 const SIGNATURE_POOL_COUNT = TOP_N * 2;
 const POINTS_MARGIN = 500;
 const SLICE_CONCURRENCY = 3;
+
+type EncounterOutcome = 'benched' | 'empty' | 'failed';
+
+const ENCOUNTER_OUTCOME_NOTE: Record<EncounterOutcome, string> = {
+  benched: 'done',
+  empty: 'no parses to bench',
+  failed: 'bench load failed, retried next run',
+};
 
 /** Published on `globalThis.__INGEST_DONE__` - the headless harness's exit signal. */
 export interface IngestRunSummary {
@@ -161,6 +172,7 @@ export class IngestOrchestratorService {
     for (const spec of await this.dataFile.listSpecs()) {
       const pruned = await this.pruneStaleEncounters(spec, protectedIds);
       if (pruned.length) console.log(`  [${spec}] pruned ${pruned.length} stale encounter(s): ${pruned.join(', ')}`);
+      await this.pruneIngestState(spec, protectedIds);
     }
   }
 
@@ -224,26 +236,29 @@ export class IngestOrchestratorService {
     if (!withRulebook.length) return [];
 
     const orderInputs = await Promise.all(withRulebook.map(async spec => {
-      const burstFiles = (await this.dataFile.listSliceFiles(spec, 'burst'))
-        .filter(file => file.endsWith('.json'));
-      const stamps = await Promise.all(burstFiles.map(async file => {
-        const slice = await this.dataFile.getSlice<StampedFile>(spec, parseInt(file), 'burst');
+      const benched = await this.benchedIds(spec);
+      const state = await this.loadIngestState(spec);
+      const emptyIds = state?.empty_encounter_ids ?? [];
+      const stamps = await Promise.all(benched.map(async id => {
+        const slice = await this.dataFile.getSlice<StampedFile>(spec, id, 'burst');
         return readStoredMetadata(slice.ok ? slice.value : null);
       }));
       const versions = stamps.map(stamp => stamp.version);
+      if (state) versions.push(state.ingest_version);
       const storedVersions = versions.filter((stored): stored is number => stored !== null);
       const storedTimes = stamps
         .map(stamp => stamp.ingestedAtS)
         .filter((stored): stored is number => stored !== null);
+      if (state) storedTimes.push(state.ingested_at_s);
       const entry: SpecOrderEntry = {
         spec,
-        dataCount: burstFiles.length,
-        onCurrentVersion: burstFiles.length > 0 && versions.every(stored => stored === INGEST_VERSION),
+        checkedCount: new Set([...benched, ...emptyIds]).size,
+        onCurrentVersion: versions.length > 0 && versions.every(stored => stored === INGEST_VERSION),
       };
       // Worst version but most recent write: "still on v23", "last ingested 3h ago".
       const displayVersion = storedVersions.length ? Math.min(...storedVersions) : null;
       const displayIngestedAtS = storedTimes.length ? Math.max(...storedTimes) : null;
-      return { entry, displayVersion, displayIngestedAtS };
+      return { entry, displayVersion, displayIngestedAtS, emptyCount: emptyIds.length };
     }));
     const prioritySpecs = parsePrioritySpecs(new URLSearchParams(globalThis.location.search).get('prioritySpecs'));
     const { ordered, selected } = specsForRun(orderInputs.map(input => input.entry), prioritySpecs);
@@ -253,6 +268,7 @@ export class IngestOrchestratorService {
       spec,
       version: displayBySpec.get(spec)?.displayVersion ?? null,
       ingestedAtS: displayBySpec.get(spec)?.displayIngestedAtS ?? null,
+      emptyCount: displayBySpec.get(spec)?.emptyCount ?? 0,
       selected: selectedSpecs.has(spec),
     }));
     console.log(
@@ -268,21 +284,19 @@ export class IngestOrchestratorService {
   ): Promise<boolean> {
     console.log(`\nIngesting ${spec} - ${encounters.length} encounters (top ${TOP_N})`);
 
-    // Feeds the missing-first order - a file-server-only signal, zero WCL budget.
-    const presentIds = new Set(
-      (await this.dataFile.listSliceFiles(spec, 'burst'))
-        .filter(file => file.endsWith('.json'))
-        .map(file => parseInt(file))
-        .filter(id => Number.isFinite(id)),
-    );
+    // Feeds the never-checked-first order - a file-server-only signal, zero WCL budget.
+    const previousState = await this.loadIngestState(spec);
+    const checkedIds = new Set([...await this.benchedIds(spec), ...previousState?.empty_encounter_ids ?? []]);
+    const emptyThisPass: number[] = [];
 
     try {
-      for (const encounter of orderEncountersByMissingFirst(encounters, presentIds)) {
+      for (const encounter of orderEncountersByMissingFirst(encounters, checkedIds)) {
         await client.assertBudget(POINTS_MARGIN);
 
         const { rows: poolRows, partition } = await this.rankingPool(spec, encounter);
         if (!poolRows.length) {
           console.log(`  [${encounter.name}] no rankings, skipped`);
+          emptyThisPass.push(encounter.id);
           continue;
         }
 
@@ -295,28 +309,54 @@ export class IngestOrchestratorService {
         }
 
         console.log(`  [${encounter.name}] computing slices (signature ${skipKey})...`);
+        let outcome: EncounterOutcome;
         try {
-          const wrote = await this.ingestEncounter(spec, encounter, version, poolRows, partition);
-          console.log(`  [${encounter.name}] ${wrote ? 'done' : 'no slice data produced'}`);
+          outcome = await this.ingestEncounter(spec, encounter, version, poolRows, partition);
         } finally {
           // Drop this encounter's cached reports/events before the next one to bound memory.
           this.wclCache.clearCache();
         }
+        if (outcome === 'empty') emptyThisPass.push(encounter.id);
+        console.log(`  [${encounter.name}] ${ENCOUNTER_OUTCOME_NOTE[outcome]}`);
       }
     } catch (err) {
       if (err instanceof BudgetExceededError) {
         console.log(`\n[budget] Stopping cleanly: ${err.message}`);
-        await this.rebuildEncountersIndex(spec, encounters);
-        await this.rebuildSpecIndex();
+        await this.finishSpec(spec, encounters, previousState, emptyThisPass);
         return true;
       }
       throw err;
     }
 
-    await this.rebuildEncountersIndex(spec, encounters);
-    await this.rebuildSpecIndex();
+    await this.finishSpec(spec, encounters, previousState, emptyThisPass);
     console.log(`Ingestion complete for ${spec}.`);
     return false;
+  }
+
+  private benchedIds(spec: string): Promise<number[]> {
+    return this.dataFile.listSliceFiles(spec, 'burst').then(encounterIdsFromFiles);
+  }
+
+  private async loadIngestState(spec: string): Promise<SpecIngestState | null> {
+    const stored = await this.dataFile.getIngestState(spec);
+    return stored.ok ? readIngestState(stored.value) : null;
+  }
+
+  private async pruneIngestState(spec: string, protectedIds: Set<number>): Promise<void> {
+    const pruned = prunedIngestState(await this.loadIngestState(spec), protectedIds);
+    if (pruned) await this.dataFile.writeIngestState(spec, pruned);
+  }
+
+  /** Re-lists the benched ids rather than tracking this pass's writes, so a mark still clears after a run that died between writing a bench and updating the marker. */
+  private async finishSpec(
+    spec: string, encounters: IngestEncounter[],
+    previous: SpecIngestState | null, emptyThisPass: readonly number[],
+  ): Promise<void> {
+    const stamp: IngestStamp = { version: INGEST_VERSION, ingestedAtS: nowS() };
+    const benched = new Set(await this.benchedIds(spec));
+    await this.dataFile.writeIngestState(spec, nextIngestState(previous, emptyThisPass, benched, stamp));
+    await this.rebuildEncountersIndex(spec, encounters);
+    await this.rebuildSpecIndex();
   }
 
   /** Resolves the partition here, once, so the signature and every slice below read the same parses. */
@@ -330,7 +370,7 @@ export class IngestOrchestratorService {
   /** Compute every slice first, THEN stamp + write: the signature is known only after every transform has fetched. */
   private async ingestEncounter(
     spec: string, encounter: IngestEncounter, version: string, poolRows: SignatureRanking[], partition: number | null,
-  ): Promise<boolean> {
+  ): Promise<EncounterOutcome> {
     const encId = encounter.id;
     const limit = pLimit(SLICE_CONCURRENCY);
     const [burstSlice, ...siblings] = this.slices;
@@ -351,7 +391,6 @@ export class IngestOrchestratorService {
         ? `    [${encounter.name}] ${slice}: no data, skipped`
         : `    [${encounter.name}] ${slice}: ${error.kind} (${error.message}), skipped`;
 
-    let wroteAny = burst.ok;
     const writes: Promise<void>[] = [];
     if (burst.ok) {
       const all = [burst, ...rest.map(entry => entry.result)];
@@ -360,26 +399,23 @@ export class IngestOrchestratorService {
     for (const { slice, result } of rest) {
       if (result.ok) {
         writes.push(slice.write(spec, encId, stampSignature(result.value, signature, stamp)));
-        wroteAny ||= slice.countsAsBenchData;
       } else { console.log(skipNote(slice.file, result.error)); }
     }
 
     await Promise.all(writes);
-    return wroteAny;
+    if (burst.ok) return 'benched';
+    // Marking a transient or permanent failure empty would defeat the retry `stampBurstFile` leaves open.
+    return burst.error.kind === 'missing' ? 'empty' : 'failed';
   }
 
   private async rebuildEncountersIndex(spec: string, current: IngestEncounter[]): Promise<void> {
-    const files = await this.dataFile.listSliceFiles(spec, 'burst');
     const onDisk: EncounterEntry[] = [];
-    for (const file of files.sort()) {
-      if (!file.endsWith('.json')) continue;
-      const encId = parseInt(file);
-      if (!Number.isFinite(encId)) continue;
+    for (const encId of await this.benchedIds(spec)) {
       const bench = await this.dataFile.getSlice<{ encounter_id?: number; encounter_name?: string; sample_count?: number }>(spec, encId, 'burst');
       if (!bench.ok) continue;
       onDisk.push({
         id: bench.value.encounter_id ?? encId,
-        name: bench.value.encounter_name ?? file,
+        name: bench.value.encounter_name ?? String(encId),
         sample_count: bench.value.sample_count ?? 0,
       });
     }
@@ -400,11 +436,8 @@ export class IngestOrchestratorService {
 
   private async pruneStaleEncounters(spec: string, protectedIds: Set<number>): Promise<number[]> {
     const removed: number[] = [];
-    const files = await this.dataFile.listSliceFiles(spec, 'burst');
-    for (const file of files) {
-      if (!file.endsWith('.json')) continue;
-      const encId = parseInt(file);
-      if (!Number.isFinite(encId) || protectedIds.has(encId)) continue;
+    for (const encId of await this.benchedIds(spec)) {
+      if (protectedIds.has(encId)) continue;
       for (const { file: slice } of this.slices) {
         try {
           await this.dataFile.removeSlice(spec, encId, slice);
@@ -414,6 +447,6 @@ export class IngestOrchestratorService {
       }
       removed.push(encId);
     }
-    return removed.sort((a, b) => a - b);
+    return removed;
   }
 }
