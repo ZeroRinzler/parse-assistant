@@ -36,7 +36,6 @@ interface CdHoldTarget extends HoldTarget {
 
 export type CdHoldTargets = Record<string, CdHoldTarget>;
 
-/** The cadence of one pressable ability: its benched timing pattern across the top parses. */
 export interface CadenceBenchmark {
   /** Total top parses sampled (NOT users-only, so `used_sample_count` is comparable). */
   sample_count: number;

@@ -1,11 +1,11 @@
 import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
-import { WclEvent, WclReport } from '../../../core/models/wcl.models';
+import { WclReport } from '../../../core/models/wcl.models';
 import {
   AnalysisFinding, BurstWindow, PlayerBurstWindow, PlayerDefensive,
 } from '../../../core/models/analysis.models';
 import { PerDefensiveBenchmark } from '../../../core/models/encounter.models';
-import { ComparisonWindow, WindowStatus, RangeRow } from '../../../core/models/window-comparison.models';
+import { ComparisonWindow, WindowStatus } from '../../../core/models/window-comparison.models';
 import { ClipAnchor } from '../../../core/models/capture.models';
 import { logWarn } from '../../../core/log';
 import { Result, ok } from '../../../core/result';
@@ -16,12 +16,11 @@ import { benchExpectedUses, sortBySeverity } from '../../../shared/analysis/anal
 import {
   CadenceVoice, cadencePlanUsage, checkFirstCastDelay, checkGaps, checkLostUses, holdsOf, usedByMajority,
 } from '../../../shared/analysis/cast-cadence';
-import { TimedEvent, normalizeAbilityId, relativeS, resolveAbility, windowSpells, withRelativeS } from '../../../shared/analysis/wcl-projections';
+import { AbilityIcons, TimedEvent, relativeS, withRelativeS } from '../../../shared/analysis/wcl-projections';
+import { WindowView, WindowViewAdapter, buildWindowView, playerWindowDamage } from '../../../shared/analysis/window-view';
 import {
-  DEFENSIVE_DATA_SOURCE, DefensiveBench, DefensivePlanMeta, BakedAbility,
+  DEFENSIVE_DATA_SOURCE, DefensiveBench, DefensivePlanMeta,
 } from './defensive-data-source';
-
-type AbilityIcons = Record<number, BakedAbility>;
 
 export interface DefensiveMapAnchor {
   timeS: number;
@@ -55,8 +54,6 @@ export interface DefensivePlanRow {
 export interface DefensivePlanView {
   rows: DefensivePlanRow[];
 }
-
-const dmgOf = (event: WclEvent): number => (event.amount ?? 0) + (event.absorbed ?? 0);
 
 const DEFENSIVE_VOICE: CadenceVoice = {
   unit: 'use(s)',
@@ -135,7 +132,6 @@ export function analyzeOneDefensive(
   const castTimesS = defensive.cast_times_s ?? [];
 
   const issues: AnalysisFinding[] = [];
-  // A situational defensive most parses skip has a noisy expected count, so flagging it without majority use is a false positive.
   if (usedByMajority(defBench)) {
     const lost = checkLostUses(DEFENSIVE_VOICE, name, uses, expected, floor, fightDurS);
     if (lost) issues.push(lost);
@@ -162,27 +158,10 @@ export function analyzeDefensiveFindings(
   return findings;
 }
 
-export function computePlayerDefensiveWindows(topDefWindows: BurstWindow[], dtEvents: TimedEvent[]): PlayerBurstWindow[] {
-  const sorted = dtEvents
-    .filter(event => event.atS >= 0 && dmgOf(event) > 0)
-    .sort((a, b) => a.atS - b.atS);
+const TOP_DAMAGE_SOURCES = 6;
 
-  return topDefWindows.map(window => {
-    const inWindow = (tsS: number): boolean => tsS >= window.time_s && tsS < window.time_s + window.window_length_s;
-    const winEvents = sorted.filter(event => inWindow(event.atS));
-    const winTotal = winEvents.reduce((sum, event) => sum + dmgOf(event), 0);
-    const byAbility: Record<number, number> = {};
-    for (const event of winEvents) {
-      if (!event.abilityGameID) continue;
-      const spellId = normalizeAbilityId(event.abilityGameID);
-      byAbility[spellId] = (byAbility[spellId] ?? 0) + dmgOf(event);
-    }
-    const ability_breakdown = Object.entries(byAbility)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 6)
-      .map(([sid, damage]) => ({ spell_id: parseInt(sid, 10), damage: Math.round(damage) }));
-    return { window_damage: Math.round(winTotal), ability_breakdown };
-  });
+export function computePlayerDefensiveWindows(topDefWindows: BurstWindow[], dtEvents: TimedEvent[]): PlayerBurstWindow[] {
+  return playerWindowDamage(topDefWindows, dtEvents, { maxAbilities: TOP_DAMAGE_SOURCES });
 }
 
 const WINDOW_NEAR_S = 3;
@@ -219,27 +198,6 @@ export function defensiveWindowStatus(
   return { status: 'good', icon: 'check_circle', note: covered ? NOTE_COVERED : NOTE_NO_DEFENSIVE };
 }
 
-export function defensiveDetailRows(
-  abilityBreakdown: BurstWindow['ability_breakdown'],
-  playerWindow: PlayerBurstWindow | null,
-  abilities: AbilityIcons,
-): RangeRow[] {
-  const playerByAbility: Record<number, { damage: number }> = {};
-  for (const ability of playerWindow?.ability_breakdown ?? []) playerByAbility[ability.spell_id] = ability;
-  return abilityBreakdown.map(ability => {
-    const baked = resolveAbility(abilities, ability.spell_id, 'defensiveDetailRows');
-    return {
-      spellId: ability.spell_id,
-      label: baked.name,
-      icon: baked.icon,
-      playerPct: playerByAbility[ability.spell_id]?.damage ?? null,
-      topAvg: ability.avg_damage,
-      topMin: ability.min_damage,
-      topMax: ability.max_damage,
-    };
-  });
-}
-
 export function defensiveMapAnchor(window: BurstWindow): DefensiveMapAnchor {
   return {
     timeS: window.time_s,
@@ -265,37 +223,27 @@ export interface DefensiveWindowsInput {
   abilities: AbilityIcons;
 }
 
-// A window starting past the player's fight length is "not reached" and muted.
+function defensiveAdapter(playerDefensives: PlayerDefensive[]): WindowViewAdapter<DefensiveMapAnchor> {
+  const coveredBy = (window: BurstWindow): boolean =>
+    playerCoveredWindow(window, playerDefensives.find(entry => entry.name === (window.defensive_name ?? '')));
+  return {
+    status: (window, playerDamage, notReached) =>
+      defensiveWindowStatus(playerDamage, window.dmg_max, window.dmg_stddev, notReached, coveredBy(window)),
+    chips: window => ({
+      spellIds: window.spell_id != null ? [window.spell_id] : [],
+      labels: window.spell_id == null && window.defensive_name ? [window.defensive_name] : [],
+    }),
+    mapAnchor: defensiveMapAnchor,
+    clipAnchor: defensiveClipAnchor,
+  };
+}
+
 export function buildDefensiveWindows(
   { topWindows, playerWindows, playerDefensives, fightDurationS, abilities }: DefensiveWindowsInput,
-): { windows: ComparisonWindow[]; anchors: DefensiveMapAnchor[]; clipAnchors: ClipAnchor[] } {
-  const windows: ComparisonWindow[] = [];
-  const anchors: DefensiveMapAnchor[] = [];
-  const clipAnchors: ClipAnchor[] = [];
-  topWindows.forEach((window, index) => {
-    const notReached = window.time_s > fightDurationS;
-    const playerWindow = notReached ? null : (playerWindows[index] ?? null);
-    const playerDamage = playerWindow?.window_damage ?? null;
-    const defensiveName = window.defensive_name ?? '';
-    const playerDefensive = playerDefensives.find(entry => entry.name === defensiveName);
-    const covered = playerCoveredWindow(window, playerDefensive);
-    const { status, icon, note } = defensiveWindowStatus(playerDamage, window.dmg_max, window.dmg_stddev, notReached, covered);
-    const labels = window.spell_id == null && defensiveName ? [defensiveName] : [];
-    if (note) labels.push(note);
-    windows.push({
-      timeStartS: window.time_s,
-      timeEndS: window.time_s + window.window_length_s,
-      spells: windowSpells(window.spell_id != null ? [window.spell_id] : [], abilities),
-      labels,
-      status,
-      statusIcon: icon,
-      overview: { label: '', icon: '', playerPct: playerDamage, topAvg: window.dmg_avg, topMin: window.dmg_min, topMax: window.dmg_max },
-      detailRows: defensiveDetailRows(window.ability_breakdown, playerWindow, abilities),
-    });
-    anchors.push(defensiveMapAnchor(window));
-    clipAnchors.push(defensiveClipAnchor(window, index));
+): WindowView<DefensiveMapAnchor> {
+  return buildWindowView({
+    topWindows, playerWindows, fightDurationS, abilities, adapter: defensiveAdapter(playerDefensives),
   });
-  return { windows, anchors, clipAnchors };
 }
 
 function defensivePlanRow(

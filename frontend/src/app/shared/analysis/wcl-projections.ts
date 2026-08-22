@@ -60,11 +60,11 @@ export function unwrapRankings(blob: WclRankingsBlob | null | undefined): WclRaw
   return parsed?.rankings ?? [];
 }
 
+export type AbilityIcons = Record<number, { icon: string; name: string }>;
+
 /** Projects WCL's aliased ability map into an id-keyed `{ icon, name }` record, stripping `.jpg` for the bare filename `wl-game-icon` expects; a null icon becomes '' for name-only render. */
-export function abilityIcons(
-  raw: Record<string, WclRawAbility | null>,
-): Record<number, { icon: string; name: string }> {
-  const icons: Record<number, { icon: string; name: string }> = {};
+export function abilityIcons(raw: Record<string, WclRawAbility | null>): AbilityIcons {
+  const icons: AbilityIcons = {};
   for (const entry of Object.values(raw)) {
     if (entry) icons[entry.id] = { icon: entry.icon?.replace(/\.jpg$/i, '') ?? '', name: entry.name };
   }
@@ -101,7 +101,7 @@ export function findParseActor(actors: ReportActor[] | undefined, ranking: Parse
 
 /** WCL can leave an ability unnamed and a bench can miss the id outright; both render as a labelled placeholder, and only the missing id is worth a warning. */
 export function resolveAbility(
-  abilities: Record<number, { icon: string; name: string }>, id: number, source: string,
+  abilities: AbilityIcons, id: number, source: string,
 ): { icon: string; name: string } {
   const ability = abilities[id];
   if (!ability) logWarn(`${source}: ability id missing from ability map`, id);
@@ -109,8 +109,6 @@ export function resolveAbility(
 }
 
 /** Header chips for a window: each spell id with its baked icon + name. */
-export function windowSpells(
-  spellIds: number[], abilities: Record<number, { icon: string; name: string }>,
-): WindowSpell[] {
+export function windowSpells(spellIds: number[], abilities: AbilityIcons): WindowSpell[] {
   return spellIds.map(id => ({ id, ...resolveAbility(abilities, id, 'windowSpells') }));
 }

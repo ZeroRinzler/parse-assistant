@@ -52,7 +52,7 @@ describe('buildCadenceBenchmark', () => {
 
   it('keeps median_uses steady against a single outlier', () => {
     const TYPICAL_USES = 3;
-    const OUTLIER_USES = 20;  // one parse spiking far above the rest
+    const OUTLIER_USES = 20;
     const times = (uses: number): number[] => Array.from({ length: uses }, (_, i) => 5 + i * 10);
     const users = [TYPICAL_USES, TYPICAL_USES, TYPICAL_USES, OUTLIER_USES]
       .map(uses => user({ cast_times_s: times(uses), first_cast_s: 5 }));

@@ -3,91 +3,48 @@ import { BurstWindow, PlayerBurstWindow, PlayerDefensive } from '../../../core/m
 import {
   computePlayerDefensiveWindows,
   defensiveWindowStatus, defensiveMapAnchor, defensiveClipAnchor, defensiveFindingClipAnchor, buildDefensiveWindows,
-  defensiveDetailRows,
   playerCoveredWindow,
 } from './defensive.service';
 import { damageTaken } from '../../../../testing/builders/events';
-import {
-  CLOAK_OF_SHADOWS, WCL_MELEE_EVENT_ABILITY_ID, WOW_AUTO_ATTACK_SPELL_ID, WCL_SYNTHETIC_SOURCE_FALLBACK_ID,
-} from '../../../../testing/spell-ids';
-import { timed } from './defensive-harness';
+import { CLOAK_OF_SHADOWS } from '../../../../testing/spell-ids';
+import { BOSS_HIT_SPELL_ID, timed } from './defensive-harness';
+
+function first<T>(items: readonly T[]): T {
+  const [head] = items;
+  assert.exists(head);
+  return head;
+}
 
 describe('computePlayerDefensiveWindows', () => {
-  it('sums player damage taken inside each top defensive window (half-open, amount + absorbed)', () => {
-    const top: BurstWindow[] = [
-      { time_s: 10, window_length_s: 5, dmg_avg: 0, dmg_min: 0, dmg_max: 0, dmg_stddev: 0, common_cds: [], ability_breakdown: [] },
-    ];
-    const out = computePlayerDefensiveWindows(top, timed([damageTaken(700, 12, 400, { absorbed: 150 }), damageTaken(701, 14, 100), damageTaken(700, 15, 999)], 0));
-    // (400 + 150 absorbed) + 100 = 650; the event at exactly 15 (== end) is excluded (half-open).
-    assert.exists(out[0]);
-    expect(out[0].window_damage).toBe(650);
-    assert.exists(out[0]);
-    assert.exists(out[0].ability_breakdown);
-    expect(out[0].ability_breakdown[0]).toMatchObject({ spell_id: 700, damage: 550 });
-  });
+  const WIN_START_S = 10;
+  const WIN_LEN_S = 5;
+  const top: BurstWindow[] = [
+    { time_s: WIN_START_S, window_length_s: WIN_LEN_S, dmg_avg: 0, dmg_min: 0, dmg_max: 0, dmg_stddev: 0, common_cds: [], ability_breakdown: [] },
+  ];
 
-  it('folds melee and synthetic-negative ability ids to normalized spell ids so the bench detail join resolves', () => {
-    const WIN_START_S = 10;
-    const WIN_LEN_S = 5;
-    const MELEE_HIT_A = 400;
-    const MELEE_HIT_B = 100;
-    const SYNTH_NEG_ID_A = -32;   // WCL synthesizes distinct negative ids for sourceless hits
-    const SYNTH_NEG_ID_B = -45;
-    const SYNTH_HIT_A = 300;
-    const SYNTH_HIT_B = 250;
-    const MELEE_TOTAL = MELEE_HIT_A + MELEE_HIT_B;
-    const SYNTH_TOTAL = SYNTH_HIT_A + SYNTH_HIT_B;
-    // The bench breakdown stores NORMALIZED spell ids, so the player fold must match or the join renders null.
-    const top: BurstWindow[] = [{
-      time_s: WIN_START_S, window_length_s: WIN_LEN_S, dmg_avg: 0, dmg_min: 0, dmg_max: 0, dmg_stddev: 0, common_cds: [],
-      ability_breakdown: [
-        { spell_id: WOW_AUTO_ATTACK_SPELL_ID, avg_damage: 0, min_damage: 0, max_damage: 0 },
-        { spell_id: WCL_SYNTHETIC_SOURCE_FALLBACK_ID, avg_damage: 0, min_damage: 0, max_damage: 0 },
-      ],
-    }];
-    const [playerWindow] = computePlayerDefensiveWindows(top, timed([
-      damageTaken(WCL_MELEE_EVENT_ABILITY_ID, WIN_START_S + 1, MELEE_HIT_A),
-      damageTaken(WCL_MELEE_EVENT_ABILITY_ID, WIN_START_S + 2, MELEE_HIT_B),
-      damageTaken(SYNTH_NEG_ID_A, WIN_START_S + 2, SYNTH_HIT_A),
-      damageTaken(SYNTH_NEG_ID_B, WIN_START_S + 3, SYNTH_HIT_B),
+  it('sums the damage the player took in the window, with no cast count to report', () => {
+    const AMOUNT = 400, ABSORBED = 150;
+    const SECOND_SOURCE_ID = BOSS_HIT_SPELL_ID + 1, SECOND_HIT = 100;
+    const out = computePlayerDefensiveWindows(top, timed([
+      damageTaken(BOSS_HIT_SPELL_ID, WIN_START_S + 2, AMOUNT, { absorbed: ABSORBED }),
+      damageTaken(SECOND_SOURCE_ID, WIN_START_S + 4, SECOND_HIT),
     ], 0));
-
-    assert.exists(playerWindow);
-    assert.exists(playerWindow.ability_breakdown);
-    const breakdown = playerWindow.ability_breakdown;
-    expect(breakdown).toContainEqual({ spell_id: WOW_AUTO_ATTACK_SPELL_ID, damage: MELEE_TOTAL });
-    expect(breakdown).toContainEqual({ spell_id: WCL_SYNTHETIC_SOURCE_FALLBACK_ID, damage: SYNTH_TOTAL });
-
-    const abilities = {
-      [WOW_AUTO_ATTACK_SPELL_ID]: { icon: 'melee', name: 'Auto Attack' },
-      [WCL_SYNTHETIC_SOURCE_FALLBACK_ID]: { icon: '', name: 'Unknown Source' },
-    };
-    assert.exists(top[0]);
-    assert.exists(playerWindow);
-    const rows = defensiveDetailRows(top[0].ability_breakdown, playerWindow, abilities);
-    expect(rows.find(row => row.spellId === WOW_AUTO_ATTACK_SPELL_ID)?.playerPct).toBe(MELEE_TOTAL);
-    expect(rows.find(row => row.spellId === WCL_SYNTHETIC_SOURCE_FALLBACK_ID)?.playerPct).toBe(SYNTH_TOTAL);
-  });
-});
-
-describe('defensiveDetailRows', () => {
-  it('labels an ability whose spell id is missing from the ability map with a placeholder and empty icon', () => {
-    // 9001 is intentionally absent from the ability map, so the guarded lookup must not throw.
-    const breakdown = [{ spell_id: 9001, avg_damage: 600, min_damage: 400, max_damage: 800, count: 5 }];
-    const rows = defensiveDetailRows(breakdown, null, {});
-    assert.exists(rows[0]);
-    expect(rows[0].label).toBe('Ability #9001');
-    assert.exists(rows[0]);
-    expect(rows[0].icon).toBe('');
+    expect(first(out).window_damage).toBe(AMOUNT + ABSORBED + SECOND_HIT);
+    const breakdown = first(out).ability_breakdown;
+    assert.exists(breakdown);
+    expect(first(breakdown)).toEqual({ spell_id: BOSS_HIT_SPELL_ID, damage: AMOUNT + ABSORBED });
   });
 
-  it('resolves an ability present in the map to its baked name and icon', () => {
-    const breakdown = [{ spell_id: 700, avg_damage: 600, min_damage: 400, max_damage: 800, count: 5 }];
-    const rows = defensiveDetailRows(breakdown, null, { 700: { icon: 'hit', name: 'Boss Hit' } });
-    assert.exists(rows[0]);
-    expect(rows[0].label).toBe('Boss Hit');
-    assert.exists(rows[0]);
-    expect(rows[0].icon).toBe('hit');
+  it('lists the six heaviest damage sources and drops the rest', () => {
+    const SOURCE_COUNT = 8;
+    const KEPT_SOURCES = 6;
+    const PER_SOURCE_DAMAGE = 100;
+    const hits = Array.from({ length: SOURCE_COUNT }, (_, i) =>
+      damageTaken(BOSS_HIT_SPELL_ID + i, WIN_START_S + 1, (i + 1) * PER_SOURCE_DAMAGE));
+    const breakdown = first(computePlayerDefensiveWindows(top, timed(hits, 0))).ability_breakdown;
+    assert.exists(breakdown);
+    expect(breakdown).toHaveLength(KEPT_SOURCES);
+    expect(first(breakdown).damage).toBe(SOURCE_COUNT * PER_SOURCE_DAMAGE);
   });
 });
 
@@ -169,54 +126,49 @@ describe('buildDefensiveWindows', () => {
   const window: BurstWindow = {
     time_s: 30, window_length_s: 5, dmg_avg: 1000, dmg_min: 800, dmg_max: 1200, dmg_stddev: 100,
     defensive_name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS, ref_game_id: 6666, common_cds: ['Cloak of Shadows'],
-    ability_breakdown: [{ spell_id: 700, avg_damage: 600, min_damage: 400, max_damage: 800 }],
+    ability_breakdown: [{ spell_id: BOSS_HIT_SPELL_ID, avg_damage: 600, min_damage: 400, max_damage: 800 }],
   };
-  const abilities = { [CLOAK_OF_SHADOWS]: { icon: 'cloak', name: 'Cloak of Shadows' }, 700: { icon: 'hit', name: 'Boss Hit' } };
+  const abilities = {
+    [CLOAK_OF_SHADOWS]: { icon: 'cloak', name: 'Cloak of Shadows' },
+    [BOSS_HIT_SPELL_ID]: { icon: 'hit', name: 'Boss Hit' },
+  };
+  const FIGHT_DURATION_S = 300;
 
   it('pairs each window with player damage taken at the same index', () => {
-    const player: PlayerBurstWindow[] = [{ window_damage: 1150, ability_breakdown: [{ spell_id: 700, damage: 700 }] }];
+    const player: PlayerBurstWindow[] = [{ window_damage: 1150, ability_breakdown: [{ spell_id: BOSS_HIT_SPELL_ID, damage: 700 }] }];
     // Covered the window (span 30-35); 1150 is within the band (max 1200 + stddev 100 = 1300) -> good, annotated covered.
     const playerDef: PlayerDefensive[] = [{ name: 'Cloak of Shadows', uses: 1, windows: [{ start_s: 30, end_s: 35 }] }];
-    const { windows, anchors, clipAnchors } = buildDefensiveWindows({ topWindows: [window], playerWindows: player, playerDefensives: playerDef, fightDurationS: 300, abilities });
-    assert.exists(windows[0]);
-    expect(windows[0].overview.playerPct).toBe(1150);
-    assert.exists(windows[0]);
-    expect(windows[0].status).toBe('good');
-    assert.exists(windows[0]);
-    expect(windows[0].labels).toContain('covered');
-    assert.exists(windows[0]);
-    expect(windows[0].spells).toEqual([{ id: CLOAK_OF_SHADOWS, icon: 'cloak', name: 'Cloak of Shadows' }]);
-    assert.exists(windows[0]);
-    expect(windows[0].detailRows[0]).toMatchObject({ spellId: 700, label: 'Boss Hit', icon: 'hit', playerPct: 700, topAvg: 600 });
+    const { windows, anchors, clipAnchors } = buildDefensiveWindows({ topWindows: [window], playerWindows: player, playerDefensives: playerDef, fightDurationS: FIGHT_DURATION_S, abilities });
+    const defensiveWindow = first(windows);
+    expect(defensiveWindow.overview.playerPct).toBe(1150);
+    expect(defensiveWindow.status).toBe('good');
+    expect(defensiveWindow.labels).toContain('covered');
+    expect(defensiveWindow.spells).toEqual([{ id: CLOAK_OF_SHADOWS, icon: 'cloak', name: 'Cloak of Shadows' }]);
+    expect(first(defensiveWindow.detailRows)).toMatchObject({ spellId: BOSS_HIT_SPELL_ID, label: 'Boss Hit', icon: 'hit', playerPct: 700, topAvg: 600 });
     expect(anchors[0]).toEqual({ timeS: 30, refGameId: 6666, windowLengthS: 5 });
     expect(clipAnchors[0]).toEqual({ timeS: 30, windowLengthS: 5, key: 'defensive-0' });
+  });
+
+  it('names the defensive as a plain label when the bench window has no spell id', () => {
+    const unbakedWindow: BurstWindow = { ...window, spell_id: undefined };
+    const { windows } = buildDefensiveWindows({ topWindows: [unbakedWindow], playerWindows: [], playerDefensives: [], fightDurationS: FIGHT_DURATION_S, abilities });
+    expect(first(windows).spells).toEqual([]);
+    expect(first(windows).labels).toContain('Cloak of Shadows');
   });
 
   it('marks an above-band window bad, annotated as needing an unused defensive', () => {
     // 1500 > band edge (max 1200 + stddev 100 = 1300); no covering defensive -> bad.
     const player: PlayerBurstWindow[] = [{ window_damage: 1500, ability_breakdown: [] }];
-    const { windows } = buildDefensiveWindows({ topWindows: [window], playerWindows: player, playerDefensives: [], fightDurationS: 300, abilities });
-    assert.exists(windows[0]);
-    expect(windows[0].status).toBe('bad');
-    assert.exists(windows[0]);
-    expect(windows[0].labels).toContain('defensive needed, unused');
+    const { windows } = buildDefensiveWindows({ topWindows: [window], playerWindows: player, playerDefensives: [], fightDurationS: FIGHT_DURATION_S, abilities });
+    expect(first(windows).status).toBe('bad');
+    expect(first(windows).labels).toContain('defensive needed, unused');
   });
 
   it('keeps an uncovered within-band window good, annotated no defensive used', () => {
     // 900 is within the band; not pressing a defensive when damage stayed acceptable is not a miss.
     const player: PlayerBurstWindow[] = [{ window_damage: 900, ability_breakdown: [] }];
-    const { windows } = buildDefensiveWindows({ topWindows: [window], playerWindows: player, playerDefensives: [], fightDurationS: 300, abilities });
-    assert.exists(windows[0]);
-    expect(windows[0].status).toBe('good');
-    assert.exists(windows[0]);
-    expect(windows[0].labels).toContain('no defensive used');
-  });
-
-  it('mutes and drops player data for a window the fight never reached', () => {
-    const { windows } = buildDefensiveWindows({ topWindows: [window], playerWindows: [], playerDefensives: [], fightDurationS: 5, abilities });
-    assert.exists(windows[0]);
-    expect(windows[0].status).toBe('muted');
-    assert.exists(windows[0]);
-    expect(windows[0].overview.playerPct).toBeNull();
+    const { windows } = buildDefensiveWindows({ topWindows: [window], playerWindows: player, playerDefensives: [], fightDurationS: FIGHT_DURATION_S, abilities });
+    expect(first(windows).status).toBe('good');
+    expect(first(windows).labels).toContain('no defensive used');
   });
 });

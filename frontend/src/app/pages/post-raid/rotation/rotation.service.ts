@@ -15,14 +15,12 @@ import {
   CadenceVoice, cadencePlanUsage, checkFirstCastDelay, checkGaps, checkLostUses, holdsOf, usedByMajority,
 } from '../../../shared/analysis/cast-cadence';
 import { CAT_LABEL } from '../../../shared/components/finding-table/finding-table.utils';
-import { TimedEvent, relativeS, withRelativeS } from '../../../shared/analysis/wcl-projections';
+import { AbilityIcons, TimedEvent, relativeS, withRelativeS } from '../../../shared/analysis/wcl-projections';
 import {
   buildRuleContext, evaluateRules, rulesFollowed, rulesNeed, benchedRules, RULE_TYPE_LABEL,
 } from './rotation-rules';
 import { detectBloodlust } from './rotation-bloodlust';
 import { ROTATION_DATA_SOURCE, RotationBench } from './rotation-data-source';
-
-export type AbilityIcons = Record<number, { icon: string; name: string }>;
 
 export interface RotationFindingRow {
   severity: 'critical' | 'warning' | 'info';
@@ -185,7 +183,6 @@ export function analyzeOneCooldown(
   const { expected, floor } = benchExpectedUses(fightDurS, cdBench.uses_per_min);
 
   const issues: AnalysisFinding[] = [];
-  // A situational cd most parses skip has a noisy expected count and a meaningless avg_first_cast_s, so flagging it would punish the player for correctly matching the parses.
   if (usedByMajority(cdBench)) {
     const lost = checkLostUses(ROTATION_VOICE, cdName, actual, expected, floor, fightDurS);
     if (lost) issues.push(lost);
@@ -339,7 +336,6 @@ type CdPlanUsage = Pick<
   CdPlanRow, 'firstCastS' | 'typicalUses' | 'usedSampleCount' | 'sampleCount' | 'usesPerMin' | 'bloodlust' | 'bloodlustPct'
 >;
 
-// Uses/min is a user-only stat; gate it on the same use-share majority the analysis uses.
 function cdPlanUsageOf(cdBench: PerCdBenchmark | undefined): CdPlanUsage {
   const usage = cadencePlanUsage(cdBench);
   if (!cdBench) return { ...usage, usesPerMin: null, bloodlust: false, bloodlustPct: null };

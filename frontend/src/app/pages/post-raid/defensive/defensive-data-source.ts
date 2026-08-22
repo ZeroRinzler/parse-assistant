@@ -11,7 +11,7 @@ export interface DefensivePlanMeta {
   talent_gated: boolean;
 }
 
-export interface BakedAbility {
+interface BakedAbility {
   icon: string;
   name: string;
 }

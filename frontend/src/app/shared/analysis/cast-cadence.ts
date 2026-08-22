@@ -1,10 +1,9 @@
-/** Cadence: the benched timing pattern of a pressable ability, and the findings coached against it. */
 import { AnalysisFinding } from '../../core/models/analysis.models';
 import { CadenceBenchmark } from '../../core/models/encounter.models';
 import { avgOr, stddevOr, medianOr, castGaps, round, fmtClock, isOutlierAbove } from './analysis-math';
 import { HoldWindow, HOLD_CONSENSUS_FRAC, buildHoldTargets } from './hold-targets';
 
-/** One user parse's cadence for one ability. Rows are users-only; `totalParses` carries the non-users. */
+/** Rows are users-only; `totalParses` carries the non-users. */
 export interface CadenceEntry {
   cast_times_s: number[];
   first_cast_s: number | null;
@@ -13,13 +12,9 @@ export interface CadenceEntry {
   cast_pattern: 'hold' | 'on_cooldown';
 }
 
-/** The per-slice voice of the shared findings: it changes the words, never the math. */
 export interface CadenceVoice {
-  /** Measured-value unit for use counts: 'cast(s)' | 'use(s)'. */
   unit: string;
-  /** 'opened at' | 'was first used at' in the late-opener message. */
   firstCastPhrase: string;
-  /** 'casts' | 'uses' in the gap message. */
   gapNoun: string;
   underuseRemedy(name: string, missing: number): string;
   firstCastRemedy(name: string): string;
@@ -48,7 +43,7 @@ export function buildCadenceBenchmark(users: CadenceEntry[], effectiveCd: number
   };
 }
 
-/** A situational ability most top parses skip has a noisy expected count, so the user-only checks and plan stats gate on this. */
+/** A situational ability most top parses skip has a noisy expected count, so flagging against it would be a false positive. */
 const MIN_USE_SHARE_FRAC = 0.5;
 
 export function usedByMajority(bench: CadenceBenchmark): boolean {
@@ -121,11 +116,10 @@ export interface CadencePlanUsage {
   firstCastS: number | null;
 }
 
-// First cast is a user-only stat; gate it on the same use-share majority the analysis uses.
 export function cadencePlanUsage(bench: CadenceBenchmark | undefined): CadencePlanUsage {
   if (!bench) return { typicalUses: null, usedSampleCount: 0, sampleCount: 0, firstCastS: null };
   return {
-    // Typical uses is the median over the parses that pressed it at all, so any adoption (not just a majority) yields a number.
+    // Any adoption yields a number here, unlike the use-share gate on firstCastS.
     typicalUses: bench.used_sample_count > 0 ? bench.median_uses : null,
     usedSampleCount: bench.used_sample_count,
     sampleCount: bench.sample_count,

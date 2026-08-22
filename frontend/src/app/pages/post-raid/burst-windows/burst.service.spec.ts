@@ -6,13 +6,10 @@ import { BURST_DATA_SOURCE, BurstBench } from './burst-data-source';
 import { sliceService } from '../../../../testing/service-harness';
 import {
   BurstFeatureService,
-  burstWindowStatus, splitCommonCds, burstMapAnchor, burstClipAnchor, buildBurstView, burstDetailRows, findPlayerBurstWindows,
+  burstWindowStatus, splitCommonCds, burstMapAnchor, burstClipAnchor, buildBurstView, findPlayerBurstWindows,
 } from './burst.service';
 import { wclReport } from '../../../../testing/builders/wcl-fixtures';
-import {
-  SHADOW_BLADES, SHADOW_BLADES_DAMAGE,
-  WCL_MELEE_EVENT_ABILITY_ID, WOW_AUTO_ATTACK_SPELL_ID, WCL_SYNTHETIC_SOURCE_FALLBACK_ID,
-} from '../../../../testing/spell-ids';
+import { SHADOW_BLADES, SHADOW_BLADES_DAMAGE } from '../../../../testing/spell-ids';
 import { cast, damage } from '../../../../testing/builders/events';
 import { withRelativeS } from '../../../shared/analysis/wcl-projections';
 
@@ -24,13 +21,6 @@ function first<T>(items: readonly T[]): T {
   assert.exists(head);
   return head;
 }
-
-// A melee auto-attack (event id 1) folds onto Auto Attack; synthetic negatives fold onto the "I Don't Know" fallback.
-const MELEE_HIT = 300;
-const SYNTHETIC_HIT = 100;
-// Two distinct negative ids WCL synthesizes for sourceless events; both normalize to the fallback spell.
-const PET_MELEE_ID = -32;
-const ENVIRONMENTAL_ID = -7;
 
 describe('burstWindowStatus', () => {
   // topAvg 1000, topMin 800, stddev 100 -> bad below 700, warn below 900.
@@ -78,48 +68,6 @@ describe('burstClipAnchor', () => {
   });
 });
 
-describe('burstDetailRows', () => {
-  it('labels an ability whose spell id is missing from the ability map with a placeholder and empty icon', () => {
-    // SHADOW_BLADES_DAMAGE is intentionally left out of the ability map, so the guarded lookup must not throw.
-    const breakdown = [{ spell_id: SHADOW_BLADES_DAMAGE, avg_damage: 600, min_damage: 400, max_damage: 800, count: 5, avg_casts: 2 }];
-    const row = first(burstDetailRows(breakdown, null, {}));
-    expect(row.label).toBe(`Ability #${SHADOW_BLADES_DAMAGE}`);
-    expect(row.icon).toBe('');
-  });
-
-  it('joins the player normalized melee and synthetic damage onto the bench auto-attack and fallback rows', () => {
-    const window: BurstWindow = {
-      time_s: 10, window_length_s: 20, dmg_avg: 0, dmg_min: 0, dmg_max: 0, dmg_stddev: 0, common_cds: [], ability_breakdown: [],
-    };
-    const playerWindow = first(findPlayerBurstWindows(
-      [window],
-      timed([
-        damage(WCL_MELEE_EVENT_ABILITY_ID, 12, MELEE_HIT),
-        damage(WCL_MELEE_EVENT_ABILITY_ID, 15, MELEE_HIT),
-        damage(PET_MELEE_ID, 13, SYNTHETIC_HIT),
-      ], 0),
-      [],
-      new Map(),
-    ));
-    const benchBreakdown = [
-      { spell_id: WOW_AUTO_ATTACK_SPELL_ID, avg_damage: 500, min_damage: 400, max_damage: 800, count: 5, avg_casts: 0 },
-      { spell_id: WCL_SYNTHETIC_SOURCE_FALLBACK_ID, avg_damage: 200, min_damage: 100, max_damage: 300, count: 5, avg_casts: 0 },
-    ];
-    const abilities = {
-      [WOW_AUTO_ATTACK_SPELL_ID]: { icon: 'aa', name: 'Auto Attack' },
-      [WCL_SYNTHETIC_SOURCE_FALLBACK_ID]: { icon: 'idk', name: 'Synthetic' },
-    };
-    const rows = burstDetailRows(benchBreakdown, playerWindow, abilities);
-    const melee = rows.find(row => row.spellId === WOW_AUTO_ATTACK_SPELL_ID);
-    assert.exists(melee);
-    expect(melee.playerPct).toBe(2 * MELEE_HIT);
-    expect(melee.playerCasts).toBe(0);
-    const synthetic = rows.find(row => row.spellId === WCL_SYNTHETIC_SOURCE_FALLBACK_ID);
-    assert.exists(synthetic);
-    expect(synthetic.playerPct).toBe(SYNTHETIC_HIT);
-  });
-});
-
 describe('buildBurstView', () => {
   const window: BurstWindow = {
     time_s: 10, window_length_s: 20, dmg_avg: 1000, dmg_min: 800, dmg_max: 1200, dmg_stddev: 100,
@@ -158,12 +106,6 @@ describe('buildBurstView', () => {
     expect(first(benchWindow.detailRows).passive).toBe(false);
   });
 
-  it('mutes and drops player data for a window the fight never reached', () => {
-    const burstWindow = first(buildBurstView([window], [], 5, {}, abilities).windows);
-    expect(burstWindow.status).toBe('muted');
-    expect(burstWindow.overview.playerPct).toBeNull();
-  });
-
   it('bench-only marks windows neutral info (no player overlay) instead of muted', () => {
     const burstWindow = first(buildBurstView([window], [], Number.POSITIVE_INFINITY, {}, abilities, true).windows);
     expect(burstWindow.status).toBe('info');
@@ -176,63 +118,31 @@ describe('findPlayerBurstWindows', () => {
   const window: BurstWindow = {
     time_s: 10, window_length_s: 20, dmg_avg: 0, dmg_min: 0, dmg_max: 0, dmg_stddev: 0, common_cds: [], ability_breakdown: [],
   };
+  const HIT_S = 12, CAST_S = 11, HIT_DAMAGE = 400, CAST_COUNT = 1;
 
-  it('sums player damage inside the window (amount + absorbed) and counts casts by ability name', () => {
+  it('bridges the damage id to the cast id through the report ability names', () => {
     const out = findPlayerBurstWindows(
       [window],
-      timed([damage(SHADOW_BLADES_DAMAGE, 12, 500, { absorbed: 100 }), damage(SHADOW_BLADES_DAMAGE, 15, 400), damage(1, 999, 5000)], 0),
-      timed([cast(SHADOW_BLADES, 11), cast(SHADOW_BLADES, 13)], 0),
-      // Bridge the damage id and the cast id to one name so the damage row counts the casts by NAME, not id.
+      timed([damage(SHADOW_BLADES_DAMAGE, HIT_S, HIT_DAMAGE)], 0),
+      timed([cast(SHADOW_BLADES, CAST_S)], 0),
+      // The two ids share one name, which is the only bridge between a cast and the damage it deals.
       new Map([[SHADOW_BLADES_DAMAGE, 'Shadow Blades'], [SHADOW_BLADES, 'Shadow Blades']]),
     );
-    // (500 + 100 absorbed) + 400 = 1000; the id-1 hit at 999s is outside the [10, 30) window.
-    const playerWindow = first(out);
-    expect(playerWindow.window_damage).toBe(1000);
-    assert.exists(playerWindow.ability_breakdown);
-    expect(playerWindow.ability_breakdown[0]).toMatchObject({ spell_id: SHADOW_BLADES_DAMAGE, damage: 1000, casts: 2 });
+    const breakdown = first(out).ability_breakdown;
+    assert.exists(breakdown);
+    expect(first(breakdown)).toMatchObject({ spell_id: SHADOW_BLADES_DAMAGE, casts: CAST_COUNT });
   });
 
-  it('folds synthetic damage ids onto their normalized spells, summing raw ids that collapse together', () => {
+  it('stands an unnamed ability up under its own id, so its casts still count', () => {
     const out = findPlayerBurstWindows(
       [window],
-      timed([
-        damage(WCL_MELEE_EVENT_ABILITY_ID, 12, MELEE_HIT),
-        damage(WCL_MELEE_EVENT_ABILITY_ID, 15, MELEE_HIT),
-        damage(PET_MELEE_ID, 13, SYNTHETIC_HIT),
-        damage(ENVIRONMENTAL_ID, 16, SYNTHETIC_HIT),
-      ], 0),
-      [],
+      timed([damage(SHADOW_BLADES, HIT_S, HIT_DAMAGE)], 0),
+      timed([cast(SHADOW_BLADES, CAST_S)], 0),
       new Map(),
     );
     const breakdown = first(out).ability_breakdown;
     assert.exists(breakdown);
-    expect(breakdown.find(row => row.spell_id === WOW_AUTO_ATTACK_SPELL_ID)?.damage).toBe(2 * MELEE_HIT);
-    expect(breakdown.find(row => row.spell_id === WCL_SYNTHETIC_SOURCE_FALLBACK_ID)?.damage).toBe(2 * SYNTHETIC_HIT);
-    // No raw synthetic id survives as its own row.
-    expect(breakdown.some(row => row.spell_id === WCL_MELEE_EVENT_ABILITY_ID || row.spell_id < 0)).toBe(false);
-  });
-
-  it('excludes an event at exactly the window end (half-open)', () => {
-    const out = findPlayerBurstWindows([window], timed([damage(SHADOW_BLADES_DAMAGE, 30, 800)], 0), [], new Map());
-    expect(first(out).window_damage).toBe(0);
-  });
-
-  it('keeps a low-ranked ability the player used so the bench join surfaces its damage', () => {
-    const FILLER_COUNT = 10;
-    const FILLER_BASE_ID = 900_000; // synthetic ids distinct from the bench ability
-    const FILLER_DAMAGE = 1_000; // each filler out-damages the bench hit, ranking it last
-    const BENCH_HIT_DAMAGE = 50; // the player's damage on the bench ability, ranked past the filler abilities
-    const AT_S = 15; // inside the [10, 30) window
-    const fillerHits = Array.from({ length: FILLER_COUNT }, (_, i) => damage(FILLER_BASE_ID + i, AT_S, FILLER_DAMAGE));
-    const out = findPlayerBurstWindows(
-      [window],
-      timed([...fillerHits, damage(SHADOW_BLADES_DAMAGE, AT_S, BENCH_HIT_DAMAGE)], 0),
-      [],
-      new Map([[SHADOW_BLADES_DAMAGE, 'Eviscerate']]),
-    );
-    const benchBreakdown = [{ spell_id: SHADOW_BLADES_DAMAGE, avg_damage: 600, min_damage: 400, max_damage: 800, count: 5, avg_casts: 2 }];
-    const rows = burstDetailRows(benchBreakdown, first(out), { [SHADOW_BLADES_DAMAGE]: { icon: 'evis', name: 'Eviscerate' } });
-    expect(first(rows).playerPct).toBe(BENCH_HIT_DAMAGE);
+    expect(first(breakdown)).toMatchObject({ spell_id: SHADOW_BLADES, casts: CAST_COUNT });
   });
 });
 
