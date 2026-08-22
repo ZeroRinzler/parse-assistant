@@ -1,6 +1,5 @@
 import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
-import { WclReport } from '../../../core/models/wcl.models';
 import {
   AnalysisFinding, BurstWindow, PlayerBurstWindow, PlayerDefensive,
 } from '../../../core/models/analysis.models';
@@ -9,15 +8,15 @@ import { ComparisonWindow, WindowStatus } from '../../../core/models/window-comp
 import { ClipAnchor } from '../../../core/models/capture.models';
 import { logWarn } from '../../../core/log';
 import { Result, ok } from '../../../core/result';
-import { toLoadError } from '../../../core/transport/http-load-error';
 import { holdSuggestionFindings } from '../../../shared/analysis/hold-targets';
 import { buildAuraWindows } from '../../../shared/analysis/aura-windows';
 import { benchExpectedUses, sortBySeverity } from '../../../shared/analysis/analysis-math';
 import {
   CadenceVoice, cadencePlanUsage, checkFirstCastDelay, checkGaps, checkLostUses, holdsOf, usedByMajority,
 } from '../../../shared/analysis/cast-cadence';
-import { AbilityIcons, TimedEvent, relativeS, withRelativeS } from '../../../shared/analysis/wcl-projections';
+import { AbilityIcons, TimedEvent, withRelativeS } from '../../../shared/analysis/wcl-projections';
 import { WindowView, WindowViewAdapter, buildWindowView, playerWindowDamage } from '../../../shared/analysis/window-view';
+import { PullContext, PullRef, analyzePull } from '../../../shared/analysis/pull-context';
 import {
   DEFENSIVE_DATA_SOURCE, DefensiveBench, DefensivePlanMeta,
 } from './defensive-data-source';
@@ -293,42 +292,46 @@ export class DefensiveFeatureService {
     const bench = await this.source.getBench(spec, encounterId);
     if (!bench.ok) return bench;
 
-    try {
-      const report: WclReport = await this.wclApi.getReport(reportCode);
-      const fight = report.fights.find(entry => entry.id === fightId);
-      // A selected fight not yet present (e.g. mid live-sync) is informational, not a failure.
-      if (!fight) return ok({ findings: [], spellIdsByName: bench.value.cd_spell_ids, iconByName: {}, windows: [], anchors: [], clipAnchors: [] });
-      const fightDurationS = relativeS(fight.endTime, fight.startTime);
+    const pull: PullRef = { reportCode, fightId };
+    return analyzePull(this.wclApi, pull, {
+      logSource: 'DefensiveFeatureService.loadAnalysisView',
+      errorId: 'defensive.player-view',
+      emptyView: () => ({ findings: [], spellIdsByName: bench.value.cd_spell_ids, iconByName: {}, windows: [], anchors: [], clipAnchors: [] }),
+      analyze: context => this.analysisView(bench.value, pull, playerId, context),
+    });
+  }
 
-      const [casts, buffs, dtEvents] = await Promise.all([
-        this.wclApi.getAllEvents(reportCode, fightId, 'Casts', fight.startTime, fight.endTime, playerId),
-        this.wclApi.getAllEvents(reportCode, fightId, 'Buffs', fight.startTime, fight.endTime, playerId),
-        this.wclApi.getAllEvents(reportCode, fightId, 'DamageTaken', fight.startTime, fight.endTime, playerId),
-      ]);
+  private async analysisView(
+    bench: DefensiveBench, pull: PullRef, playerId: number, context: PullContext,
+  ): Promise<DefensiveView> {
+    const { reportCode, fightId } = pull;
+    const { fight, fightDurationS } = context;
 
-      const dtEventsTimed = withRelativeS(dtEvents, fight.startTime);
-      const playerDefensives = analyzeDefensives(
-        bench.value.defensives, withRelativeS(casts, fight.startTime), withRelativeS(buffs, fight.startTime), fightDurationS,
-      );
-      const findings = bench.value.defensives.length && playerDefensives.length
-        ? analyzeDefensiveFindings(playerDefensives, bench.value.per_defensive_benchmarks, fightDurationS)
-        : [];
+    const [casts, buffs, dtEvents] = await Promise.all([
+      this.wclApi.getAllEvents(reportCode, fightId, 'Casts', fight.startTime, fight.endTime, playerId),
+      this.wclApi.getAllEvents(reportCode, fightId, 'Buffs', fight.startTime, fight.endTime, playerId),
+      this.wclApi.getAllEvents(reportCode, fightId, 'DamageTaken', fight.startTime, fight.endTime, playerId),
+    ]);
 
-      const playerWindows = computePlayerDefensiveWindows(bench.value.defensive_windows, dtEventsTimed);
-      const iconByName: Record<string, string> = {};
-      for (const [name, spellId] of Object.entries(bench.value.cd_spell_ids)) {
-        const ability = bench.value.ability_icons[spellId];
-        if (!ability) logWarn('loadAnalysisView: ability id missing from ability map', spellId);
-        iconByName[name] = ability?.icon ?? '';
-      }
-      const { windows, anchors, clipAnchors } = buildDefensiveWindows({
-        topWindows: bench.value.defensive_windows, playerWindows, playerDefensives, fightDurationS, abilities: bench.value.ability_icons,
-      });
-      return ok({ findings, spellIdsByName: bench.value.cd_spell_ids, iconByName, windows, anchors, clipAnchors });
-    } catch (cause) {
-      logWarn(`DefensiveFeatureService.loadAnalysisView ${reportCode}:${fightId}`, cause);
-      return toLoadError(cause, 'defensive.player-view');
+    const dtEventsTimed = withRelativeS(dtEvents, fight.startTime);
+    const playerDefensives = analyzeDefensives(
+      bench.defensives, withRelativeS(casts, fight.startTime), withRelativeS(buffs, fight.startTime), fightDurationS,
+    );
+    const findings = bench.defensives.length && playerDefensives.length
+      ? analyzeDefensiveFindings(playerDefensives, bench.per_defensive_benchmarks, fightDurationS)
+      : [];
+
+    const playerWindows = computePlayerDefensiveWindows(bench.defensive_windows, dtEventsTimed);
+    const iconByName: Record<string, string> = {};
+    for (const [name, spellId] of Object.entries(bench.cd_spell_ids)) {
+      const ability = bench.ability_icons[spellId];
+      if (!ability) logWarn('loadAnalysisView: ability id missing from ability map', spellId);
+      iconByName[name] = ability?.icon ?? '';
     }
+    const { windows, anchors, clipAnchors } = buildDefensiveWindows({
+      topWindows: bench.defensive_windows, playerWindows, playerDefensives, fightDurationS, abilities: bench.ability_icons,
+    });
+    return { findings, spellIdsByName: bench.cd_spell_ids, iconByName, windows, anchors, clipAnchors };
   }
 
   async loadPlan(spec: string, encounterId: number): Promise<Result<DefensivePlanView>> {

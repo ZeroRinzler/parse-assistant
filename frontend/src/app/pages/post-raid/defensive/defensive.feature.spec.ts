@@ -54,20 +54,27 @@ describe('DefensiveFeatureService.loadAnalysisView (post-raid)', () => {
     if (result.ok) expect(result.value.iconByName).toEqual({ 'Cloak of Shadows': '' });
   });
 
-  it('surfaces a WCL failure as an error instead of a silent bench-only view', async () => {
-    const wcl = { getReport: async () => { throw new Error('WCL down'); } };
-    const service = serviceWith(ok(fullBench()), wcl);
-    const result = await service.loadAnalysisView('SubtletyRogue', 1, 'r1', 1, 10);
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error).toMatchObject({ kind: 'permanent', id: 'defensive.player-view' });
-  });
+  it('wires the shared pull context with the empty defensive view and the defensive repro id', async () => {
+    const UNLOGGED_FIGHT_ID = 99;
+    const FAILING_CODE = 'boom';
+    // TestBed configures once per test, so one service with one refused report code covers both branches.
+    const service = serviceWith(ok(fullBench()), {
+      getReport: async (code: string) => {
+        if (code === FAILING_CODE) throw new Error('WCL down');
+        return wclReport({ fights: [], actors: [] });
+      },
+      getAllEvents: async () => [],
+    });
 
-  it('returns an informational ok view when the selected fight is absent (e.g. mid live-sync)', async () => {
-    const wcl = { getReport: async () => wclReport({ fights: [], actors: [] }) };
-    const service = serviceWith(ok(fullBench()), wcl);
-    const result = await service.loadAnalysisView('SubtletyRogue', 1, 'r1', 99, 10);
-    expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toMatchObject({ findings: [], windows: [], spellIdsByName: { 'Cloak of Shadows': CLOAK_OF_SHADOWS } });
+    const onMissingFight = await service.loadAnalysisView('SubtletyRogue', 1, 'r1', UNLOGGED_FIGHT_ID, 10);
+    expect(onMissingFight).toEqual(ok({
+      findings: [], spellIdsByName: { 'Cloak of Shadows': CLOAK_OF_SHADOWS }, iconByName: {},
+      windows: [], anchors: [], clipAnchors: [],
+    }));
+
+    const onFailure = await service.loadAnalysisView('SubtletyRogue', 1, FAILING_CODE, 1, 10);
+    expect(onFailure.ok).toBe(false);
+    if (!onFailure.ok) expect(onFailure.error).toMatchObject({ kind: 'permanent', id: 'defensive.player-view' });
   });
 });
 

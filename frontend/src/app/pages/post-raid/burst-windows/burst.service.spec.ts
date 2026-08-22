@@ -1,5 +1,4 @@
 import { assert, describe, it, expect } from 'vitest';
-import { HttpErrorResponse } from '@angular/common/http';
 import { BurstWindow, PlayerBurstWindow } from '../../../core/models/analysis.models';
 import { Result, ok, missing } from '../../../core/result';
 import { BURST_DATA_SOURCE, BurstBench } from './burst-data-source';
@@ -169,9 +168,6 @@ const benchFixture: BurstBench = {
   }],
 };
 
-// A 5xx status toLoadError maps to a transient error.
-const HTTP_SERVICE_UNAVAILABLE = 503;
-
 describe('BurstFeatureService', () => {
   it('propagates the data-source error when the bench read fails', async () => {
     const result = await withBench(missing('Not yet ingested.')).loadBenchView('SubtletyRogue', 1);
@@ -206,22 +202,20 @@ describe('BurstFeatureService', () => {
     expect(result.value.anchors[0]).toEqual({ timeS: 10, windowLengthS: 20 });
   });
 
-  it('surfaces a WCL failure in the player view as a transient error (no silent bench-only fallback)', async () => {
-    const failingWcl = { getReport: async () => { throw new HttpErrorResponse({ status: HTTP_SERVICE_UNAVAILABLE }); } };
-    const result = await withBench(ok(benchFixture), failingWcl).loadPlayerView('SubtletyRogue', 1, 'rep', 1, 10);
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.kind).toBe('transient');
-  });
-
-  it('returns an ok informational view when the selected fight is not in the report (live sync)', async () => {
+  it('wires the shared pull context with the bench-only view and the burst repro id', async () => {
     const MISSING_FIGHT_ID = 999;
-    const result = await withBench(ok(benchFixture)).loadPlayerView('SubtletyRogue', 1, 'rep', MISSING_FIGHT_ID, 10);
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value.windows).toHaveLength(1);
-    // No player overlay: the informational bench-only view (benchOnly=true) shows the neutral info glyph.
-    const burstWindow = first(result.value.windows);
-    expect(burstWindow.status).toBe('info');
-    expect(burstWindow.overview.playerPct).toBeNull();
+    const FAILING_CODE = 'boom';
+    // TestBed configures once per test, so one service with one refused report code covers both branches.
+    const service = withBench(ok(benchFixture), {
+      ...wclFake,
+      getReport: async (code: string) => { if (code === FAILING_CODE) throw new Error('WCL down'); return wclFake.getReport(); },
+    });
+
+    const onMissingFight = await service.loadPlayerView('SubtletyRogue', 1, 'rep', MISSING_FIGHT_ID, 10);
+    expect(onMissingFight).toEqual(await service.loadBenchView('SubtletyRogue', 1));
+
+    const onFailure = await service.loadPlayerView('SubtletyRogue', 1, FAILING_CODE, 1, 10);
+    expect(onFailure.ok).toBe(false);
+    if (!onFailure.ok) expect(onFailure.error).toMatchObject({ kind: 'permanent', id: 'burst.player-view' });
   });
 });

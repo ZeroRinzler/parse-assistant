@@ -4,8 +4,7 @@ import { AnalysisFinding, FindingOccurrence, FindingTimeline } from '../../../co
 import { PerCdBenchmark } from '../../../core/models/encounter.models';
 import { RulebookCooldown } from '../../../core/models/rulebook.models';
 import { logWarn } from '../../../core/log';
-import { Result, ok, permanent } from '../../../core/result';
-import { toLoadError } from '../../../core/transport/http-load-error';
+import { Result, ok } from '../../../core/result';
 import { holdSuggestionFindings } from '../../../shared/analysis/hold-targets';
 import {
   isOutlierBeyond, isOutlierBelow, castEfficiencyPct,
@@ -15,7 +14,8 @@ import {
   CadenceVoice, cadencePlanUsage, checkFirstCastDelay, checkGaps, checkLostUses, holdsOf, usedByMajority,
 } from '../../../shared/analysis/cast-cadence';
 import { CAT_LABEL } from '../../../shared/components/finding-table/finding-table.utils';
-import { AbilityIcons, TimedEvent, relativeS, withRelativeS } from '../../../shared/analysis/wcl-projections';
+import { AbilityIcons, TimedEvent, withRelativeS } from '../../../shared/analysis/wcl-projections';
+import { PullContext, PullRef, analyzePull } from '../../../shared/analysis/pull-context';
 import {
   buildRuleContext, evaluateRules, rulesFollowed, rulesNeed, benchedRules, RULE_TYPE_LABEL,
 } from './rotation-rules';
@@ -378,50 +378,54 @@ export class RotationFeatureService {
     const bench = await this.source.getBench(spec, encounterId);
     if (!bench.ok) return bench;
 
-    try {
-      const report = await this.wclApi.getReport(reportCode);
-      const fight = report.fights.find(entry => entry.id === fightId);
-      if (!fight) return permanent('Fight not found in this report.', 'rotation.player-view');
+    const pull: PullRef = { reportCode, fightId };
+    return analyzePull(this.wclApi, pull, {
+      logSource: 'RotationFeatureService.loadPlayerView',
+      errorId: 'rotation.player-view',
+      emptyView: () => ({ ruleRows: [], ruleOnPlan: [], offensiveRows: [], onPlan: [] }),
+      analyze: context => this.playerView(bench.value, pull, playerId, context),
+    });
+  }
 
-      const rules = benchedRules(bench.value.rules);
-      const conditions = rules.map(entry => entry.rule);
-      const [casts, buffs, enemyAuras, damage] = await Promise.all([
-        this.wclApi.getAllEvents(reportCode, fightId, 'Casts', fight.startTime, fight.endTime, playerId, true),
-        this.wclApi.getAllEvents(reportCode, fightId, 'Buffs', fight.startTime, fight.endTime, playerId),
-        // Unnarrowable, so it costs several raid-wide pages: `Enemies` plus a sourceID returns nothing, and WCL offers no other source filter here.
-        rulesNeed(conditions, 'enemyAuras')
-          ? this.wclApi.getAllEvents(reportCode, fightId, 'Debuffs', fight.startTime, fight.endTime, undefined, false, 'Enemies')
-          : Promise.resolve([]),
-        // Target health rides on the damage rows, and only the resource-bearing form carries it.
-        rulesNeed(conditions, 'damage')
-          ? this.wclApi.getAllEvents(reportCode, fightId, 'DamageDone', fight.startTime, fight.endTime, playerId,
-            rulesNeed(conditions, 'targetHealth'))
-          : Promise.resolve([]),
-      ]);
-      const fightDurationS = relativeS(fight.endTime, fight.startTime);
-      const castsTimed = withRelativeS(casts, fight.startTime);
-      const buffsTimed = withRelativeS(buffs, fight.startTime);
-      const debuffsTimed = withRelativeS(enemyAuras.filter(event => event.sourceID === playerId), fight.startTime);
+  private async playerView(
+    bench: RotationBench, pull: PullRef, playerId: number, context: PullContext,
+  ): Promise<RotationPlayerView> {
+    const { reportCode, fightId } = pull;
+    const { fight, fightDurationS } = context;
+    const rules = benchedRules(bench.rules);
+    const conditions = rules.map(entry => entry.rule);
+    const [casts, buffs, enemyAuras, damage] = await Promise.all([
+      this.wclApi.getAllEvents(reportCode, fightId, 'Casts', fight.startTime, fight.endTime, playerId, true),
+      this.wclApi.getAllEvents(reportCode, fightId, 'Buffs', fight.startTime, fight.endTime, playerId),
+      // Unnarrowable, so it costs several raid-wide pages: `Enemies` plus a sourceID returns nothing, and WCL offers no other source filter here.
+      rulesNeed(conditions, 'enemyAuras')
+        ? this.wclApi.getAllEvents(reportCode, fightId, 'Debuffs', fight.startTime, fight.endTime, undefined, false, 'Enemies')
+        : Promise.resolve([]),
+      // Target health rides on the damage rows, and only the resource-bearing form carries it.
+      rulesNeed(conditions, 'damage')
+        ? this.wclApi.getAllEvents(reportCode, fightId, 'DamageDone', fight.startTime, fight.endTime, playerId,
+          rulesNeed(conditions, 'targetHealth'))
+        : Promise.resolve([]),
+    ]);
+    const castsTimed = withRelativeS(casts, fight.startTime);
+    const buffsTimed = withRelativeS(buffs, fight.startTime);
+    const debuffsTimed = withRelativeS(enemyAuras.filter(event => event.sourceID === playerId), fight.startTime);
 
-      const offensiveFindings = analyzeRotationFindings({
-        fightDurationS, castEvents: castsTimed, buffEvents: buffsTimed,
-        cooldowns: bench.value.major_cooldowns, bench: bench.value,
-      });
-      const ruleCtx = buildRuleContext({
-        casts: castsTimed, buffs: buffsTimed, debuffs: debuffsTimed, damage: withRelativeS(damage, fight.startTime),
-        fightDurationS,
-      });
-      const ruleFindings = evaluateRules(rules, ruleCtx);
-      const findings = [...offensiveFindings, ...ruleFindings];
-      sortBySeverity(findings);
-      const { ruleRows, offensiveRows, onPlan } =
-        bucketRotationFindings(findings, bench.value.cd_spell_ids, bench.value.ability_icons);
-      const ruleOnPlan = rulesFollowed(rules, ruleCtx);
-      return ok({ ruleRows, ruleOnPlan, offensiveRows, onPlan });
-    } catch (cause) {
-      logWarn(`RotationFeatureService.loadPlayerView ${reportCode}:${fightId}`, cause);
-      return toLoadError(cause, 'rotation.player-view');
-    }
+    const offensiveFindings = analyzeRotationFindings({
+      fightDurationS, castEvents: castsTimed, buffEvents: buffsTimed,
+      cooldowns: bench.major_cooldowns, bench,
+    });
+    const ruleCtx = buildRuleContext({
+      casts: castsTimed, buffs: buffsTimed, debuffs: debuffsTimed, damage: withRelativeS(damage, fight.startTime),
+      fightDurationS,
+    });
+    const ruleFindings = evaluateRules(rules, ruleCtx);
+    const findings = [...offensiveFindings, ...ruleFindings];
+    sortBySeverity(findings);
+    const { ruleRows, offensiveRows, onPlan } =
+      bucketRotationFindings(findings, bench.cd_spell_ids, bench.ability_icons);
+    const ruleOnPlan = rulesFollowed(rules, ruleCtx);
+    return { ruleRows, ruleOnPlan, offensiveRows, onPlan };
   }
 
   async loadPlanView(spec: string, encounterId: number): Promise<Result<RotationPlanView>> {

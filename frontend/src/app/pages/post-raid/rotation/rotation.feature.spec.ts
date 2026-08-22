@@ -1,5 +1,4 @@
 import { assert, describe, it, expect } from 'vitest';
-import { WclTransportError } from '../../../core/services/wcl-transport';
 import { Result, ok, missing } from '../../../core/result';
 import { RulebookRule, CastWithoutPriorCondition } from '../../../core/models/rulebook.models';
 import {
@@ -41,9 +40,6 @@ const WORKING_WCL = {
   getAllEvents: async () => [],
 };
 
-// Status a 5xx WCL outage raises; `toLoadError` maps it to a transient error.
-const WCL_UNAVAILABLE_STATUS = 503;
-
 function withSource(bench: Result<RotationBench>, wcl: unknown = WORKING_WCL): RotationFeatureService {
   return sliceService(ROTATION_DATA_SOURCE, RotationFeatureService, bench, wcl);
 }
@@ -56,12 +52,21 @@ describe('RotationFeatureService', () => {
     expect(result).toEqual(missing('Not yet ingested.'));
   });
 
-  it('surfaces a WCL failure as a transient error instead of a silent empty view', async () => {
-    const failingWcl = { getReport: async () => { throw new WclTransportError('WCL down', WCL_UNAVAILABLE_STATUS); } };
-    const service = withSource(ok(bench()), failingWcl);
-    const result = await service.loadPlayerView('SubtletyRogue', 1, 'rX', 1, 10);
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.kind).toBe('transient');
+  it('wires the shared pull context with the empty offensives view and the rotation repro id', async () => {
+    const UNLOGGED_FIGHT_ID = 99;
+    const FAILING_CODE = 'boom';
+    // TestBed configures once per test, so one service with one refused report code covers both branches.
+    const service = withSource(ok(bench()), {
+      ...WORKING_WCL,
+      getReport: async (code: string) => { if (code === FAILING_CODE) throw new Error('WCL down'); return REPORT; },
+    });
+
+    const onMissingFight = await service.loadPlayerView('SubtletyRogue', 1, 'rX', UNLOGGED_FIGHT_ID, 10);
+    expect(onMissingFight).toEqual(ok({ ruleRows: [], ruleOnPlan: [], offensiveRows: [], onPlan: [] }));
+
+    const onFailure = await service.loadPlayerView('SubtletyRogue', 1, FAILING_CODE, 1, 10);
+    expect(onFailure.ok).toBe(false);
+    if (!onFailure.ok) expect(onFailure.error).toMatchObject({ kind: 'permanent', id: 'rotation.player-view' });
   });
 
   it('evaluates the rotation rules baked into the bench', async () => {
