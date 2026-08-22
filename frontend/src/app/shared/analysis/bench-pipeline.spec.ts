@@ -139,15 +139,15 @@ describe('benchFromTopParses', () => {
 
   it('samples the partition it was handed', async () => {
     const RESOLVED_PARTITION = 2;
-    const asked: (number | null | undefined)[] = [];
+    const asked: (number | null)[] = [];
     const wcl = {
-      getRankings: async (_spec: string, _encounterId: number, partition?: number | null) => {
+      getRankings: async (_spec: string, _encounterId: number, partition: number | null) => {
         asked.push(partition);
         return { rankings: [] };
       },
     } as unknown as WclApiService;
     await benchFromTopParses(wcl, { ...QUERY, partition: RESOLVED_PARTITION }, codeSlice());
     await benchFromTopParses(wcl, QUERY, codeSlice());
-    expect(asked).toEqual([RESOLVED_PARTITION, undefined]);
+    expect(asked).toEqual([RESOLVED_PARTITION, null]);
   });
 });

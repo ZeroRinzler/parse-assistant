@@ -5,7 +5,7 @@ import { buildClientSchema, getIntrospectionQuery, lexicographicSortSchema, pars
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { WCL_PUBLIC_CLIENT_ID, WCL_PUBLIC_CLIENT_SECRET } from '../src/environments/wcl-public-client.ts';
+import { WCL_PUBLIC_CLIENT_ID, WCL_PUBLIC_CLIENT_SECRET } from '../src/app/core/transport/wcl-public-client.ts';
 import { nameJsonFieldScalars } from './wcl-json-scalars.mjs';
 
 const SDL = fileURLToPath(new URL('../schema/wcl.graphql', import.meta.url));

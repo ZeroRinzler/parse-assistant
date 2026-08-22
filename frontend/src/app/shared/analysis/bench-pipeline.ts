@@ -44,7 +44,7 @@ export async function benchFromTopParses<TParse, TBench>(
   try {
     const limits = sliceLimits(slice);
     const rankings = toParseRankings(
-      unwrapRankings(await wclApi.getRankings(spec, encounterId, partition)), limits.poolCount);
+      unwrapRankings(await wclApi.getRankings(spec, encounterId, partition ?? null)), limits.poolCount);
     if (!rankings.length) return missing(slice.noRankingsMessage);
 
     const payload = await collectParses(wclApi, slice, rankings, limits.sampleTarget);

@@ -1,17 +1,15 @@
 // Each run is bounded by the WCL hourly point budget, so these pure helpers order work to fix the most out-of-date data first.
 
-export const DEFAULT_PRIORITY_SPECS: readonly string[] = [];
-
 /** Cap on how many specs one run ingests, so a single run stays within the WCL point budget. */
 export const SPEC_LIMIT = 10;
 
 const SPEC_TOKEN = /^[A-Za-z]+$/;
 
-// Malformed input falls back to DEFAULT_PRIORITY_SPECS rather than throwing, so a typo'd repo variable can't break a run.
+// Malformed input falls back to no priority spec rather than throwing, so a typo'd repo variable can't break a run.
 export function parsePrioritySpecs(raw: string | null | undefined): readonly string[] {
-  if (!raw) return DEFAULT_PRIORITY_SPECS;
+  if (!raw) return [];
   const tokens = raw.split(',').map(token => token.trim()).filter(token => token.length > 0);
-  if (tokens.length === 0 || !tokens.every(token => SPEC_TOKEN.test(token))) return DEFAULT_PRIORITY_SPECS;
+  if (tokens.length === 0 || !tokens.every(token => SPEC_TOKEN.test(token))) return [];
   return tokens;
 }
 
@@ -24,7 +22,7 @@ export interface SpecOrderEntry {
 /** Order within each version group is randomized per call so every spec gets a turn at the front over many runs. */
 export function orderSpecsByVersion(
   entries: readonly SpecOrderEntry[],
-  prioritySpecs: readonly string[] = DEFAULT_PRIORITY_SPECS,
+  prioritySpecs: readonly string[],
   random: () => number = Math.random,
 ): string[] {
   const group = (entry: SpecOrderEntry): number =>
@@ -51,7 +49,7 @@ export interface SpecRunPlan {
 
 export function specsForRun(
   entries: readonly SpecOrderEntry[],
-  prioritySpecs: readonly string[] = DEFAULT_PRIORITY_SPECS,
+  prioritySpecs: readonly string[],
 ): SpecRunPlan {
   const ordered = orderSpecsByVersion(entries, prioritySpecs);
   return { ordered, selected: ordered.slice(0, SPEC_LIMIT) };

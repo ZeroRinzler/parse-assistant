@@ -5,7 +5,7 @@ export const UNKNOWN_COOLDOWN_LABEL = 'Unknown cooldown';
 
 const UNKNOWN_COOLDOWN_CONTEXT = 'finding-table.unknown-cooldown';
 
-export const CAT_LABEL: Record<string, string> = {
+const CAT_LABEL: Record<string, string> = {
   lost_cooldown: 'lost cast',
   cooldown_delay: 'held',
   cooldown_alignment: 'BL miss',
@@ -49,12 +49,10 @@ export interface FindingEntry {
   /** Baked icon filename for `wl-game-icon` (empty string when there is no art). */
   icon: string;
   hasIssue: boolean;
-  hasCritical: boolean;
-  metaItems: string[];
   findings: AnalysisFinding[];
 }
 
-export function rowsFromEntries(entries: FindingEntry[], catLabel: Record<string, string>): FindingRow[] {
+export function rowsFromEntries(entries: FindingEntry[]): FindingRow[] {
   const rows: FindingRow[] = [];
   for (const entry of entries) {
     if (!entry.hasIssue) continue;
@@ -65,7 +63,7 @@ export function rowsFromEntries(entries: FindingEntry[], catLabel: Record<string
         spellId: entry.spellId,
         icon: entry.icon,
         timestampS: f.timestamp_s ?? null,
-        chip: catLabel[f.category],
+        chip: CAT_LABEL[f.category],
         measured: f.measured ?? { value: '-' },
         fix: f.details?.remedy,
         occurrences: f.occurrences,
@@ -79,7 +77,7 @@ export function onPlanFromEntries(entries: FindingEntry[]): OnPlanChip[] {
   return entries.filter(e => !e.hasIssue).map(e => ({ name: e.name, spellId: e.spellId, icon: e.icon }));
 }
 
-interface FindingBucket { issues: AnalysisFinding[]; holds: AnalysisFinding[]; success?: AnalysisFinding; }
+interface FindingBucket { issues: AnalysisFinding[]; holds: AnalysisFinding[]; }
 
 export interface BucketOptions {
   spellId: (name: string) => number | null;
@@ -116,26 +114,15 @@ export function bucketFindings(
   for (const finding of findings) {
     if (finding.severity !== 'success') continue;
     const name = finding.cd_name;
-    if (name) bucketOf(byName, name).success = finding;
+    // The empty bucket is what surfaces the cooldown as an "On plan" chip.
+    if (name) bucketOf(byName, name);
   }
 
-  return Object.entries(byName).map(([name, bucket]) => {
-    const hasCritical = bucket.issues.some(f => f.severity === 'critical');
-    const hasIssue = bucket.issues.length > 0 || bucket.holds.length > 0;
-    const metaItems: string[] = [];
-    for (const finding of bucket.issues) {
-      const label = CAT_LABEL[finding.category];
-      if (label && !metaItems.includes(label)) metaItems.push(label);
-    }
-    if (bucket.holds.length) metaItems.push(`${bucket.holds.length} hold${bucket.holds.length > 1 ? 's' : ''}`);
-    return {
-      name,
-      spellId: options.spellId(name),
-      icon: options.icon(name),
-      hasCritical,
-      hasIssue,
-      metaItems,
-      findings: [...bucket.issues, ...bucket.holds],
-    };
-  });
+  return Object.entries(byName).map(([name, bucket]) => ({
+    name,
+    spellId: options.spellId(name),
+    icon: options.icon(name),
+    hasIssue: bucket.issues.length > 0 || bucket.holds.length > 0,
+    findings: [...bucket.issues, ...bucket.holds],
+  }));
 }

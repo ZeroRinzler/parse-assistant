@@ -4,7 +4,7 @@ import {
   provideEnvironmentInitializer,
   inject,
 } from '@angular/core';
-import { provideRouter, withComponentInputBinding } from '@angular/router';
+import { provideRouter } from '@angular/router';
 import { MatIconRegistry } from '@angular/material/icon';
 import { routes } from './app.routes';
 import { WCL_TRANSPORT } from './core/services/wcl-transport';
@@ -18,7 +18,7 @@ import { environmentProviders } from '../environments/environment';
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
-    provideRouter(routes, withComponentInputBinding()),
+    provideRouter(routes),
     provideAppHttp(),
     provideWclCaching(),
     provideEnvironmentInitializer(() => {

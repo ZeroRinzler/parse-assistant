@@ -3,7 +3,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import * as z from '../zod-mini';
 import { WclTransportError } from '../services/wcl-transport';
-import { environment } from '../../../environments/environment';
+import { WCL_PUBLIC_CLIENT_ID, WCL_PUBLIC_CLIENT_SECRET } from './wcl-public-client';
 
 const TOKEN_URL = 'https://www.warcraftlogs.com/oauth/token';
 
@@ -33,8 +33,8 @@ export class WclAuthService {
   private async _fetchToken(): Promise<string> {
     const params = new URLSearchParams({
       grant_type: 'client_credentials',
-      client_id: environment.wclClientId,
-      client_secret: environment.wclClientSecret,
+      client_id: WCL_PUBLIC_CLIENT_ID,
+      client_secret: WCL_PUBLIC_CLIENT_SECRET,
     });
     let data: unknown;
     try {

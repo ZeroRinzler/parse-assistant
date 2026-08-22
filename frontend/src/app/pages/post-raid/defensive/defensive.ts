@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 import { ClipAnchor } from '../../../core/models/capture.models';
 import {
-  bucketFindings, CAT_LABEL, FindingRow, FindingTableComponent, onPlanFromEntries, rowsFromEntries,
+  bucketFindings, FindingRow, FindingTableComponent, onPlanFromEntries, rowsFromEntries,
 } from '../../../shared/components/finding-table/finding-table';
 import { WindowComparisonComponent } from '../../../shared/components/window-comparison/window-comparison';
 import { LoadStateComponent } from '../../../shared/components/load-state/load-state';
@@ -65,7 +65,7 @@ export class DefensiveComponent {
     });
   });
 
-  protected readonly findingRows = computed<FindingRow[]>(() => rowsFromEntries(this.entries(), CAT_LABEL));
+  protected readonly findingRows = computed<FindingRow[]>(() => rowsFromEntries(this.entries()));
   protected readonly onPlan = computed(() => onPlanFromEntries(this.entries()));
 
   protected onOpenMap(index: number): void {

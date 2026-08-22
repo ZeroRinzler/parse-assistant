@@ -122,7 +122,7 @@ describe('WclApiService', () => {
     it('pins the rankings query to Mythic difficulty', async () => {
       const { api, transport } = setup();
       transport.response = { worldData: { encounter: { characterRankings: { rankings: [] } } } };
-      await api.getRankings(SPEC_META.spec, ENCOUNTER_ID);
+      await api.getRankings(SPEC_META.spec, ENCOUNTER_ID, null);
       expect(transport.variables[0]).toMatchObject({
         className: SPEC_META.className, specName: SPEC_META.specName, difficulty: MYTHIC_DIFFICULTY,
       });

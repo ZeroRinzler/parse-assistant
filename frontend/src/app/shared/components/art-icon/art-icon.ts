@@ -13,6 +13,4 @@ export class ArtIconComponent {
   /** Fully-resolved absolute image URL; '' renders nothing. */
   readonly src = input.required<string>();
   readonly alt = input.required<string>();
-  /** Square pixel size; the default suits a `mat-option` row. */
-  readonly size = input<number>(20);
 }

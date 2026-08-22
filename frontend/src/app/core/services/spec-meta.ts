@@ -81,7 +81,7 @@ export class SpecMetaService {
   /** specMetaOf, deferred until hydration lands - for callers outside a reactive context. */
   async resolve(spec: string | null | undefined): Promise<SpecMeta | undefined> {
     await this.hydrated;
-    return this.specMetaOf(spec);
+    return specMetaOf(this.universe(), spec);
   }
 
   classList(): { className: string; classLabel: string; classIcon: string }[] {
@@ -90,10 +90,6 @@ export class SpecMetaService {
 
   specsForClass(className: string, available: string[]): SpecMeta[] {
     return specsForClass(this.universe(), className, available);
-  }
-
-  specMetaOf(spec: string | null | undefined): SpecMeta | undefined {
-    return specMetaOf(this.universe(), spec);
   }
 
   classIconUrl(className: string): string {

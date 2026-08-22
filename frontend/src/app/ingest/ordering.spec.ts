@@ -1,7 +1,6 @@
 import { assert, describe, it, expect } from 'vitest';
 import {
-  orderSpecsByVersion, specsForRun, orderEncountersByMissingFirst, parsePrioritySpecs,
-  DEFAULT_PRIORITY_SPECS, SPEC_LIMIT,
+  orderSpecsByVersion, specsForRun, orderEncountersByMissingFirst, parsePrioritySpecs, SPEC_LIMIT,
   type SpecOrderEntry,
 } from './ordering';
 
@@ -17,7 +16,7 @@ describe('orderSpecsByVersion', () => {
       entry({ spec: 'Current', onCurrentVersion: true }),
       entry({ spec: 'Empty', dataCount: 0, onCurrentVersion: false }),
       entry({ spec: 'Old', onCurrentVersion: false }),
-    ]);
+    ], []);
     expect(order).toEqual(['Empty', 'Old', 'Current']);
   });
 
@@ -25,7 +24,7 @@ describe('orderSpecsByVersion', () => {
     const order = orderSpecsByVersion([
       entry({ spec: 'CurrentZebra', onCurrentVersion: true }),
       entry({ spec: 'OldApple', onCurrentVersion: false }),
-    ]);
+    ], []);
     expect(order).toEqual(['OldApple', 'CurrentZebra']);
   });
 
@@ -35,7 +34,7 @@ describe('orderSpecsByVersion', () => {
     let next = 0;
     const order = orderSpecsByVersion(
       [entry({ spec: 'Charlie' }), entry({ spec: 'Alpha' }), entry({ spec: 'Bravo' })],
-      DEFAULT_PRIORITY_SPECS,
+      [],
       () => {
         const key = keys[next++];
         assert.exists(key);
@@ -45,12 +44,12 @@ describe('orderSpecsByVersion', () => {
     expect(order).toEqual(['Charlie', 'Bravo', 'Alpha']);
   });
 
-  it('has no priority spec by default: order comes from the shuffle alone', () => {
+  it('with no priority spec, order comes from the shuffle alone', () => {
     const keys = [0.9, 0.1, 0.5]; // Outlaw, Subtlety, Assassination
     let next = 0;
     const order = orderSpecsByVersion(
       [entry({ spec: 'OutlawRogue' }), entry({ spec: 'SubtletyRogue' }), entry({ spec: 'AssassinationRogue' })],
-      DEFAULT_PRIORITY_SPECS,
+      [],
       () => {
         const key = keys[next++];
         assert.exists(key);
@@ -89,23 +88,23 @@ describe('orderSpecsByVersion', () => {
   it('does not mutate the input', () => {
     const entries = [entry({ spec: 'B' }), entry({ spec: 'A' })];
     const snapshot = entries.map(item => item.spec);
-    orderSpecsByVersion(entries);
+    orderSpecsByVersion(entries, []);
     expect(entries.map(item => item.spec)).toEqual(snapshot);
   });
 
   it('returns an empty list for no specs', () => {
-    expect(orderSpecsByVersion([])).toEqual([]);
+    expect(orderSpecsByVersion([], [])).toEqual([]);
   });
 
   it('caps a run at SPEC_LIMIT specs, dropping the overflow', () => {
     // One more spec than the cap: specsForRun orders then slices, so the run never exceeds SPEC_LIMIT.
     const entries = Array.from({ length: SPEC_LIMIT + 1 }, (_, i) => entry({ spec: `Spec${i}` }));
-    expect(specsForRun(entries).selected).toHaveLength(SPEC_LIMIT);
+    expect(specsForRun(entries, []).selected).toHaveLength(SPEC_LIMIT);
   });
 
   it('reports every spec in the same order the cap was applied to, so the deferred ones are still logged', () => {
     const entries = Array.from({ length: SPEC_LIMIT + 3 }, (_, i) => entry({ spec: `Spec${i}` }));
-    const { ordered, selected } = specsForRun(entries);
+    const { ordered, selected } = specsForRun(entries, []);
     expect(ordered).toHaveLength(SPEC_LIMIT + 3);
     expect(ordered.slice(0, SPEC_LIMIT)).toEqual(selected);
     expect([...ordered].sort()).toEqual(entries.map(item => item.spec).sort());
@@ -126,20 +125,20 @@ describe('parsePrioritySpecs', () => {
     expect(parsePrioritySpecs('SubtletyRogue, ArmsWarrior')).toEqual(['SubtletyRogue', 'ArmsWarrior']);
   });
 
-  it('falls back to the default for missing input', () => {
-    expect(parsePrioritySpecs(undefined)).toEqual(DEFAULT_PRIORITY_SPECS);
-    expect(parsePrioritySpecs(null)).toEqual(DEFAULT_PRIORITY_SPECS);
-    expect(parsePrioritySpecs('')).toEqual(DEFAULT_PRIORITY_SPECS);
+  it('falls back to no priority spec for missing input', () => {
+    expect(parsePrioritySpecs(undefined)).toEqual([]);
+    expect(parsePrioritySpecs(null)).toEqual([]);
+    expect(parsePrioritySpecs('')).toEqual([]);
   });
 
-  it('falls back to the default for a blank or malformed list', () => {
-    expect(parsePrioritySpecs('  , , ')).toEqual(DEFAULT_PRIORITY_SPECS);
-    expect(parsePrioritySpecs('["SubtletyRogue"]')).toEqual(DEFAULT_PRIORITY_SPECS);
-    expect(parsePrioritySpecs('SubtletyRogue;ArmsWarrior')).toEqual(DEFAULT_PRIORITY_SPECS);
+  it('falls back to no priority spec for a blank or malformed list', () => {
+    expect(parsePrioritySpecs('  , , ')).toEqual([]);
+    expect(parsePrioritySpecs('["SubtletyRogue"]')).toEqual([]);
+    expect(parsePrioritySpecs('SubtletyRogue;ArmsWarrior')).toEqual([]);
   });
 
   it('rejects the whole list when any single token is malformed', () => {
-    expect(parsePrioritySpecs('SubtletyRogue,Arms Warrior')).toEqual(DEFAULT_PRIORITY_SPECS);
+    expect(parsePrioritySpecs('SubtletyRogue,Arms Warrior')).toEqual([]);
   });
 });
 

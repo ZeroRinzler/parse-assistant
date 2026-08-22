@@ -42,8 +42,6 @@ export interface WclEvent {
   targetInstance?: number;
   // Present on `death` events: `amount` is absent, so the lethal hit's magnitude is read from the matching DamageTaken event.
   killingAbilityGameID?: number;
-  // Present on DamageTaken events: the full incoming hit before the player's mitigation.
-  unmitigatedAmount?: number;
   // Position is present only when the events query is made with `includeResources: true`; `resourceActor` says whose snapshot it is (1 = source, 2 = target).
   resourceActor?: number;
   x?: number;
