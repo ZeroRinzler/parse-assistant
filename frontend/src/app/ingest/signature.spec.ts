@@ -1,16 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
-  encounterSignature, encounterSkipKey, signatureAfterFetch, stampSignature, stampBurstFile, parseKey,
-  type SignatureRanking, type IngestStamp,
+  encounterSignature, encounterSkipKey, signatureAfterFetch, parseKey, type SignatureRanking,
 } from './signature';
-import { readStoredMetadata, signatureMatches, type StampedFile } from '../core/data-source/metadata/stored-metadata';
-import { ok, missing, transient, permanent, type Result } from '../core/result';
 
 const rankings = (...rows: [string, number][]): SignatureRanking[] =>
   rows.map(([report_code, fight_id]) => ({ report_code, fight_id }));
-
-const INGESTED_AT_S = 1776245400;
-const STAMP: IngestStamp = { version: 1, ingestedAtS: INGESTED_AT_S };
 
 describe('encounterSignature', () => {
   it('produces a 16-char lowercase hex hash', () => {
@@ -195,84 +189,5 @@ describe('signatureAfterFetch', () => {
     expect(result.signature).toBe(encounterSignature(VERSION, pool('a', 'c', 'd')));
     // The healthy rerun's cheap check keys on the full top-N (b included), so it differs.
     expect(encounterSkipKey(rows, new Set(result.inaccessibleParses), VERSION, TOP_N)).not.toBe(result.signature);
-  });
-});
-
-describe('stampSignature', () => {
-  it('adds source_signature + ingest_version + ingested_at_s without mutating the original', () => {
-    const original = { spec: 'X', encounter_id: 1 };
-    const stamped = stampSignature(original, 'sig', STAMP);
-    expect(stamped).toEqual({
-      spec: 'X', encounter_id: 1, source_signature: 'sig', ingest_version: 1, ingested_at_s: INGESTED_AT_S,
-    });
-    expect(original).not.toHaveProperty('source_signature');
-    expect(original).not.toHaveProperty('ingest_version');
-    expect(original).not.toHaveProperty('ingested_at_s');
-  });
-
-  it('round-trips: a stamped file matches its own signature, version and stamp time', () => {
-    const sig = encounterSignature('1', rankings(['r1', 1]));
-    const stored = readStoredMetadata(stampSignature({ data: true }, sig, STAMP));
-    expect(signatureMatches(stored.signature, sig)).toBe(true);
-    expect(stored.version).toBe(1);
-    expect(stored.ingestedAtS).toBe(INGESTED_AT_S);
-  });
-});
-
-describe('stampBurstFile', () => {
-  // An unstamped burst makes the next run recompute, so a failed sibling is retried.
-  const SIGNATURE = encounterSignature('1', rankings(['r1', 1]));
-  const VERSION = STAMP.version;
-  const INACCESSIBLE = ['r2:2'];
-  const data = { spec: 'X', encounter_id: 1 };
-
-  // Only .ok and .error.kind matter to the stamp, so the ok payload is a placeholder.
-  const OK: Result<unknown> = ok('slice');
-  const ALL_OK: Result<unknown>[] = [OK, OK, OK, OK, OK];
-  const withSibling = (sibling: Result<unknown>): Result<unknown>[] => [OK, sibling, OK, OK, OK];
-
-  const nextRunSkips = (file: StampedFile): boolean =>
-    signatureMatches(readStoredMetadata(file).signature, SIGNATURE);
-
-  it('stamps the signature when every slice produced data, so the next run skips', () => {
-    const file = stampBurstFile(data, SIGNATURE, STAMP, INACCESSIBLE, ALL_OK);
-    expect(readStoredMetadata(file).signature).toBe(SIGNATURE);
-    expect(nextRunSkips(file)).toBe(true);
-  });
-
-  it('leaves the burst unstamped when a sibling slice fails transiently, so the next run redoes it', () => {
-    const file = stampBurstFile(data, SIGNATURE, STAMP, INACCESSIBLE, withSibling(transient('WCL request failed')));
-    expect(readStoredMetadata(file).signature).toBeNull();
-    expect(nextRunSkips(file)).toBe(false);
-  });
-
-  it('leaves the burst unstamped when a sibling slice fails permanently', () => {
-    const file = stampBurstFile(data, SIGNATURE, STAMP, INACCESSIBLE, withSibling(permanent('bad shape', 'burst.bench')));
-    expect(readStoredMetadata(file).signature).toBeNull();
-    expect(nextRunSkips(file)).toBe(false);
-  });
-
-  it('still stamps when a sibling is legitimately empty (missing is not a failure), so a valid encounter is not redone forever', () => {
-    const file = stampBurstFile(data, SIGNATURE, STAMP, INACCESSIBLE, withSibling(missing('No top parses')));
-    expect(readStoredMetadata(file).signature).toBe(SIGNATURE);
-    expect(nextRunSkips(file)).toBe(true);
-  });
-
-  it('persists the ingest version, the stamp time and the inaccessible set, stamped or not', () => {
-    const stamped = stampBurstFile(data, SIGNATURE, STAMP, INACCESSIBLE, ALL_OK);
-    const unstamped = stampBurstFile(data, SIGNATURE, STAMP, INACCESSIBLE, withSibling(transient('WCL request failed')));
-    for (const file of [stamped, unstamped]) {
-      const stored = readStoredMetadata(file);
-      expect(stored.version).toBe(VERSION);
-      expect(stored.ingestedAtS).toBe(INGESTED_AT_S);
-      expect(stored.inaccessibleParses).toEqual(new Set(INACCESSIBLE));
-    }
-  });
-
-  it('does not mutate the input data', () => {
-    stampBurstFile(data, SIGNATURE, STAMP, INACCESSIBLE, ALL_OK);
-    expect(data).not.toHaveProperty('source_signature');
-    expect(data).not.toHaveProperty('ingest_version');
-    expect(data).not.toHaveProperty('ingested_at_s');
   });
 });

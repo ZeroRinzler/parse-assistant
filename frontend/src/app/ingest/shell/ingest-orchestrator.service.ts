@@ -17,10 +17,10 @@ import {
 } from '../current-raids';
 import { INGEST_VERSION } from '../ingest-version';
 import { specsForRun, orderEncountersByMissingFirst, parsePrioritySpecs, type SpecOrderEntry } from '../ordering';
+import { signatureAfterFetch } from '../signature';
 import {
-  encounterSkipKey, signatureAfterFetch, stampSignature, stampBurstFile, type IngestStamp,
-} from '../signature';
-import { readStoredMetadata, signatureMatches, type StampedFile } from '../../core/data-source/metadata/stored-metadata';
+  readFileStamp, skipDecision, stampSignature, stampBurstFile, type IngestStamp,
+} from '../stamp';
 import {
   readIngestState, nextIngestState, prunedIngestState, encounterIdsFromFiles, type SpecIngestState,
 } from '../ingest-state';
@@ -206,8 +206,8 @@ export class IngestOrchestratorService {
       const state = await this.loadIngestState(spec);
       const emptyIds = state?.empty_encounter_ids ?? [];
       const stamps = await Promise.all(benched.map(async id => {
-        const slice = await this.dataFile.getSlice<StampedFile>(spec, id, BENCH_SLICE);
-        return readStoredMetadata(slice.ok ? slice.value : null);
+        const slice = await this.dataFile.getSlice(spec, id, BENCH_SLICE);
+        return readFileStamp(slice.ok ? slice.value : null);
       }));
       const versions = stamps.map(stamp => stamp.version);
       if (state) versions.push(state.ingest_version);
@@ -266,10 +266,10 @@ export class IngestOrchestratorService {
           continue;
         }
 
-        const existingResult = await this.dataFile.getSlice<StampedFile>(spec, encounter.id, BENCH_SLICE);
-        const existing = readStoredMetadata(existingResult.ok ? existingResult.value : null);
-        const skipKey = encounterSkipKey(selection.rows, existing.inaccessibleParses, version, TOP_N);
-        if (signatureMatches(existing.signature, skipKey)) {
+        const existing = await this.dataFile.getSlice(spec, encounter.id, BENCH_SLICE);
+        const { skip, signature: skipKey } = skipDecision(
+          existing.ok ? existing.value : null, selection.rows, version, TOP_N);
+        if (skip) {
           console.log(`  [${encounter.name}] unchanged (signature ${skipKey}), skipped`);
           continue;
         }

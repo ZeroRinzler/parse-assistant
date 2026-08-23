@@ -1,5 +1,5 @@
 import * as z from '../core/zod-mini';
-import { type IngestStamp } from './signature';
+import { type IngestStamp } from './stamp';
 
 export interface SpecIngestState {
   ingest_version: number;

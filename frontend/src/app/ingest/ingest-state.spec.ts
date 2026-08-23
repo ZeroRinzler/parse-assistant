@@ -3,7 +3,7 @@ import {
   readIngestState, nextIngestState, prunedIngestState, encounterIdsFromFiles,
   type SpecIngestState,
 } from './ingest-state';
-import { type IngestStamp } from './signature';
+import { type IngestStamp } from './stamp';
 
 const NEKZALI = 3470;
 const ENTOMBED_SENTINELS = 3445;
