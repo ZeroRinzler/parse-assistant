@@ -1,12 +1,12 @@
 import { ChangeDetectionStrategy, Component, computed, input, linkedSignal, output } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
-import { GameIconComponent } from '../game-icon/game-icon';
-import { CompactAbilityRowComponent } from '../compact-ability-row/compact-ability-row';
+import { GameIcon } from '../game-icon/game-icon';
+import { CompactAbilityRow } from '../compact-ability-row/compact-ability-row';
 import { FormatDurationPipe } from '../../pipes/format-duration-pipe';
 import { FormatDamagePipe } from '../../pipes/format-damage-pipe';
 import { SignedPercentPipe } from '../../pipes/signed-percent-pipe';
-import { RangeRow, ComparisonWindow } from '../../../core/models/window-comparison.models';
+import type { RangeRow, ComparisonWindow } from '../../../domain/analysis/window-comparison.models';
 
 type TimelineCell =
   | { readonly kind: 'window'; readonly index: number; readonly window: ComparisonWindow }
@@ -20,10 +20,10 @@ let nextInstanceSeq = 0;
   selector: 'wl-window-comparison',
   // Angular custom elements default to display:inline; block keeps the card full-width.
   host: { class: 'block' },
-  imports: [MatIconModule, MatButtonModule, GameIconComponent, CompactAbilityRowComponent, FormatDurationPipe, FormatDamagePipe, SignedPercentPipe],
+  imports: [MatIconModule, MatButtonModule, GameIcon, CompactAbilityRow, FormatDurationPipe, FormatDamagePipe, SignedPercentPipe],
   templateUrl: './window-comparison.html',
 })
-export class WindowComparisonComponent {
+export class WindowComparison {
   readonly windows = input.required<ComparisonWindow[]>();
   readonly higherIsBetter = input<boolean>(true);
   readonly showMap = input<boolean>(false);
@@ -94,7 +94,7 @@ export class WindowComparisonComponent {
   });
 
   private gapSlots(pauseS: number): number {
-    return Math.max(0, Math.floor(pauseS / WindowComparisonComponent.GAP_SLOT_SECONDS));
+    return Math.max(0, Math.floor(pauseS / WindowComparison.GAP_SLOT_SECONDS));
   }
 
   protected select(i: number): void {

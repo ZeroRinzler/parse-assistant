@@ -9,7 +9,7 @@ import { MatIconModule } from '@angular/material/icon';
   imports: [MatButtonModule, MatIconModule],
   templateUrl: './flyover-panel.html',
 })
-export class FlyoverPanelComponent {
+export class FlyoverPanel {
   readonly heading = input.required<string>();
   /** Muted status text beside the heading; empty renders nothing. */
   readonly loadingText = input<string>('');

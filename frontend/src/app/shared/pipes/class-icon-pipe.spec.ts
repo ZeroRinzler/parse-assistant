@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { ClassIconPipe } from './class-icon-pipe';
-import { SpecMetaService } from '../../core/services/spec-meta';
-import { DataFileApiService } from '../../core/services/data-file-api';
+import { SpecMetaService } from '../../core/data-files/spec-meta-service';
+import { DataFileApiService } from '../../core/data-files/data-file-api-service';
 
 let pipe: ClassIconPipe;
 

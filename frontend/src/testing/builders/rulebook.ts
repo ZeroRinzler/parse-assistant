@@ -1,5 +1,5 @@
 /** Rulebook fixture factory: fills in the boilerplate so a test only states the one cooldown or rule it cares about. */
-import { Rulebook, RulebookCooldown, RulebookDefensive, RulebookRule } from '../../app/core/models/rulebook.models';
+import { Rulebook, RulebookCooldown, RulebookDefensive, RulebookRule } from '../../app/domain/rulebook/rulebook.models';
 
 type CooldownSeed = Pick<RulebookCooldown, 'name' | 'spell_id' | 'cooldown'> & Partial<RulebookCooldown>;
 type DefensiveSeed = Pick<RulebookDefensive, 'name' | 'spell_id' | 'cooldown'> & Partial<RulebookDefensive>;

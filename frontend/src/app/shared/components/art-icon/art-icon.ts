@@ -9,7 +9,7 @@ import { NgOptimizedImage } from '@angular/common';
   imports: [NgOptimizedImage],
   templateUrl: './art-icon.html',
 })
-export class ArtIconComponent {
+export class ArtIcon {
   /** Fully-resolved absolute image URL; '' renders nothing. */
   readonly src = input.required<string>();
   readonly alt = input.required<string>();

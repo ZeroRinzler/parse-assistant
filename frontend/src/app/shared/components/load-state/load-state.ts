@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
-import { LoadError } from '../../../core/result';
+import { LoadError } from '../../../core/http/result';
 
 /** The hard-error kinds this panel renders; a null error is the waiting (not-yet-ingested) state. */
 export type RenderableLoadError = Extract<LoadError, { kind: 'transient' | 'permanent' }>;
@@ -13,7 +13,7 @@ export type RenderableLoadError = Extract<LoadError, { kind: 'transient' | 'perm
   host: { class: 'block' },
   templateUrl: './load-state.html',
 })
-export class LoadStateComponent {
+export class LoadState {
   readonly heading = input<string>('');
   readonly subtitle = input<string>('');
   readonly caption = input<string>('Built from the top-parse bench.');

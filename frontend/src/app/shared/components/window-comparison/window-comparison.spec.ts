@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { WindowComparisonComponent } from './window-comparison';
-import { ComparisonWindow, WindowStatus, RangeRow } from '../../../core/models/window-comparison.models';
+import { WindowComparison } from './window-comparison';
+import type { ComparisonWindow, WindowStatus, RangeRow } from '../../../domain/analysis/window-comparison.models';
 import { badgeStatus, mountDom, MountedDom } from '../../../../testing/component-harness';
 
 const CHIP = 'button[role="option"]';
@@ -26,7 +26,7 @@ function win(overview: Partial<RangeRow>, status: WindowStatus = 'good'): Compar
 }
 
 const render = (windows: ComparisonWindow[], inputs: Record<string, unknown> = {}): MountedDom =>
-  mountDom(WindowComparisonComponent, { windows, ...inputs });
+  mountDom(WindowComparison, { windows, ...inputs });
 
 function selectedChip(dom: MountedDom): number {
   return dom.queryAll(CHIP).findIndex(chip => chip.getAttribute('aria-selected') === 'true');
@@ -44,7 +44,7 @@ const threeWindows = (): ComparisonWindow[] => [
   win({ playerPct: 120, topAvg: 100 }),
 ];
 
-describe('WindowComparisonComponent chip selection', () => {
+describe('WindowComparison chip selection', () => {
   it('renders one chip per window, labelled with its start time', () => {
     const LATE_START_S = 65;
     const dom = render([win({}), { ...win({}), timeStartS: LATE_START_S }]);
@@ -121,7 +121,7 @@ describe('WindowComparisonComponent chip selection', () => {
   });
 });
 
-describe('WindowComparisonComponent keyboard navigation', () => {
+describe('WindowComparison keyboard navigation', () => {
   it('moves one chip right on ArrowRight', () => {
     const dom = render(threeWindows());
     expect(selectedChip(dom)).toBe(1);
@@ -168,7 +168,7 @@ describe('WindowComparisonComponent keyboard navigation', () => {
   });
 });
 
-describe('WindowComparisonComponent damage bar', () => {
+describe('WindowComparison damage bar', () => {
   it('scales the bars so the largest value across every window fills the track', () => {
     const MAX_PLAYER_PCT = 300;
     const dom = render([
@@ -207,7 +207,7 @@ describe('WindowComparisonComponent damage bar', () => {
   });
 });
 
-describe('WindowComparisonComponent delta badge', () => {
+describe('WindowComparison delta badge', () => {
   it('shows the signed percent gap against the top average', () => {
     const dom = render([win({ playerPct: 90, topAvg: 100 })]);
     expect(dom.query(DELTA_BADGE)?.textContent.trim()).toBe('-10%');
@@ -247,7 +247,7 @@ describe('WindowComparisonComponent delta badge', () => {
   });
 });
 
-describe('WindowComparisonComponent detail rows', () => {
+describe('WindowComparison detail rows', () => {
   const detailRow = (label: string, spellId: number, playerPct: number | null, topAvg: number): RangeRow =>
     ({ label, icon: '', spellId, playerPct, topAvg, topMin: null, topMax: null });
 
@@ -329,7 +329,7 @@ describe('WindowComparisonComponent detail rows', () => {
   });
 });
 
-describe('WindowComparisonComponent pacing slots', () => {
+describe('WindowComparison pacing slots', () => {
   // One dashed slot stands for this many seconds of pause between two windows.
   const SLOT_SECONDS = 20;
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { CompactAbilityRowComponent } from './compact-ability-row';
-import { RangeRow } from '../../../core/models/window-comparison.models';
+import { CompactAbilityRow } from './compact-ability-row';
+import type { RangeRow } from '../../../domain/analysis/window-comparison.models';
 import { badgeStatus, mountDom } from '../../../../testing/component-harness';
 
 function row(overrides: Partial<RangeRow>): RangeRow {
@@ -10,7 +10,7 @@ function row(overrides: Partial<RangeRow>): RangeRow {
 const BADGE = 'span[class*="badge-"]';
 
 function render(r: RangeRow, extra: Record<string, unknown> = {}) {
-  const dom = mountDom(CompactAbilityRowComponent, { row: r, ...extra });
+  const dom = mountDom(CompactAbilityRow, { row: r, ...extra });
   return {
     dom,
     gap: dom.query(`div > div:first-child ${BADGE}`),
@@ -20,7 +20,7 @@ function render(r: RangeRow, extra: Record<string, unknown> = {}) {
 
 const clean = (el: HTMLElement | null): string => (el?.textContent ?? '').replace(/\s+/g, ' ').trim();
 
-describe('CompactAbilityRowComponent gap', () => {
+describe('CompactAbilityRow gap', () => {
   it('shows a positive gap with a + sign and the success colour when the player exceeds top avg', () => {
     const { gap } = render(row({ playerPct: 150, topAvg: 100 }));
     expect(clean(gap)).toBe('+50');
@@ -61,7 +61,7 @@ describe('CompactAbilityRowComponent gap', () => {
   });
 });
 
-describe('CompactAbilityRowComponent casts badge', () => {
+describe('CompactAbilityRow casts badge', () => {
   it('shows the player and top counts, in the success colour when the player meets top', () => {
     const { casts } = render(row({ playerCasts: 3, topCasts: 3 }));
     expect(clean(casts)).toBe('3 / 3');
@@ -99,7 +99,7 @@ describe('CompactAbilityRowComponent casts badge', () => {
   });
 });
 
-describe('CompactAbilityRowComponent label', () => {
+describe('CompactAbilityRow label', () => {
   it('names the ability, and shows the game icon only when the row carries a spell id', () => {
     const LABEL = 'Shadow Blades';
     const SPELL_ID = 121471;

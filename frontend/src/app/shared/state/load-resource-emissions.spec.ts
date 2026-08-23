@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ok, transient } from '../../core/result';
+import { Results } from '../../core/http/result';
 import { whenStable } from '../../../testing/when-stable';
 import {
   EMPTY_VALUE, FIRST_PARAMS, FIRST_VALUE, OUTAGE_MESSAGE, SECOND_PARAMS, SECOND_VALUE, harness,
@@ -9,7 +9,7 @@ describe('loadResource busyChange', () => {
   it('emits busy false exactly once when a load lands ok, and never emits busy true', async () => {
     const h = harness();
     h.start();
-    h.settle(FIRST_PARAMS, ok(FIRST_VALUE));
+    h.settle(FIRST_PARAMS, Results.ok(FIRST_VALUE));
     await whenStable();
 
     expect(h.busy).toEqual([false]);
@@ -18,7 +18,7 @@ describe('loadResource busyChange', () => {
   it('emits busy false when the load lands a failed result', async () => {
     const h = harness();
     h.start();
-    h.settle(FIRST_PARAMS, transient(OUTAGE_MESSAGE));
+    h.settle(FIRST_PARAMS, Results.transient(OUTAGE_MESSAGE));
     await whenStable();
 
     expect(h.busy).toEqual([false]);
@@ -27,12 +27,12 @@ describe('loadResource busyChange', () => {
   it('emits busy false again for each reload', async () => {
     const h = harness();
     h.start();
-    h.settle(FIRST_PARAMS, ok(FIRST_VALUE));
+    h.settle(FIRST_PARAMS, Results.ok(FIRST_VALUE));
     await whenStable();
 
     h.params.set(SECOND_PARAMS);
     h.start();
-    h.settle(SECOND_PARAMS, ok(SECOND_VALUE));
+    h.settle(SECOND_PARAMS, Results.ok(SECOND_VALUE));
     await whenStable();
 
     expect(h.busy).toEqual([false, false]);
@@ -51,7 +51,7 @@ describe('loadResource availableChange', () => {
   it('emits available true when an ok result lands', async () => {
     const h = harness();
     h.start();
-    h.settle(FIRST_PARAMS, ok(FIRST_VALUE));
+    h.settle(FIRST_PARAMS, Results.ok(FIRST_VALUE));
     await whenStable();
 
     expect(h.availability).toEqual([true]);
@@ -60,7 +60,7 @@ describe('loadResource availableChange', () => {
   it('emits available false when the load fails', async () => {
     const h = harness();
     h.start();
-    h.settle(FIRST_PARAMS, transient(OUTAGE_MESSAGE));
+    h.settle(FIRST_PARAMS, Results.transient(OUTAGE_MESSAGE));
     await whenStable();
 
     expect(h.availability).toEqual([false]);
@@ -69,7 +69,7 @@ describe('loadResource availableChange', () => {
   it('emits the availableWhen verdict for an ok result', async () => {
     const h = harness({ availableWhen: value => value.length > 0 });
     h.start();
-    h.settle(FIRST_PARAMS, ok(EMPTY_VALUE));
+    h.settle(FIRST_PARAMS, Results.ok(EMPTY_VALUE));
     await whenStable();
 
     expect(h.availability).toEqual([false]);
@@ -78,7 +78,7 @@ describe('loadResource availableChange', () => {
   it('settles a load with no availableChange wired', async () => {
     const h = harness({ withAvailableChange: false });
     h.start();
-    h.settle(FIRST_PARAMS, ok(FIRST_VALUE));
+    h.settle(FIRST_PARAMS, Results.ok(FIRST_VALUE));
     await whenStable();
 
     expect(h.card.value()).toBe(FIRST_VALUE);

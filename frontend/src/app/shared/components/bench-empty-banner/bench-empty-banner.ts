@@ -12,7 +12,7 @@ export type BenchEmptyVariant = 'post' | 'pre';
   host: { class: 'block' },
   templateUrl: './bench-empty-banner.html',
 })
-export class BenchEmptyBannerComponent {
+export class BenchEmptyBanner {
   readonly encounter = input<string>('');
   readonly variant = input<BenchEmptyVariant>('post');
 }

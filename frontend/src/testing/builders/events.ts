@@ -1,5 +1,5 @@
 /** Factories for `WclEvent` fixtures; an omitted opt leaves the field absent on the event, not `undefined`. */
-import { WclEvent } from '../../app/core/models/wcl.models';
+import { WclEvent } from '../../app/core/wcl/wcl.models';
 
 /** WCL timestamps are milliseconds; factory times are fight-relative seconds. */
 const MS_PER_SECOND = 1000;

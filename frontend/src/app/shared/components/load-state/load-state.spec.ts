@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { LoadStateComponent, RenderableLoadError } from './load-state';
+import { LoadState, RenderableLoadError } from './load-state';
 
 const TRANSIENT_ERROR: RenderableLoadError = { kind: 'transient', message: 'WCL is unreachable right now.' };
 const PERMANENT_ERROR: RenderableLoadError = {
@@ -16,10 +16,10 @@ interface Rendered {
 function render(inputs: Record<string, unknown>): Rendered {
   TestBed.resetTestingModule();
   TestBed.configureTestingModule({
-    imports: [LoadStateComponent],
+    imports: [LoadState],
     providers: [provideZonelessChangeDetection()],
   });
-  const fixture = TestBed.createComponent(LoadStateComponent);
+  const fixture = TestBed.createComponent(LoadState);
   for (const [name, value] of Object.entries(inputs)) fixture.componentRef.setInput(name, value);
   fixture.detectChanges();
   const host = fixture.nativeElement as HTMLElement;
@@ -29,7 +29,7 @@ function render(inputs: Record<string, unknown>): Rendered {
   };
 }
 
-describe('LoadStateComponent', () => {
+describe('LoadState', () => {
   describe('waiting state (no error)', () => {
     it('renders the heading and the waiting message with the schedule icon', () => {
       const { text, icon } = render({ heading: 'Offensives' });

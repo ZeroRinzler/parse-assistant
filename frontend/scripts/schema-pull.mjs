@@ -5,12 +5,12 @@ import { buildClientSchema, getIntrospectionQuery, lexicographicSortSchema, pars
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { WCL_PUBLIC_CLIENT_ID, WCL_PUBLIC_CLIENT_SECRET } from '../src/app/core/transport/wcl-public-client.ts';
+import { WCL_PUBLIC_CLIENT_ID, WCL_PUBLIC_CLIENT_SECRET } from '../src/app/core/http/wcl-public-client.ts';
 import { nameJsonFieldScalars } from './wcl-json-scalars.mjs';
 
 const SDL = fileURLToPath(new URL('../schema/wcl.graphql', import.meta.url));
-const DOCUMENTS = fileURLToPath(new URL('../src/app/core/services/wcl-queries.ts', import.meta.url));
-const TARGET = fileURLToPath(new URL('../src/app/core/services/wcl-operations.generated.ts', import.meta.url));
+const DOCUMENTS = fileURLToPath(new URL('../src/app/core/wcl/wcl-queries.ts', import.meta.url));
+const TARGET = fileURLToPath(new URL('../src/app/core/wcl/wcl-operations.generated.ts', import.meta.url));
 
 const CONFIG = {
   skipTypename: true,
@@ -55,5 +55,5 @@ const output = await codegen({
   pluginMap: { 'typescript-operations': typescriptOperations },
 });
 
-await writeFile(TARGET, output);
+await writeFile(TARGET, output.replace(/\n{3,}/g, '\n\n').replace(/^\n+/, '').replace(/\n+$/, '\n'));
 console.log(`Wrote ${SDL} and ${TARGET}`);

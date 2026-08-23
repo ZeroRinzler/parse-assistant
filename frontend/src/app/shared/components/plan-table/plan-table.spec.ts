@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { mountDom } from '../../../../testing/component-harness';
-import { PlanTableComponent, PlanTableRow } from './plan-table';
+import { PlanTable, PlanTableRow } from './plan-table';
 
 const HEADING = 'Cooldown plan';
 const SUBTITLE = 'Offensive cooldown usage across top parses.';
@@ -12,11 +12,11 @@ function row(overrides: Partial<PlanTableRow> = {}): PlanTableRow {
   };
 }
 
-const render = (inputs: Record<string, unknown>) => mountDom(PlanTableComponent, {
+const render = (inputs: Record<string, unknown>) => mountDom(PlanTable, {
   heading: HEADING, subtitle: SUBTITLE, rows: [row()], available: true, error: null, ...inputs,
 });
 
-describe('PlanTableComponent', () => {
+describe('PlanTable', () => {
   it('renders the plan rows when the bench loaded and there is at least one row', () => {
     const dom = render({ rows: [row({ name: 'Shadow Blades' }), row({ name: 'Vanish' })] });
 

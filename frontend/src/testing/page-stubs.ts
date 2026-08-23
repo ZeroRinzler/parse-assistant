@@ -1,10 +1,10 @@
 import { InjectionToken, Provider, signal } from '@angular/core';
-import { Result, missing } from '../app/core/result';
+import { Result, Results } from '../app/core/http/result';
 
 /** Callers pass their own `*_DATA_SOURCE` tokens, since only the page layer may name a slice. */
 export function stubBenchTokens(
   tokens: readonly InjectionToken<unknown>[],
-  bench: Result<never> = missing('Not yet ingested.'),
+  bench: Result<never> = Results.missing('Not yet ingested.'),
 ): Provider[] {
   return tokens.map(token => ({
     provide: token,

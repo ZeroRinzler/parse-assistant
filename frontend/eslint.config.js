@@ -6,19 +6,27 @@ import angular from 'angular-eslint';
 import boundaries from 'eslint-plugin-boundaries';
 import singleLineComment from './eslint-rules/single-line-comment.js';
 import bannedCharacters from './eslint-rules/banned-characters.js';
+import pathConventions from './eslint-rules/path-conventions.js';
+import noFunctionAliasMembers from './eslint-rules/no-function-alias-members.js';
 
 const local = {
-  rules: { 'single-line-comment': singleLineComment, 'banned-characters': bannedCharacters },
+  rules: {
+    'single-line-comment': singleLineComment,
+    'banned-characters': bannedCharacters,
+    'path-conventions': pathConventions,
+    'no-function-alias-members': noFunctionAliasMembers,
+  },
 };
 
 const architectureLayers = [
   { type: 'testing', pattern: 'src/testing', partialMatch: false },
   { type: 'environments', pattern: 'src/environments', partialMatch: false },
-  { type: 'ingest', pattern: 'src/app/ingest', partialMatch: false },
+  { type: 'domain', pattern: 'src/app/domain', partialMatch: false },
   { type: 'core', pattern: 'src/app/core', partialMatch: false },
   { type: 'shared', pattern: 'src/app/shared', partialMatch: false },
-  { type: 'slice', pattern: 'src/app/pages/post-raid/*', partialMatch: false, capture: ['sliceName'] },
-  { type: 'page', pattern: 'src/app/pages/*', partialMatch: false },
+  { type: 'ingest', pattern: 'src/app/features/*/ingest', partialMatch: false },
+  { type: 'pages', pattern: 'src/app/features/*/pages', partialMatch: false },
+  { type: 'slice', pattern: 'src/app/features/*/*', partialMatch: false, capture: ['featureName', 'sliceName'] },
   { type: 'app-root', pattern: 'src/app', partialMatch: false },
   { type: 'bootstrap', pattern: 'src', partialMatch: false },
 ];
@@ -27,15 +35,16 @@ const to = (...types) => types.map((type) => ({ to: { element: { type } } }));
 
 // Last match wins: moving the Pull Overview exception above the general slice policy disables it.
 const layerPolicies = [
-  { from: [{ element: { type: 'core' } }], allow: to('environments', 'testing') },
-  { from: [{ element: { type: 'shared' } }], allow: to('core', 'testing') },
-  { from: [{ element: { type: 'slice' } }], allow: to('core', 'shared', 'testing') },
-  { from: [{ element: { type: 'page' } }], allow: to('core', 'shared', 'slice', 'testing') },
-  { from: [{ element: { type: 'ingest' } }], allow: to('core', 'shared', 'slice', 'testing') },
-  { from: [{ element: { type: 'app-root' } }], allow: to('core', 'shared', 'page', 'environments') },
+  { from: [{ element: { type: 'domain' } }], allow: to('core', 'testing') },
+  { from: [{ element: { type: 'core' } }], allow: to('domain', 'environments', 'testing') },
+  { from: [{ element: { type: 'shared' } }], allow: to('domain', 'core', 'testing') },
+  { from: [{ element: { type: 'slice' } }], allow: to('domain', 'core', 'shared', 'testing') },
+  { from: [{ element: { type: 'pages' } }], allow: to('domain', 'core', 'shared', 'slice', 'testing') },
+  { from: [{ element: { type: 'ingest' } }], allow: to('domain', 'core', 'shared', 'slice', 'testing') },
+  { from: [{ element: { type: 'app-root' } }], allow: to('core', 'shared', 'pages', 'environments') },
   { from: [{ element: { type: 'environments' } }], allow: to('core', 'slice', 'ingest') },
   { from: [{ element: { type: 'bootstrap' } }], allow: to('core', 'app-root') },
-  { from: [{ element: { type: 'testing' } }], allow: to('core') },
+  { from: [{ element: { type: 'testing' } }], allow: to('domain', 'core') },
   {
     from: [{ element: { type: 'slice', captured: { sliceName: 'pull-overview' } } }],
     allow: [{ to: { element: { type: 'slice', captured: { sliceName: 'map' } } } }],
@@ -89,29 +98,6 @@ const restrictHttpImports = {
   ],
 };
 
-const restrictAngularImports = {
-  patterns: [
-    {
-      group: ['@angular/*', '@angular/*/*'],
-      message: 'This is functional-core code: keep it pure and framework-free, and inject nothing.',
-    },
-  ],
-};
-
-const functionalCoreFiles = [
-  'src/app/core/*.ts',
-  'src/app/core/models/**/*.ts',
-  'src/app/shared/*.ts',
-  'src/app/shared/analysis/**/*.ts',
-  'src/app/shared/gear/**/*.ts',
-  'src/app/ingest/*.ts',
-  'src/app/ingest/models/**/*.ts',
-  // A slice's own folder holds its Angular components and services; only its subfolders are pure math.
-  'src/app/pages/post-raid/*/*/**/*.ts',
-  'src/app/**/*.utils.ts',
-  'src/app/**/*-queries.ts',
-];
-
 export default defineConfig([
   { ignores: ['src/**/*.generated.ts'] },
   {
@@ -134,15 +120,18 @@ export default defineConfig([
       '@typescript-eslint/restrict-template-expressions': ['error', { allowNumber: true }],
       // tsconfig sets noPropertyAccessFromIndexSignature, which mandates the bracket access this rule would flag.
       '@typescript-eslint/dot-notation': ['error', { allowIndexSignaturePropertyAccess: true }],
-      // A decorator-only class (the root App component) is the Angular idiom, not a namespace stand-in.
-      '@typescript-eslint/no-extraneous-class': ['error', { allowWithDecorator: true }],
+      // A decorator-only class (the root App component) is the Angular idiom; a static-only class with a private constructor is the sanctioned factory shape (Results, HttpLoadErrors).
+      '@typescript-eslint/no-extraneous-class': ['error', { allowWithDecorator: true, allowStaticOnly: true }],
       // HttpClient rejects with HttpErrorResponse, which does not extend Error; fakes must throw it too.
       '@typescript-eslint/only-throw-error': [
         'error',
         { allow: [{ from: 'package', name: 'HttpErrorResponse', package: '@angular/common' }] },
       ],
+      'no-multiple-empty-lines': ['error', { max: 1, maxBOF: 0, maxEOF: 0 }],
       'local/single-line-comment': 'error',
       'local/banned-characters': 'error',
+      'local/path-conventions': 'error',
+      'local/no-function-alias-members': 'error',
     },
   },
   {
@@ -229,14 +218,57 @@ export default defineConfig([
     },
   },
   {
-    // Every transport/ folder is a chokepoint, so narrowing this to one of them re-bans the other's HttpClient.
+    // Every http/ folder is a chokepoint, so narrowing this to one of them re-bans the other's HttpClient.
     files: ['src/**/*.ts'],
-    ignores: ['src/app/**/transport/**'],
+    ignores: ['src/app/core/http/**', 'src/app/features/*/ingest/http/**'],
     rules: { 'no-restricted-imports': ['error', restrictHttpImports] },
   },
   {
-    files: functionalCoreFiles,
-    rules: { 'no-restricted-imports': ['error', restrictAngularImports] },
+    // The ignores are the sanctioned function shapes: Angular provide/interceptor factories, the math utils plain code shares, spec support.
+    // restrictUiSyntax is restated because this block's no-restricted-syntax entry replaces the earlier block's for these files.
+    files: ['src/app/**/*.ts'],
+    ignores: [
+      'src/app/**/*-harness.ts',
+      'src/app/**/rule-fixtures.ts',
+      'src/app/features/raid-analysis/pages/post-raid/post-raid-page.ts',
+      'src/app/domain/analysis/analysis-math.ts',
+      'src/app/core/http/http-providers.ts',
+      'src/app/core/http/retry-transient-interceptor.ts',
+      'src/app/core/wcl/wcl-caching.ts',
+      'src/app/core/data-source/provide-data-source.ts',
+    ],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        ...restrictUiSyntax,
+        {
+          selector: 'ExportNamedDeclaration > FunctionDeclaration',
+          message: 'Behavior lives as methods on an @Injectable service; only the files in this block\'s ignores export functions.',
+        },
+        {
+          selector: 'ExportNamedDeclaration > VariableDeclaration > VariableDeclarator > ArrowFunctionExpression',
+          message: 'Behavior lives as methods on an @Injectable service; only the files in this block\'s ignores export functions.',
+        },
+      ],
+    },
+  },
+  {
+    // import type compiles away, so no domain code can reach a shared or core bundle.
+    files: ['src/app/shared/**/*.ts', 'src/app/core/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/domain/**'],
+              allowTypeImports: true,
+              message: 'Shared and core render or type domain shapes but never run domain logic: import type only.',
+            },
+          ],
+        },
+      ],
+    },
   },
   {
     // Plain-JS Node scripts (the ingest file server + headless harness). console is
@@ -258,6 +290,7 @@ export default defineConfig([
     },
     rules: {
       'no-console': 'off',
+      'no-multiple-empty-lines': ['error', { max: 1, maxBOF: 0, maxEOF: 0 }],
       'local/single-line-comment': 'error',
       'local/banned-characters': 'error',
     },
@@ -281,8 +314,10 @@ export default defineConfig([
       '@angular-eslint/template/prefer-built-in-pipes': 'error',
       '@angular-eslint/template/prefer-contextual-for-variables': 'error',
       'max-lines': ['error', { max: 500, skipBlankLines: false, skipComments: false }],
+      'no-multiple-empty-lines': ['error', { max: 1, maxBOF: 0, maxEOF: 0 }],
       'local/single-line-comment': 'error',
       'local/banned-characters': 'error',
+      'local/path-conventions': 'error',
     },
   },
 ]);

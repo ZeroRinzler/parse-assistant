@@ -1,8 +1,8 @@
 import { InjectionToken, Type } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { DataSource } from '../app/core/data-source/data-source';
-import { Result } from '../app/core/result';
-import { WclApiService } from '../app/core/services/wcl-api';
+import { Result } from '../app/core/http/result';
+import { WclApiService } from '../app/core/wcl/wcl-api-service';
 
 export function sliceService<T, S>(
   token: InjectionToken<DataSource<T>>,

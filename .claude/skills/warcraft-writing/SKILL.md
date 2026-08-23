@@ -16,7 +16,7 @@ description: warcraft-learner user-facing writing and branding rules. Covers the
 
 ## UI copy voice (plain-spoken coach)
 
-All user-facing copy - finding messages, remedies, card subtitles, empty states, microcopy - is written so a raider reads it once and knows what to change. Plain words over jargon, and never a number whose meaning the reader has to infer. This is enforced by convention (no linter), so apply it whenever you add or edit any string a user sees. The reference implementations are the finding messages in `rotation-rules.ts` and `rotation.service.ts` / `defensive.service.ts`, and the gear notes in `shared/gear/gear-comparison.ts`.
+All user-facing copy - finding messages, remedies, card subtitles, empty states, microcopy - is written so a raider reads it once and knows what to change. Plain words over jargon, and never a number whose meaning the reader has to infer. This is enforced by convention (no linter), so apply it whenever you add or edit any string a user sees. The reference implementations are the finding messages in the rotation rule kinds and `rotation-feature-service.ts` / `defensive-feature-service.ts`, and the gear notes in `domain/gear/gear-comparison-service.ts`.
 
 - **Count first, target second, in one sentence each.** A finding reads `<what happened>. <what to hit>.` `"4 of 12 Black Powders hit fewer than 3 targets. Wait for 3 or more."` Never staple two fragments together with a colon or a trailing label.
 - **Name the comparison group in words: `top raiders`.** Never a bare `"Top:"` prefix, never `"the field"` - both are internal shorthand that means nothing to a new user. `"Top raiders average 12s."`, not `"top 12s."`

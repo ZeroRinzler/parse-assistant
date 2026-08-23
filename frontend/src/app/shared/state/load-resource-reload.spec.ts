@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ok, transient } from '../../core/result';
+import { Results } from '../../core/http/result';
 import { whenStable } from '../../../testing/when-stable';
 import {
   FIRST_PARAMS, FIRST_VALUE, LOAD_CONTEXT, OUTAGE_MESSAGE, SECOND_PARAMS, SECOND_VALUE, drain, harness, spyOnConsoleWarn,
@@ -18,7 +18,7 @@ describe('loadResource latest-wins', () => {
     h.params.set(SECOND_PARAMS);
     h.start();
 
-    h.settle(FIRST_PARAMS, ok(FIRST_VALUE));
+    h.settle(FIRST_PARAMS, Results.ok(FIRST_VALUE));
     await drain();
 
     expect(h.card.value()).toBeNull();
@@ -32,9 +32,9 @@ describe('loadResource latest-wins', () => {
     h.params.set(SECOND_PARAMS);
     h.start();
 
-    h.settle(FIRST_PARAMS, ok(FIRST_VALUE));
+    h.settle(FIRST_PARAMS, Results.ok(FIRST_VALUE));
     await drain();
-    h.settle(SECOND_PARAMS, ok(SECOND_VALUE));
+    h.settle(SECOND_PARAMS, Results.ok(SECOND_VALUE));
     await whenStable();
 
     expect(h.card.value()).toBe(SECOND_VALUE);
@@ -48,9 +48,9 @@ describe('loadResource latest-wins', () => {
     h.params.set(SECOND_PARAMS);
     h.start();
 
-    h.settle(FIRST_PARAMS, transient(OUTAGE_MESSAGE));
+    h.settle(FIRST_PARAMS, Results.transient(OUTAGE_MESSAGE));
     await drain();
-    h.settle(SECOND_PARAMS, ok(SECOND_VALUE));
+    h.settle(SECOND_PARAMS, Results.ok(SECOND_VALUE));
     await whenStable();
 
     expect(h.card.error()).toBeNull();
@@ -66,7 +66,7 @@ describe('loadResource latest-wins', () => {
 
     h.fail(FIRST_PARAMS, LOAD_FAILURE);
     await drain();
-    h.settle(SECOND_PARAMS, ok(SECOND_VALUE));
+    h.settle(SECOND_PARAMS, Results.ok(SECOND_VALUE));
     await whenStable();
 
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining(LOAD_CONTEXT), LOAD_FAILURE);
@@ -101,7 +101,7 @@ describe('loadResource rejected load', () => {
     spyOnConsoleWarn();
     const h = harness();
     h.start();
-    h.settle(FIRST_PARAMS, ok(FIRST_VALUE));
+    h.settle(FIRST_PARAMS, Results.ok(FIRST_VALUE));
     await whenStable();
     expect(h.card.value()).toBe(FIRST_VALUE);
 
@@ -132,7 +132,7 @@ describe('loadResource reload retention', () => {
   it('keeps the last value while a reload is in flight', async () => {
     const h = harness();
     h.start();
-    h.settle(FIRST_PARAMS, ok(FIRST_VALUE));
+    h.settle(FIRST_PARAMS, Results.ok(FIRST_VALUE));
     await whenStable();
     expect(h.card.value()).toBe(FIRST_VALUE);
 
@@ -147,13 +147,13 @@ describe('loadResource reload retention', () => {
   it('replaces the retained value once the reload lands', async () => {
     const h = harness();
     h.start();
-    h.settle(FIRST_PARAMS, ok(FIRST_VALUE));
+    h.settle(FIRST_PARAMS, Results.ok(FIRST_VALUE));
     await whenStable();
     expect(h.card.value()).toBe(FIRST_VALUE);
 
     h.params.set(SECOND_PARAMS);
     h.start();
-    h.settle(SECOND_PARAMS, ok(SECOND_VALUE));
+    h.settle(SECOND_PARAMS, Results.ok(SECOND_VALUE));
     await whenStable();
 
     expect(h.card.value()).toBe(SECOND_VALUE);
@@ -162,7 +162,7 @@ describe('loadResource reload retention', () => {
   it('keeps the last error while a reload is in flight', async () => {
     const h = harness();
     h.start();
-    h.settle(FIRST_PARAMS, transient(OUTAGE_MESSAGE));
+    h.settle(FIRST_PARAMS, Results.transient(OUTAGE_MESSAGE));
     await whenStable();
     expect(h.card.error()).toEqual({ kind: 'transient', message: OUTAGE_MESSAGE });
 

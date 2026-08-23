@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, input, linkedSignal } from '@angular/core';
 import { FormatDurationPipe } from '../../pipes/format-duration-pipe';
-import type { FindingOccurrence, FindingTimeline } from '../../../core/models/analysis.models';
+import type { FindingOccurrence, FindingTimeline } from '../../../domain/analysis/analysis.models';
 
 export interface TimelineBand {
   leftPercentage: number;
@@ -17,7 +17,7 @@ let nextInstanceSeq = 0;
   imports: [FormatDurationPipe],
   templateUrl: './finding-occurrences.html',
 })
-export class FindingOccurrencesComponent {
+export class FindingOccurrences {
   readonly occurrences = input.required<FindingOccurrence[]>();
   readonly target = input<string>('');
   readonly timeline = input<FindingTimeline | undefined>(undefined);

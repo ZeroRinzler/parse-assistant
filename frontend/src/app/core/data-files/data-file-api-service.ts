@@ -1,0 +1,76 @@
+import { Injectable, inject } from '@angular/core';
+import type { Rulebook } from '../../domain/rulebook/rulebook.models';
+import type { EncounterEntry, SpecEntry } from '../../domain/encounter/encounter.models';
+import { SpecMeta } from './spec-meta.models';
+import { DATA_FILE_TRANSPORT } from './data-file-transport';
+import { Result, Results } from '../http/result';
+
+// A manifest with no file yet is the legitimate empty fresh-tier state; a real read failure must propagate so the UI surfaces it instead of a silently empty list.
+function foldMissingToEmpty<T>(result: Result<T[]>): Result<T[]> {
+  if (result.ok) return result;
+  return result.error.kind === 'missing' ? Results.ok([]) : result;
+}
+
+// Delegates IO to an injected DataFileTransport so one API serves both runtimes: the browser binds an HTTP read-only transport, Node ingestion an fs read+write one.
+@Injectable({ providedIn: 'root' })
+export class DataFileApiService {
+  private readonly io = inject(DATA_FILE_TRANSPORT);
+
+  getSlice<T>(spec: string, encounterId: number, slice: string): Promise<Result<T>> {
+    return this.io.readJson<T>(`${spec}/${slice}/${encounterId}.json`);
+  }
+
+  getRulebook(spec: string): Promise<Result<Rulebook>> {
+    return this.io.readJson<Rulebook>(`${spec}/rulebook.json`);
+  }
+
+  async getSpecs(): Promise<Result<SpecEntry[]>> {
+    return foldMissingToEmpty(await this.io.readJson<SpecEntry[]>('index.json'));
+  }
+
+  async getSpecMeta(): Promise<Result<SpecMeta[]>> {
+    return foldMissingToEmpty(await this.io.readJson<SpecMeta[]>('spec-meta.json'));
+  }
+
+  async getEncounters(spec: string): Promise<Result<EncounterEntry[]>> {
+    return foldMissingToEmpty(await this.io.readJson<EncounterEntry[]>(`${spec}/encounters.json`));
+  }
+
+  // Typed `unknown` both ways: the shape belongs to the ingest layer, which core may not import.
+  getIngestState(spec: string): Promise<Result<unknown>> {
+    return this.io.readJson<unknown>(`${spec}/ingest-state.json`);
+  }
+
+  writeIngestState(spec: string, data: unknown): Promise<void> {
+    return this.io.writeJson(`${spec}/ingest-state.json`, data);
+  }
+
+  writeSlice(spec: string, encounterId: number, slice: string, data: unknown): Promise<void> {
+    return this.io.writeJson(`${spec}/${slice}/${encounterId}.json`, data);
+  }
+
+  writeEncounters(spec: string, entries: EncounterEntry[]): Promise<void> {
+    return this.io.writeJson(`${spec}/encounters.json`, entries);
+  }
+
+  writeSpecs(entries: SpecEntry[]): Promise<void> {
+    return this.io.writeJson('index.json', entries);
+  }
+
+  writeSpecMeta(metas: SpecMeta[]): Promise<void> {
+    return this.io.writeJson('spec-meta.json', metas);
+  }
+
+  // A spec folder name never contains a dot; otherwise the index rebuild reads `index.json/encounters.json` and hits ENOTDIR.
+  async listSpecs(): Promise<string[]> {
+    return (await this.io.list('')).filter(name => !name.includes('.'));
+  }
+
+  listSliceFiles(spec: string, slice: string): Promise<string[]> {
+    return this.io.list(`${spec}/${slice}`);
+  }
+
+  removeSlice(spec: string, encounterId: number, slice: string): Promise<void> {
+    return this.io.remove(`${spec}/${slice}/${encounterId}.json`);
+  }
+}

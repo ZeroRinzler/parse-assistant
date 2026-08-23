@@ -12,7 +12,7 @@ import { MatIconModule } from '@angular/material/icon';
   imports: [MatIconModule],
   templateUrl: './collapsible-text.html',
 })
-export class CollapsibleTextComponent {
+export class CollapsibleText {
   private readonly destroyRef = inject(DestroyRef);
   private readonly content = viewChild.required<ElementRef<HTMLElement>>('content');
 

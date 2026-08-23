@@ -1,9 +1,10 @@
 import { assert, describe, it, expect, vi, beforeEach, afterEach, MockInstance } from 'vitest';
-import {
-  bucketFindings, rowsFromEntries, onPlanFromEntries, FindingEntry, UNKNOWN_COOLDOWN_LABEL,
-} from './finding-table.utils';
-import { AnalysisFinding } from '../../../core/models/analysis.models';
+import { FindingEntry, UNKNOWN_COOLDOWN_LABEL, FindingRowsService } from './finding-rows-service';
+import type { AnalysisFinding } from '../../../domain/analysis/analysis.models';
 import { SHADOW_BLADES, VANISH } from '../../../../testing/spell-ids';
+import { TestBed } from '@angular/core/testing';
+
+const rowBuilder = TestBed.inject(FindingRowsService);
 
 const spellId = (_name: string) => null;
 const icon = (_name: string) => '';
@@ -30,7 +31,7 @@ describe('bucketFindings', () => {
 
   it('groups critical issue under its cooldown name', () => {
     const finding = f('critical', 'lost_cooldown', 'Shadow Blades');
-    const entries = bucketFindings([finding], { spellId, icon });
+    const entries = rowBuilder.bucketFindings([finding], { spellId, icon });
 
     expect(entries).toHaveLength(1);
     assert.exists(entries[0]);
@@ -48,7 +49,7 @@ describe('bucketFindings', () => {
       details: { cd_name: 'Feint' },
       occurrences: [],
     };
-    const entries = bucketFindings([finding], { spellId, icon });
+    const entries = rowBuilder.bucketFindings([finding], { spellId, icon });
 
     expect(entries).toHaveLength(1);
     assert.exists(entries[0]);
@@ -59,7 +60,7 @@ describe('bucketFindings', () => {
 
   it('buckets a rule_violation under its cooldown name', () => {
     const finding: AnalysisFinding = f('warning', 'rule_violation', 'Shadow Blades');
-    const entries = bucketFindings([finding], { spellId, icon });
+    const entries = rowBuilder.bucketFindings([finding], { spellId, icon });
 
     expect(entries).toHaveLength(1);
     assert.exists(entries[0]);
@@ -68,7 +69,7 @@ describe('bucketFindings', () => {
 
   it('success finding with cd_name creates an entry with hasIssue=false', () => {
     const finding = f('success', 'cooldown_usage', 'Shadow Blades');
-    const entries = bucketFindings([finding], { spellId, icon });
+    const entries = rowBuilder.bucketFindings([finding], { spellId, icon });
 
     expect(entries).toHaveLength(1);
     assert.exists(entries[0]);
@@ -78,12 +79,12 @@ describe('bucketFindings', () => {
   });
 
   it('returns no entries for empty input', () => {
-    expect(bucketFindings([], { spellId, icon })).toHaveLength(0);
+    expect(rowBuilder.bucketFindings([], { spellId, icon })).toHaveLength(0);
   });
 
   it('surfaces a finding with no cd_name as an Unknown cooldown entry', () => {
     const finding = f('warning', 'cast_efficiency');
-    const entries = bucketFindings([finding], { spellId, icon });
+    const entries = rowBuilder.bucketFindings([finding], { spellId, icon });
     expect(entries).toHaveLength(1);
     assert.exists(entries[0]);
     expect(entries[0].name).toBe(UNKNOWN_COOLDOWN_LABEL);
@@ -95,7 +96,7 @@ describe('bucketFindings', () => {
 
   it('logs a warning carrying the finding so an unidentified cooldown can be reproduced', () => {
     const finding = f('warning', 'cast_efficiency');
-    bucketFindings([finding], { spellId, icon });
+    rowBuilder.bucketFindings([finding], { spellId, icon });
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('unknown-cooldown'), finding);
   });
 });
@@ -120,7 +121,7 @@ describe('rowsFromEntries', () => {
   };
 
   it('generates one row per finding for entries with hasIssue=true', () => {
-    const rows = rowsFromEntries([issueEntry]);
+    const rows = rowBuilder.rowsFromEntries([issueEntry]);
     expect(rows).toHaveLength(1);
     assert.exists(rows[0]);
     expect(rows[0].name).toBe('Shadow Blades');
@@ -131,7 +132,7 @@ describe('rowsFromEntries', () => {
   });
 
   it('skips entries with hasIssue=false', () => {
-    expect(rowsFromEntries([onPlanEntry])).toHaveLength(0);
+    expect(rowBuilder.rowsFromEntries([onPlanEntry])).toHaveLength(0);
   });
 
   it('uses a dash placeholder when finding.measured is absent', () => {
@@ -139,7 +140,7 @@ describe('rowsFromEntries', () => {
       name: 'Shadow Blades', spellId: null, icon: '', hasIssue: true,
       findings: [{ severity: 'warning', category: 'rule_violation', message: 'bad', occurrences: [] }],
     };
-    const rows = rowsFromEntries([entry]);
+    const rows = rowBuilder.rowsFromEntries([entry]);
     assert.exists(rows[0]);
     expect(rows[0].measured).toEqual({ value: '-' });
   });
@@ -153,7 +154,7 @@ describe('rowsFromEntries', () => {
         { severity: 'warning',  category: 'cooldown_delay',   message: '', measured: { value: '', unit: '' }, occurrences: [] },
       ],
     };
-    const rows = rowsFromEntries([mixedEntry]);
+    const rows = rowBuilder.rowsFromEntries([mixedEntry]);
     assert.exists(rows[0]);
     expect(rows[0].severity).toBe('critical');
     assert.exists(rows[1]);
@@ -169,7 +170,7 @@ describe('onPlanFromEntries', () => {
       { name: 'Shadow Blades', spellId: SHADOW_BLADES, icon: '', hasIssue: true,  findings: [] },
       { name: 'Vanish',        spellId: VANISH,   icon: '', hasIssue: false, findings: [] },
     ];
-    const chips = onPlanFromEntries(entries);
+    const chips = rowBuilder.onPlanFromEntries(entries);
     expect(chips).toHaveLength(1);
     expect(chips[0]).toEqual({ name: 'Vanish', spellId: VANISH, icon: '' });
   });
@@ -178,6 +179,6 @@ describe('onPlanFromEntries', () => {
     const entries: FindingEntry[] = [
       { name: 'Shadow Blades', spellId: null, icon: '', hasIssue: true, findings: [] },
     ];
-    expect(onPlanFromEntries(entries)).toHaveLength(0);
+    expect(rowBuilder.onPlanFromEntries(entries)).toHaveLength(0);
   });
 });

@@ -1,20 +1,20 @@
 import { describe, it, expect } from 'vitest';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { BenchEmptyBannerComponent } from './bench-empty-banner';
+import { BenchEmptyBanner } from './bench-empty-banner';
 
 function render(inputs: Record<string, unknown>): string {
   TestBed.configureTestingModule({
-    imports: [BenchEmptyBannerComponent],
+    imports: [BenchEmptyBanner],
     providers: [provideZonelessChangeDetection()],
   });
-  const fixture = TestBed.createComponent(BenchEmptyBannerComponent);
+  const fixture = TestBed.createComponent(BenchEmptyBanner);
   for (const [name, value] of Object.entries(inputs)) fixture.componentRef.setInput(name, value);
   fixture.detectChanges();
   return (fixture.nativeElement as HTMLElement).textContent.replace(/\s+/g, ' ').trim();
 }
 
-describe('BenchEmptyBannerComponent', () => {
+describe('BenchEmptyBanner', () => {
   it('names the encounter in the headline', () => {
     expect(render({ encounter: 'Chimaerus, the Undreamt God' }))
       .toContain('No benchmark for Chimaerus, the Undreamt God yet');

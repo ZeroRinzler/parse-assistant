@@ -1,6 +1,6 @@
 import { afterNextRender, ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
 import { NgOptimizedImage } from '@angular/common';
-import { WowheadTooltipsService } from '../../../core/services/wowhead-tooltips';
+import { WowheadTooltipsService } from '../../../core/wowhead/wowhead-tooltips-service';
 
 export type GameIconKind = 'spell' | 'item';
 
@@ -12,7 +12,7 @@ export type GameIconKind = 'spell' | 'item';
   imports: [NgOptimizedImage],
   templateUrl: './game-icon.html',
 })
-export class GameIconComponent {
+export class GameIcon {
   constructor() {
     // Load the tooltip enhancer on first render; afterNextRender is browser-only, so prerender skips it.
     const tooltips = inject(WowheadTooltipsService);

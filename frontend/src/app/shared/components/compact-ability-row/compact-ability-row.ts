@@ -1,17 +1,17 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
-import { GameIconComponent } from '../game-icon/game-icon';
+import { GameIcon } from '../game-icon/game-icon';
 import { FormatDamagePipe } from '../../pipes/format-damage-pipe';
-import { RangeRow } from '../../../core/models/window-comparison.models';
+import type { RangeRow } from '../../../domain/analysis/window-comparison.models';
 
 export type RowStatus = 'success' | 'warning' | 'critical' | 'muted';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'wl-compact-ability-row',
-  imports: [GameIconComponent, FormatDamagePipe],
+  imports: [GameIcon, FormatDamagePipe],
   templateUrl: './compact-ability-row.html',
 })
-export class CompactAbilityRowComponent {
+export class CompactAbilityRow {
   readonly row = input.required<RangeRow>();
   readonly higherIsBetter = input<boolean>(true);
   readonly showCasts = input<boolean>(true);

@@ -14,7 +14,7 @@ This file is the always-on **router**: the few rules that apply on every turn, t
 
 ## Architecture at a glance
 
-Per-use-case **vertical slices** (rotation / burst / defensive / gear / map / live), functional-core / imperative-shell, fed by exactly **two pass-through API services** (`WclApiService`, `DataFileApiService`). Ingestion is the same Angular app booted with the `ingest` configuration, driving the same `*TransformService`s and persisting through a micro file server to `frontend/public/data/specs/**`:
+One `raid-analysis` feature holding both pages, per-use-case **vertical slices** (rotation / burst / defensive / gear / map / live) typed inside as `components/ data-access/ facade/ domain/`, over the layers `domain/` (cross-slice business services), `core/` (system foundation) and `shared/` (reusable UI). Behavior is implemented as methods on `@Injectable` services - stateless, data in, data out (eslint-enforced); exactly **two pass-through API services** (`WclApiService`, `DataFileApiService`) do IO. Ingestion is the same Angular app booted with the `ingest` configuration, living inside the feature it bakes data for, driving the same `*TransformService`s and persisting through a micro file server to `frontend/public/data/specs/**`:
 
 ```
 INGEST (browser, ingest env)                RUNTIME (browser, Angular)
@@ -27,9 +27,10 @@ The deployed site is composed on **`gh-pages`** from disjoint single-owner folde
 
 ```
 frontend/        # the entire Angular 22 app
-  src/app/pages/ # post-raid (/), pre-fight (/pre), the live/ slice
-  src/app/core/  # the two API services, data-source token, models
-  src/app/ingest # ingest orchestrator (bundled only by the ingest configuration)
+  src/app/features/raid-analysis/  # pages/ (post-raid /, pre-fight /pre), the slices, ingest/ (bundled only by the ingest configuration)
+  src/app/domain/  # cross-slice business logic: analysis/, gear/, rulebook/, encounter/, capture/
+  src/app/core/    # wcl/, data-files/, http/ (the HttpClient chokepoint), state/, validation/, observability/, wowhead/, data-source/
+  src/app/shared/  # reusable UI: components/, pipes/, state/
   schema/        # wcl.graphql - the introspected WCL v2 SDL, for browsing available fields; gitignored, written by `npm run schema:pull`
   scripts/       # ingest-server.js + ingest-headless.mjs + schema-pull.mjs - plain Node, zero ingestion logic
   e2e/           # Playwright happy-path suite (one WCL analysis per run)

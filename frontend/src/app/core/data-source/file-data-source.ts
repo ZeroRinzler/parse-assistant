@@ -1,6 +1,6 @@
-import { DataFileApiService } from '../services/data-file-api';
+import { DataFileApiService } from '../data-files/data-file-api-service';
 import { DataSource } from './data-source';
-import { Result } from '../result';
+import { Result } from '../http/result';
 
 // provideDataSource instantiates one per *_DATA_SOURCE token, so it is not providedIn root.
 export class FileDataSource<T> implements DataSource<T> {

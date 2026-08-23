@@ -13,8 +13,8 @@ description: warcraft-learner change contract - what a code change must deliver,
 
 Every change delivers some subset of:
 
-1. **Slice math** - named, pure, total functions colocated in the slice's own `*.service.ts` (or its slice-local module). No `inject()` and no IO in the pure layer.
-2. **Bench shape** - if the change alters what ingestion must bake, update the slice's `*Bench` interface in its `*-data-source.ts` and bump `INGEST_VERSION` (`src/app/ingest/ingest-version.ts`).
+1. **Slice math** - named, stateless methods: protected on the slice's facade service, or public on a `domain/` service. Methods take data in and return data; IO stays behind the two API services.
+2. **Bench shape** - if the change alters what ingestion must bake, update the slice's `*Bench` interface in its `data-access/*-data-source.ts` and bump `INGEST_VERSION` (`src/app/features/raid-analysis/ingest/domain/ingest-version.ts`).
 3. **Failure handling** - every fallible load returns `Result<T, LoadError>`; the four render states (content / waiting / transient error / permanent error). No silent swallow.
 4. **UI** - template owns styling off the `styles.scss` tokens, formatting goes through pipes, drill-down uses `wl-finding-occurrences`.
 5. **Copy** - message + remedy in the terse analyst voice. Governing skill: **warcraft-writing**.
@@ -29,11 +29,11 @@ Deliver: the pure check in the slice's colocated functions, a `FindingOccurrence
 
 ### New rule-engine kind
 
-Deliver: the kind's block in `RULE_KINDS` (`rotation-rules.ts` - streams, measure, evaluator, applicability, label; the mapped type will not compile with one missing), per-instance `occurrences` on the finding (extend `evaluateBoundedPerCast` or `fillerOccurrences` before writing a bespoke builder), boundary-paired specs. The kind must also be declared in the rulebook schema (`.claude/skills/warcraft-rulebook/rulebook.schema.json`) - bump `INGEST_VERSION`.
+Deliver: the kind's class in `rotation-rules/kinds/` extending `RuleKind` - or `BoundedPerCastKind` / `FillerKind` for the shared evaluators - registered in `KIND_CLASSES` (`rotation-rules/rule-kinds.ts`; the mapped type will not compile with one missing), per-instance `occurrences` on the finding, boundary-paired specs. The kind must also be declared in the rulebook schema (`.claude/skills/warcraft-rulebook/rulebook.schema.json`) - bump `INGEST_VERSION`.
 
 ### New vertical slice
 
-Follow the Burst slice (`pages/post-raid/burst-windows/`) as the reference. Deliver: the slice's `*TransformService` + `*DataSource` token pair + `*FeatureService` + feature component, wired into the ingest orchestrator and the page shell, its tailored bench file, specs at both altitudes. Bump `INGEST_VERSION`.
+Follow the Burst slice (`features/raid-analysis/burst-windows/`) as the reference. Deliver: the slice's `*TransformService` + `*DataSource` token pair in `data-access/`, its `*FeatureService` in `facade/`, the feature component in `components/`, slice-local math in `domain/`, wired into the ingest orchestrator and the page shell, its tailored bench file, specs at both altitudes. Bump `INGEST_VERSION`.
 
 ### New page or shared component
 
@@ -42,10 +42,10 @@ Deliver: the shell (zero domain services) or leaf (inputs/outputs only), copy pe
 ## Architecture rules (hard)
 
 - **Exactly two pass-through API services at runtime** - `WclApiService` and `DataFileApiService`. Bytes in, typed bytes out.
-- **Services are self-contained**: import only the two API services (or the slice `*DataSource` token) + models + `logWarn`. Each service owns its math as named, pure, total functions colocated in its own `*.service.ts`.
+- **Services are self-contained**: inject only the two API services (or the slice `*DataSource` token), domain services, and `LoggerService`; import models. A facade owns its slice-local math as protected methods or delegates to the slice's `domain/` service. The method shape itself is eslint-enforced (`no-function-alias-members` plus the exported-function ban, whose `ignores` list the sanctioned exceptions).
 - **`*DataSource` interface + `*_DATA_SOURCE` InjectionToken** - the only swap point between production (`*DataFileService`) and development/ingest (`*TransformService`).
-- **`*FeatureService`** - the runtime shell, one per feature component. Injects its token + the cached `WclApiService`, calls colocated pure functions, exposes signals. No arithmetic.
-- **Feature components inject exactly one service**: their `*FeatureService`.
+- **`*FeatureService`** - the runtime shell, one per feature component, in the slice's `facade/`. Injects its token + the cached `WclApiService` + domain services, exposes signals; its public members are the component's surface.
+- **Feature components inject their `*FeatureService`** plus shared UI services (`LoadResourceService`, `FindingRowsService`) - never a domain service.
 - **Page shells - zero domain services.** Resolve selection, compose feature components, pass selection as inputs.
 - **Presentational leaves - inputs/outputs only**, no services beyond framework tokens.
 
@@ -61,13 +61,13 @@ Deliver: the shell (zero domain services) or leaf (inputs/outputs only), copy pe
 
 - Every fallible load returns `Result<T, LoadError>` - never `T | null`, never an escaping throw.
 - The error channel is the three-variant `LoadError` union: `missing` (404, not an error), `transient` (network/5xx, retried once by the interceptor), `permanent` (200 but semantically unusable, carries an `id` and is `logWarn`ed).
-- `try/catch` lives only in the imperative shell; the catch `logWarn`s then returns `toLoadError(cause, id)` (`core/http-load-error.ts`).
+- `try/catch` lives only in the imperative shell; the catch `logWarn`s then returns `toLoadError(cause, id)` (`core/http/http-load-error.ts`).
 - Pure core functions signal failure with `missing(...)` / `permanent(...)`, never by throwing.
 - Components apply the `Result`, keep one `available` signal (`= result.ok`) and one `error` signal (null for `missing`), and render content or one `wl-load-state`.
 
 ## Testing rules (hard)
 
-- **Altitude rule:** test behavior exhaustively at the lowest altitude that owns it. A composite gets exactly one composition test; never re-test shared helpers from slice specs.
+- **Altitude rule:** test behavior exhaustively at the lowest altitude that owns it. A composite gets exactly one composition test; never re-test shared helpers from slice specs. A service under test is resolved with `TestBed.inject`; protected members are read through the bracket-access loophole.
 - **Named constants, never magic numbers or raw ids.** Spell/item ids come from `src/testing/spell-ids.ts`; every computed value gets a named `const` with a one-line derivation.
 - **Boundary comparisons are strict** and tested as such: a value exactly at `mean + 2*stddev` is not an outlier - pair the cases.
 - **Never load a WCL JSON blob** - build minimal event streams from the factories in `src/testing/builders/events.ts`.
