@@ -6,7 +6,6 @@ import { BENCH_SLICE } from './slice-registry';
 import { DATA_FILE_TRANSPORT, type DataFileTransport } from '../../core/services/data-file-transport';
 import { WclApiService } from '../../core/services/wcl-api';
 import { WCL_TRANSPORT, type WclTransport } from '../../core/services/wcl-transport';
-import { RATE_LIMIT_Q, CLASSES_Q, ENCOUNTERS_Q } from '../../core/services/wcl-queries';
 import { ok, missing, type Result } from '../../core/result';
 import { BurstTransformService } from '../../pages/post-raid/burst-windows/burst-transform.service';
 import { RotationTransformService } from '../../pages/post-raid/rotation/rotation-transform.service';
@@ -76,18 +75,12 @@ function fakeDisk(seed: Record<string, unknown>, undeletable = new Set<string>()
 
 function fakeWcl(encounters: { id: number; name: string }[], rankings: Record<number, RankedRow[]>): WclApiService {
   const zone = { id: ZONE_ID, name: RAID, frozen: false, partitions: [{ id: PARTITION }], encounters };
-  const answers = new Map<string, unknown>([
-    [RATE_LIMIT_Q, { rateLimitData: { limitPerHour: HOURLY_POINT_LIMIT, pointsSpentThisHour: 0 } }],
-    [CLASSES_Q, { gameData: { classes: [{ name: 'Rogue', slug: 'Rogue', specs: [{ name: 'Subtlety', slug: 'Subtlety' }] }] } }],
-    [ENCOUNTERS_Q, { worldData: { expansions: [{ zones: [zone] }] } }],
-  ]);
   return {
-    query: async (gql: string) => {
-      const answer = answers.get(gql);
-      if (answer === undefined) throw new Error('the run issued a WCL query this fixture does not answer');
-      return answer;
-    },
+    getPointsBudget: async () => ({ limitPerHour: HOURLY_POINT_LIMIT, pointsSpentThisHour: 0 }),
+    getPlayableClasses: async () => [{ name: 'Rogue', slug: 'Rogue', specs: [{ name: 'Subtlety', slug: 'Subtlety' }] }],
+    getZoneTree: async () => [{ zones: [zone] }],
     getRankings: async (_spec: string, encId: number) => ({ rankings: rankings[encId] ?? [] }),
+    query: () => { throw new Error('the run issued a raw WCL query; discovery goes through the narrow reads'); },
   } as unknown as WclApiService;
 }
 

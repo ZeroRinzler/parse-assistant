@@ -75,7 +75,7 @@ export function buildAbilityIconsQuery(ids: number[]): string {
   return `query{gameData{${fields}}}`;
 }
 
-// Ingest discovery queries (used only by src/app/ingest, bundled only there)
+// The discovery reads' queries, issued only during ingestion.
 
 /** The WCL hourly point budget - the ingest orchestrator's budget gate. */
 export const RATE_LIMIT_Q = gql`query RateLimit { rateLimitData { limitPerHour pointsSpentThisHour } }`;

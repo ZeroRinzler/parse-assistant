@@ -139,6 +139,25 @@ export interface WclRawAbility {
   icon: string | null;
 }
 
+export interface WclZone {
+  id: number;
+  name: string;
+  // WCL omits this on some zones though the schema declares it non-null, so an absent one reads as not-frozen.
+  frozen?: boolean;
+  partitions?: { id: number }[];
+  encounters?: { id: number; name: string }[];
+}
+
+export interface WclExpansion {
+  zones?: WclZone[];
+}
+
+export interface WclClass {
+  name: string;
+  slug: string;
+  specs?: { name: string; slug: string }[];
+}
+
 export interface CharacterGear {
   talent_key?: string;
   trinkets?: { slot: number; id: number; name: string; icon?: string }[];

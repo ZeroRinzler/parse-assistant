@@ -4,22 +4,29 @@ import { WCL_TRANSPORT, WclTransportError, WCL_UNUSABLE_STATUS } from './wcl-tra
 import {
   WclReport, WclEvent,
   PlayerDetailGroups, WclRankingsBlob, WclRawAbility, WclCombatantInfo, WclTableBlob,
+  WclClass, WclExpansion,
   MYTHIC_DIFFICULTY,
 } from '../models/wcl.models';
 import {
   REPORT_Q, REPORT_FIGHTS_Q, PLAYER_DETAILS_Q, EVENTS_Q,
   COMBATANT_INFO_Q, RANKINGS_Q, TABLE_Q, RESURRECTS_Q, buildGearNamesQuery, buildAbilityIconsQuery,
+  RATE_LIMIT_Q, CLASSES_Q, ENCOUNTERS_Q,
 } from './wcl-queries';
 import type {
+  ClassesQuery,
   CombatantInfoQuery, CombatantInfoQueryVariables,
+  EncountersQuery,
   EventDataType, EventsQuery, EventsQueryVariables, HostilityType,
   PlayerDetailsQuery, PlayerDetailsQueryVariables,
   RankingsQuery, RankingsQueryVariables,
+  RateLimitQuery,
   ReportFightsQuery, ReportQuery, ReportQueryVariables,
   ResurrectsQuery, ResurrectsQueryVariables,
   TableQuery, TableQueryVariables,
 } from './wcl-operations.generated';
 import { SpecMetaService } from './spec-meta';
+
+type WclPointsBudget = NonNullable<RateLimitQuery['rateLimitData']>;
 
 // WCL declares every selected field nullable, so these reads narrow the generated envelope once instead of pushing null into every consumer.
 @Injectable({ providedIn: 'root' })
@@ -156,5 +163,22 @@ export class WclApiService {
     if (partition != null) vars.partition = partition;
     const result = await this.query<RankingsQuery>(RANKINGS_Q, vars);
     return result.worldData?.encounter?.characterRankings ?? null;
+  }
+
+  /** null when WCL serves no rate-limit block: the budget is unknown, not exhausted. */
+  async getPointsBudget(): Promise<WclPointsBudget | null> {
+    const result = await this.query<RateLimitQuery>(RATE_LIMIT_Q);
+    return result.rateLimitData;
+  }
+
+  async getPlayableClasses(): Promise<WclClass[]> {
+    const result = await this.query<ClassesQuery>(CLASSES_Q);
+    return (result.gameData?.classes ?? []) as WclClass[];
+  }
+
+  /** null when WCL serves no expansion tree: collapsing that to [] would silently read as "no current raid". */
+  async getZoneTree(): Promise<WclExpansion[] | null> {
+    const result = await this.query<EncountersQuery>(ENCOUNTERS_Q);
+    return (result.worldData?.expansions ?? null) as WclExpansion[] | null;
   }
 }

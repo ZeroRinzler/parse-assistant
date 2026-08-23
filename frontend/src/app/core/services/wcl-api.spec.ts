@@ -157,4 +157,52 @@ describe('WclApiService', () => {
         .rejects.toMatchObject({ name: 'WclTransportError', status: WCL_UNUSABLE_STATUS });
     });
   });
+
+  describe('getPointsBudget', () => {
+    const BUDGET = { limitPerHour: 36_000, pointsSpentThisHour: 1_200 };
+
+    it('returns the served rate-limit block', async () => {
+      const { api, transport } = setup();
+      transport.response = { rateLimitData: BUDGET };
+      expect(await api.getPointsBudget()).toEqual(BUDGET);
+    });
+
+    it('returns null when WCL serves no rate-limit block', async () => {
+      const { api, transport } = setup();
+      transport.response = { rateLimitData: null };
+      expect(await api.getPointsBudget()).toBeNull();
+    });
+  });
+
+  describe('getPlayableClasses', () => {
+    const CLASSES = [{ name: 'Rogue', slug: 'Rogue', specs: [{ name: 'Subtlety', slug: 'Subtlety' }] }];
+
+    it('returns the served class list', async () => {
+      const { api, transport } = setup();
+      transport.response = { gameData: { classes: CLASSES } };
+      expect(await api.getPlayableClasses()).toEqual(CLASSES);
+    });
+
+    it('returns no class when WCL serves no gameData', async () => {
+      const { api, transport } = setup();
+      transport.response = { gameData: null };
+      expect(await api.getPlayableClasses()).toEqual([]);
+    });
+  });
+
+  describe('getZoneTree', () => {
+    const EXPANSIONS = [{ zones: [{ id: 53, name: 'The Venomous Abyss', frozen: false, partitions: null, encounters: null }] }];
+
+    it('returns the served expansion tree', async () => {
+      const { api, transport } = setup();
+      transport.response = { worldData: { expansions: EXPANSIONS } };
+      expect(await api.getZoneTree()).toEqual(EXPANSIONS);
+    });
+
+    it('returns null when WCL serves no worldData', async () => {
+      const { api, transport } = setup();
+      transport.response = { worldData: null };
+      expect(await api.getZoneTree()).toBeNull();
+    });
+  });
 });
