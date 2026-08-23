@@ -1,10 +1,8 @@
 import { assert, describe, it, expect } from 'vitest';
 import { BurstWindow, PlayerBurstWindow } from '../../core/models/analysis.models';
+import { RangeRow } from '../../core/models/window-comparison.models';
 import { AbilityIcons, withRelativeS } from './wcl-projections';
-import {
-  WindowView, WindowViewAdapter, WindowViewInput,
-  buildWindowView, playerWindowDamage, windowDetailRows,
-} from './window-view';
+import { WindowView, WindowViewAdapter, buildWindowView, playerWindowDamage } from './window-view';
 import { cast, damage } from '../../../testing/builders/events';
 import {
   SHADOW_BLADES, SHADOW_BLADES_DAMAGE,
@@ -59,13 +57,20 @@ function probeAdapter(over: Partial<WindowViewAdapter<ProbeAnchor>> = {}): Windo
   };
 }
 
-function viewOf(over: Partial<WindowViewInput<ProbeAnchor>> = {}): WindowView<ProbeAnchor> {
-  return buildWindowView({
-    topWindows: [topWindow()], playerWindows: [], fightDurationS: FIGHT_DURATION_S,
-    abilities: ABILITIES, adapter: probeAdapter(),
-    ...over,
-  });
+const VIEW_INPUT = {
+  topWindows: [topWindow()],
+  playerWindows: [] as PlayerBurstWindow[],
+  fightDurationS: FIGHT_DURATION_S,
+  abilities: ABILITIES,
+  adapter: probeAdapter(),
+};
+
+function viewOf(over: Partial<typeof VIEW_INPUT> = {}): WindowView<ProbeAnchor> {
+  return buildWindowView({ ...VIEW_INPUT, ...over });
 }
+
+const detailRowsOf = (over: Partial<typeof VIEW_INPUT> = {}): RangeRow[] =>
+  first(viewOf(over).windows).detailRows;
 
 const PLAYER_DAMAGE = 950;
 const playerWindow = (windowDamage: number): PlayerBurstWindow => ({ window_damage: windowDamage, ability_breakdown: [] });
@@ -158,36 +163,40 @@ const PLAYER_ABILITY_DAMAGE = 550;
 const benchBreakdown = (over: Partial<BurstWindow['ability_breakdown'][number]> = {}): BurstWindow['ability_breakdown'] =>
   [{ spell_id: SHADOW_BLADES_DAMAGE, avg_damage: BENCH_AVG, min_damage: BENCH_MIN, max_damage: BENCH_MAX, ...over }];
 
-describe('windowDetailRows', () => {
+const benchWindow = (over: Partial<BurstWindow['ability_breakdown'][number]> = {}): BurstWindow[] =>
+  [topWindow({ ability_breakdown: benchBreakdown(over) })];
+
+const playerBreakdown = (casts?: number): PlayerBurstWindow[] => [{
+  window_damage: PLAYER_DAMAGE,
+  ability_breakdown: [{ spell_id: SHADOW_BLADES_DAMAGE, damage: PLAYER_ABILITY_DAMAGE, ...(casts == null ? {} : { casts }) }],
+}];
+
+describe('buildWindowView detail rows', () => {
   it('joins the player damage onto the bench row sharing its spell id', () => {
-    const player: PlayerBurstWindow = {
-      window_damage: PLAYER_DAMAGE,
-      ability_breakdown: [{ spell_id: SHADOW_BLADES_DAMAGE, damage: PLAYER_ABILITY_DAMAGE }],
-    };
-    expect(first(windowDetailRows(benchBreakdown(), player, ABILITIES, false))).toEqual({
+    expect(first(detailRowsOf({ topWindows: benchWindow(), playerWindows: playerBreakdown() }))).toEqual({
       spellId: SHADOW_BLADES_DAMAGE, label: 'Eviscerate', icon: 'evis',
       playerPct: PLAYER_ABILITY_DAMAGE, topAvg: BENCH_AVG, topMin: BENCH_MIN, topMax: BENCH_MAX,
     });
   });
 
   it('labels an ability the map is missing with a placeholder and no icon', () => {
-    const row = first(windowDetailRows(benchBreakdown(), null, {}, false));
+    const row = first(detailRowsOf({ topWindows: benchWindow(), abilities: {} }));
     expect(row.label).toBe(`Ability #${SHADOW_BLADES_DAMAGE}`);
     expect(row.icon).toBe('');
     expect(row.playerPct).toBeNull();
   });
 
   it('carries the cast columns and the passive tag for a slice that asks for them', () => {
-    const player: PlayerBurstWindow = {
-      window_damage: PLAYER_DAMAGE,
-      ability_breakdown: [{ spell_id: SHADOW_BLADES_DAMAGE, damage: PLAYER_ABILITY_DAMAGE, casts: BENCH_CASTS }],
-    };
-    const row = first(windowDetailRows(benchBreakdown({ avg_casts: BENCH_CASTS, is_passive: true }), player, ABILITIES, true));
+    const row = first(detailRowsOf({
+      topWindows: benchWindow({ avg_casts: BENCH_CASTS, is_passive: true }),
+      playerWindows: playerBreakdown(BENCH_CASTS),
+      adapter: probeAdapter({ castColumns: true }),
+    }));
     expect(row).toMatchObject({ playerCasts: BENCH_CASTS, topCasts: BENCH_CASTS, passive: true });
   });
 
   it('omits the cast columns entirely for a slice that does not', () => {
-    const row = first(windowDetailRows(benchBreakdown({ avg_casts: BENCH_CASTS, is_passive: true }), null, ABILITIES, false));
+    const row = first(detailRowsOf({ topWindows: benchWindow({ avg_casts: BENCH_CASTS, is_passive: true }) }));
     expect(row.playerCasts).toBeUndefined();
     expect(row.topCasts).toBeUndefined();
     expect(row.passive).toBeUndefined();

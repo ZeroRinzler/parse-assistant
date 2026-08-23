@@ -4,7 +4,7 @@ import { WclTransportError } from '../../core/services/wcl-transport';
 import { ok, transient } from '../../core/result';
 import { WclReport } from '../../core/models/wcl.models';
 import { wclReport } from '../../../testing/builders/wcl-fixtures';
-import { PullAnalysis, PullContext, PullRef, analyzePull } from './pull-context';
+import { PullContext, PullRef, analyzePull } from './pull-context';
 
 const FIGHT_ID = 1;
 const FIGHT_END_MS = 120_000;
@@ -19,14 +19,15 @@ function wclFake(getReport: () => Promise<WclReport> = async () => REPORT): WclA
   return { getReport } as unknown as WclApiService;
 }
 
-function viewSlice(over: Partial<PullAnalysis<string>> = {}): PullAnalysis<string> {
-  return {
-    logSource: 'Slice.loadPlayerView',
-    errorId: ERROR_ID,
-    emptyView: () => EMPTY_VIEW,
-    analyze: async () => ANALYZED_VIEW,
-    ...over,
-  };
+const SLICE = {
+  logSource: 'Slice.loadPlayerView',
+  errorId: ERROR_ID,
+  emptyView: () => EMPTY_VIEW,
+  analyze: async (_context: PullContext) => ANALYZED_VIEW,
+};
+
+function viewSlice(over: Partial<typeof SLICE> = {}): typeof SLICE {
+  return { ...SLICE, ...over };
 }
 
 describe('analyzePull', () => {

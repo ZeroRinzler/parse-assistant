@@ -16,7 +16,7 @@ export interface PullRef {
   fightId: number;
 }
 
-export interface PullAnalysis<TView> {
+interface PullAnalysis<TView> {
   logSource: string;
   errorId: string;
   emptyView: () => TView;

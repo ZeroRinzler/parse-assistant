@@ -13,7 +13,7 @@ interface CastAttribution {
   nameOf: (spellId: number) => string;
 }
 
-export interface PlayerWindowOptions {
+interface PlayerWindowOptions {
   attribution?: CastAttribution;
   maxAbilities?: number;
 }
@@ -88,7 +88,7 @@ export interface WindowViewAdapter<A> {
   castColumns?: boolean;
 }
 
-export interface WindowViewInput<A> {
+interface WindowViewInput<A> {
   topWindows: BurstWindow[];
   playerWindows: PlayerBurstWindow[];
   fightDurationS: number;
@@ -102,7 +102,7 @@ export interface WindowView<A> {
   clipAnchors: ClipAnchor[];
 }
 
-export function windowDetailRows(
+function windowDetailRows(
   abilityBreakdown: BurstWindow['ability_breakdown'],
   playerWindow: PlayerBurstWindow | null,
   abilities: AbilityIcons,
