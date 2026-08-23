@@ -4,7 +4,7 @@ import {
 } from './support';
 
 const REPORT_URL = 'https://www.warcraftlogs.com/reports/fGDk8PmvBzdhtQga?fight=last';
-const PLAYER_NAME = 'Rolexes';
+const PLAYER_NAME = 'Pudders';
 // Mirrors POST_RAID_KEY in core/services/selection-store.ts.
 const STICKY_PLAYER_KEY = 'wl.sel.postRaid';
 
@@ -25,7 +25,7 @@ let page: Page;
 test.beforeAll(async ({ browser }) => {
   test.setTimeout(ANALYZE_TIMEOUT_MS + SLACK_MS);
   page = await browser.newPage();
-  // Seeded before boot so the one analysis targets Elsahr instead of the roster's first player.
+  // Seeded before boot so the one analysis targets Pudders instead of the roster's first player.
   await page.addInitScript(
     ([key, name]) => { localStorage.setItem(key, JSON.stringify({ playerName: name })); },
     [STICKY_PLAYER_KEY, PLAYER_NAME] as const,
@@ -48,7 +48,7 @@ test('analyzing the report selects the last pull and the sticky player', async (
   await expect(fight).toContainText(CLOCK);
   const player = page.getByRole('combobox', { name: 'Player' });
   await expect(player).toContainText(PLAYER_NAME);
-  await expect(player.getByAltText('Shadow Priest')).toBeVisible();
+  await expect(player.getByAltText('Balance Druid')).toBeVisible();
 });
 
 test('following the latest pull hands the fight selection to the live poll', async () => {
@@ -161,12 +161,12 @@ test('gear lists the top-parse talent builds and how the alt build differs, plus
   await shows(gear, 'Gear vs top parses.');
   const talents = gear.locator('div.border-t').filter({ hasText: 'Talents' }).first();
   await shows(talents, 'Your build');
-  await shows(talents, 'Most common build');
+  await shows(talents, /Most common build/);
   await shows(talents, PERCENT);
   await shows(talents, 'of top parsers');
   // How many alt builds the bench carries moves with every refresh; a thin sample can leave zero.
   if (await talents.getByText(/Alt build \d+/).count()) {
-    await shows(talents, 'Alt build 1');
+    await shows(talents, /Alt build 1/);
     await shows(talents, 'Added');
     await shows(talents, 'Dropped');
     await showsEntity(talents);
