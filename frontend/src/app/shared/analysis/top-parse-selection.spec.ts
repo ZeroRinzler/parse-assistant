@@ -24,17 +24,13 @@ function wclFake(rankingsFor: (partition: number | null) => FixtureRanking[]): {
 }
 
 describe('resolveTopParses', () => {
-  it('names the partition that answered, with its rows mapped to what a parse refetch needs', async () => {
+  it('falls back to the older partition, with its rows mapped to what a parse refetch needs', async () => {
     const { api, asked } = wclFake(partition => (partition === NEWEST_PARTITION ? [] : parseRankings(1)));
 
     const selection = await resolveTopParses(api, SPEC, ENCOUNTER_ID, [NEWEST_PARTITION, PREVIOUS_PARTITION]);
 
     expect(asked).toEqual([NEWEST_PARTITION, PREVIOUS_PARTITION]);
-    expect(selection).toEqual({
-      partition: PREVIOUS_PARTITION,
-      rows: [{ player: 'P1', server: '', report_code: 'r1', fight_id: 1 }],
-      depth: POOL_DEPTH,
-    });
+    expect(selection).toEqual([{ player: 'P1', server: '', report_code: 'r1', fight_id: 1 }]);
   });
 
   it('stops at the newest partition that has parses, leaving the older ones unqueried', async () => {
@@ -43,7 +39,7 @@ describe('resolveTopParses', () => {
     const selection = await resolveTopParses(api, SPEC, ENCOUNTER_ID, [NEWEST_PARTITION, PREVIOUS_PARTITION]);
 
     expect(asked).toEqual([NEWEST_PARTITION]);
-    expect(selection.partition).toBe(NEWEST_PARTITION);
+    expect(selection).toHaveLength(1);
   });
 
   it('makes one unpartitioned attempt when no partition is named, which is WCL\'s own default', async () => {
@@ -52,14 +48,13 @@ describe('resolveTopParses', () => {
     const selection = await resolveTopParses(api, SPEC, ENCOUNTER_ID);
 
     expect(asked).toEqual([null]);
-    expect(selection.partition).toBeNull();
+    expect(selection).toHaveLength(1);
   });
 
   it('resolves an empty pool when every partition is empty', async () => {
     const { api } = wclFake(() => []);
 
-    expect(await resolveTopParses(api, SPEC, ENCOUNTER_ID, [NEWEST_PARTITION, PREVIOUS_PARTITION]))
-      .toEqual({ partition: null, rows: [], depth: POOL_DEPTH });
+    expect(await resolveTopParses(api, SPEC, ENCOUNTER_ID, [NEWEST_PARTITION, PREVIOUS_PARTITION])).toEqual([]);
   });
 
   it('keeps a ranking list that exactly fills the pool depth', async () => {
@@ -67,8 +62,7 @@ describe('resolveTopParses', () => {
 
     const selection = await resolveTopParses(api, SPEC, ENCOUNTER_ID);
 
-    expect(selection.rows).toHaveLength(POOL_DEPTH);
-    expect(selection.depth).toBe(POOL_DEPTH);
+    expect(selection).toHaveLength(POOL_DEPTH);
   });
 
   it('cuts one ranked parse past the pool depth, so the pool never outgrows the depth it reports', async () => {
@@ -77,7 +71,7 @@ describe('resolveTopParses', () => {
 
     const selection = await resolveTopParses(api, SPEC, ENCOUNTER_ID);
 
-    expect(selection.rows).toHaveLength(POOL_DEPTH);
-    expect(selection.rows.map(row => row.report_code).at(-1)).toBe(`r${POOL_DEPTH}`);
+    expect(selection).toHaveLength(POOL_DEPTH);
+    expect(selection.map(row => row.report_code).at(-1)).toBe(`r${POOL_DEPTH}`);
   });
 });

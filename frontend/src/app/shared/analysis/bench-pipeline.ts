@@ -79,7 +79,7 @@ export async function benchFromTopParses<TParse, TBench, TPlan = undefined>(
   try {
     const limits = sliceLimits(slice);
     const selection = query.selection ?? await resolveTopParses(wclApi, spec, encounterId);
-    const rankings = selection.rows.slice(0, slice.candidatePoolCount ?? selection.depth);
+    const rankings = slice.candidatePoolCount ? selection.slice(0, slice.candidatePoolCount) : selection;
     if (!rankings.length) return missing(slice.noRankingsMessage);
 
     const payload = await collectParses(wclApi, slice, planned.value, rankings, limits.sampleTarget);

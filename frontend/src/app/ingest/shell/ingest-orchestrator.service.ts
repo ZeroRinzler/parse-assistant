@@ -40,7 +40,7 @@ const ENCOUNTER_OUTCOME_NOTE: Record<EncounterOutcome, string> = {
 };
 
 /** Published on `globalThis.__INGEST_DONE__` - the headless harness's exit signal. */
-export interface IngestRunSummary {
+interface IngestRunSummary {
   succeeded: string[];
   failed: { spec: string; message: string }[];
   budgetStopped: boolean;
@@ -260,7 +260,7 @@ export class IngestOrchestratorService {
         await assertPointsBudget(this.wclApi, POINTS_MARGIN);
 
         const selection = await resolveTopParses(this.wclApi, spec, encounter.id, encounter.partitionIds);
-        if (!selection.rows.length) {
+        if (!selection.length) {
           console.log(`  [${encounter.name}] no rankings, skipped`);
           emptyThisPass.push(encounter.id);
           continue;
@@ -268,7 +268,7 @@ export class IngestOrchestratorService {
 
         const existing = await this.dataFile.getSlice(spec, encounter.id, BENCH_SLICE);
         const { skip, signature: skipKey } = skipDecision(
-          existing.ok ? existing.value : null, selection.rows, version, TOP_N);
+          existing.ok ? existing.value : null, selection, version, TOP_N);
         if (skip) {
           console.log(`  [${encounter.name}] unchanged (signature ${skipKey}), skipped`);
           continue;
@@ -339,7 +339,7 @@ export class IngestOrchestratorService {
     ]));
 
     const { signature, inaccessibleParses } = signatureAfterFetch(
-      selection.rows, outcomes.inaccessibleCodes, outcomes.failedCodes, version, TOP_N);
+      selection, outcomes.inaccessibleCodes, outcomes.failedCodes, version, TOP_N);
     const stamp: IngestStamp = { version: INGEST_VERSION, ingestedAtS: nowS() };
 
     // Skip on any failure so a slice is never overwritten with partial data.

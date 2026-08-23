@@ -2,10 +2,12 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { IngestHttpDataFileTransport, INGEST_SERVER_URL } from './ingest-data-file-transport';
+import { IngestHttpDataFileTransport } from './ingest-data-file-transport';
 import { INGEST_VERSION } from '../ingest-version';
 import { ok, missing } from '../../core/result';
 
+// Spelled out rather than imported, so moving the transport off this URL fails the assertions.
+const INGEST_SERVER_URL = 'http://localhost:3000';
 const REL_PATH = 'SubtletyRogue/burst/3176.json';
 // The file server is rooted at data/, one level above the specs tree the transport addresses.
 const SERVER_FILE_PATH = `specs/${REL_PATH}`;

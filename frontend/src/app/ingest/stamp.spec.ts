@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { ok, missing, transient, permanent, type Result } from '../core/result';
 import { INGEST_VERSION } from './ingest-version';
-import { encounterSkipKey, parseKey, type SignatureRanking } from './signature';
+import { encounterSkipKey, type SignatureRanking } from './signature';
 import { isFutureVersion, readFileStamp, skipDecision, stampBurstFile, stampSignature, type IngestStamp } from './stamp';
 
 const INGESTED_AT_S = 1776245400;
@@ -11,7 +11,8 @@ const TOP_N = 10;
 const PRIVATE_RANK = 1;
 const ranking = (rank: number): SignatureRanking => ({ report_code: `report${rank}`, fight_id: rank });
 const ROWS = [PRIVATE_RANK, 2, 3].map(ranking);
-const PRIVATE_PARSE = parseKey(ranking(PRIVATE_RANK));
+// Spelled out rather than imported: baked files carry this key, so importing its producer would let a format change pass.
+const PRIVATE_PARSE = `report${PRIVATE_RANK}:${PRIVATE_RANK}`;
 const SIGNATURE = encounterSkipKey(ROWS, new Set(), VERSION, TOP_N);
 const WITHOUT_PRIVATE = encounterSkipKey(ROWS, new Set([PRIVATE_PARSE]), VERSION, TOP_N);
 const DATA = { spec: 'SubtletyRogue', encounter_id: 3470 };

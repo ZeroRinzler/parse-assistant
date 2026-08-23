@@ -78,12 +78,8 @@ export interface ParseRanking {
   fight_id: number;
 }
 
-/** One encounter's resolved candidate pool: which partition answered, its ranked rows, and the depth they were capped at. */
-export interface TopParseSelection {
-  partition: number | null;
-  rows: ParseRanking[];
-  depth: number;
-}
+/** resolveTopParses already caps these at CANDIDATE_POOL_DEPTH, so capping them again cuts nothing. */
+export type TopParseSelection = ParseRanking[];
 
 export interface WclGearItem {
   id?: number | string;

@@ -16,7 +16,7 @@ export interface SliceDescriptor {
 }
 
 /** Non-empty: the orchestrator destructures the head as the burst slice. */
-export type SliceRegistry = readonly [SliceDescriptor, ...SliceDescriptor[]];
+type SliceRegistry = readonly [SliceDescriptor, ...SliceDescriptor[]];
 
 export const BENCH_SLICE = 'burst';
 

@@ -8,7 +8,7 @@ import { toLoadError } from '../../core/transport/http-load-error';
 import { isFutureVersion } from '../stamp';
 
 /** The file server (scripts/ingest-server.js) is dumb file ops; all ingestion semantics stay on this side. */
-export const INGEST_SERVER_URL = 'http://localhost:3000';
+const INGEST_SERVER_URL = 'http://localhost:3000';
 
 // The file server is rooted one level up at data/ so a single containment guard covers the whole data folder.
 const SPECS_PREFIX = 'specs/';

@@ -13,7 +13,7 @@ import { DefensiveTransformService } from '../../pages/post-raid/defensive/defen
 import { GearTransformService } from '../../pages/post-raid/gear/gear-transform.service';
 import { MapTransformService } from '../../pages/post-raid/map/map-transform.service';
 import { NorthernSkyTransformService } from '../../pages/post-raid/northern-sky/northern-sky-transform.service';
-import { encounterSignature } from '../signature';
+import { encounterSkipKey } from '../signature';
 import { INGEST_VERSION } from '../ingest-version';
 
 const SPEC = 'SubtletyRogue';
@@ -41,8 +41,9 @@ const RANKED = [TOP_PARSE, RUNNER_UP];
 const RERANKED = [TOP_PARSE, NEWCOMER];
 
 // Fewer rows than the orchestrator's top-N cap: past it, signatureOf stops matching the signature the run stamps.
-const signatureOf = (rows: RankedRow[]): string => encounterSignature(
-  String(INGEST_VERSION), rows.map(row => ({ report_code: row.report.code, fight_id: row.report.fightID })));
+const signatureOf = (rows: RankedRow[]): string => encounterSkipKey(
+  rows.map(row => ({ report_code: row.report.code, fight_id: row.report.fightID })),
+  new Set(), String(INGEST_VERSION), rows.length);
 
 const benchPath = (encId: number, slice = BENCH_SLICE): string => `${SPEC}/${slice}/${encId}.json`;
 const bossName = (encId: number): string => BOSSES.find(boss => boss.id === encId)?.name ?? '';

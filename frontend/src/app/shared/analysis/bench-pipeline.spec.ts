@@ -160,12 +160,7 @@ describe('benchFromTopParses', () => {
 
 describe('benchFromTopParses top-parse selection', () => {
   const POOL_SIZE = 3;
-  const RESOLVED_PARTITION = 2;
-  const HANDED_POOL: TopParseSelection = {
-    partition: RESOLVED_PARTITION,
-    rows: toParseRankings(parseRankings(POOL_SIZE), POOL_SIZE),
-    depth: CANDIDATE_POOL_COUNT,
-  };
+  const HANDED_POOL: TopParseSelection = toParseRankings(parseRankings(POOL_SIZE), POOL_SIZE);
 
   it('benches the pool it was handed, leaving the rankings query to whoever resolved it', async () => {
     const asked: (number | null)[] = [];

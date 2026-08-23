@@ -13,7 +13,7 @@ export async function resolveTopParses(
   for (const partition of (partitionIds.length ? partitionIds : [null])) {
     const raw = await wclApi.getRankings(spec, encounterId, partition);
     const rows = toParseRankings(unwrapRankings(raw), CANDIDATE_POOL_DEPTH);
-    if (rows.length) return { partition, rows, depth: CANDIDATE_POOL_DEPTH };
+    if (rows.length) return rows;
   }
-  return { partition: null, rows: [], depth: CANDIDATE_POOL_DEPTH };
+  return [];
 }

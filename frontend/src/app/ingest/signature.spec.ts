@@ -1,43 +1,39 @@
 import { describe, it, expect } from 'vitest';
-import {
-  encounterSignature, encounterSkipKey, signatureAfterFetch, parseKey, type SignatureRanking,
-} from './signature';
+import { encounterSkipKey, signatureAfterFetch, type SignatureRanking } from './signature';
 
 const rankings = (...rows: [string, number][]): SignatureRanking[] =>
   rows.map(([report_code, fight_id]) => ({ report_code, fight_id }));
 
-describe('encounterSignature', () => {
+// N is the pool's own length: a fixed N would silently sign a prefix of the rows instead of all of them.
+const signatureOf = (version: string, rows: SignatureRanking[]): string =>
+  encounterSkipKey(rows, new Set(), version, rows.length);
+
+describe('parse-set signature', () => {
   it('produces a 16-char lowercase hex hash', () => {
-    expect(encounterSignature('abc123', rankings(['r1', 1]))).toMatch(/^[0-9a-f]{16}$/);
+    expect(signatureOf('abc123', rankings(['r1', 1]))).toMatch(/^[0-9a-f]{16}$/);
   });
 
   it('is independent of ranking order (sorted parse-set fingerprint)', () => {
-    const a = encounterSignature('code', rankings(['r1', 1], ['r2', 2], ['r3', 3]));
-    const b = encounterSignature('code', rankings(['r3', 3], ['r1', 1], ['r2', 2]));
+    const a = signatureOf('code', rankings(['r1', 1], ['r2', 2], ['r3', 3]));
+    const b = signatureOf('code', rankings(['r3', 3], ['r1', 1], ['r2', 2]));
     expect(a).toBe(b);
   });
 
   it('changes when the parse set changes', () => {
-    const a = encounterSignature('code', rankings(['r1', 1], ['r2', 2]));
-    const b = encounterSignature('code', rankings(['r1', 1], ['r2', 9]));
+    const a = signatureOf('code', rankings(['r1', 1], ['r2', 2]));
+    const b = signatureOf('code', rankings(['r1', 1], ['r2', 9]));
     expect(a).not.toBe(b);
   });
 
   it('changes when only the version changes (same parse set)', () => {
     const set = rankings(['r1', 1], ['r2', 2]);
-    expect(encounterSignature('1', set)).not.toBe(encounterSignature('2', set));
+    expect(signatureOf('1', set)).not.toBe(signatureOf('2', set));
   });
 
   it('distinguishes same report with different fight ids', () => {
-    const a = encounterSignature('code', rankings(['r1', 1]));
-    const b = encounterSignature('code', rankings(['r1', 2]));
+    const a = signatureOf('code', rankings(['r1', 1]));
+    const b = signatureOf('code', rankings(['r1', 2]));
     expect(a).not.toBe(b);
-  });
-});
-
-describe('parseKey', () => {
-  it('joins report code and fight id', () => {
-    expect(parseKey({ report_code: 'r1', fight_id: 3 })).toBe('r1:3');
   });
 });
 
@@ -45,7 +41,7 @@ describe('inaccessible-aware skip key', () => {
   // Each parse has a STABLE identity (report_code:fight_id) independent of its rank, so a parse keeps its key when it moves position.
   const P = (report_code: string): SignatureRanking => ({ report_code, fight_id: 1 });
   const pool = (...codes: string[]): SignatureRanking[] => codes.map(P);
-  const sig = (rows: SignatureRanking[]): string => encounterSignature('1', rows);
+  const sig = (rows: SignatureRanking[]): string => signatureOf('1', rows);
 
   // Key on the top-N accessible parses (pool minus the persisted known-inaccessible keys).
   const skipKey = (rows: SignatureRanking[], knownInaccessible: string[], n = 10): string =>
@@ -143,13 +139,13 @@ describe('encounterSkipKey', () => {
   it('with no inaccessible parses, equals the signature over the top-N pool', () => {
     const rows = pool('a', 'b', 'c', 'd');
     expect(encounterSkipKey(rows, new Set(), VERSION, TOP_N))
-      .toBe(encounterSignature(VERSION, pool('a', 'b', 'c')));
+      .toBe(signatureOf(VERSION, pool('a', 'b', 'c')));
   });
 
   it('excludes inaccessible keys before taking the top-N', () => {
     // b inaccessible -> the top-3 accessible parses are a, c, d
     expect(encounterSkipKey(pool('a', 'b', 'c', 'd'), new Set(['b:1']), VERSION, TOP_N))
-      .toBe(encounterSignature(VERSION, pool('a', 'c', 'd')));
+      .toBe(signatureOf(VERSION, pool('a', 'c', 'd')));
   });
 
   it('ignores a parse past the top-N accessible (strict slice boundary)', () => {
@@ -178,7 +174,7 @@ describe('signatureAfterFetch', () => {
     const codes = new Set(['zzz']);
     const result = signatureAfterFetch(rows, codes, codes, VERSION, TOP_N);
     expect(result.inaccessibleParses).toEqual([]);
-    expect(result.signature).toBe(encounterSignature(VERSION, pool('a', 'b', 'c')));
+    expect(result.signature).toBe(signatureOf(VERSION, pool('a', 'b', 'c')));
   });
 
   it('excludes a transient (non-permission) failure from the signature without persisting it', () => {
@@ -186,7 +182,7 @@ describe('signatureAfterFetch', () => {
     const rows = pool('a', 'b', 'c', 'd');
     const result = signatureAfterFetch(rows, new Set(), new Set(['b']), VERSION, TOP_N);
     expect(result.inaccessibleParses).toEqual([]);
-    expect(result.signature).toBe(encounterSignature(VERSION, pool('a', 'c', 'd')));
+    expect(result.signature).toBe(signatureOf(VERSION, pool('a', 'c', 'd')));
     // The healthy rerun's cheap check keys on the full top-N (b included), so it differs.
     expect(encounterSkipKey(rows, new Set(result.inaccessibleParses), VERSION, TOP_N)).not.toBe(result.signature);
   });

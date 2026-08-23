@@ -9,7 +9,7 @@ export interface SignatureRanking {
 }
 
 /** `report_code:fight_id` key - the unit of the parse-set fingerprint and the inaccessible set. */
-export function parseKey(ranking: SignatureRanking): string {
+function parseKey(ranking: SignatureRanking): string {
   return `${ranking.report_code}:${ranking.fight_id}`;
 }
 
@@ -21,7 +21,7 @@ function rankingFingerprint(rankings: SignatureRanking[]): string {
     .join('|');
 }
 
-export function encounterSignature(version: string, rankings: SignatureRanking[]): string {
+function encounterSignature(version: string, rankings: SignatureRanking[]): string {
   return bytesToHex(sha256(utf8ToBytes(`${version}\n${rankingFingerprint(rankings)}`))).slice(0, 16);
 }
 
