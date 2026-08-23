@@ -4,10 +4,11 @@ import type { DataFileApiService } from '../../core/services/data-file-api';
 import { WclTransportError } from '../../core/services/wcl-transport';
 import { Rulebook } from '../../core/models/rulebook.models';
 import { Result, ok, missing, transient } from '../../core/result';
+import { TopParseSelection } from '../../core/models/wcl.models';
 import { SHADOW_BLADES, CLOAK_OF_SHADOWS } from '../../../testing/spell-ids';
 import { rulebook } from '../../../testing/builders/rulebook';
 import { FixtureRanking, abilityLookup, parseRankings, wclReport, reportsByCode } from '../../../testing/builders/wcl-fixtures';
-import { AbilityIcons } from './wcl-projections';
+import { AbilityIcons, toParseRankings } from './wcl-projections';
 import { BenchHeader, BenchSlice, benchFromTopParses, spellIdsByName } from './bench-pipeline';
 
 const SPEC = 'SubtletyRogue';
@@ -23,7 +24,7 @@ const SAMPLE_TARGET = 10;
 
 interface WclOverrides {
   rankings?: FixtureRanking[];
-  getRankings?: () => Promise<unknown>;
+  getRankings?: (spec: string, encounterId: number, partition: number | null) => Promise<unknown>;
   getReport?: (code: string) => Promise<unknown>;
   getAbilities?: (ids: number[]) => Promise<unknown>;
 }
@@ -46,7 +47,6 @@ function codeSlice(over: Partial<BenchSlice<string, CodeBench>> = {}): BenchSlic
   return {
     logSource: 'CodeSlice',
     errorId: BENCH_ERROR_ID,
-    candidatePoolCount: CANDIDATE_POOL_COUNT,
     sampleTarget: SAMPLE_TARGET,
     minSamples: 1,
     noRankingsMessage: NO_RANKINGS_MESSAGE,
@@ -156,19 +156,49 @@ describe('benchFromTopParses', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toMatchObject({ kind: 'permanent', id: BENCH_ERROR_ID });
   });
+});
 
-  it('samples the partition it was handed', async () => {
-    const RESOLVED_PARTITION = 2;
+describe('benchFromTopParses top-parse selection', () => {
+  const POOL_SIZE = 3;
+  const RESOLVED_PARTITION = 2;
+  const HANDED_POOL: TopParseSelection = {
+    partition: RESOLVED_PARTITION,
+    rows: toParseRankings(parseRankings(POOL_SIZE), POOL_SIZE),
+    depth: CANDIDATE_POOL_COUNT,
+  };
+
+  it('benches the pool it was handed, leaving the rankings query to whoever resolved it', async () => {
     const asked: (number | null)[] = [];
-    const wcl = {
-      getRankings: async (_spec: string, _encounterId: number, partition: number | null) => {
-        asked.push(partition);
-        return { rankings: [] };
-      },
-    } as unknown as WclApiService;
-    await benchFromTopParses(wcl, { ...QUERY, partition: RESOLVED_PARTITION }, codeSlice());
-    await benchFromTopParses(wcl, QUERY, codeSlice());
-    expect(asked).toEqual([RESOLVED_PARTITION, null]);
+    const wcl = wclFake({
+      getRankings: async (_spec, _encounterId, partition) => { asked.push(partition); return { rankings: [] }; },
+    });
+
+    const result = await benchFromTopParses(
+      wcl, { ...QUERY, selection: HANDED_POOL }, codeSlice({ sampleTarget: POOL_SIZE }));
+
+    expect(result).toEqual(ok(benched(['r1', 'r2', 'r3'])));
+    expect(asked).toEqual([]);
+  });
+
+  it('takes the front of a handed pool for a slice that benches a shallower one', async () => {
+    const SHALLOW_POOL = POOL_SIZE - 1;
+    const slice = codeSlice({ sampleTarget: POOL_SIZE, candidatePoolCount: SHALLOW_POOL });
+
+    const result = await benchFromTopParses(wclFake(), { ...QUERY, selection: HANDED_POOL }, slice);
+
+    expect(result).toEqual(ok(benched(['r1', 'r2'])));
+  });
+
+  it('resolves the pool itself when handed none, which is how a slice read outside ingestion benches', async () => {
+    const asked: (number | null)[] = [];
+    const wcl = wclFake({
+      getRankings: async (_spec, _encounterId, partition) => { asked.push(partition); return { rankings: parseRankings(1) }; },
+    });
+
+    const result = await benchFromTopParses(wcl, QUERY, codeSlice());
+
+    expect(result).toEqual(ok(benched(['r1'])));
+    expect(asked).toEqual([null]);
   });
 });
 

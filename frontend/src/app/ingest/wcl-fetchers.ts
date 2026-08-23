@@ -16,14 +16,3 @@ export async function getEncounters(client: WclQueryClient, raidNames: string[])
   const encounters = encountersForRaids(data.worldData.expansions, raidNames);
   return { encounters, protectedIds: new Set(encounters.map(encounter => encounter.id)) };
 }
-
-/** Newest-first, since a fresh patch's partition carries the current parses; it reports which one answered because the signature and every transform have to read the same one, and a patch rolling the default over to a still-empty partition is where they would otherwise diverge. */
-export async function rankingsFromPartition<T>(
-  partitionIds: number[], fetch: (partition: number | null) => Promise<T[]>,
-): Promise<{ rows: T[]; partition: number | null }> {
-  for (const partition of (partitionIds.length ? partitionIds : [null])) {
-    const rows = await fetch(partition);
-    if (rows.length) return { rows, partition };
-  }
-  return { rows: [], partition: null };
-}

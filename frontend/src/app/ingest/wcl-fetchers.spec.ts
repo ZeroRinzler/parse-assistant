@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getEncounters, rankingsFromPartition } from './wcl-fetchers';
+import { getEncounters } from './wcl-fetchers';
 import type { WclQueryClient } from './wcl-client';
 
 const ABYSS = 53, SPOREFALL = 50;
@@ -41,43 +41,5 @@ describe('getEncounters', () => {
 
   it('throws rather than pruning everything when WCL returns no expansions', async () => {
     await expect(getEncounters(fakeClient({ worldData: {} }), ['The Venomous Abyss'])).rejects.toThrow('worldData.expansions');
-  });
-});
-
-describe('rankingsFromPartition', () => {
-  const NEWEST = 3, PREVIOUS = 2;
-
-  it('names the partition that answered, so every later read can be pinned to it', async () => {
-    const tried: (number | null)[] = [];
-    const result = await rankingsFromPartition([NEWEST, PREVIOUS], async partition => {
-      tried.push(partition);
-      return partition === NEWEST ? [] : ['a'];
-    });
-    expect(tried).toEqual([NEWEST, PREVIOUS]);
-    expect(result).toEqual({ rows: ['a'], partition: PREVIOUS });
-  });
-
-  it('stops at the newest partition that has rows, leaving the older ones unqueried', async () => {
-    const tried: (number | null)[] = [];
-    const result = await rankingsFromPartition([NEWEST, PREVIOUS], async partition => {
-      tried.push(partition);
-      return ['a'];
-    });
-    expect(tried).toEqual([NEWEST]);
-    expect(result.partition).toBe(NEWEST);
-  });
-
-  it('makes one unpartitioned attempt when the zone lists none, which is WCL\'s own default', async () => {
-    const tried: (number | null)[] = [];
-    const result = await rankingsFromPartition([], async partition => {
-      tried.push(partition);
-      return ['a'];
-    });
-    expect(tried).toEqual([null]);
-    expect(result.partition).toBeNull();
-  });
-
-  it('reports no partition when every one of them is empty', async () => {
-    expect(await rankingsFromPartition([NEWEST, PREVIOUS], async () => [])).toEqual({ rows: [], partition: null });
   });
 });

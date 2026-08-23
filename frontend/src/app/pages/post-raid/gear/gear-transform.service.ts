@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
-import { CharacterGear, ParseRanking } from '../../../core/models/wcl.models';
+import { CharacterGear, ParseRanking, TopParseSelection } from '../../../core/models/wcl.models';
 import { EncounterGearStats } from '../../../core/models/encounter.models';
 import { logWarn } from '../../../core/log';
 import { Result } from '../../../core/result';
@@ -149,8 +149,8 @@ export class GearTransformService implements DataSource<GearBench> {
   private readonly wclApi = inject(WclApiService);
   private readonly talentData = inject(TalentDataService);
 
-  async getBench(spec: string, encounterId: number, partition?: number | null): Promise<Result<GearBench>> {
-    return benchFromTopParses(this.wclApi, { spec, encounterId, partition }, {
+  async getBench(spec: string, encounterId: number, selection?: TopParseSelection): Promise<Result<GearBench>> {
+    return benchFromTopParses(this.wclApi, { spec, encounterId, selection }, {
       logSource: 'GearTransformService',
       errorId: 'gear.bench',
       noRankingsMessage: 'Not yet ingested.',

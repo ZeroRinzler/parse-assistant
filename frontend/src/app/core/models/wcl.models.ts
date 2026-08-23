@@ -78,6 +78,13 @@ export interface ParseRanking {
   fight_id: number;
 }
 
+/** One encounter's resolved candidate pool: which partition answered, its ranked rows, and the depth they were capped at. */
+export interface TopParseSelection {
+  partition: number | null;
+  rows: ParseRanking[];
+  depth: number;
+}
+
 export interface WclGearItem {
   id?: number | string;
   name?: string;

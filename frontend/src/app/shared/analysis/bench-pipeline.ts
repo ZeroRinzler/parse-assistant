@@ -1,15 +1,14 @@
 import { WclApiService } from '../../core/services/wcl-api';
 import type { DataFileApiService } from '../../core/services/data-file-api';
-import { ParseRanking, WclFight, WclReport } from '../../core/models/wcl.models';
+import { ParseRanking, TopParseSelection, WclFight, WclReport } from '../../core/models/wcl.models';
 import { Rulebook } from '../../core/models/rulebook.models';
 import { logWarn } from '../../core/log';
 import { Result, ok, missing } from '../../core/result';
 import { toLoadError } from '../../core/transport/http-load-error';
-import { ReportActor, abilityIcons, findParseActor, toParseRankings, unwrapRankings } from './wcl-projections';
+import { ReportActor, abilityIcons, findParseActor } from './wcl-projections';
+import { resolveTopParses } from './top-parse-selection';
 
 const TOP_PARSE_COUNT = 10;
-// Over-fetch so a private/unfetchable top parse can be backfilled by the next-best one.
-const CANDIDATE_POOL_COUNT = TOP_PARSE_COUNT * 2;
 const MIN_SAMPLE_COUNT = 1;
 
 export interface BenchParse {
@@ -53,6 +52,7 @@ interface BenchRulebookStep<TPlan> {
 export interface BenchSlice<TParse, TBench, TPlan = undefined> {
   logSource: string;
   errorId: string;
+  /** Trims the resolved pool for a slice that benches fewer candidates; it cannot deepen one. */
   candidatePoolCount?: number;
   sampleTarget?: number;
   minSamples?: number;
@@ -70,16 +70,16 @@ export interface BenchSlice<TParse, TBench, TPlan = undefined> {
 
 export async function benchFromTopParses<TParse, TBench, TPlan = undefined>(
   wclApi: WclApiService,
-  query: { spec: string; encounterId: number; partition?: number | null },
+  query: { spec: string; encounterId: number; selection?: TopParseSelection },
   slice: BenchSlice<TParse, TBench, TPlan>,
 ): Promise<Result<TBench>> {
-  const { spec, encounterId, partition } = query;
+  const { spec, encounterId } = query;
   const planned = await benchPlan(slice.rulebook, spec);
   if (!planned.ok) return planned;
   try {
     const limits = sliceLimits(slice);
-    const rankings = toParseRankings(
-      unwrapRankings(await wclApi.getRankings(spec, encounterId, partition ?? null)), limits.poolCount);
+    const selection = query.selection ?? await resolveTopParses(wclApi, spec, encounterId);
+    const rankings = selection.rows.slice(0, slice.candidatePoolCount ?? selection.depth);
     if (!rankings.length) return missing(slice.noRankingsMessage);
 
     const payload = await collectParses(wclApi, slice, planned.value, rankings, limits.sampleTarget);
@@ -120,14 +120,12 @@ async function benchEnvelope<TParse, TBench, TPlan>(
 }
 
 interface SliceLimits {
-  poolCount: number;
   sampleTarget: number;
   minSamples: number;
 }
 
 function sliceLimits<TParse, TBench, TPlan>(slice: BenchSlice<TParse, TBench, TPlan>): SliceLimits {
   return {
-    poolCount: slice.candidatePoolCount ?? CANDIDATE_POOL_COUNT,
     sampleTarget: slice.sampleTarget ?? TOP_PARSE_COUNT,
     minSamples: slice.minSamples ?? MIN_SAMPLE_COUNT,
   };

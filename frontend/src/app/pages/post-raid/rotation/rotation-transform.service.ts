@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
+import { TopParseSelection } from '../../../core/models/wcl.models';
 import { RulebookCooldown, RulebookDefensive, RulebookRule } from '../../../core/models/rulebook.models';
 import { PerCdBenchmark } from '../../../core/models/encounter.models';
 import { group, quantile } from 'd3-array';
@@ -165,8 +166,8 @@ export class RotationTransformService implements DataSource<RotationBench> {
   private readonly wclApi = inject(WclApiService);
   private readonly dataFiles = inject(DataFileApiService);
 
-  async getBench(spec: string, encounterId: number, partition?: number | null): Promise<Result<RotationBench>> {
-    return benchFromTopParses(this.wclApi, { spec, encounterId, partition }, {
+  async getBench(spec: string, encounterId: number, selection?: TopParseSelection): Promise<Result<RotationBench>> {
+    return benchFromTopParses(this.wclApi, { spec, encounterId, selection }, {
       logSource: 'RotationTransformService',
       errorId: 'rotation.bench',
       minSamples: MIN_PARSE_COUNT,

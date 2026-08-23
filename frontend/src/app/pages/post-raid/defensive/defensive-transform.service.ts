@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
+import { TopParseSelection } from '../../../core/models/wcl.models';
 import { RulebookDefensive } from '../../../core/models/rulebook.models';
 import { BurstWindow } from '../../../core/models/analysis.models';
 import { PerDefensiveBenchmark } from '../../../core/models/encounter.models';
@@ -250,8 +251,8 @@ export class DefensiveTransformService implements DataSource<DefensiveBench> {
   private readonly wclApi = inject(WclApiService);
   private readonly dataFiles = inject(DataFileApiService);
 
-  async getBench(spec: string, encounterId: number, partition?: number | null): Promise<Result<DefensiveBench>> {
-    return benchFromTopParses(this.wclApi, { spec, encounterId, partition }, {
+  async getBench(spec: string, encounterId: number, selection?: TopParseSelection): Promise<Result<DefensiveBench>> {
+    return benchFromTopParses(this.wclApi, { spec, encounterId, selection }, {
       logSource: 'DefensiveTransformService',
       errorId: 'defensive.bench',
       noRankingsMessage: NO_DEFENSIVE_BENCH_MESSAGE,

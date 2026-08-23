@@ -1,6 +1,7 @@
 import { inject } from '@angular/core';
 import { DataFileApiService } from '../../core/services/data-file-api';
 import { type Result } from '../../core/result';
+import type { TopParseSelection } from '../../core/models/wcl.models';
 import type { EncounterPositions } from '../../core/models/positioning.models';
 import { BurstTransformService } from '../../pages/post-raid/burst-windows/burst-transform.service';
 import { RotationTransformService } from '../../pages/post-raid/rotation/rotation-transform.service';
@@ -11,7 +12,7 @@ import { NorthernSkyTransformService } from '../../pages/post-raid/northern-sky/
 
 export interface SliceDescriptor {
   readonly file: string;
-  readonly transform: { getBench(spec: string, encId: number, partition: number | null): Promise<Result<object>> };
+  readonly transform: { getBench(spec: string, encId: number, selection: TopParseSelection): Promise<Result<object>> };
   readonly write: (spec: string, encId: number, data: object) => Promise<void>;
 }
 

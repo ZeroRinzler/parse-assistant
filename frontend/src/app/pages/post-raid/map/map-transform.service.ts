@@ -2,7 +2,7 @@
 import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
-import { WclEvent, WclFight } from '../../../core/models/wcl.models';
+import { TopParseSelection, WclEvent, WclFight } from '../../../core/models/wcl.models';
 import { ParsePositions, PlayerPosRow, PosRow } from '../../../core/models/positioning.models';
 import { Result } from '../../../core/result';
 import { TimedEvent, relativeS, withRelativeS } from '../../../shared/analysis/wcl-projections';
@@ -181,8 +181,8 @@ export class MapTransformService implements DataSource<MapData> {
   private readonly wclApi = inject(WclApiService);
   private readonly dataFiles = inject(DataFileApiService);
 
-  async getBench(spec: string, encounterId: number, partition?: number | null): Promise<Result<MapData>> {
-    return benchFromTopParses(this.wclApi, { spec, encounterId, partition }, {
+  async getBench(spec: string, encounterId: number, selection?: TopParseSelection): Promise<Result<MapData>> {
+    return benchFromTopParses(this.wclApi, { spec, encounterId, selection }, {
       logSource: 'MapTransformService',
       errorId: 'map.bench',
       noRankingsMessage: 'No top parses for this encounter.',

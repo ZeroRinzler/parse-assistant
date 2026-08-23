@@ -8,19 +8,19 @@ import { HttpWclTransport } from '../../core/transport/http-wcl-transport';
 import { SpecMetaService } from '../../core/services/spec-meta';
 import { logWarn } from '../../core/log';
 import { type LoadError } from '../../core/result';
-import { toParseRankings, unwrapRankings } from '../../shared/analysis/wcl-projections';
+import { resolveTopParses } from '../../shared/analysis/top-parse-selection';
 import type { EncounterEntry, SpecEntry } from '../../core/models/encounter.models';
+import type { TopParseSelection } from '../../core/models/wcl.models';
 import { RATE_LIMIT_Q, CLASSES_Q } from '../../core/services/wcl-queries';
 import type { ClassesQuery, RateLimitQuery } from '../../core/services/wcl-operations.generated';
 import { sliceRegistry, type SliceDescriptor } from './slice-registry';
-import { getEncounters, rankingsFromPartition } from '../wcl-fetchers';
+import { getEncounters } from '../wcl-fetchers';
 import { mapClassesToSpecMeta, parseRaidNames } from '../wcl-mappers';
 import { type WclQueryClient, BudgetExceededError } from '../wcl-client';
 import { INGEST_VERSION } from '../ingest-version';
 import { specsForRun, orderEncountersByMissingFirst, parsePrioritySpecs, type SpecOrderEntry } from '../ordering';
 import {
-  encounterSkipKey, signatureAfterFetch, stampSignature, stampBurstFile,
-  type SignatureRanking, type IngestStamp,
+  encounterSkipKey, signatureAfterFetch, stampSignature, stampBurstFile, type IngestStamp,
 } from '../signature';
 import { readStoredMetadata, signatureMatches, type StampedFile } from '../../core/data-source/metadata/stored-metadata';
 import {
@@ -30,8 +30,6 @@ import { formatSpecReport, SELECTED_MARKER, type SpecReportRow } from '../spec-r
 import type { IngestEncounter } from '../models/wcl.models';
 
 const TOP_N = 10;
-// Matches the depth the transforms over-fetch to, so a parse that backfills a private top parse is part of the skip key.
-const SIGNATURE_POOL_COUNT = TOP_N * 2;
 const POINTS_MARGIN = 500;
 const SLICE_CONCURRENCY = 3;
 
@@ -294,8 +292,8 @@ export class IngestOrchestratorService {
       for (const encounter of orderEncountersByMissingFirst(encounters, checkedIds)) {
         await client.assertBudget(POINTS_MARGIN);
 
-        const { rows: poolRows, partition } = await this.rankingPool(spec, encounter);
-        if (!poolRows.length) {
+        const selection = await resolveTopParses(this.wclApi, spec, encounter.id, encounter.partitionIds);
+        if (!selection.rows.length) {
           console.log(`  [${encounter.name}] no rankings, skipped`);
           emptyThisPass.push(encounter.id);
           continue;
@@ -303,7 +301,7 @@ export class IngestOrchestratorService {
 
         const existingResult = await this.dataFile.getSlice<StampedFile>(spec, encounter.id, 'burst');
         const existing = readStoredMetadata(existingResult.ok ? existingResult.value : null);
-        const skipKey = encounterSkipKey(poolRows, existing.inaccessibleParses, version, TOP_N);
+        const skipKey = encounterSkipKey(selection.rows, existing.inaccessibleParses, version, TOP_N);
         if (signatureMatches(existing.signature, skipKey)) {
           console.log(`  [${encounter.name}] unchanged (signature ${skipKey}), skipped`);
           continue;
@@ -312,7 +310,7 @@ export class IngestOrchestratorService {
         console.log(`  [${encounter.name}] computing slices (signature ${skipKey})...`);
         let outcome: EncounterOutcome;
         try {
-          outcome = await this.ingestEncounter(spec, encounter, version, poolRows, partition);
+          outcome = await this.ingestEncounter(spec, encounter, version, selection);
         } finally {
           // Drop this encounter's cached reports/events before the next one to bound memory.
           this.wclCache.clearCache();
@@ -360,22 +358,14 @@ export class IngestOrchestratorService {
     await this.rebuildSpecIndex();
   }
 
-  /** Resolves the partition here, once, so the signature and every slice below read the same parses. */
-  private rankingPool(spec: string, encounter: IngestEncounter): Promise<{ rows: SignatureRanking[]; partition: number | null }> {
-    return rankingsFromPartition(encounter.partitionIds, async partition => {
-      const raw = await this.wclApi.getRankings(spec, encounter.id, partition);
-      return toParseRankings(unwrapRankings(raw), SIGNATURE_POOL_COUNT);
-    });
-  }
-
   /** Compute every slice first, THEN stamp + write: the signature is known only after every transform has fetched. */
   private async ingestEncounter(
-    spec: string, encounter: IngestEncounter, version: string, poolRows: SignatureRanking[], partition: number | null,
+    spec: string, encounter: IngestEncounter, version: string, selection: TopParseSelection,
   ): Promise<EncounterOutcome> {
     const encId = encounter.id;
     const limit = pLimit(SLICE_CONCURRENCY);
     const [burstSlice, ...siblings] = this.slices;
-    const bench = (slice: SliceDescriptor) => limit(() => slice.transform.getBench(spec, encId, partition));
+    const bench = (slice: SliceDescriptor) => limit(() => slice.transform.getBench(spec, encId, selection));
     const [burst, rest] = await Promise.all([
       bench(burstSlice),
       Promise.all(siblings.map(async slice => ({ slice, result: await bench(slice) }))),
@@ -383,7 +373,8 @@ export class IngestOrchestratorService {
 
     const inaccessibleCodes = new Set(this.wclTransport.takeInaccessibleCodes());
     const failedCodes = new Set(this.wclTransport.takeFailedCodes());
-    const { signature, inaccessibleParses } = signatureAfterFetch(poolRows, inaccessibleCodes, failedCodes, version, TOP_N);
+    const { signature, inaccessibleParses } = signatureAfterFetch(
+      selection.rows, inaccessibleCodes, failedCodes, version, TOP_N);
     const stamp: IngestStamp = { version: INGEST_VERSION, ingestedAtS: nowS() };
 
     // Skip on any failure so a slice is never overwritten with partial data.
