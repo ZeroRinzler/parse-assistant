@@ -2,13 +2,10 @@ import { InjectionToken } from '@angular/core';
 import { DataSource } from '../../../core/data-source/data-source';
 import { PerCdBenchmark } from '../../../core/models/encounter.models';
 import { RulebookCooldown } from '../../../core/models/rulebook.models';
+import { BenchHeader } from '../../../shared/analysis/bench-pipeline';
 import { BenchedRule } from './rotation-rules';
 
-export interface RotationBench {
-  spec: string;
-  encounter_id: number;
-  encounter_name: string;
-  sample_count: number;
+export interface RotationBench extends BenchHeader {
   downtime_threshold_s: number;
   top_avg_efficiency: number;
   top_efficiency_stddev: number;

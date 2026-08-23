@@ -2,6 +2,7 @@ import { InjectionToken } from '@angular/core';
 import { DataSource } from '../../../core/data-source/data-source';
 import { BurstWindow } from '../../../core/models/analysis.models';
 import { PerDefensiveBenchmark } from '../../../core/models/encounter.models';
+import { BenchHeader } from '../../../shared/analysis/bench-pipeline';
 
 export interface DefensivePlanMeta {
   name: string;
@@ -16,11 +17,7 @@ interface BakedAbility {
   name: string;
 }
 
-export interface DefensiveBench {
-  spec: string;
-  encounter_id: number;
-  encounter_name: string;
-  sample_count: number;
+export interface DefensiveBench extends BenchHeader {
   per_defensive_benchmarks: Record<string, PerDefensiveBenchmark>;
   defensive_windows: BurstWindow[];
   defensives: DefensivePlanMeta[];

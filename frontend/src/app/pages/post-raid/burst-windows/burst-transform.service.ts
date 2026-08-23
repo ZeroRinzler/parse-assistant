@@ -3,11 +3,11 @@ import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
 import { RulebookCooldown, RulebookDefensive } from '../../../core/models/rulebook.models';
 import { BurstWindow } from '../../../core/models/analysis.models';
-import { Result, missing } from '../../../core/result';
+import { Result } from '../../../core/result';
 import { mean, median, deviation, extent, greatest, quantile, rollup, rollups } from 'd3-array';
 import { round, groupByTime, getOrInsert } from '../../../shared/analysis/analysis-math';
-import { TimedEvent, abilityIcons, normalizeAbilityId, relativeS, withRelativeS } from '../../../shared/analysis/wcl-projections';
-import { BenchParse, benchFromTopParses, benchHeader } from '../../../shared/analysis/bench-pipeline';
+import { TimedEvent, normalizeAbilityId, relativeS, withRelativeS } from '../../../shared/analysis/wcl-projections';
+import { BenchParse, benchFromTopParses, spellIdsByName } from '../../../shared/analysis/bench-pipeline';
 import { DataSource } from '../../../core/data-source/data-source';
 import { BurstBench } from './burst-data-source';
 
@@ -33,13 +33,6 @@ export const DEFAULT_BURST_TUNING: BurstDetectorTuning = {
   mergeGapBins: 2,
   significancePct: 0.015,
 };
-
-export function cdSpellIds(cooldowns: RulebookCooldown[], defensives: RulebookDefensive[]): Record<string, number> {
-  const map: Record<string, number> = {};
-  for (const cooldown of cooldowns) if (cooldown.spell_id) map[cooldown.name] = cooldown.spell_id;
-  for (const defensive of defensives) if (defensive.spell_id) map[defensive.name] = defensive.spell_id;
-  return map;
-}
 
 interface CdTiming { name: string; castTimesS: number[]; }
 
@@ -304,38 +297,39 @@ export function clusterParseWindows(windows: ParseWindow[], sampleCount: number)
   return result.sort((a, b) => a.time_s - b.time_s);
 }
 
+interface BurstPlan {
+  cooldowns: RulebookCooldown[];
+  defensives: RulebookDefensive[];
+}
+
 @Injectable({ providedIn: 'root' })
 export class BurstTransformService implements DataSource<BurstBench> {
   private readonly wclApi = inject(WclApiService);
   private readonly dataFiles = inject(DataFileApiService);
 
   async getBench(spec: string, encounterId: number, partition?: number | null): Promise<Result<BurstBench>> {
-    const rulebook = await this.dataFiles.getRulebook(spec);
-    if (!rulebook.ok) return rulebook;
-    const cooldowns = rulebook.value.major_cooldowns;
-    if (!cooldowns.length) return missing('Not yet ingested.');
-    const defensives = rulebook.value.defensives;
-
     return benchFromTopParses(this.wclApi, { spec, encounterId, partition }, {
       logSource: 'BurstTransformService',
       errorId: 'burst.bench',
       noRankingsMessage: 'Not yet ingested.',
-      parse: parse => this.parseWindows(parse, cooldowns),
-      bench: async ({ encounterName, parses }) => {
+      rulebook: {
+        dataFiles: this.dataFiles,
+        plan: (rulebook): BurstPlan | null => rulebook.major_cooldowns.length
+          ? { cooldowns: rulebook.major_cooldowns, defensives: rulebook.defensives }
+          : null,
+        missingMessage: 'Not yet ingested.',
+      },
+      iconSpellIds: bench => [
+        ...Object.values(bench.cd_spell_ids),
+        ...bench.windows.flatMap(window => window.ability_breakdown.map(ability => ability.spell_id)),
+      ],
+      parse: (parse, plan) => this.parseWindows(parse, plan.cooldowns),
+      bench: ({ parses }, plan) => {
         const allWindows = parses.flatMap(
           (windows, parseIndex) => windows.map(window => ({ ...window, parse_index: parseIndex })));
-        const windows = clusterParseWindows(allWindows, parses.length);
-        const cd_spell_ids = cdSpellIds(cooldowns, defensives);
-        // Complete over every spell the card renders (header cooldowns and each window ability), so there's no icon fallback.
-        const referencedIds = [
-          ...Object.values(cd_spell_ids),
-          ...windows.flatMap(window => window.ability_breakdown.map(ability => ability.spell_id)),
-        ];
         return {
-          ...benchHeader(spec, encounterId, encounterName, parses.length),
-          windows,
-          cd_spell_ids,
-          ability_icons: abilityIcons(await this.wclApi.getAbilities(referencedIds)),
+          windows: clusterParseWindows(allWindows, parses.length),
+          cd_spell_ids: spellIdsByName([...plan.cooldowns, ...plan.defensives]),
         };
       },
     });

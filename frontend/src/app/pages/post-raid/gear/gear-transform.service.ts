@@ -10,7 +10,7 @@ import { buildTalentDiff } from '../../../shared/gear/gear-comparison';
 import { TalentDataService } from '../../../core/transport/talent-data';
 import { SpecTalents } from '../../../core/models/talent.models';
 import { getOrInsert } from '../../../shared/analysis/analysis-math';
-import { BenchParse, benchFromTopParses, benchHeader } from '../../../shared/analysis/bench-pipeline';
+import { BenchParse, benchFromTopParses } from '../../../shared/analysis/bench-pipeline';
 import { DataSource } from '../../../core/data-source/data-source';
 import { GearBench } from './gear-data-source';
 
@@ -155,10 +155,9 @@ export class GearTransformService implements DataSource<GearBench> {
       errorId: 'gear.bench',
       noRankingsMessage: 'Not yet ingested.',
       parse: parse => this.fetchParseGear(parse),
-      bench: async ({ encounterName, parses }) => {
+      bench: async ({ parses }) => {
         const stats = aggregateParseGear(parses);
         return {
-          ...benchHeader(spec, encounterId, encounterName, parses.length),
           talent_builds: withTalentDiffs(stats.talent_builds, await this.talentData.getTalents(spec)),
           trinkets: stats.trinkets,
           enchants: stats.enchants,

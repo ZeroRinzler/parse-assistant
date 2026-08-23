@@ -69,11 +69,4 @@ describe('NorthernSkyTransformService (live, in-browser)', () => {
     });
     expect(await TestBed.inject(NorthernSkyTransformService).getBench('SubtletyRogue', 1)).toEqual(missing('Not yet ingested.'));
   });
-
-  it('propagates a failed rulebook read unchanged', async () => {
-    TestBed.configureTestingModule({
-      providers: provideApiFakes({ wcl: wclFake, files: { getRulebook: async () => missing('Not yet ingested.') } }),
-    });
-    expect(await TestBed.inject(NorthernSkyTransformService).getBench('SubtletyRogue', 1)).toEqual(missing('Not yet ingested.'));
-  });
 });

@@ -1,9 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { WclApiService } from '../../core/services/wcl-api';
+import type { DataFileApiService } from '../../core/services/data-file-api';
 import { WclTransportError } from '../../core/services/wcl-transport';
-import { ok, missing, transient } from '../../core/result';
-import { FixtureRanking, parseRankings, wclReport, reportsByCode } from '../../../testing/builders/wcl-fixtures';
-import { BenchSlice, benchFromTopParses } from './bench-pipeline';
+import { Rulebook } from '../../core/models/rulebook.models';
+import { Result, ok, missing, transient } from '../../core/result';
+import { SHADOW_BLADES, CLOAK_OF_SHADOWS } from '../../../testing/spell-ids';
+import { rulebook } from '../../../testing/builders/rulebook';
+import { FixtureRanking, abilityLookup, parseRankings, wclReport, reportsByCode } from '../../../testing/builders/wcl-fixtures';
+import { AbilityIcons } from './wcl-projections';
+import { BenchHeader, BenchSlice, benchFromTopParses, spellIdsByName } from './bench-pipeline';
 
 const SPEC = 'SubtletyRogue';
 const ENCOUNTER_ID = 3144;
@@ -11,20 +16,31 @@ const QUERY = { spec: SPEC, encounterId: ENCOUNTER_ID };
 const BOSS_NAME = 'Boss';
 const NO_RANKINGS_MESSAGE = 'No top parses for this encounter.';
 const TOO_FEW_MESSAGE = 'No fetchable top parses for this encounter.';
+const NO_PLAN_MESSAGE = 'No rulebook cooldowns for this spec.';
 const BENCH_ERROR_ID = 'slice.bench';
 const CANDIDATE_POOL_COUNT = 20;
 const SAMPLE_TARGET = 10;
 
-function wclFake(
-  over: { rankings?: FixtureRanking[]; getRankings?: () => Promise<unknown>; getReport?: (code: string) => Promise<unknown> } = {},
-): WclApiService {
+interface WclOverrides {
+  rankings?: FixtureRanking[];
+  getRankings?: () => Promise<unknown>;
+  getReport?: (code: string) => Promise<unknown>;
+  getAbilities?: (ids: number[]) => Promise<unknown>;
+}
+
+function wclFake(over: WclOverrides = {}): WclApiService {
   return {
     getRankings: over.getRankings ?? (async () => ({ rankings: over.rankings ?? parseRankings(CANDIDATE_POOL_COUNT) })),
     getReport: over.getReport ?? reportsByCode(),
+    getAbilities: over.getAbilities ?? abilityLookup(),
   } as unknown as WclApiService;
 }
 
-interface CodeBench { encounterName: string; codes: string[] }
+function filesFake(read: Result<Rulebook>): DataFileApiService {
+  return { getRulebook: async () => read } as unknown as DataFileApiService;
+}
+
+interface CodeBench extends BenchHeader { codes: string[] }
 
 function codeSlice(over: Partial<BenchSlice<string, CodeBench>> = {}): BenchSlice<string, CodeBench> {
   return {
@@ -36,16 +52,20 @@ function codeSlice(over: Partial<BenchSlice<string, CodeBench>> = {}): BenchSlic
     noRankingsMessage: NO_RANKINGS_MESSAGE,
     tooFewParsesMessage: accepted => `${TOO_FEW_MESSAGE} (${accepted})`,
     parse: ({ ranking }) => Promise.resolve(ranking.report_code),
-    bench: ({ encounterName, parses }) => ({ encounterName, codes: parses }),
+    bench: ({ parses }) => ({ codes: parses }),
     ...over,
   };
+}
+
+function benched(codes: string[]): CodeBench {
+  return { spec: SPEC, encounter_id: ENCOUNTER_ID, encounter_name: BOSS_NAME, sample_count: codes.length, codes };
 }
 
 describe('benchFromTopParses', () => {
   it('hands the slice every accepted parse in acceptance order, named by the first fight', async () => {
     const CANDIDATES = 2;
     const result = await benchFromTopParses(wclFake({ rankings: parseRankings(CANDIDATES) }), QUERY, codeSlice());
-    expect(result).toEqual(ok({ encounterName: BOSS_NAME, codes: ['r1', 'r2'] }));
+    expect(result).toEqual(ok(benched(['r1', 'r2'])));
   });
 
   it('stops fetching once the slice\'s sample target is met', async () => {
@@ -56,7 +76,7 @@ describe('benchFromTopParses', () => {
       getReport: async (code: string) => { fetched.push(code); return reports(code); },
     });
     const result = await benchFromTopParses(wcl, QUERY, codeSlice({ sampleTarget: TARGET }));
-    expect(result).toEqual(ok({ encounterName: BOSS_NAME, codes: ['r1', 'r2'] }));
+    expect(result).toEqual(ok(benched(['r1', 'r2'])));
     expect(fetched).toEqual(['r1', 'r2']);
   });
 
@@ -65,7 +85,7 @@ describe('benchFromTopParses', () => {
     const PRIVATE_CODE = 'r1';
     const wcl = wclFake({ getReport: reportsByCode({ privateCode: PRIVATE_CODE }) });
     const result = await benchFromTopParses(wcl, QUERY, codeSlice({ sampleTarget: TARGET }));
-    expect(result).toEqual(ok({ encounterName: BOSS_NAME, codes: ['r2', 'r3'] }));
+    expect(result).toEqual(ok(benched(['r2', 'r3'])));
   });
 
   it('backfills past a candidate the slice itself rejects', async () => {
@@ -76,7 +96,7 @@ describe('benchFromTopParses', () => {
       parse: ({ ranking }) => Promise.resolve(ranking.report_code === REJECTED_CODE ? null : ranking.report_code),
     });
     const result = await benchFromTopParses(wclFake(), QUERY, slice);
-    expect(result).toEqual(ok({ encounterName: BOSS_NAME, codes: ['r1', 'r3'] }));
+    expect(result).toEqual(ok(benched(['r1', 'r3'])));
   });
 
   it('backfills past a report the ranked player is absent from', async () => {
@@ -87,7 +107,7 @@ describe('benchFromTopParses', () => {
       getReport: async (code: string) => (code === ANONYMOUS_CODE ? wclReport({ actors: [] }) : reports(code)),
     });
     const result = await benchFromTopParses(wcl, QUERY, codeSlice({ sampleTarget: TARGET }));
-    expect(result).toEqual(ok({ encounterName: BOSS_NAME, codes: ['r2'] }));
+    expect(result).toEqual(ok(benched(['r2'])));
   });
 
   it('backfills past a report that never ran the ranked fight', async () => {
@@ -99,7 +119,7 @@ describe('benchFromTopParses', () => {
       getReport: async (code: string) => (code === OTHER_FIGHT_CODE ? wclReport({ fightId: UNRANKED_FIGHT_ID }) : reports(code)),
     });
     const result = await benchFromTopParses(wcl, QUERY, codeSlice({ sampleTarget: TARGET }));
-    expect(result).toEqual(ok({ encounterName: BOSS_NAME, codes: ['r2'] }));
+    expect(result).toEqual(ok(benched(['r2'])));
   });
 
   it('reports an empty ranking pool as missing, without touching a report', async () => {
@@ -111,7 +131,7 @@ describe('benchFromTopParses', () => {
     const FLOOR = 2;
     const result = await benchFromTopParses(
       wclFake({ rankings: parseRankings(FLOOR) }), QUERY, codeSlice({ minSamples: FLOOR }));
-    expect(result).toEqual(ok({ encounterName: BOSS_NAME, codes: ['r1', 'r2'] }));
+    expect(result).toEqual(ok(benched(['r1', 'r2'])));
   });
 
   it('reports a pool one parse short of the floor as missing, counting the usable parses', async () => {
@@ -149,5 +169,111 @@ describe('benchFromTopParses', () => {
     await benchFromTopParses(wcl, { ...QUERY, partition: RESOLVED_PARTITION }, codeSlice());
     await benchFromTopParses(wcl, QUERY, codeSlice());
     expect(asked).toEqual([RESOLVED_PARTITION, null]);
+  });
+});
+
+interface IdentityBench { spec: string; encounter_id: number; encounter_name: string; codes: string[] }
+
+describe('benchFromTopParses header', () => {
+  it('bakes no sample count for a slice exporting one named parse', async () => {
+    const slice: BenchSlice<string, IdentityBench> = {
+      logSource: 'IdentitySlice',
+      errorId: BENCH_ERROR_ID,
+      sampleTarget: 1,
+      noRankingsMessage: NO_RANKINGS_MESSAGE,
+      header: 'identity',
+      parse: ({ ranking }) => Promise.resolve(ranking.report_code),
+      bench: ({ parses }) => ({ codes: parses }),
+    };
+    const result = await benchFromTopParses(wclFake(), QUERY, slice);
+    expect(result).toEqual(ok({ spec: SPEC, encounter_id: ENCOUNTER_ID, encounter_name: BOSS_NAME, codes: ['r1'] }));
+  });
+});
+
+const PLANNED_COOLDOWN = 'Shadow Blades';
+const PLANNED_RULEBOOK = rulebook({ cooldowns: [{ name: PLANNED_COOLDOWN, spell_id: SHADOW_BLADES, cooldown: 90 }] });
+
+function planSlice(
+  dataFiles: DataFileApiService, over: Partial<BenchSlice<string, CodeBench, string>> = {},
+): BenchSlice<string, CodeBench, string> {
+  return {
+    logSource: 'PlanSlice',
+    errorId: BENCH_ERROR_ID,
+    sampleTarget: 1,
+    noRankingsMessage: NO_RANKINGS_MESSAGE,
+    rulebook: {
+      dataFiles,
+      plan: read => read.major_cooldowns[0]?.name ?? null,
+      missingMessage: NO_PLAN_MESSAGE,
+    },
+    parse: ({ ranking }, plan) => Promise.resolve(`${plan}/${ranking.report_code}`),
+    bench: ({ parses }, plan) => ({ codes: [...parses, `bench/${plan}`] }),
+    ...over,
+  };
+}
+
+describe('benchFromTopParses rulebook step', () => {
+  it('stops with the slice\'s own message when the rulebook plans nothing, before any WCL call', async () => {
+    const wcl = wclFake({ getRankings: async () => { throw new Error('WCL must not be asked'); } });
+    const result = await benchFromTopParses(wcl, QUERY, planSlice(filesFake(ok(rulebook()))));
+    expect(result).toEqual(missing(NO_PLAN_MESSAGE));
+  });
+
+  it('propagates a failed rulebook read unchanged, so a spec with no data file reads as its own error', async () => {
+    const NOT_INGESTED = 'Not yet ingested.';
+    const result = await benchFromTopParses(wclFake(), QUERY, planSlice(filesFake(missing(NOT_INGESTED))));
+    expect(result).toEqual(missing(NOT_INGESTED));
+  });
+
+  it('hands the plan to every parse and to the bench callback', async () => {
+    const result = await benchFromTopParses(wclFake(), QUERY, planSlice(filesFake(ok(PLANNED_RULEBOOK))));
+    expect(result).toEqual(ok({
+      spec: SPEC, encounter_id: ENCOUNTER_ID, encounter_name: BOSS_NAME, sample_count: 1,
+      codes: [`${PLANNED_COOLDOWN}/r1`, `bench/${PLANNED_COOLDOWN}`],
+    }));
+  });
+});
+
+interface IconBench extends BenchHeader { spell_ids: number[]; ability_icons: AbilityIcons }
+
+function iconSlice(): BenchSlice<string, IconBench> {
+  return {
+    logSource: 'IconSlice',
+    errorId: BENCH_ERROR_ID,
+    sampleTarget: 1,
+    noRankingsMessage: NO_RANKINGS_MESSAGE,
+    iconSpellIds: bench => bench.spell_ids,
+    parse: ({ ranking }) => Promise.resolve(ranking.report_code),
+    bench: () => ({ spell_ids: [SHADOW_BLADES, CLOAK_OF_SHADOWS] }),
+  };
+}
+
+describe('benchFromTopParses icon step', () => {
+  it('bakes an icon for every spell id the slice reads off its own bench', async () => {
+    const asked: number[][] = [];
+    const abilities = abilityLookup();
+    const wcl = wclFake({ getAbilities: async (ids: number[]) => { asked.push(ids); return abilities(ids); } });
+
+    const result = await benchFromTopParses(wcl, QUERY, iconSlice());
+
+    expect(asked).toEqual([[SHADOW_BLADES, CLOAK_OF_SHADOWS]]);
+    expect(result).toEqual(ok({
+      spec: SPEC, encounter_id: ENCOUNTER_ID, encounter_name: BOSS_NAME, sample_count: 1,
+      spell_ids: [SHADOW_BLADES, CLOAK_OF_SHADOWS],
+      ability_icons: {
+        [SHADOW_BLADES]: { icon: `icon_${SHADOW_BLADES}`, name: `name_${SHADOW_BLADES}` },
+        [CLOAK_OF_SHADOWS]: { icon: `icon_${CLOAK_OF_SHADOWS}`, name: `name_${CLOAK_OF_SHADOWS}` },
+      },
+    }));
+  });
+});
+
+describe('spellIdsByName', () => {
+  it('maps cooldown + defensive names to spell ids, skipping missing ids', () => {
+    expect(spellIdsByName([
+      { name: PLANNED_COOLDOWN, spell_id: SHADOW_BLADES },
+      { name: 'NoId', spell_id: 0 },
+      { name: 'Cloak', spell_id: CLOAK_OF_SHADOWS },
+    ])).toEqual({ [PLANNED_COOLDOWN]: SHADOW_BLADES, 'Cloak': CLOAK_OF_SHADOWS });
   });
 });

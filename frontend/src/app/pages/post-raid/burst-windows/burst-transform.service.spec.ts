@@ -3,7 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { WclEvent } from '../../../core/models/wcl.models';
 import { ok, missing } from '../../../core/result';
 import {
-  BurstTransformService, cdTimings, findParseWindows, clusterParseWindows, cdSpellIds, ParseWindow,
+  BurstTransformService, cdTimings, findParseWindows, clusterParseWindows, ParseWindow,
   BurstDetectorTuning, DEFAULT_BURST_TUNING,
 } from './burst-transform.service';
 import {
@@ -53,15 +53,6 @@ const SIGNIFICANCE_ANCHOR = SIGNIFICANCE_FIGHT_DAMAGE - SIGNIFICANT_SPIKE;
 function burstAt(startS: number): WclEvent[] {
   return [0, 1, 2, 3].map(offset => damage(SHADOW_BLADES_DAMAGE, startS + offset, BIN_DAMAGE));
 }
-
-describe('cdSpellIds', () => {
-  it('maps cooldown + defensive names to spell ids, skipping missing ids', () => {
-    expect(cdSpellIds(
-      [{ name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 90 }, { name: 'NoId', spell_id: 0, cooldown: 60 }],
-      [{ name: 'Cloak', spell_id: CLOAK_OF_SHADOWS, cooldown: 120 }],
-    )).toEqual({ 'Shadow Blades': SHADOW_BLADES, 'Cloak': CLOAK_OF_SHADOWS });
-  });
-});
 
 describe('cdTimings', () => {
   it('collects per-cooldown cast times in fight-relative seconds (no duration read)', () => {
@@ -435,14 +426,6 @@ describe('BurstTransformService (live, in-browser)', () => {
   it('returns missing when the spec rulebook has no cooldowns', async () => {
     TestBed.configureTestingModule({
       providers: provideApiFakes({ wcl: wclFake, files: { getRulebook: async () => ok(rulebook({ spec: 'SubtletyRogue', cooldowns: [] })) } }),
-    });
-    expect(await TestBed.inject(BurstTransformService).getBench('SubtletyRogue', 1))
-      .toEqual(missing('Not yet ingested.'));
-  });
-
-  it('propagates a missing rulebook read as missing', async () => {
-    TestBed.configureTestingModule({
-      providers: provideApiFakes({ wcl: wclFake, files: { getRulebook: async () => missing('Not yet ingested.') } }),
     });
     expect(await TestBed.inject(BurstTransformService).getBench('SubtletyRogue', 1))
       .toEqual(missing('Not yet ingested.'));

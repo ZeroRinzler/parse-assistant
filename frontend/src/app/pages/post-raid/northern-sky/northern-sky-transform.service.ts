@@ -1,7 +1,8 @@
 import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../core/services/wcl-api';
 import { DataFileApiService } from '../../../core/services/data-file-api';
-import { Result, missing } from '../../../core/result';
+import { Rulebook } from '../../../core/models/rulebook.models';
+import { Result } from '../../../core/result';
 import { round } from '../../../shared/analysis/analysis-math';
 import { TimedEvent, abilityIcons, withRelativeS } from '../../../shared/analysis/wcl-projections';
 import { BenchParse, benchFromTopParses } from '../../../shared/analysis/bench-pipeline';
@@ -16,6 +17,14 @@ const CANDIDATE_POOL_COUNT = 10;
 const EXPORTED_PARSE_COUNT = 1;
 const NO_EXPORT_MESSAGE = 'Not yet ingested.';
 
+function exportAbilities(rulebook: Rulebook): ExportAbility[] | null {
+  const abilities: ExportAbility[] = [
+    ...rulebook.major_cooldowns.map(cd => ({ spell_id: cd.spell_id, name: cd.name, kind: 'cooldown' as const })),
+    ...rulebook.defensives.map(def => ({ spell_id: def.spell_id, name: def.name, kind: 'defensive' as const })),
+  ].filter(ability => ability.spell_id);
+  return abilities.length ? abilities : null;
+}
+
 export function cooldownCastTimes(casts: TimedEvent[], spellId: number): number[] {
   return casts
     .filter(cast => cast.type === 'cast' && cast.abilityGameID === spellId)
@@ -29,30 +38,19 @@ export class NorthernSkyTransformService implements DataSource<NorthernSkyBench>
   private readonly dataFiles = inject(DataFileApiService);
 
   async getBench(spec: string, encounterId: number, partition?: number | null): Promise<Result<NorthernSkyBench>> {
-    const rulebook = await this.dataFiles.getRulebook(spec);
-    if (!rulebook.ok) return rulebook;
-    const abilities: ExportAbility[] = [
-      ...rulebook.value.major_cooldowns.map(cd => ({ spell_id: cd.spell_id, name: cd.name, kind: 'cooldown' as const })),
-      ...rulebook.value.defensives.map(def => ({ spell_id: def.spell_id, name: def.name, kind: 'defensive' as const })),
-    ].filter(ability => ability.spell_id);
-    if (!abilities.length) return missing(NO_EXPORT_MESSAGE);
-
     return benchFromTopParses(this.wclApi, { spec, encounterId, partition }, {
       logSource: 'NorthernSkyTransformService',
       errorId: 'northern-sky.bench',
       candidatePoolCount: CANDIDATE_POOL_COUNT,
       sampleTarget: EXPORTED_PARSE_COUNT,
       noRankingsMessage: NO_EXPORT_MESSAGE,
-      parse: parse => this.parseCastTimes(parse, abilities),
-      bench: async ({ encounterName, parses }) => {
+      header: 'identity',
+      rulebook: { dataFiles: this.dataFiles, plan: exportAbilities, missingMessage: NO_EXPORT_MESSAGE },
+      parse: (parse, abilities) => this.parseCastTimes(parse, abilities),
+      bench: async ({ parses }) => {
         const built = parses[0] ?? [];
         const icons = abilityIcons(await this.wclApi.getAbilities(built.map(entry => entry.spell_id)));
-        return {
-          spec,
-          encounter_id: encounterId,
-          encounter_name: encounterName,
-          abilities: built.map(entry => ({ ...entry, icon: icons[entry.spell_id]?.icon ?? '' })),
-        };
+        return { abilities: built.map(entry => ({ ...entry, icon: icons[entry.spell_id]?.icon ?? '' })) };
       },
     });
   }

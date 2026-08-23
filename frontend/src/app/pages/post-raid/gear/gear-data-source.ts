@@ -1,12 +1,9 @@
 import { InjectionToken } from '@angular/core';
 import { DataSource } from '../../../core/data-source/data-source';
 import { EncounterGearStats } from '../../../core/models/encounter.models';
+import { BenchHeader } from '../../../shared/analysis/bench-pipeline';
 
-export interface GearBench {
-  spec: string;
-  encounter_id: number;
-  encounter_name: string;
-  sample_count: number;
+export interface GearBench extends BenchHeader {
   talent_builds: EncounterGearStats['talent_builds'];
   trinkets: EncounterGearStats['trinkets'];
   enchants: EncounterGearStats['enchants'];

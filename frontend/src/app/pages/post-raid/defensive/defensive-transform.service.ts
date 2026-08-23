@@ -4,14 +4,14 @@ import { DataFileApiService } from '../../../core/services/data-file-api';
 import { RulebookDefensive } from '../../../core/models/rulebook.models';
 import { BurstWindow } from '../../../core/models/analysis.models';
 import { PerDefensiveBenchmark } from '../../../core/models/encounter.models';
-import { Result, missing } from '../../../core/result';
+import { Result } from '../../../core/result';
 import { mean, deviation, extent, group, mode } from 'd3-array';
 import { round, groupByTime, getOrInsert, avgOr, medianOr } from '../../../shared/analysis/analysis-math';
 import { HoldWindow, detectHoldWindows } from '../../../shared/analysis/hold-targets';
 import { buildCadenceBenchmark } from '../../../shared/analysis/cast-cadence';
 import { buildAuraWindows } from '../../../shared/analysis/aura-windows';
-import { TimedEvent, abilityIcons, normalizeAbilityId, relativeS, withRelativeS } from '../../../shared/analysis/wcl-projections';
-import { BenchParse, benchFromTopParses, benchHeader } from '../../../shared/analysis/bench-pipeline';
+import { TimedEvent, normalizeAbilityId, relativeS, withRelativeS } from '../../../shared/analysis/wcl-projections';
+import { BenchParse, benchFromTopParses, spellIdsByName } from '../../../shared/analysis/bench-pipeline';
 import { DataSource } from '../../../core/data-source/data-source';
 import { DefensiveBench, DefensivePlanMeta } from './defensive-data-source';
 
@@ -21,12 +21,6 @@ const MEMBER_MAJORITY_FRAC = 0.5;
 const CLUSTER_MERGE_S = 20;
 const ABILITY_BREAKDOWN_TOP_N = 6;
 const NO_DEFENSIVE_BENCH_MESSAGE = 'Not yet ingested.';
-
-export function defensiveSpellIds(defensives: RulebookDefensive[]): Record<string, number> {
-  const map: Record<string, number> = {};
-  for (const defensive of defensives) if (defensive.spell_id) map[defensive.name] = defensive.spell_id;
-  return map;
-}
 
 export function defensivePlanMeta(defensives: RulebookDefensive[]): DefensivePlanMeta[] {
   return defensives.map(defensive => ({
@@ -257,35 +251,28 @@ export class DefensiveTransformService implements DataSource<DefensiveBench> {
   private readonly dataFiles = inject(DataFileApiService);
 
   async getBench(spec: string, encounterId: number, partition?: number | null): Promise<Result<DefensiveBench>> {
-    const rulebookResult = await this.dataFiles.getRulebook(spec);
-    if (!rulebookResult.ok) return rulebookResult;
-    const defensives = rulebookResult.value.defensives;
-    if (!defensives.length) return missing(NO_DEFENSIVE_BENCH_MESSAGE);
-
     return benchFromTopParses(this.wclApi, { spec, encounterId, partition }, {
       logSource: 'DefensiveTransformService',
       errorId: 'defensive.bench',
       noRankingsMessage: NO_DEFENSIVE_BENCH_MESSAGE,
-      parse: parse => this.parseDefensives(parse, defensives),
-      bench: async ({ encounterName, parses }) => {
+      rulebook: {
+        dataFiles: this.dataFiles,
+        plan: (rulebook): RulebookDefensive[] | null => rulebook.defensives.length ? rulebook.defensives : null,
+        missingMessage: NO_DEFENSIVE_BENCH_MESSAGE,
+      },
+      iconSpellIds: bench => [
+        ...Object.values(bench.cd_spell_ids),
+        ...bench.defensive_windows.flatMap(window => window.ability_breakdown.map(ability => ability.spell_id)),
+      ],
+      parse: (parse, defensives) => this.parseDefensives(parse, defensives),
+      bench: ({ parses }, defensives) => {
         const allWindows = parses.flatMap(
           (parse, parseIndex) => parse.windows.map(window => ({ ...window, parse_index: parseIndex })));
-        const defensiveWindows = clusterDefensiveWindows(allWindows, parses.length);
-        const perDefensiveBenchmarks = aggregateDefensiveBenchmarks(parses.map(parse => parse.summaries), defensives);
-        const cd_spell_ids = defensiveSpellIds(defensives);
-        // A real icon for every defensive + window ability by id (complete, no fallback).
-        const referencedIds = [
-          ...Object.values(cd_spell_ids),
-          ...defensiveWindows.flatMap(window => window.ability_breakdown.map(ability => ability.spell_id)),
-        ];
-
         return {
-          ...benchHeader(spec, encounterId, encounterName, parses.length),
-          per_defensive_benchmarks: perDefensiveBenchmarks,
-          defensive_windows: defensiveWindows,
+          per_defensive_benchmarks: aggregateDefensiveBenchmarks(parses.map(parse => parse.summaries), defensives),
+          defensive_windows: clusterDefensiveWindows(allWindows, parses.length),
           defensives: defensivePlanMeta(defensives),
-          cd_spell_ids,
-          ability_icons: abilityIcons(await this.wclApi.getAbilities(referencedIds)),
+          cd_spell_ids: spellIdsByName(defensives),
         };
       },
     });

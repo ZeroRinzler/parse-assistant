@@ -3,10 +3,10 @@ import { TestBed } from '@angular/core/testing';
 import {
   RotationTransformService,
   summarizeCooldownCasts, castGapListS,
-  buildCdBenchmark, computeEfficiencyThresholds, aggregateCdBenchmarks, rotationCdSpellIds, benchRules,
+  buildCdBenchmark, computeEfficiencyThresholds, aggregateCdBenchmarks, benchRules,
   CdSummary, ParseRuleSamples,
 } from './rotation-transform.service';
-import { SHADOW_BLADES, BLOODLUST, CLOAK_OF_SHADOWS, RUPTURE } from '../../../../testing/spell-ids';
+import { SHADOW_BLADES, BLOODLUST, RUPTURE } from '../../../../testing/spell-ids';
 import { cast, applyBuff } from '../../../../testing/builders/events';
 import { rulebook } from '../../../../testing/builders/rulebook';
 import { abilityLookup, parseRankings, reportsByCode } from '../../../../testing/builders/wcl-fixtures';
@@ -18,15 +18,6 @@ import { RuleSample } from './rotation-rules';
 
 /** Fixture events build against a fight-start of 0, so stamping is a pass-through to seconds. */
 const timed = withRelativeS;
-
-describe('rotationCdSpellIds', () => {
-  it('maps cooldown + defensive names to spell ids, skipping missing ids', () => {
-    expect(rotationCdSpellIds(
-      [{ name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 90 }, { name: 'NoId', spell_id: 0, cooldown: 60 }],
-      [{ name: 'Cloak', spell_id: CLOAK_OF_SHADOWS, cooldown: 120 }],
-    )).toEqual({ 'Shadow Blades': SHADOW_BLADES, 'Cloak': CLOAK_OF_SHADOWS });
-  });
-});
 
 describe('summarizeCooldownCasts', () => {
   const cooldowns = [{ name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 90 }];

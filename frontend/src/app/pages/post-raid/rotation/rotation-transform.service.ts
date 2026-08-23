@@ -9,10 +9,10 @@ import {
 } from '../../../shared/analysis/analysis-math';
 import { HoldWindow, detectHoldWindows } from '../../../shared/analysis/hold-targets';
 import { buildCadenceBenchmark } from '../../../shared/analysis/cast-cadence';
-import { TimedEvent, abilityIcons, relativeS, withRelativeS } from '../../../shared/analysis/wcl-projections';
-import { BenchParse, benchFromTopParses, benchHeader } from '../../../shared/analysis/bench-pipeline';
+import { TimedEvent, relativeS, withRelativeS } from '../../../shared/analysis/wcl-projections';
+import { BenchParse, benchFromTopParses, spellIdsByName } from '../../../shared/analysis/bench-pipeline';
 import { DataSource } from '../../../core/data-source/data-source';
-import { Result, missing } from '../../../core/result';
+import { Result } from '../../../core/result';
 import {
   BenchedRule, RuleSample, MIN_MEASURED_PARSES, buildRuleContext, sampleRule, ruleBand, judgeableRules, rulesNeed,
 } from './rotation-rules';
@@ -28,13 +28,6 @@ const BL_WINDOW_AFTER_S = 55;
 /** p90 of pooled cast gaps is the downtime floor. */
 const DOWNTIME_PERCENTILE = 0.9;
 const DEFAULT_DOWNTIME_THRESHOLD_S = 1.5;
-
-export function rotationCdSpellIds(cooldowns: RulebookCooldown[], defensives: RulebookDefensive[]): Record<string, number> {
-  const map: Record<string, number> = {};
-  for (const cooldown of cooldowns) if (cooldown.spell_id) map[cooldown.name] = cooldown.spell_id;
-  for (const defensive of defensives) if (defensive.spell_id) map[defensive.name] = defensive.spell_id;
-  return map;
-}
 
 export interface CdSummary {
   name: string;
@@ -161,20 +154,18 @@ export function benchRules(rules: RulebookRule[], perParse: ParseRuleSamples[]):
   }));
 }
 
+interface RotationPlan {
+  cooldowns: RulebookCooldown[];
+  defensives: RulebookDefensive[];
+  judgeable: RulebookRule[];
+}
+
 @Injectable({ providedIn: 'root' })
 export class RotationTransformService implements DataSource<RotationBench> {
   private readonly wclApi = inject(WclApiService);
   private readonly dataFiles = inject(DataFileApiService);
 
   async getBench(spec: string, encounterId: number, partition?: number | null): Promise<Result<RotationBench>> {
-    const rulebookResult = await this.dataFiles.getRulebook(spec);
-    if (!rulebookResult.ok) return rulebookResult;
-    const rulebook = rulebookResult.value;
-    const cooldowns = rulebook.major_cooldowns;
-    if (!cooldowns.length) return missing('No rulebook cooldowns for this spec.');
-    const defensives = rulebook.defensives;
-    const judgeable = judgeableRules(rulebook.rules);
-
     return benchFromTopParses(this.wclApi, { spec, encounterId, partition }, {
       logSource: 'RotationTransformService',
       errorId: 'rotation.bench',
@@ -182,22 +173,29 @@ export class RotationTransformService implements DataSource<RotationBench> {
       noRankingsMessage: 'No top parses for this encounter.',
       tooFewParsesMessage: usable =>
         `Only ${usable} usable top parse(s) for this encounter; ${MIN_PARSE_COUNT} are needed to bench it.`,
-      parse: parse => this.parseRotation(parse, cooldowns, judgeable),
-      bench: async ({ encounterName, parses }) => {
+      rulebook: {
+        dataFiles: this.dataFiles,
+        plan: (rulebook): RotationPlan | null => rulebook.major_cooldowns.length
+          ? {
+            cooldowns: rulebook.major_cooldowns,
+            defensives: rulebook.defensives,
+            judgeable: judgeableRules(rulebook.rules),
+          }
+          : null,
+        missingMessage: 'No rulebook cooldowns for this spec.',
+      },
+      iconSpellIds: bench => Object.values(bench.cd_spell_ids),
+      parse: (parse, plan) => this.parseRotation(parse, plan.cooldowns, plan.judgeable),
+      bench: ({ parses }, plan) => {
         const { downtimeThresholdS, topAvgEfficiency, topEfficiencyStddev } = computeEfficiencyThresholds(parses);
-
-        const cd_spell_ids = rotationCdSpellIds(cooldowns, defensives);
         return {
-          ...benchHeader(spec, encounterId, encounterName, parses.length),
           downtime_threshold_s: downtimeThresholdS,
           top_avg_efficiency: topAvgEfficiency,
           top_efficiency_stddev: topEfficiencyStddev,
-          per_cd_benchmarks: aggregateCdBenchmarks(parses.map(parse => parse.summaries), cooldowns),
-          major_cooldowns: cooldowns,
-          rules: benchRules(judgeable, parses.map(parse => parse.ruleSamples)),
-          cd_spell_ids,
-          // A real icon for every cooldown + defensive by id, so the map is complete (no fallback).
-          ability_icons: abilityIcons(await this.wclApi.getAbilities(Object.values(cd_spell_ids))),
+          per_cd_benchmarks: aggregateCdBenchmarks(parses.map(parse => parse.summaries), plan.cooldowns),
+          major_cooldowns: plan.cooldowns,
+          rules: benchRules(plan.judgeable, parses.map(parse => parse.ruleSamples)),
+          cd_spell_ids: spellIdsByName([...plan.cooldowns, ...plan.defensives]),
         };
       },
     });

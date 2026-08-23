@@ -2,7 +2,7 @@ import { assert, describe, it, expect } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import {
   DefensiveTransformService,
-  defensiveSpellIds, defensivePlanMeta, summarizeDefensiveCasts,
+  defensivePlanMeta, summarizeDefensiveCasts,
   findParseDefensiveWindows, clusterDefensiveWindows,
   aggregateDefensiveBenchmarks,
   windowDamageBreakdown, clusterDamageStats, clusterAbilityBreakdown,
@@ -30,13 +30,6 @@ const ADD_GAME_ID = 5555;   // stable gameID the add actor maps to
 
 const CLOAK = { name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS, cooldown: 120, duration: 5 };
 const FIGHT_DUR_S = 300;  // standard fight length used across the per-parse summary fixtures
-
-describe('defensiveSpellIds', () => {
-  it('maps defensive names to spell ids, skipping missing ids', () => {
-    expect(defensiveSpellIds([CLOAK, { name: 'NoId', spell_id: 0, cooldown: 60 }]))
-      .toEqual({ 'Cloak of Shadows': CLOAK_OF_SHADOWS });
-  });
-});
 
 describe('defensivePlanMeta', () => {
   it('carries metadata with nullable defaults', () => {

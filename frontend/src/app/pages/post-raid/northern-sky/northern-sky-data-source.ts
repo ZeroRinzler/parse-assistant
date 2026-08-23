@@ -1,5 +1,6 @@
 import { InjectionToken } from '@angular/core';
 import { DataSource } from '../../../core/data-source/data-source';
+import { BenchIdentity } from '../../../shared/analysis/bench-pipeline';
 
 export interface NorthernSkyAbility {
   spell_id: number;
@@ -11,10 +12,7 @@ export interface NorthernSkyAbility {
 }
 
 /** The tailored Northern Sky export bench for one encounter, read from `data/specs/{spec}/northern-sky/{enc}.json`. */
-export interface NorthernSkyBench {
-  spec: string;
-  encounter_id: number;
-  encounter_name: string;
+export interface NorthernSkyBench extends BenchIdentity {
   abilities: NorthernSkyAbility[];
 }
 
