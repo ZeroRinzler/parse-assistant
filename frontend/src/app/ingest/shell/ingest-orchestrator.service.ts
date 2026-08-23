@@ -13,7 +13,7 @@ import type { EncounterEntry, SpecEntry } from '../../core/models/encounter.mode
 import type { TopParseSelection } from '../../core/models/wcl.models';
 import { RATE_LIMIT_Q, CLASSES_Q } from '../../core/services/wcl-queries';
 import type { ClassesQuery, RateLimitQuery } from '../../core/services/wcl-operations.generated';
-import { sliceRegistry, type SliceDescriptor } from './slice-registry';
+import { sliceRegistry, BENCH_SLICE, type SliceDescriptor } from './slice-registry';
 import { getEncounters } from '../wcl-fetchers';
 import { mapClassesToSpecMeta, parseRaidNames } from '../wcl-mappers';
 import { type WclQueryClient, BudgetExceededError } from '../wcl-client';
@@ -58,7 +58,7 @@ function publishSummary(summary: IngestRunSummary): void {
 }
 
 /** Zero-sample encounters stay listed, or a new raid's bosses are not selectable until its first parses land. */
-export function encounterIndexEntries(current: IngestEncounter[], onDisk: EncounterEntry[]): EncounterEntry[] {
+function encounterIndexEntries(current: IngestEncounter[], onDisk: EncounterEntry[]): EncounterEntry[] {
   if (!current.length) return onDisk;
   const samplesById = new Map(onDisk.map(entry => [entry.id, entry.sample_count]));
   return current.map(encounter => ({ id: encounter.id, name: encounter.name, sample_count: samplesById.get(encounter.id) ?? 0 }));
@@ -238,7 +238,7 @@ export class IngestOrchestratorService {
       const state = await this.loadIngestState(spec);
       const emptyIds = state?.empty_encounter_ids ?? [];
       const stamps = await Promise.all(benched.map(async id => {
-        const slice = await this.dataFile.getSlice<StampedFile>(spec, id, 'burst');
+        const slice = await this.dataFile.getSlice<StampedFile>(spec, id, BENCH_SLICE);
         return readStoredMetadata(slice.ok ? slice.value : null);
       }));
       const versions = stamps.map(stamp => stamp.version);
@@ -299,7 +299,7 @@ export class IngestOrchestratorService {
           continue;
         }
 
-        const existingResult = await this.dataFile.getSlice<StampedFile>(spec, encounter.id, 'burst');
+        const existingResult = await this.dataFile.getSlice<StampedFile>(spec, encounter.id, BENCH_SLICE);
         const existing = readStoredMetadata(existingResult.ok ? existingResult.value : null);
         const skipKey = encounterSkipKey(selection.rows, existing.inaccessibleParses, version, TOP_N);
         if (signatureMatches(existing.signature, skipKey)) {
@@ -333,7 +333,7 @@ export class IngestOrchestratorService {
   }
 
   private benchedIds(spec: string): Promise<number[]> {
-    return this.dataFile.listSliceFiles(spec, 'burst').then(encounterIdsFromFiles);
+    return this.dataFile.listSliceFiles(spec, BENCH_SLICE).then(encounterIdsFromFiles);
   }
 
   private async loadIngestState(spec: string): Promise<SpecIngestState | null> {
@@ -403,7 +403,7 @@ export class IngestOrchestratorService {
   private async rebuildEncountersIndex(spec: string, current: IngestEncounter[]): Promise<void> {
     const onDisk: EncounterEntry[] = [];
     for (const encId of await this.benchedIds(spec)) {
-      const bench = await this.dataFile.getSlice<{ encounter_id?: number; encounter_name?: string; sample_count?: number }>(spec, encId, 'burst');
+      const bench = await this.dataFile.getSlice<{ encounter_id?: number; encounter_name?: string; sample_count?: number }>(spec, encId, BENCH_SLICE);
       if (!bench.ok) continue;
       onDisk.push({
         id: bench.value.encounter_id ?? encId,

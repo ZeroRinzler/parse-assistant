@@ -1,37 +1,205 @@
-import { describe, it, expect } from 'vitest';
-import { encounterIndexEntries } from './ingest-orchestrator.service';
-import type { IngestEncounter } from '../models/wcl.models';
-import type { EncounterEntry } from '../../core/models/encounter.models';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { TestBed } from '@angular/core/testing';
+import { NgHttpCachingService } from 'ng-http-caching';
+import { IngestOrchestratorService } from './ingest-orchestrator.service';
+import { BENCH_SLICE } from './slice-registry';
+import { DATA_FILE_TRANSPORT, type DataFileTransport } from '../../core/services/data-file-transport';
+import { WclApiService } from '../../core/services/wcl-api';
+import { HttpWclTransport } from '../../core/transport/http-wcl-transport';
+import { RATE_LIMIT_Q, CLASSES_Q, ENCOUNTERS_Q } from '../../core/services/wcl-queries';
+import { ok, missing, type Result } from '../../core/result';
+import { BurstTransformService } from '../../pages/post-raid/burst-windows/burst-transform.service';
+import { RotationTransformService } from '../../pages/post-raid/rotation/rotation-transform.service';
+import { DefensiveTransformService } from '../../pages/post-raid/defensive/defensive-transform.service';
+import { GearTransformService } from '../../pages/post-raid/gear/gear-transform.service';
+import { MapTransformService } from '../../pages/post-raid/map/map-transform.service';
+import { NorthernSkyTransformService } from '../../pages/post-raid/northern-sky/northern-sky-transform.service';
+import { encounterSignature } from '../signature';
+import { INGEST_VERSION } from '../ingest-version';
 
-describe('encounterIndexEntries', () => {
-  const SAMPLED_COUNT = 25;
-  const enc = (id: number, name: string): IngestEncounter =>
-    ({ id, name, zone: 'New Raid', zoneId: 60, partitionIds: [] });
+const SPEC = 'SubtletyRogue';
+const RAID = 'Manaforge Omega';
+const ZONE_ID = 44;
+const PARTITION = 2;
 
-  const FIRST_BOSS = enc(9100, 'First Boss');
-  const SECOND_BOSS = enc(9101, 'Second Boss');
-  const ON_DISK: EncounterEntry[] = [{ id: 9101, name: 'Second Boss', sample_count: SAMPLED_COUNT }];
+const CURRENT_BOSS = { id: 3129, name: 'Nexus-King Salhadaar' };
+const NEW_BOSS = { id: 3131, name: 'Dimensius' };
+const RETIRED_BOSS = { id: 2902, name: 'Ulgrax the Devourer' };
+const BOSSES = [CURRENT_BOSS, NEW_BOSS, RETIRED_BOSS];
 
-  it('lists every current encounter in zone order, at zero samples when nothing is on disk yet', () => {
-    expect(encounterIndexEntries([FIRST_BOSS, SECOND_BOSS], [])).toEqual([
-      { id: 9100, name: 'First Boss', sample_count: 0 },
-      { id: 9101, name: 'Second Boss', sample_count: 0 },
+const STORED_SAMPLES = 3;
+const FRESH_SAMPLES = 7;
+const HOURLY_POINT_LIMIT = 18_000;
+
+const rankedRow = (player: string, code: string, fightID: number) =>
+  ({ name: player, server: { name: 'Ravencrest' }, report: { code, fightID } });
+type RankedRow = ReturnType<typeof rankedRow>;
+
+const TOP_PARSE = rankedRow('Kaelra', 'aBcD1234', 12);
+const RUNNER_UP = rankedRow('Torvin', 'eFgH5678', 3);
+const NEWCOMER = rankedRow('Miravel', 'iJkL9012', 5);
+const RANKED = [TOP_PARSE, RUNNER_UP];
+const RERANKED = [TOP_PARSE, NEWCOMER];
+
+// Fewer rows than the orchestrator's top-N cap: past it, signatureOf stops matching the signature the run stamps.
+const signatureOf = (rows: RankedRow[]): string => encounterSignature(
+  String(INGEST_VERSION), rows.map(row => ({ report_code: row.report.code, fight_id: row.report.fightID })));
+
+const benchPath = (encId: number, slice = BENCH_SLICE): string => `${SPEC}/${slice}/${encId}.json`;
+const bossName = (encId: number): string => BOSSES.find(boss => boss.id === encId)?.name ?? '';
+
+interface FakeDisk extends DataFileTransport {
+  readonly files: Map<string, unknown>;
+}
+
+function fakeDisk(seed: Record<string, unknown>, undeletable = new Set<string>()): FakeDisk {
+  const files = new Map<string, unknown>(Object.entries(seed));
+  return {
+    files,
+    readJson: async <T>(path: string): Promise<Result<T>> =>
+      files.has(path) ? ok(files.get(path) as T) : missing(`${path} is not ingested`),
+    writeJson: async (path: string, data: unknown) => { files.set(path, data); },
+    remove: async (path: string) => {
+      if (undeletable.has(path)) throw new Error(`the file server refused to delete ${path}`);
+      files.delete(path);
+    },
+    list: async (dir: string) => {
+      const prefix = dir ? `${dir}/` : '';
+      const entries = new Set<string>();
+      for (const path of files.keys()) {
+        if (path.startsWith(prefix)) entries.add(path.slice(prefix.length).split('/')[0] ?? '');
+      }
+      return [...entries];
+    },
+  };
+}
+
+function fakeWcl(encounters: { id: number; name: string }[], rankings: Record<number, RankedRow[]>): WclApiService {
+  const zone = { id: ZONE_ID, name: RAID, frozen: false, partitions: [{ id: PARTITION }], encounters };
+  const answers = new Map<string, unknown>([
+    [RATE_LIMIT_Q, { rateLimitData: { limitPerHour: HOURLY_POINT_LIMIT, pointsSpentThisHour: 0 } }],
+    [CLASSES_Q, { gameData: { classes: [{ name: 'Rogue', slug: 'Rogue', specs: [{ name: 'Subtlety', slug: 'Subtlety' }] }] } }],
+    [ENCOUNTERS_Q, { worldData: { expansions: [{ zones: [zone] }] } }],
+  ]);
+  return {
+    query: async (gql: string) => {
+      const answer = answers.get(gql);
+      if (answer === undefined) throw new Error('the run issued a WCL query this fixture does not answer');
+      return answer;
+    },
+    getRankings: async (_spec: string, encId: number) => ({ rankings: rankings[encId] ?? [] }),
+  } as unknown as WclApiService;
+}
+
+const TRANSFORMS = [
+  BurstTransformService, RotationTransformService, DefensiveTransformService,
+  GearTransformService, MapTransformService, NorthernSkyTransformService,
+];
+
+const stubTransform = {
+  getBench: async (_spec: string, encId: number) =>
+    ok({ encounter_id: encId, encounter_name: bossName(encId), sample_count: FRESH_SAMPLES }),
+};
+
+function ingest(disk: FakeDisk, wcl: WclApiService, currentRaids: string): Promise<void> {
+  globalThis.history.replaceState(null, '', currentRaids ? `/?currentRaids=${encodeURIComponent(currentRaids)}` : '/');
+  TestBed.configureTestingModule({
+    providers: [
+      { provide: DATA_FILE_TRANSPORT, useValue: disk },
+      { provide: WclApiService, useValue: wcl },
+      { provide: HttpWclTransport, useValue: { takeInaccessibleCodes: () => [], takeFailedCodes: () => [] } },
+      { provide: NgHttpCachingService, useValue: { clearCache: () => undefined } },
+      ...TRANSFORMS.map(transform => ({ provide: transform, useValue: stubTransform })),
+    ],
+  });
+  return TestBed.inject(IngestOrchestratorService).run();
+}
+
+describe('IngestOrchestratorService.run', () => {
+  const RULEBOOK_ONLY = { [`${SPEC}/rulebook.json`]: { spec_icon: 'ability_rogue_shadowdance' } };
+  const RETIRED_ON_DISK = {
+    ...RULEBOOK_ONLY,
+    [benchPath(RETIRED_BOSS.id)]: {
+      encounter_id: RETIRED_BOSS.id, encounter_name: RETIRED_BOSS.name,
+      sample_count: STORED_SAMPLES, ingest_version: INGEST_VERSION,
+    },
+    [benchPath(RETIRED_BOSS.id, 'positions')]: { encounter_id: RETIRED_BOSS.id, ingest_version: INGEST_VERSION },
+  };
+  const filesFor = (disk: FakeDisk, encId: number): string[] =>
+    [...disk.files.keys()].filter(path => path.endsWith(`/${encId}.json`));
+
+  beforeEach(() => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('deletes every slice of an encounter the current raids no longer list', async () => {
+    const disk = fakeDisk(RETIRED_ON_DISK);
+
+    await ingest(disk, fakeWcl([CURRENT_BOSS], { [CURRENT_BOSS.id]: RANKED }), RAID);
+
+    expect(filesFor(disk, RETIRED_BOSS.id)).toEqual([]);
+  });
+
+  it('prunes nothing when no current raid resolved, rather than reading that as "prune everything"', async () => {
+    const disk = fakeDisk(RETIRED_ON_DISK);
+
+    await ingest(disk, fakeWcl([CURRENT_BOSS], { [CURRENT_BOSS.id]: RANKED }), '');
+
+    expect(filesFor(disk, RETIRED_BOSS.id))
+      .toEqual([benchPath(RETIRED_BOSS.id), benchPath(RETIRED_BOSS.id, 'positions')]);
+    expect(disk.files.get(`${SPEC}/encounters.json`))
+      .toEqual([{ id: RETIRED_BOSS.id, name: RETIRED_BOSS.name, sample_count: STORED_SAMPLES }]);
+  });
+
+  it('keeps a boss the current raids no longer list out of the index, even when its bench survives deletion', async () => {
+    const disk = fakeDisk(RETIRED_ON_DISK, new Set([benchPath(RETIRED_BOSS.id)]));
+
+    await ingest(disk, fakeWcl([CURRENT_BOSS], { [CURRENT_BOSS.id]: RANKED }), RAID);
+
+    expect(filesFor(disk, RETIRED_BOSS.id)).toEqual([benchPath(RETIRED_BOSS.id)]);
+    expect(disk.files.get(`${SPEC}/encounters.json`))
+      .toEqual([{ id: CURRENT_BOSS.id, name: CURRENT_BOSS.name, sample_count: FRESH_SAMPLES }]);
+  });
+
+  it('leaves a benched encounter untouched when its stored signature covers the current top parses', async () => {
+    const stored = {
+      encounter_id: CURRENT_BOSS.id, encounter_name: CURRENT_BOSS.name, sample_count: STORED_SAMPLES,
+      source_signature: signatureOf(RANKED), ingest_version: INGEST_VERSION,
+    };
+    const disk = fakeDisk({ ...RULEBOOK_ONLY, [benchPath(CURRENT_BOSS.id)]: stored });
+
+    await ingest(disk, fakeWcl([CURRENT_BOSS], { [CURRENT_BOSS.id]: RANKED }), RAID);
+
+    expect(disk.files.get(benchPath(CURRENT_BOSS.id))).toEqual(stored);
+  });
+
+  it('re-benches that encounter once one of the top parses changes', async () => {
+    const stored = {
+      encounter_id: CURRENT_BOSS.id, encounter_name: CURRENT_BOSS.name, sample_count: STORED_SAMPLES,
+      source_signature: signatureOf(RANKED), ingest_version: INGEST_VERSION,
+    };
+    const disk = fakeDisk({ ...RULEBOOK_ONLY, [benchPath(CURRENT_BOSS.id)]: stored });
+
+    await ingest(disk, fakeWcl([CURRENT_BOSS], { [CURRENT_BOSS.id]: RERANKED }), RAID);
+
+    expect(disk.files.get(benchPath(CURRENT_BOSS.id))).toMatchObject({
+      sample_count: FRESH_SAMPLES, source_signature: signatureOf(RERANKED),
+    });
+  });
+
+  it('lists an encounter with no Mythic parses yet in the index, at zero samples', async () => {
+    const disk = fakeDisk(RULEBOOK_ONLY);
+
+    await ingest(disk, fakeWcl([CURRENT_BOSS, NEW_BOSS], { [CURRENT_BOSS.id]: RANKED }), RAID);
+
+    expect(disk.files.get(`${SPEC}/encounters.json`)).toEqual([
+      { id: CURRENT_BOSS.id, name: CURRENT_BOSS.name, sample_count: FRESH_SAMPLES },
+      { id: NEW_BOSS.id, name: NEW_BOSS.name, sample_count: 0 },
     ]);
-  });
-
-  it('carries the on-disk sample count for a benched encounter and 0 for the rest', () => {
-    expect(encounterIndexEntries([FIRST_BOSS, SECOND_BOSS], ON_DISK)).toEqual([
-      { id: 9100, name: 'First Boss', sample_count: 0 },
-      { id: 9101, name: 'Second Boss', sample_count: SAMPLED_COUNT },
-    ]);
-  });
-
-  it('drops on-disk entries outside the current zone (the phased-out tier)', () => {
-    const stale: EncounterEntry[] = [{ id: 3176, name: 'Old Boss', sample_count: SAMPLED_COUNT }];
-    expect(encounterIndexEntries([FIRST_BOSS], stale)).toEqual([{ id: 9100, name: 'First Boss', sample_count: 0 }]);
-  });
-
-  it('keeps the on-disk entries untouched when no live zone was resolved', () => {
-    expect(encounterIndexEntries([], ON_DISK)).toEqual(ON_DISK);
   });
 });

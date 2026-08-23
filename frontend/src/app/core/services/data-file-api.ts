@@ -2,7 +2,6 @@ import { Injectable, inject } from '@angular/core';
 import { Rulebook } from '../models/rulebook.models';
 import { EncounterEntry, SpecEntry } from '../models/encounter.models';
 import { SpecMeta } from '../models/spec-meta.models';
-import { EncounterPositions } from '../models/positioning.models';
 import { DATA_FILE_TRANSPORT } from './data-file-transport';
 import { Result, ok } from '../result';
 
@@ -50,10 +49,6 @@ export class DataFileApiService {
 
   writeSlice(spec: string, encounterId: number, slice: string, data: unknown): Promise<void> {
     return this.io.writeJson(`${spec}/${slice}/${encounterId}.json`, data);
-  }
-
-  writePositions(spec: string, encounterId: number, data: EncounterPositions): Promise<void> {
-    return this.io.writeJson(`${spec}/positions/${encounterId}.json`, data);
   }
 
   writeEncounters(spec: string, entries: EncounterEntry[]): Promise<void> {

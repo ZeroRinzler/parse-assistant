@@ -2,7 +2,6 @@ import { inject } from '@angular/core';
 import { DataFileApiService } from '../../core/services/data-file-api';
 import { type Result } from '../../core/result';
 import type { TopParseSelection } from '../../core/models/wcl.models';
-import type { EncounterPositions } from '../../core/models/positioning.models';
 import { BurstTransformService } from '../../pages/post-raid/burst-windows/burst-transform.service';
 import { RotationTransformService } from '../../pages/post-raid/rotation/rotation-transform.service';
 import { DefensiveTransformService } from '../../pages/post-raid/defensive/defensive-transform.service';
@@ -19,6 +18,8 @@ export interface SliceDescriptor {
 /** Non-empty: the orchestrator destructures the head as the burst slice. */
 export type SliceRegistry = readonly [SliceDescriptor, ...SliceDescriptor[]];
 
+export const BENCH_SLICE = 'burst';
+
 // Burst leads: only its file carries the encounter signature, stamped only when every slice behind it produced data.
 export function sliceRegistry(): SliceRegistry {
   const dataFile = inject(DataFileApiService);
@@ -27,14 +28,11 @@ export function sliceRegistry(): SliceRegistry {
     write: (spec, encId, data) => dataFile.writeSlice(spec, encId, file, data),
   });
   return [
-    bench('burst', inject(BurstTransformService)),
+    bench(BENCH_SLICE, inject(BurstTransformService)),
     bench('rotation', inject(RotationTransformService)),
     bench('defensive', inject(DefensiveTransformService)),
     bench('gear', inject(GearTransformService)),
-    {
-      file: 'positions', transform: inject(MapTransformService),
-      write: (spec, encId, data) => dataFile.writePositions(spec, encId, data as EncounterPositions),
-    },
+    bench('positions', inject(MapTransformService)),
     bench('northern-sky', inject(NorthernSkyTransformService)),
   ];
 }
