@@ -5,7 +5,7 @@ import { IngestOrchestratorService } from './ingest-orchestrator.service';
 import { BENCH_SLICE } from './slice-registry';
 import { DATA_FILE_TRANSPORT, type DataFileTransport } from '../../core/services/data-file-transport';
 import { WclApiService } from '../../core/services/wcl-api';
-import { HttpWclTransport } from '../../core/transport/http-wcl-transport';
+import { WCL_TRANSPORT, type WclTransport } from '../../core/services/wcl-transport';
 import { RATE_LIMIT_Q, CLASSES_Q, ENCOUNTERS_Q } from '../../core/services/wcl-queries';
 import { ok, missing, type Result } from '../../core/result';
 import { BurstTransformService } from '../../pages/post-raid/burst-windows/burst-transform.service';
@@ -101,13 +101,18 @@ const stubTransform = {
     ok({ encounter_id: encId, encounter_name: bossName(encId), sample_count: FRESH_SAMPLES }),
 };
 
+const cleanTransport: Pick<WclTransport, 'withFetchOutcomes'> = {
+  withFetchOutcomes: async run =>
+    ({ result: await run(), outcomes: { inaccessibleCodes: new Set(), failedCodes: new Set() } }),
+};
+
 function ingest(disk: FakeDisk, wcl: WclApiService, currentRaids: string): Promise<void> {
   globalThis.history.replaceState(null, '', currentRaids ? `/?currentRaids=${encodeURIComponent(currentRaids)}` : '/');
   TestBed.configureTestingModule({
     providers: [
       { provide: DATA_FILE_TRANSPORT, useValue: disk },
       { provide: WclApiService, useValue: wcl },
-      { provide: HttpWclTransport, useValue: { takeInaccessibleCodes: () => [], takeFailedCodes: () => [] } },
+      { provide: WCL_TRANSPORT, useValue: cleanTransport },
       { provide: NgHttpCachingService, useValue: { clearCache: () => undefined } },
       ...TRANSFORMS.map(transform => ({ provide: transform, useValue: stubTransform })),
     ],

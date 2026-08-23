@@ -13,6 +13,8 @@ const QUERY = 'query Report($code: String!) { reportData { report(code: $code) {
 // RATE_LIMIT_Q is marked uncached by wclCachingHeaders, so it stands in for the always-fresh reads.
 const UNCACHED_QUERY = RATE_LIMIT_Q;
 const REPORT_CODE = 'AbCdEfGh12345678';
+const OTHER_REPORT_CODE = 'ZyXwVuTs87654321';
+const RUN_FAILURE = 'slice transform blew up';
 const TOKEN = 'token-1';
 const REPORT_DATA = { reportData: { report: { title: 'Weekly clear' } } };
 const UNAUTHORIZED_STATUS = 401;
@@ -29,6 +31,17 @@ function setup(): { transport: HttpWclTransport; httpMock: HttpTestingController
     transport: TestBed.inject(HttpWclTransport),
     httpMock: TestBed.inject(HttpTestingController),
   };
+}
+
+async function failedFetch(
+  transport: HttpWclTransport, httpMock: HttpTestingController,
+  code: string, body: object | string, status?: number,
+): Promise<void> {
+  const pending = transport.query(QUERY, { code }, TOKEN);
+  const request = httpMock.expectOne(WCL_API_URL);
+  if (status == null) request.flush(body);
+  else request.flush(body, { status, statusText: 'Failed' });
+  await expect(pending).rejects.toBeInstanceOf(WclTransportError);
 }
 
 describe('HttpWclTransport', () => {
@@ -114,49 +127,97 @@ describe('HttpWclTransport', () => {
     await expect(pending).rejects.toMatchObject({ name: 'WclTransportError', status: WCL_UNUSABLE_STATUS });
   });
 
-  it('records the report code on a permission-denied GraphQL error; take drains the set', async () => {
+  it('reports a permission-denied GraphQL error as both inaccessible and failed', async () => {
     const { transport, httpMock } = setup();
 
-    const pending = transport.query(QUERY, { code: REPORT_CODE }, TOKEN);
-    httpMock.expectOne(WCL_API_URL).flush({ errors: [{ message: PERMISSION_MESSAGE }] });
-    await expect(pending).rejects.toMatchObject({ status: WCL_UNUSABLE_STATUS });
+    const { outcomes } = await transport.withFetchOutcomes(() =>
+      failedFetch(transport, httpMock, REPORT_CODE, { errors: [{ message: PERMISSION_MESSAGE }] }));
 
-    // A permission denial is both persisted (inaccessible) and stamp-shaping (failed).
-    expect(transport.takeFailedCodes()).toEqual([REPORT_CODE]);
-    expect(transport.takeInaccessibleCodes()).toEqual([REPORT_CODE]);
-    expect(transport.takeInaccessibleCodes()).toEqual([]);
+    expect(outcomes.failedCodes).toEqual(new Set([REPORT_CODE]));
+    expect(outcomes.inaccessibleCodes).toEqual(new Set([REPORT_CODE]));
   });
 
-  it('records a transient HTTP failure in the failed set, not the inaccessible set', async () => {
+  it('reports a transient HTTP failure as failed but not inaccessible', async () => {
     const { transport, httpMock } = setup();
 
-    const pending = transport.query(QUERY, { code: REPORT_CODE }, TOKEN);
-    httpMock.expectOne(WCL_API_URL)
-      .flush('Unavailable', { status: SERVICE_UNAVAILABLE_STATUS, statusText: 'Service Unavailable' });
-    await expect(pending).rejects.toMatchObject({ name: 'WclTransportError', status: SERVICE_UNAVAILABLE_STATUS });
+    const { outcomes } = await transport.withFetchOutcomes(() =>
+      failedFetch(transport, httpMock, REPORT_CODE, 'Unavailable', SERVICE_UNAVAILABLE_STATUS));
 
-    expect(transport.takeFailedCodes()).toEqual([REPORT_CODE]);
-    expect(transport.takeInaccessibleCodes()).toEqual([]);
+    expect(outcomes.failedCodes).toEqual(new Set([REPORT_CODE]));
+    expect(outcomes.inaccessibleCodes).toEqual(new Set());
   });
 
-  it('records a non-permission GraphQL error in the failed set, not the inaccessible set', async () => {
+  it('reports a non-permission GraphQL error as failed but not inaccessible', async () => {
     const { transport, httpMock } = setup();
 
-    const pending = transport.query(QUERY, { code: REPORT_CODE }, TOKEN);
-    httpMock.expectOne(WCL_API_URL).flush({ errors: [{ message: OTHER_GRAPHQL_MESSAGE }] });
-    await expect(pending).rejects.toMatchObject({ status: WCL_UNUSABLE_STATUS });
+    const { outcomes } = await transport.withFetchOutcomes(() =>
+      failedFetch(transport, httpMock, REPORT_CODE, { errors: [{ message: OTHER_GRAPHQL_MESSAGE }] }));
 
-    expect(transport.takeFailedCodes()).toEqual([REPORT_CODE]);
-    expect(transport.takeInaccessibleCodes()).toEqual([]);
+    expect(outcomes.failedCodes).toEqual(new Set([REPORT_CODE]));
+    expect(outcomes.inaccessibleCodes).toEqual(new Set());
   });
 
-  it('does not record a 401 in the failed set (the auth layer retries it)', async () => {
+  it('reports no code for a 401 (the auth layer retries it)', async () => {
     const { transport, httpMock } = setup();
 
-    const pending = transport.query(QUERY, { code: REPORT_CODE }, TOKEN);
-    httpMock.expectOne(WCL_API_URL).flush('Unauthorized', { status: UNAUTHORIZED_STATUS, statusText: 'Unauthorized' });
-    await expect(pending).rejects.toMatchObject({ status: UNAUTHORIZED_STATUS });
+    const { outcomes } = await transport.withFetchOutcomes(() =>
+      failedFetch(transport, httpMock, REPORT_CODE, 'Unauthorized', UNAUTHORIZED_STATUS));
 
-    expect(transport.takeFailedCodes()).toEqual([]);
+    expect(outcomes.failedCodes).toEqual(new Set());
+  });
+
+  it('returns the value of run alongside the outcomes', async () => {
+    const { transport, httpMock } = setup();
+
+    const { result, outcomes } = await transport.withFetchOutcomes(() => {
+      const pending = transport.query(QUERY, { code: REPORT_CODE }, TOKEN);
+      httpMock.expectOne(WCL_API_URL).flush({ data: REPORT_DATA });
+      return pending;
+    });
+
+    expect(result).toEqual(REPORT_DATA);
+    expect(outcomes.failedCodes).toEqual(new Set());
+  });
+
+  it('starts a second scope empty', async () => {
+    const { transport, httpMock } = setup();
+
+    await transport.withFetchOutcomes(() =>
+      failedFetch(transport, httpMock, REPORT_CODE, { errors: [{ message: PERMISSION_MESSAGE }] }));
+    const { outcomes } = await transport.withFetchOutcomes(() =>
+      failedFetch(transport, httpMock, OTHER_REPORT_CODE, { errors: [{ message: OTHER_GRAPHQL_MESSAGE }] }));
+
+    expect(outcomes.failedCodes).toEqual(new Set([OTHER_REPORT_CODE]));
+    expect(outcomes.inaccessibleCodes).toEqual(new Set());
+  });
+
+  it('closes a scope whose run throws, so its codes never reach the next scope', async () => {
+    const { transport, httpMock } = setup();
+
+    const thrown = transport.withFetchOutcomes(async () => {
+      await failedFetch(transport, httpMock, REPORT_CODE, { errors: [{ message: PERMISSION_MESSAGE }] });
+      throw new Error(RUN_FAILURE);
+    });
+    await expect(thrown).rejects.toThrow(RUN_FAILURE);
+
+    const { outcomes } = await transport.withFetchOutcomes(() =>
+      failedFetch(transport, httpMock, OTHER_REPORT_CODE, { errors: [{ message: OTHER_GRAPHQL_MESSAGE }] }));
+    expect(outcomes.failedCodes).toEqual(new Set([OTHER_REPORT_CODE]));
+    expect(outcomes.inaccessibleCodes).toEqual(new Set());
+  });
+
+  it('keeps a nested scope out of the enclosing one, and restores the enclosing one after it', async () => {
+    const { transport, httpMock } = setup();
+    let nestedFailed: ReadonlySet<string> = new Set();
+
+    const { outcomes } = await transport.withFetchOutcomes(async () => {
+      const inner = await transport.withFetchOutcomes(() =>
+        failedFetch(transport, httpMock, REPORT_CODE, { errors: [{ message: OTHER_GRAPHQL_MESSAGE }] }));
+      nestedFailed = inner.outcomes.failedCodes;
+      await failedFetch(transport, httpMock, OTHER_REPORT_CODE, { errors: [{ message: OTHER_GRAPHQL_MESSAGE }] });
+    });
+
+    expect(nestedFailed).toEqual(new Set([REPORT_CODE]));
+    expect(outcomes.failedCodes).toEqual(new Set([OTHER_REPORT_CODE]));
   });
 });

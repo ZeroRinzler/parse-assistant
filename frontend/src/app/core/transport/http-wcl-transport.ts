@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
-import { WclTransport, WclTransportError, WCL_API_URL, WCL_UNUSABLE_STATUS } from '../services/wcl-transport';
+import { FetchOutcomes, WclTransport, WclTransportError, WCL_API_URL, WCL_UNUSABLE_STATUS } from '../services/wcl-transport';
 import { wclCachingHeaders } from '../services/wcl-caching';
 
 interface GraphQLResponse<TData> {
@@ -9,25 +9,32 @@ interface GraphQLResponse<TData> {
   errors?: { message: string }[];
 }
 
+interface OpenScope {
+  inaccessibleCodes: Set<string>;
+  failedCodes: Set<string>;
+}
+
 // The bearer is attached per request because the token renews on expiry.
 @Injectable({ providedIn: 'root' })
 export class HttpWclTransport implements WclTransport {
   private readonly http = inject(HttpClient);
-  // Only deterministic permission denials land here - a transient error must not stick a usable log as inaccessible.
-  private readonly inaccessibleCodes = new Set<string>();
-  // Every code-bearing fetch that failed this run (permission + transient), so the stamp keys on the parses actually used.
-  private readonly failedCodes = new Set<string>();
+  private scope: OpenScope | null = null;
 
-  takeInaccessibleCodes(): string[] {
-    const codes = [...this.inaccessibleCodes];
-    this.inaccessibleCodes.clear();
-    return codes;
+  async withFetchOutcomes<T>(run: () => Promise<T>): Promise<{ result: T; outcomes: FetchOutcomes }> {
+    const enclosing = this.scope;
+    const outcomes: OpenScope = { inaccessibleCodes: new Set(), failedCodes: new Set() };
+    this.scope = outcomes;
+    try {
+      return { result: await run(), outcomes };
+    } finally {
+      this.scope = enclosing;
+    }
   }
 
-  takeFailedCodes(): string[] {
-    const codes = [...this.failedCodes];
-    this.failedCodes.clear();
-    return codes;
+  private recordFailure(code: string | undefined, denied = false): void {
+    if (!code || !this.scope) return;
+    this.scope.failedCodes.add(code);
+    if (denied) this.scope.inaccessibleCodes.add(code);
   }
 
   async query<TData>(gqlString: string, variables: object, token: string): Promise<TData> {
@@ -43,7 +50,7 @@ export class HttpWclTransport implements WclTransport {
     } catch (error) {
       if (error instanceof HttpErrorResponse) {
         // 401 is the auth layer's to retry; any other HTTP error has spent the transient-retry interceptor.
-        if (code && error.status !== 401) this.failedCodes.add(code);
+        if (error.status !== 401) this.recordFailure(code);
         throw new WclTransportError(`WCL API error (${error.status})`, error.status);
       }
       throw error;
@@ -55,14 +62,11 @@ export class HttpWclTransport implements WclTransport {
     // A 200 with a GraphQL `errors` array never improves on retry, so it classifies permanent, not transient.
     if (body.errors?.length) {
       const message = body.errors[0]?.message ?? 'WCL GraphQL error';
-      if (code) {
-        this.failedCodes.add(code);
-        if (/permission/i.test(message)) this.inaccessibleCodes.add(code);
-      }
+      this.recordFailure(code, /permission/i.test(message));
       throw new WclTransportError(message, WCL_UNUSABLE_STATUS);
     }
     if (body.data === undefined) {
-      if (code) this.failedCodes.add(code);
+      this.recordFailure(code);
       throw new WclTransportError('WCL response had no data', WCL_UNUSABLE_STATUS);
     }
     return body.data;

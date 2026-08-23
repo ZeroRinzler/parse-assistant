@@ -5,7 +5,7 @@ import { WclAuthService } from '../transport/wcl-auth';
 import { DataFileApiService } from './data-file-api';
 import { ok } from '../result';
 import { WclCombatantInfo, MYTHIC_DIFFICULTY } from '../models/wcl.models';
-import { WCL_TRANSPORT, WclTransport, WclTransportError, WCL_UNUSABLE_STATUS } from './wcl-transport';
+import { FetchOutcomes, WCL_TRANSPORT, WclTransport, WclTransportError, WCL_UNUSABLE_STATUS } from './wcl-transport';
 
 const UNAUTHORIZED_STATUS = 401;
 
@@ -27,6 +27,10 @@ class RecordingTransport implements WclTransport {
     return {
       reportData: { report: { fights: [], masterData: {}, events: { data: [], nextPageTimestamp: undefined } } },
     } as unknown as TData;
+  }
+
+  async withFetchOutcomes<T>(run: () => Promise<T>): Promise<{ result: T; outcomes: FetchOutcomes }> {
+    return { result: await run(), outcomes: { inaccessibleCodes: new Set(), failedCodes: new Set() } };
   }
 }
 

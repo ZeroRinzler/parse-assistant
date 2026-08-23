@@ -4,7 +4,7 @@ import pLimit from 'p-limit';
 import { NgHttpCachingService } from 'ng-http-caching';
 import { WclApiService } from '../../core/services/wcl-api';
 import { DataFileApiService } from '../../core/services/data-file-api';
-import { HttpWclTransport } from '../../core/transport/http-wcl-transport';
+import { WCL_TRANSPORT } from '../../core/services/wcl-transport';
 import { SpecMetaService } from '../../core/services/spec-meta';
 import { logWarn } from '../../core/log';
 import { type LoadError } from '../../core/result';
@@ -95,8 +95,7 @@ export class IngestOrchestratorService {
   private readonly wclApi = inject(WclApiService);
   private readonly dataFile = inject(DataFileApiService);
   private readonly specMeta = inject(SpecMetaService);
-  // The orchestrator needs the transport's inaccessible-code drain, which is ingest-only surface.
-  private readonly wclTransport = inject(HttpWclTransport);
+  private readonly wclTransport = inject(WCL_TRANSPORT);
   private readonly wclCache = inject(NgHttpCachingService);
   private readonly slices = sliceRegistry();
 
@@ -366,15 +365,13 @@ export class IngestOrchestratorService {
     const limit = pLimit(SLICE_CONCURRENCY);
     const [burstSlice, ...siblings] = this.slices;
     const bench = (slice: SliceDescriptor) => limit(() => slice.transform.getBench(spec, encId, selection));
-    const [burst, rest] = await Promise.all([
+    const { result: [burst, rest], outcomes } = await this.wclTransport.withFetchOutcomes(() => Promise.all([
       bench(burstSlice),
       Promise.all(siblings.map(async slice => ({ slice, result: await bench(slice) }))),
-    ]);
+    ]));
 
-    const inaccessibleCodes = new Set(this.wclTransport.takeInaccessibleCodes());
-    const failedCodes = new Set(this.wclTransport.takeFailedCodes());
     const { signature, inaccessibleParses } = signatureAfterFetch(
-      selection.rows, inaccessibleCodes, failedCodes, version, TOP_N);
+      selection.rows, outcomes.inaccessibleCodes, outcomes.failedCodes, version, TOP_N);
     const stamp: IngestStamp = { version: INGEST_VERSION, ingestedAtS: nowS() };
 
     // Skip on any failure so a slice is never overwritten with partial data.

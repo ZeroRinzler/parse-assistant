@@ -34,7 +34,7 @@ export function encounterSignature(version: string, rankings: SignatureRanking[]
 
 /** The signature over the top-`topN` ACCESSIBLE parses - the one rule both the cheap pre-check and the post-fetch stamp key on, so they can never diverge. */
 export function encounterSkipKey(
-  poolRows: SignatureRanking[], inaccessible: Set<string>, version: string, topN: number,
+  poolRows: SignatureRanking[], inaccessible: ReadonlySet<string>, version: string, topN: number,
 ): string {
   const usedRows = poolRows.filter(row => !inaccessible.has(parseKey(row))).slice(0, topN);
   return encounterSignature(version, usedRows);
@@ -42,7 +42,8 @@ export function encounterSkipKey(
 
 /** Persist only permission-denied `inaccessibleCodes`; sign the top-N minus every `failedCodes` fetch, so a backfilled bench is stamped as the set it used. */
 export function signatureAfterFetch(
-  poolRows: SignatureRanking[], inaccessibleCodes: Set<string>, failedCodes: Set<string>, version: string, topN: number,
+  poolRows: SignatureRanking[], inaccessibleCodes: ReadonlySet<string>, failedCodes: ReadonlySet<string>,
+  version: string, topN: number,
 ): { signature: string; inaccessibleParses: string[] } {
   const inaccessibleParses = poolRows.filter(row => inaccessibleCodes.has(row.report_code)).map(parseKey);
   const failedParses = poolRows.filter(row => failedCodes.has(row.report_code)).map(parseKey);
