@@ -27,10 +27,9 @@ export interface ClipWindow {
 }
 
 export interface ClipHandle {
-  blobs: Blob[];
+  blob: Blob;
   startOffsetS: number;
   endOffsetS: number;
-  mimeType: string;
 }
 
 export interface ClipRoll {
@@ -45,7 +44,7 @@ const DEFAULT_CAPTURE_PROFILE: CaptureProfile = {
   bitrateBps: 4_000_000,
 };
 
-/** A single continuous recorder with `timeslice` cannot be assembled via MSE. */
+/** A single continuous recorder with `timeslice` yields header-less chunks the rolling buffer cannot trim or remux. */
 const SEG_MS = 3_000;
 
 /** Rolling-buffer retention: covers the longest fight plus WCL upload lag plus pre-roll. */
@@ -83,13 +82,13 @@ export function selectSegments(segments: Segment[], window: ClipWindow): Segment
     .sort((a, b) => a.start - b.start);
 }
 
-/** The assembled timeline re-bases to 0 at the first segment's start; never negative. */
+/** The remuxed timeline re-bases to 0 at the first segment's start; never negative. */
 export function segmentSeekOffset(window: ClipWindow, firstSegment: { start: number } | undefined): number {
   if (!firstSegment) return 0;
   return Math.max(0, (window.fromMs - firstSegment.start) / 1000);
 }
 
-/** The assembled timeline is gapless, so a loop length from a wall-clock span shrinks by this much to end on the same footage. */
+/** The remuxed timeline is gapless, so a loop length from a wall-clock span shrinks by this much to end on the same footage. */
 export function interSegmentGapMs(segments: { start: number; end: number }[]): number {
   let gaps = 0;
   let prev: { start: number; end: number } | undefined;
@@ -104,7 +103,6 @@ export function segmentsCover(segments: Segment[], fromMs: number, toMs: number)
   return segments.some(segment => segment.end > fromMs && segment.start < toMs);
 }
 
-/** MSE assembly re-declares this via `addSourceBuffer`, which rejects bare `video/webm`, so a codec-qualified pick keeps playback on the MSE path. */
 function mimeFor(profile: CaptureProfile): string {
   const candidates = [`video/webm;codecs=${profile.codec}`, 'video/webm;codecs=vp8', 'video/webm'];
   return candidates.find(candidate => MediaRecorder.isTypeSupported(candidate)) ?? 'video/webm';
@@ -145,13 +143,13 @@ export class LiveCaptureFeatureService {
 
   readonly open = signal(false);
   readonly handle = signal<ClipHandle | null>(null);
-  /** True once the clip player's `<video>` fails to decode (MSE assembly and the single-blob fallback both failed). */
+  readonly preparing = signal(false);
   readonly playbackFailed = signal(false);
 
   private readonly ctx = signal<{ reportCode: string; reportStartTime: number; fight: WclFight } | null>(null);
   private currentAnchor: ClipAnchor | null = null;
   /** Clips already cut this session, keyed `reportCode:fightId:windowKey`; keeps a window openable after the buffer rolls past it. */
-  private readonly resolved = new Map<string, ClipHandle>();
+  private readonly resolved = new Map<string, Promise<ClipHandle | null>>();
 
   setLive(on: boolean): void { this.liveActive.set(on); }
   setStatus(message: string): void { this.status.set(message); }
@@ -201,7 +199,7 @@ export class LiveCaptureFeatureService {
     this.sourceLabel.set('');
   }
 
-  /** Each segment is a complete WebM (own header + keyframe) so it appends cleanly during MSE assembly. */
+  /** Each segment is a complete WebM (own header + keyframe) so the remuxer can decode it on its own. */
   private cycleSegment(): void {
     if (!this.isCapturing() || !this.stream) return;
     const chunks: Blob[] = [];
@@ -245,20 +243,22 @@ export class LiveCaptureFeatureService {
     this.open.set(true);
     this.downloadError.set(null);
     this.playbackFailed.set(false);
+    this.handle.set(null);
     const ctx = this.ctx();
+    this.preparing.set(ctx != null);
     if (!ctx) {
-      this.handle.set(null);
       logWarn(`LiveCaptureFeatureService.openClip ${anchor.key}`, 'no correlation context (report not resolved)');
       return;
     }
-    this.handle.set(this.resolveHandle(ctx.reportCode, ctx.fight.id, this.clipWindowFor(anchor, ctx)));
+    void this.applyHandle(anchor, `${ctx.reportCode}:${ctx.fight.id}:${anchor.key}`, this.clipWindowFor(anchor, ctx));
   }
 
   download(): void {
     const anchor = this.currentAnchor;
     const handle = this.handle();
     if (!anchor || !handle) return;
-    void this.saveSegments(handle.blobs, `${anchor.key}.webm`);
+    this.downloadError.set(null);
+    this.triggerDownload(handle.blob, `${anchor.key}.webm`);
   }
 
   downloadFullPull(): void {
@@ -295,6 +295,7 @@ export class LiveCaptureFeatureService {
   clear(): void {
     this.open.set(false);
     this.handle.set(null);
+    this.preparing.set(false);
     this.ctx.set(null);
     this.currentAnchor = null;
     this.resolved.clear();
@@ -309,26 +310,33 @@ export class LiveCaptureFeatureService {
     return buildClipWindow(reportStartTime, fight.startTime, anchor, roll);
   }
 
-  private resolveHandle(reportCode: string, fightId: number, window: ClipWindow): ClipHandle | null {
-    const key = `${reportCode}:${fightId}:${window.key}`;
-    const cached = this.resolved.get(key);
-    if (cached) return cached;
-    const segments = selectSegments(this.segments(), window);
-    if (!segments.length) return null;
-    const handle = this.handleFor(window, segments);
-    this.resolved.set(key, handle);
-    return handle;
+  /** A second open supersedes the first, so a slow remux must never overwrite the newer clip. */
+  private async applyHandle(anchor: ClipAnchor, key: string, window: ClipWindow): Promise<void> {
+    const pending = this.resolved.get(key) ?? this.buildHandle(window);
+    this.resolved.set(key, pending);
+    try {
+      const handle = await pending;
+      if (this.currentAnchor !== anchor) return;
+      this.handle.set(handle);
+    } catch (err) {
+      this.resolved.delete(key);
+      if (this.currentAnchor !== anchor) return;
+      logWarn(`LiveCaptureFeatureService.applyHandle ${anchor.key}`, err);
+      this.playbackFailed.set(true);
+    }
+    this.preparing.set(false);
   }
 
-  /** The recorder-restart gaps are subtracted since the wall-clock span spans them but the assembled timeline does not. */
-  private handleFor(window: ClipWindow, segments: Segment[]): ClipHandle {
+  /** The recorder-restart gaps are subtracted since the wall-clock span spans them but the remuxed timeline does not. */
+  private async buildHandle(window: ClipWindow): Promise<ClipHandle | null> {
+    const segments = selectSegments(this.segments(), window);
+    if (!segments.length) return null;
     const startOffsetS = segmentSeekOffset(window, segments[0]);
     const loopSpanS = (window.toMs - window.fromMs - interSegmentGapMs(segments)) / 1000;
     return {
-      blobs: segments.map(segment => segment.blob),
+      blob: await remuxSegments(segments.map(segment => segment.blob)),
       startOffsetS,
       endOffsetS: startOffsetS + Math.max(0, loopSpanS),
-      mimeType: this.mimeType,
     };
   }
 
@@ -340,25 +348,6 @@ export class LiveCaptureFeatureService {
     anchor.click();
     // Revoking synchronously can invalidate the URL before the browser reads the blob.
     setTimeout(() => { URL.revokeObjectURL(url); }, DOWNLOAD_URL_TTL_MS);
-  }
-}
-
-/** The MediaSource only reaches `sourceopen` once attached, so the URL is set on `video` first, then the buffers appended, then the URL revoked (the element keeps the MediaSource alive). */
-export async function pipeIntoElement(video: HTMLVideoElement, blobs: Blob[], mimeType: string): Promise<void> {
-  releaseElement(video);
-  try {
-    const source = new MediaSource();
-    const attachUrl = URL.createObjectURL(source);
-    video.src = attachUrl;
-    await onceOpen(source);
-    URL.revokeObjectURL(attachUrl);
-    const buffer = source.addSourceBuffer(mimeType);
-    buffer.mode = 'sequence';
-    for (const blob of blobs) await appendAndWait(buffer, await blob.arrayBuffer());
-    source.endOfStream();
-  } catch (err) {
-    logWarn('pipeIntoElement: MSE assembly failed, falling back to single-blob src', err);
-    video.src = URL.createObjectURL(new Blob(blobs, { type: mimeType }));
   }
 }
 
@@ -396,21 +385,4 @@ async function remuxSegments(blobs: Blob[]): Promise<Blob> {
   const buffer = output.target.buffer;
   if (!buffer) throw new Error('remux produced no output');
   return new Blob([buffer], { type: 'video/webm' });
-}
-
-export function releaseElement(video: HTMLVideoElement): void {
-  if (video.src.startsWith('blob:')) URL.revokeObjectURL(video.src);
-}
-
-function onceOpen(source: MediaSource): Promise<void> {
-  return new Promise(resolve => { source.addEventListener('sourceopen', () => { resolve(); }, { once: true }); });
-}
-
-/** Append one buffer and resolve on `updateend` (SourceBuffer appends are async). */
-function appendAndWait(buffer: SourceBuffer, data: ArrayBuffer): Promise<void> {
-  return new Promise((resolve, reject) => {
-    buffer.addEventListener('updateend', () => { resolve(); }, { once: true });
-    buffer.addEventListener('error', () => { reject(new Error('append failed')); }, { once: true });
-    buffer.appendBuffer(data);
-  });
 }
