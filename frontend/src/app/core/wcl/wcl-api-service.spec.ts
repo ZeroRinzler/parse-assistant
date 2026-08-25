@@ -158,6 +158,25 @@ describe('WclApiService', () => {
     });
   });
 
+  describe('getDamageDoneTableForSource', () => {
+    const FIGHT_ID = 5;
+    const SOURCE_ID = 3;
+
+    it('forwards the source id and returns the served table', async () => {
+      const { api, transport } = setup();
+      const table = { data: { entries: [{ id: 1, guid: 47540, name: 'Penance', total: 500 }] } };
+      transport.response = { reportData: { report: { table } } };
+      expect(await api.getDamageDoneTableForSource('code', FIGHT_ID, SOURCE_ID)).toEqual(table);
+      expect(transport.variables[0]).toMatchObject({ fightIDs: [FIGHT_ID], sourceID: SOURCE_ID, dataType: 'DamageDone' });
+    });
+
+    it('returns null when the report carries no table', async () => {
+      const { api, transport } = setup();
+      transport.response = { reportData: { report: { table: null } } };
+      expect(await api.getDamageDoneTableForSource('code', FIGHT_ID, SOURCE_ID)).toBeNull();
+    });
+  });
+
   describe('getPointsBudget', () => {
     const BUDGET = { limitPerHour: 36_000, pointsSpentThisHour: 1_200 };
 

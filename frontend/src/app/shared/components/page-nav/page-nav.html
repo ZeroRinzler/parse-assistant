@@ -4,7 +4,7 @@
     <mat-icon>menu</mat-icon>
   </button>
 
-  <a routerLink="/" class="flex items-center gap-2 no-underline text-[var(--gold)] font-semibold text-[15px]" aria-label="warcraft-learner home">
+  <a routerLink="/" class="flex items-center gap-2 no-underline text-[var(--gold)] font-semibold text-[15px]" aria-label="Parse Assistant home">
     <svg class="w-6 h-6 shrink-0" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
       <path class="fill-[var(--gold)]" d="M16 4 L27 7 L27 15.5 C27 21.5 22.5 26.5 16 29 C9.5 26.5 5 21.5 5 15.5 L5 7 Z"/>
       <g class="fill-[var(--surface)]">
@@ -13,7 +13,7 @@
         <rect x="19.5" y="10" width="3" height="12" rx="1"/>
       </g>
     </svg>
-    <span>warcraft-learner</span>
+    <span>Parse Assistant</span>
   </a>
 </mat-toolbar>
 
@@ -43,6 +43,14 @@
             <mat-icon matListItemIcon>analytics</mat-icon>
             @if (!railCollapsed()) {
               <span matListItemTitle>Analyze</span>
+            }
+          </a>
+          <a mat-list-item routerLink="/compare" routerLinkActive #compare="routerLinkActive"
+             [activated]="compare.isActive" (click)="onNavigate()" aria-label="Compare"
+             [matTooltip]="railCollapsed() ? 'Compare' : ''" matTooltipPosition="right">
+            <mat-icon matListItemIcon>vertical_split</mat-icon>
+            @if (!railCollapsed()) {
+              <span matListItemTitle>Compare</span>
             }
           </a>
         </mat-nav-list>

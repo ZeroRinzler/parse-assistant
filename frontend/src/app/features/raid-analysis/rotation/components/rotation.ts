@@ -2,9 +2,11 @@ import { ChangeDetectionStrategy, Component, computed, inject, input, output } f
 import { FindingTable, OnPlanChip } from '../../../../shared/components/finding-table/finding-table';
 import { LoadState } from '../../../../shared/components/load-state/load-state';
 import {
-  RotationFeatureService, RotationFindingRow, RotationOnPlanChip,
+  RotationFeatureService, RotationFindingRow, RotationOnPlanChip, RotationPlayerView,
 } from '../facade/rotation-feature-service';
+import { RotationBench } from '../data-access/rotation-data-source';
 import { LoadResourceService } from '../../../../shared/state/load-resource-service';
+import { Result } from '../../../../core/http/result';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -21,6 +23,15 @@ export class Rotation {
   readonly reportCode = input.required<string>();
   readonly fightId = input.required<number>();
   readonly playerId = input.required<number>();
+  /** Set only by the compare page: a bench synthesized from the other log's single parse, in place of the top-parse bench. */
+  readonly compareBench = input<Result<RotationBench> | null>(null);
+  /** Set only by the compare page: the other log's player name, in place of "top parses" in the card copy. */
+  readonly peerLabel = input<string | null>(null);
+
+  protected readonly offensiveSubtitle = computed(() => {
+    const peer = this.peerLabel();
+    return peer ? `Offensive cooldowns vs ${peer}.` : 'Offensive cooldowns vs top parses.';
+  });
 
   readonly busyChange = output<boolean>();
   readonly availableChange = output<boolean>();
@@ -32,8 +43,13 @@ export class Rotation {
       reportCode: this.reportCode(),
       fightId: this.fightId(),
       playerId: this.playerId(),
+      compareBench: this.compareBench(),
     }),
-    load: p => this.rotation.loadPlayerView(p.spec, p.encounterId, p.reportCode, p.fightId, p.playerId),
+    load: (p): Promise<Result<RotationPlayerView>> => p.compareBench
+      ? p.compareBench.ok
+        ? this.rotation.loadPlayerViewFromBench(p.compareBench.value, p.reportCode, p.fightId, p.playerId)
+        : Promise.resolve(p.compareBench)
+      : this.rotation.loadPlayerView(p.spec, p.encounterId, p.reportCode, p.fightId, p.playerId),
     context: 'rotation.loadPlayerView',
     initialAvailable: true,
     busyChange: this.busyChange,

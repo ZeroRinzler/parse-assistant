@@ -16,6 +16,8 @@ export class CompactAbilityRow {
   readonly higherIsBetter = input<boolean>(true);
   readonly showCasts = input<boolean>(true);
   readonly hidePlayer = input<boolean>(false);
+  /** Set only by the compare page: the other log's player name, in place of "Top" in the mobile-only column prefix. */
+  readonly peerLabel = input<string | null>(null);
 
   private readonly gap = computed<number | null>(() => {
     const { playerPct, topAvg } = this.row();

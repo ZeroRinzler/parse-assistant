@@ -1,0 +1,50 @@
+@if (error(); as e) {
+  <wl-load-state [error]="e" />
+} @else if (loading()) {
+  <wl-loading-spinner message="Comparing…" />
+} @else if (view(); as v) {
+  <div class="bg-[var(--surface)] border border-[var(--border)] rounded-[10px] overflow-hidden">
+
+    <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-4 px-4 py-4 border-b border-[var(--border)]">
+      <div class="text-left">
+        <div class="text-[13px] font-semibold text-[var(--accent)]">{{ v.playerA }}</div>
+        <div class="font-mono text-[20px] text-[var(--text)] tabular-nums">{{ v.totalDpsA | formatDamage }} dps</div>
+      </div>
+      <div class="text-[11px] uppercase tracking-widest text-[var(--muted)]">vs</div>
+      <div class="text-right">
+        <div class="text-[13px] font-semibold text-[var(--warning)]">{{ v.playerB }}</div>
+        <div class="font-mono text-[20px] text-[var(--text)] tabular-nums">{{ v.totalDpsB | formatDamage }} dps</div>
+      </div>
+    </div>
+
+    <div class="hidden md:grid grid-cols-[minmax(0,1fr)_90px_90px_90px_150px] gap-x-[14px] items-center px-4 pb-1 pt-3">
+      <span class="text-[10px] uppercase tracking-widest text-[var(--muted)]">ability</span>
+      <span class="text-right text-[10px] uppercase tracking-widest text-[var(--muted)]">dps a</span>
+      <span class="text-right text-[10px] uppercase tracking-widest text-[var(--muted)]">dps b</span>
+      <span class="text-right text-[10px] uppercase tracking-widest text-[var(--muted)]">delta</span>
+      <span></span>
+    </div>
+
+    @for (row of v.rows; track row.key) {
+      @let deltaColor = row.deltaDps > 0 ? 'text-[var(--accent)]' : row.deltaDps < 0 ? 'text-[var(--warning)]' : 'text-[var(--muted)]';
+      <div class="grid grid-cols-2 md:grid-cols-[minmax(0,1fr)_90px_90px_90px_150px] gap-x-[14px] items-center px-4 py-2 border-t border-[var(--border)]">
+        <span class="col-span-2 md:col-span-1 text-[13px] text-[var(--text)] truncate">{{ row.name }}</span>
+        <span class="text-right font-mono text-[13px] text-[var(--text)] tabular-nums">{{ row.dpsA | formatDamage }}</span>
+        <span class="text-right font-mono text-[13px] text-[var(--text)] tabular-nums">{{ row.dpsB | formatDamage }}</span>
+        <span [class]="'text-right font-mono text-[13px] tabular-nums ' + deltaColor">{{ row.deltaDps >= 0 ? '+' : '' }}{{ row.deltaDps | formatDamage }}</span>
+        <div class="relative h-3 rounded bg-[var(--bg)]" aria-hidden="true">
+          <div class="absolute inset-y-0 left-1/2 w-px bg-[var(--border)]"></div>
+          @if (row.deltaDps > 0) {
+            <div class="absolute inset-y-0 right-1/2 rounded-l bg-[var(--accent)]" [style.width.%]="barPct(row.deltaDps) / 2"></div>
+          } @else if (row.deltaDps < 0) {
+            <div class="absolute inset-y-0 left-1/2 rounded-r bg-[var(--warning)]" [style.width.%]="barPct(row.deltaDps) / 2"></div>
+          }
+        </div>
+      </div>
+    } @empty {
+      <div class="px-4 py-6 text-center text-[13px] text-[var(--muted)]">No damage recorded for either player on this pull.</div>
+    }
+  </div>
+} @else {
+  <div class="px-4 py-8 text-center text-[13px] text-[var(--muted)]">Pick a pull and a player on both sides, then compare.</div>
+}

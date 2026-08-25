@@ -1,12 +1,2 @@
-import { InjectionToken } from '@angular/core';
-import { DataSource } from '../../../../core/data-source/data-source';
-import { EncounterGearStats } from '../../../../domain/encounter/encounter.models';
-import { BenchHeader } from '../../../../domain/analysis/bench-pipeline-service';
-
-export interface GearBench extends BenchHeader {
-  talent_builds: EncounterGearStats['talent_builds'];
-  trinkets: EncounterGearStats['trinkets'];
-  enchants: EncounterGearStats['enchants'];
-}
-
-export const GEAR_DATA_SOURCE = new InjectionToken<DataSource<GearBench>>('GEAR_DATA_SOURCE');
+// Re-exported from domain/gear (not defined here) so the talents slice can share this bench without a slice-to-slice import.
+export { GEAR_DATA_SOURCE } from '../../../../domain/gear/gear-bench';

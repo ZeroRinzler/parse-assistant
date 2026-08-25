@@ -11,5 +11,9 @@ export const routes: Routes = [
     path: 'pre',
     loadComponent: () => import('./features/raid-analysis/pages/pre-fight/pre-fight').then(m => m.PreFight),
   },
+  {
+    path: 'compare',
+    loadComponent: () => import('./features/raid-analysis/pages/compare/compare').then(m => m.Compare),
+  },
   { path: '**', redirectTo: '' },
 ];

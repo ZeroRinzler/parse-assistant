@@ -5,7 +5,7 @@ import { mapFeatureStub, stubBenchTokens } from '../../../../../testing/page-stu
 import { BURST_DATA_SOURCE } from '../../burst-windows/data-access/burst-data-source';
 import { ROTATION_DATA_SOURCE } from '../../rotation/data-access/rotation-data-source';
 import { DEFENSIVE_DATA_SOURCE } from '../../defensive/data-access/defensive-data-source';
-import { GEAR_DATA_SOURCE } from '../../gear/data-access/gear-data-source';
+import { GEAR_DATA_SOURCE } from '../../../../domain/gear/gear-bench';
 import { MAP_DATA_SOURCE } from '../../map/data-access/map-data-source';
 import { NORTHERN_SKY_DATA_SOURCE } from '../../northern-sky/data-access/northern-sky-data-source';
 import { DataFileApiService } from '../../../../core/data-files/data-file-api-service';

@@ -1,0 +1,53 @@
+@if (error() || !available()) {
+  <wl-load-state heading="Stats" subtitle="Stats vs top parses." [error]="error()"></wl-load-state>
+} @else {
+<div class="bg-[var(--surface)] border border-[var(--border)] rounded-[10px] overflow-hidden">
+
+  @if (view().comparison) {
+    <!-- No "Fix" column here (unlike Gear/Talents): a stat delta has no remedy to prescribe, it just reports the gap. -->
+    <div class="px-4 pt-3 pb-2 md:grid md:grid-cols-[minmax(0,1fr)_90px_90px_90px] md:gap-[14px] md:items-baseline">
+      <div>
+        <div class="text-[17px] font-semibold text-[var(--text)]">Stats &amp; item level</div>
+        <div class="text-xs text-[var(--muted)] mt-0.5">{{ subtitle() }}</div>
+      </div>
+      <div class="hidden md:block text-[10px] uppercase tracking-widest text-[var(--muted)] text-right truncate">{{ youColumnLabel() }}</div>
+      <div class="hidden md:block text-[10px] uppercase tracking-widest text-[var(--muted)] text-right truncate">{{ statsColumnLabel() }}</div>
+      <div class="hidden md:block text-[10px] uppercase tracking-widest text-[var(--muted)] text-right">Measured</div>
+    </div>
+
+    @for (row of view().rows; track row.label) {
+      <div class="grid grid-cols-[minmax(0,1fr)_90px_90px_90px] gap-x-[14px] items-center px-4 py-[10px] border-t border-[var(--border)]">
+        <div class="text-sm text-[var(--text)]">{{ row.label }}</div>
+        <div class="text-right text-[13px] tabular-nums text-[var(--muted)]">{{ row.player | number:'1.0-0' }}</div>
+        <div class="text-right text-[13px] tabular-nums text-[var(--muted)]">{{ row.bench | number:'1.0-0' }}</div>
+        <!-- Neutral text, deliberately no green/red: whether more of a stat is better depends on spec/patch context this app does not model. -->
+        <div class="text-right text-[15px] font-semibold tabular-nums text-[var(--text)]">{{ row.delta | signedNumber }}</div>
+      </div>
+    } @empty {
+      <div class="flex items-center gap-2 border-t border-[var(--border)] px-4 py-3 text-[13px] text-[var(--muted)]">
+        No stats data.
+      </div>
+    }
+  } @else {
+    <div class="px-4 pt-3 pb-2 md:grid md:grid-cols-[minmax(0,1fr)_90px] md:gap-[14px] md:items-baseline">
+      <div>
+        <div class="text-[17px] font-semibold text-[var(--text)]">Stats &amp; item level</div>
+        <div class="text-xs text-[var(--muted)] mt-0.5">{{ subtitle() }}</div>
+      </div>
+      <div class="hidden md:block text-[10px] uppercase tracking-widest text-[var(--muted)] text-right">Measured</div>
+    </div>
+
+    @for (row of view().benchRows; track row.label) {
+      <div class="grid grid-cols-[minmax(0,1fr)_90px] gap-x-[14px] items-center px-4 py-[10px] border-t border-[var(--border)]">
+        <div class="text-sm text-[var(--text)]">{{ row.label }}</div>
+        <div class="text-right text-[15px] font-semibold tabular-nums text-[var(--text)]">{{ row.value | number:'1.0-0' }}</div>
+      </div>
+    } @empty {
+      <div class="flex items-center gap-2 border-t border-[var(--border)] px-4 py-3 text-[13px] text-[var(--muted)]">
+        No stats data.
+      </div>
+    }
+  }
+
+</div>
+}

@@ -1,11 +1,11 @@
 @if (error() || !available()) {
-  <wl-load-state heading="Defensives" subtitle="Defensive cooldowns vs top parses." [error]="error()"></wl-load-state>
+  <wl-load-state heading="Defensives" [subtitle]="cdSubtitle()" [error]="error()"></wl-load-state>
 }
 @else {
   @if (findingRows().length || onPlan().length) {
     <wl-finding-table
       heading="Defensives"
-      subtitle="Defensive cooldowns vs top parses."
+      [subtitle]="cdSubtitle()"
       [rows]="findingRows()"
       [onPlan]="onPlan()"
       [showMap]="showMap()"
@@ -23,8 +23,9 @@
       [showCasts]="false"
       [showMap]="showMap()"
       [showClip]="showClip()"
+      [peerLabel]="peerLabel()"
       heading="Defensive Windows"
-      subtitle="Damage taken in top-parse defensive windows vs top parses."
+      [subtitle]="windowsSubtitle()"
       (openMap)="onOpenMap($event)"
       (openClip)="onOpenClip($event)">
     </wl-window-comparison>

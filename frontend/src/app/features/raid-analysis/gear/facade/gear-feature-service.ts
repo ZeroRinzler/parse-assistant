@@ -6,17 +6,13 @@ import { WclApiService } from '../../../../core/wcl/wcl-api-service';
 import { Result, Results } from '../../../../core/http/result';
 import { HttpLoadErrors } from '../../../../core/http/http-load-error';
 import { GearExtractService, GameNames } from '../domain/gear-extract-service';
-import { GearStatus, EnchantRow, TrinketRow, TalentBuildRow, BenchEnchantRow, BenchTrinketRow } from '../../../../domain/gear/gear-comparison-service';
-import { GEAR_DATA_SOURCE, GearBench } from '../data-access/gear-data-source';
+import { GearStatus, EnchantRow, TrinketRow, BenchEnchantRow, BenchTrinketRow } from '../../../../domain/gear/gear-comparison-service';
+import { GEAR_DATA_SOURCE, GearBench } from '../../../../domain/gear/gear-bench';
 import { LoggerService } from '../../../../core/observability/logger-service';
-import { TalentKeyService } from '../../../../domain/gear/talent-key-service';
 import { GearComparisonService } from '../../../../domain/gear/gear-comparison-service';
 
 export interface GearComparisonView {
   comparison: boolean;
-
-  talentBuilds: TalentBuildRow[];
-  talentStatus: { status: GearStatus; note: string };
 
   trinketRows: TrinketRow[];
   trinketStatus: GearStatus;
@@ -30,7 +26,6 @@ export interface GearComparisonView {
 @Injectable({ providedIn: 'root' })
 export class GearFeatureService {
   private readonly logger = inject(LoggerService);
-  private readonly talentKeys = inject(TalentKeyService);
   private readonly gearComparison = inject(GearComparisonService);
   private readonly gearExtract = inject(GearExtractService);
   private readonly source = inject(GEAR_DATA_SOURCE);
@@ -46,6 +41,15 @@ export class GearFeatureService {
     const playerGear = await this.fetchPlayerGear(reportCode, fightId, playerId);
     if (!playerGear.ok) return playerGear;
     return Results.ok(this.buildGearView(playerGear.value, this.benchToStats(bench.value)));
+  }
+
+  // `bench` is caller-supplied (a compare view's synthesized 1-parse bench), not looked up from the DataSource.
+  async loadComparisonViewFromBench(
+    bench: GearBench, reportCode: string, fightId: number, playerId: number,
+  ): Promise<Result<GearComparisonView>> {
+    const playerGear = await this.fetchPlayerGear(reportCode, fightId, playerId);
+    if (!playerGear.ok) return playerGear;
+    return Results.ok(this.buildGearView(playerGear.value, this.benchToStats(bench)));
   }
 
   async loadBenchView(spec: string, encounterId: number): Promise<Result<GearComparisonView>> {
@@ -81,7 +85,6 @@ export class GearFeatureService {
   emptyGearView(): GearComparisonView {
     return {
       comparison: false,
-      talentBuilds: [], talentStatus: { status: 'unknown', note: 'No talent data.' },
       trinketRows: [], trinketStatus: 'ok', benchTrinketRows: [],
       enchantRows: [], enchantStatus: 'ok', benchEnchantRows: [],
     };
@@ -96,12 +99,11 @@ export class GearFeatureService {
       return Results.permanent('No combatant info in this log.', 'gear.combatant-info');
     }
     const { trinkets, enchants } = this.gearExtract.extractGear(event.gear);
-    const talent_key = this.talentKeys.talentKeyFromTree(event.talentTree);
 
     this.gearExtract.fillGameNames(trinkets, 'i', names);
     this.gearExtract.fillGameNames(enchants, 'e', names);
 
-    return Results.ok({ talent_key, trinkets, enchants });
+    return Results.ok({ trinkets, enchants });
   }
 
   protected benchToStats(bench: GearBench): EncounterGearStats {
@@ -110,14 +112,11 @@ export class GearFeatureService {
 
   // playerGear is never null: the card builds comparison rows only once the combatant-info gear is in hand.
   protected buildGearView(playerGear: CharacterGear, stats: EncounterGearStats): GearComparisonView {
-    const playerKey = playerGear.talent_key ?? '';
     const enchantRows = this.gearComparison.buildEnchantRows(playerGear, stats);
     const trinketRows = this.gearComparison.buildTrinketRows(playerGear, stats);
 
     return {
       comparison: true,
-      talentBuilds: this.gearComparison.buildTalentBuilds(stats, playerKey),
-      talentStatus: this.gearComparison.talentStatusOf(stats, playerKey),
       trinketRows,
       trinketStatus: this.gearComparison.trinketStatusOf(trinketRows),
       benchTrinketRows: [],
@@ -131,8 +130,6 @@ export class GearFeatureService {
   protected buildBenchGearView(stats: EncounterGearStats): GearComparisonView {
     return {
       comparison: false,
-      talentBuilds: this.gearComparison.buildTalentBuilds(stats, ''),
-      talentStatus: this.gearComparison.talentStatusOf(stats, ''),
       trinketRows: [],
       trinketStatus: 'ok',
       benchTrinketRows: this.gearComparison.buildBenchTrinketRows(stats),

@@ -87,6 +87,7 @@ export interface WclGearItem {
   icon?: string;
   permanentEnchant?: number | string;
   permanentEnchantName?: string;
+  itemLevel?: number;
 }
 
 /** `id` is the talent entry, never a spell id. */
@@ -96,10 +97,22 @@ export interface WclTalentNode {
   rank?: number;
 }
 
+// Secondary/primary stats ride flat on the combatantinfo event itself (confirmed against a live report) - there is no nested `stats` sub-object.
 export interface WclCombatantInfo {
   sourceID?: number;
   gear?: WclGearItem[];
   talentTree?: WclTalentNode[];
+  strength?: number;
+  agility?: number;
+  intellect?: number;
+  stamina?: number;
+  critMelee?: number;
+  hasteMelee?: number;
+  mastery?: number;
+  versatilityDamageDone?: number;
+  avoidance?: number;
+  leech?: number;
+  speed?: number;
 }
 
 // CombatantInfo rows come back through the same `events.data` field as ordinary events, so one type has to cover both.
@@ -125,8 +138,8 @@ export interface WclRawRanking {
 // Either a JSON blob (string) or an already-parsed object; consumers unwrap both forms (see `unwrapRankings`).
 export type WclRankingsBlob = string | { rankings?: WclRawRanking[] };
 
-// Either a JSON blob (string) or an already-parsed object; `data.entries` carries one row per source actor (`id` = actor id, `total` = summed damage).
-export type WclTableBlob = string | { data?: { entries?: { id: number; total: number }[] } };
+// Either a JSON blob (string) or an already-parsed object; scoped to one `sourceID`, WCL regroups `data.entries` by ability (`guid`, `name`) instead of by actor.
+export type WclTableBlob = string | { data?: { entries?: { id: number; total: number; guid?: number; name?: string; hitCount?: number; castCount?: number }[] } };
 
 // WCL returns `null` for an id it cannot resolve, so the batched map is `entry | null` per alias.
 export interface WclRawAbility {
@@ -154,8 +167,23 @@ export interface WclClass {
   specs?: { name: string; slug: string }[];
 }
 
+/** Rating values as WCL reports them (never a percent); `primary` is whichever of Strength/Agility/Intellect the class actually uses. */
+export interface SecondaryStats {
+  primary: number;
+  stamina: number;
+  crit: number;
+  haste: number;
+  mastery: number;
+  versatility: number;
+  avoidance: number;
+  leech: number;
+  speed: number;
+}
+
 export interface CharacterGear {
   talent_key?: string;
   trinkets?: { slot: number; id: number; name: string; icon?: string }[];
   enchants?: { slot: number; id: number; name: string }[];
+  stats?: SecondaryStats;
+  avgItemLevel?: number;
 }

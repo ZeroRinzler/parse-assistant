@@ -169,7 +169,7 @@ describe('windowSpells', () => {
 
   it('warns with the missing id so a bug report can reproduce it', () => {
     wclProjections.windowSpells([UNKNOWN_SPELL_ID], abilities);
-    // logWarn(context, id) lands as two console.warn args: '[warcraft-learner] <context>:', id.
+    // logWarn(context, id) lands as two console.warn args: '[Parse Assistant] <context>:', id.
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('windowSpells'), UNKNOWN_SPELL_ID);
   });
 });

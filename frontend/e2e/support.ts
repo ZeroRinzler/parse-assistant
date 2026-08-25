@@ -52,6 +52,6 @@ export async function showsFindingRows(table: Locator, chip?: RegExp): Promise<v
 }
 
 export async function showsOnPlan(table: Locator): Promise<void> {
-  await shows(table, 'On plan');
+  await shows(table, 'On point');
   await expect(table.locator('.chip-onplan').first()).toBeVisible();
 }

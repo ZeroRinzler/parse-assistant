@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { WindowComparison } from './window-comparison';
 import type { ComparisonWindow, WindowStatus, RangeRow } from '../../../domain/analysis/window-comparison.models';
 import { badgeStatus, mountDom, MountedDom } from '../../../../testing/component-harness';
+import type { WindowBuffPresence } from '../../../domain/analysis/buff-presence-service';
 
 const CHIP = 'button[role="option"]';
 const LISTBOX = '[role="listbox"]';
@@ -244,6 +245,135 @@ describe('WindowComparison delta badge', () => {
     expect(dom.text()).toContain('1M');
     expect(dom.text()).not.toContain('2M');
     expect(dom.query(DELTA_BADGE)).toBeNull();
+  });
+});
+
+describe('WindowComparison peer bullet chart', () => {
+  const PEER_BAR = 'div.h-4';
+
+  it('renders two explicit bars and the numeric delta when comparing against a peer', () => {
+    const PLAYER_DAMAGE = 5_500_000;
+    const PEER_DAMAGE = 7_700_000;
+    const dom = render([win({ playerPct: PLAYER_DAMAGE, topAvg: PEER_DAMAGE })], { peerLabel: 'Bob' });
+
+    expect(dom.queryAll(PEER_BAR)).toHaveLength(2);
+    expect(dom.text()).toContain('5.5M');
+    expect(dom.text()).toContain('7.7M');
+    expect(dom.text()).toContain('Bob');
+    expect(dom.text()).toContain('-2.2M');
+    expect(dom.text()).toContain('-29%');
+  });
+
+  it('falls back to the single-bar range gauge without a peer label', () => {
+    const dom = render([win({ playerPct: 100, topAvg: 100, topMin: 80, topMax: 120 })]);
+
+    expect(dom.queryAll(PEER_BAR)).toHaveLength(0);
+    expect(dom.query(BAR_TRACK)).not.toBeNull();
+  });
+});
+
+describe('WindowComparison recommended cooldowns', () => {
+  it('renders the chips by default', () => {
+    const window: ComparisonWindow = { ...win({}), spells: [{ id: 1, icon: 'i.jpg', name: 'Trueshot' }] };
+    expect(render([window]).text()).toContain('Recommended cooldowns');
+  });
+
+  it('hides the chips when showRecommendedCooldowns is false (burst uses its own buff comparison instead)', () => {
+    const window: ComparisonWindow = { ...win({}), spells: [{ id: 1, icon: 'i.jpg', name: 'Trueshot' }] };
+    const dom = render([window], { showRecommendedCooldowns: false });
+    expect(dom.text()).not.toContain('Recommended cooldowns');
+  });
+});
+
+describe('WindowComparison buff comparison', () => {
+  const presence = (over: Partial<WindowBuffPresence> = {}): WindowBuffPresence =>
+    ({ potion: false, powerInfusion: false, bloodlust: false, cooldowns: {}, ...over });
+
+  it('renders exactly the Potion / Power Infusion / Bloodlust rows, active/missing per side', () => {
+    const window: ComparisonWindow = {
+      ...win({}),
+      buffs: { player: presence({ potion: true, bloodlust: true }), peer: presence({ powerInfusion: true }) },
+    };
+    const dom = render([window], { peerLabel: 'Bob' });
+
+    expect(dom.text()).toContain('Potion');
+    expect(dom.text()).toContain('Power Infusion');
+    expect(dom.text()).toContain('Bloodlust');
+  });
+
+  it('headers the two columns with the player\'s own name and the peer\'s name', () => {
+    const window: ComparisonWindow = {
+      ...win({}),
+      buffs: { player: presence(), peer: presence() },
+    };
+    const dom = render([window], { peerLabel: 'Bob', youLabel: 'Ana' });
+
+    expect(dom.text()).toContain('Ana');
+    expect(dom.text()).toContain('Bob');
+  });
+
+  it('falls back to the generic "You" header when no youLabel is supplied', () => {
+    const window: ComparisonWindow = {
+      ...win({}),
+      buffs: { player: presence(), peer: presence() },
+    };
+    const dom = render([window], { peerLabel: 'Bob' });
+
+    expect(dom.text()).toContain('You');
+  });
+
+  it('marks a missing buff with the cross icon, not the circle-remove icon', () => {
+    const window: ComparisonWindow = {
+      ...win({}),
+      buffs: { player: presence(), peer: presence() },
+    };
+    const dom = render([window], { peerLabel: 'Bob' });
+
+    expect(dom.text()).toContain('Missing');
+    expect(dom.queryAll('mat-icon').some(el => el.textContent.trim() === 'close')).toBe(true);
+  });
+
+  it('renders nothing when the window carries no buff data (bench-mode, no peer)', () => {
+    const dom = render([win({})]);
+    expect(dom.text()).not.toContain('Active');
+    expect(dom.text()).not.toContain('Missing');
+  });
+
+  it('adds a row per recommended cooldown of this window, with its game icon', () => {
+    const TRUESHOT_ID = 288613;
+    const window: ComparisonWindow = {
+      ...win({}),
+      spells: [{ id: TRUESHOT_ID, icon: 'trueshot.jpg', name: 'Trueshot' }],
+      buffs: {
+        player: presence({ cooldowns: { [TRUESHOT_ID]: true } }),
+        peer: presence({ cooldowns: { [TRUESHOT_ID]: false } }),
+      },
+    };
+    const dom = render([window], { peerLabel: 'Bob' });
+
+    expect(dom.text()).toContain('Trueshot');
+    expect(dom.query('wl-game-icon')).not.toBeNull();
+  });
+
+  it('keeps a cooldown row visible on a window that does not itself recommend it', () => {
+    const TRUESHOT_ID = 288613;
+    const recommendsIt: ComparisonWindow = {
+      ...win({}),
+      spells: [{ id: TRUESHOT_ID, icon: 'trueshot.jpg', name: 'Trueshot' }],
+      buffs: { player: presence({ cooldowns: { [TRUESHOT_ID]: true } }), peer: presence({ cooldowns: { [TRUESHOT_ID]: false } }) },
+    };
+    const doesNotRecommendIt: ComparisonWindow = {
+      ...win({}),
+      timeStartS: 60, timeEndS: 70,
+      spells: [],
+      buffs: { player: presence({ cooldowns: { [TRUESHOT_ID]: false } }), peer: presence({ cooldowns: { [TRUESHOT_ID]: false } }) },
+    };
+    const dom = render([recommendsIt, doesNotRecommendIt], { peerLabel: 'Bob' });
+
+    dom.queryAll(CHIP)[1]?.click();
+    dom.detectChanges();
+
+    expect(dom.text()).toContain('Trueshot');
   });
 });
 

@@ -85,7 +85,7 @@ export class IngestOrchestratorService {
   }
 
   private async ingestAll(): Promise<void> {
-    console.log('warcraft-learner - Parse Ingestion');
+    console.log('Parse Assistant - Parse Ingestion');
     const version = String(INGEST_VERSION);
     console.log(`Ingest version: ${version}`);
 

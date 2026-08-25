@@ -39,6 +39,12 @@ export type TableDataType =
   | 'Survivability'
   | 'Threat';
 
+export type ViewType =
+  | 'Ability'
+  | 'Default'
+  | 'Source'
+  | 'Target';
+
 export type ReportQueryVariables = Exact<{
   code: string;
 }>;
@@ -78,6 +84,18 @@ export type TableQueryVariables = Exact<{
 }>;
 
 export type TableQuery = { reportData: { report: { table: WclTableBlob | null } | null } | null };
+
+export type TableForSourceQueryVariables = Exact<{
+  code: string;
+  fightIDs: Array<number | null | undefined> | number;
+  dataType?: TableDataType | null | undefined;
+  sourceID?: number | null | undefined;
+  viewBy?: ViewType | null | undefined;
+  startTime?: number | null | undefined;
+  endTime?: number | null | undefined;
+}>;
+
+export type TableForSourceQuery = { reportData: { report: { table: WclTableBlob | null } | null } | null };
 
 export type ResurrectsQueryVariables = Exact<{
   code: string;

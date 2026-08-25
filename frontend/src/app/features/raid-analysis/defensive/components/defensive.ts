@@ -6,8 +6,10 @@ import {
 import { FindingRowsService } from '../../../../shared/components/finding-table/finding-rows-service';
 import { WindowComparison } from '../../../../shared/components/window-comparison/window-comparison';
 import { LoadState } from '../../../../shared/components/load-state/load-state';
-import { DefensiveFeatureService, DefensiveMapAnchor } from '../facade/defensive-feature-service';
+import { DefensiveFeatureService, DefensiveMapAnchor, DefensiveView } from '../facade/defensive-feature-service';
+import { DefensiveBench } from '../data-access/defensive-data-source';
 import { LoadResourceService } from '../../../../shared/state/load-resource-service';
+import { Result } from '../../../../core/http/result';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -29,6 +31,20 @@ export class Defensive {
   readonly showMap = input<boolean>(false);
   /** Clip button is available once the page's rolling buffer covers this fight. */
   readonly showClip = input<boolean>(false);
+  /** Set only by the compare page: a bench synthesized from the other log's single parse, in place of the top-parse bench. */
+  readonly compareBench = input<Result<DefensiveBench> | null>(null);
+  /** Set only by the compare page: the other log's player name, in place of "top parses" in the card copy. */
+  readonly peerLabel = input<string | null>(null);
+
+  protected readonly cdSubtitle = computed(() => {
+    const peer = this.peerLabel();
+    return peer ? `Defensive cooldowns vs ${peer}.` : 'Defensive cooldowns vs top parses.';
+  });
+
+  protected readonly windowsSubtitle = computed(() => {
+    const peer = this.peerLabel();
+    return peer ? `Damage taken in each defensive window vs ${peer}.` : 'Damage taken in top-parse defensive windows vs top parses.';
+  });
 
   readonly openMap = output<DefensiveMapAnchor>();
   readonly openClip = output<ClipAnchor>();
@@ -44,8 +60,13 @@ export class Defensive {
       report: this.report(),
       fight: this.fight(),
       player: this.player(),
+      compareBench: this.compareBench(),
     }),
-    load: p => this.defensive.loadAnalysisView(p.spec, p.encounterId, p.report, p.fight, p.player),
+    load: (p): Promise<Result<DefensiveView>> => p.compareBench
+      ? p.compareBench.ok
+        ? this.defensive.loadAnalysisViewFromBench(p.compareBench.value, p.report, p.fight, p.player)
+        : Promise.resolve(p.compareBench)
+      : this.defensive.loadAnalysisView(p.spec, p.encounterId, p.report, p.fight, p.player),
     context: 'defensive.loadAnalysisView',
     initialAvailable: true,
     busyChange: this.busyChange,

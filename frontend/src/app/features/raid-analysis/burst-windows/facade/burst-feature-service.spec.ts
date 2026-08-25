@@ -5,8 +5,10 @@ import { BURST_DATA_SOURCE, BurstBench } from '../data-access/burst-data-source'
 import { sliceService } from '../../../../../testing/service-harness';
 import { BurstFeatureService } from './burst-feature-service';
 import { wclReport } from '../../../../../testing/builders/wcl-fixtures';
-import { SHADOW_BLADES, SHADOW_BLADES_DAMAGE } from '../../../../../testing/spell-ids';
-import { cast, damage } from '../../../../../testing/builders/events';
+import { SHADOW_BLADES, SHADOW_BLADES_DAMAGE, BLOODLUST, VANISH } from '../../../../../testing/spell-ids';
+import { cast, damage, applyBuff } from '../../../../../testing/builders/events';
+import { WindowBuffPresence } from '../../../../domain/analysis/buff-presence-service';
+import { ComparisonWindow } from '../../../../domain/analysis/window-comparison.models';
 import { WclProjectionsService } from '../../../../domain/analysis/wcl-projections-service';
 import { TestBed } from '@angular/core/testing';
 import { WCL_TRANSPORT } from '../../../../core/wcl/wcl-transport';
@@ -60,6 +62,22 @@ describe('splitCommonCds', () => {
 
   it('is empty for no cds', () => {
     expect(svc['splitCommonCds']([], {})).toEqual({ spellIds: [], labels: [] });
+  });
+});
+
+describe('fightCooldownIds', () => {
+  const asWindow = (commonCds: string[]): BurstWindow =>
+    ({ time_s: 0, window_length_s: 20, dmg_avg: 0, dmg_min: 0, dmg_max: 0, dmg_stddev: 0, common_cds: commonCds, ability_breakdown: [] });
+
+  it('unions cooldown ids across every window, deduped, so every window shares the same rows', () => {
+    const windows = [asWindow(['Shadow Blades']), asWindow(['Shadow Blades', 'Vanish']), asWindow([])];
+    const out = svc['fightCooldownIds'](windows, { 'Shadow Blades': SHADOW_BLADES, Vanish: VANISH });
+    expect(out).toEqual([SHADOW_BLADES, VANISH]);
+  });
+
+  it('is empty with no windows or no known names', () => {
+    expect(svc['fightCooldownIds']([], {})).toEqual([]);
+    expect(svc['fightCooldownIds']([asWindow(['Mystery'])], {})).toEqual([]);
   });
 });
 
@@ -123,6 +141,27 @@ describe('buildBurstView', () => {
   });
 });
 
+describe('attachBuffPresence', () => {
+  const presence = (over: Partial<WindowBuffPresence> = {}): WindowBuffPresence =>
+    ({ potion: false, powerInfusion: false, bloodlust: false, cooldowns: {}, ...over });
+  const window: ComparisonWindow = {
+    timeStartS: 0, timeEndS: 10, spells: [], labels: [], status: 'good', statusIcon: 'check_circle',
+    overview: { label: '', icon: '', playerPct: null, topAvg: null, topMin: null, topMax: null }, detailRows: [],
+  };
+
+  it('pairs player and peer presence onto each window by index', () => {
+    const player = [presence({ bloodlust: true })];
+    const peer = [presence({ potion: true })];
+    const out = svc['attachBuffPresence']([window], player, peer);
+    expect(out[0]?.buffs).toEqual({ player: player[0], peer: peer[0] });
+  });
+
+  it('leaves a window untouched when either side has no entry at that index', () => {
+    const out = svc['attachBuffPresence']([window], [], []);
+    expect(out[0]?.buffs).toBeUndefined();
+  });
+});
+
 describe('findPlayerBurstWindows', () => {
   const window: BurstWindow = {
     time_s: 10, window_length_s: 20, dmg_avg: 0, dmg_min: 0, dmg_max: 0, dmg_stddev: 0, common_cds: [], ability_breakdown: [],
@@ -159,23 +198,29 @@ const wclFake = {
   getReport: async () => wclReport({
     actors: [], abilities: [{ gameID: SHADOW_BLADES_DAMAGE, name: 'Eviscerate', icon: 'inv' }],
   }),
-  getAllEvents: async (_code: string, _fightId: number, dataType: string) =>
-    dataType === 'Casts' ? [cast(SHADOW_BLADES, 11)] : [damage(SHADOW_BLADES_DAMAGE, 12, 950)],
+  getAllEvents: async (_code: string, _fightId: number, dataType: string) => {
+    if (dataType === 'Casts') return [cast(SHADOW_BLADES, 11)];
+    // Bloodlust up 5s into the bench's [10, 30) window, self-sourced so it reads as the raid buff landing on the player.
+    if (dataType === 'Buffs') return [applyBuff(BLOODLUST, 15, { target: 10 })];
+    return [damage(SHADOW_BLADES_DAMAGE, 12, 950)];
+  },
 };
 
 function withBench(bench: Result<BurstBench>, wcl: unknown = wclFake): BurstFeatureService {
   return sliceService(BURST_DATA_SOURCE, BurstFeatureService, bench, wcl);
 }
 
+const benchWindow: BurstBench['windows'][number] = {
+  time_s: 10, window_length_s: 20, dmg_avg: 1000, dmg_min: 800, dmg_max: 1200, dmg_stddev: 100,
+  common_cds: ['Shadow Blades'],
+  ability_breakdown: [{ spell_id: SHADOW_BLADES_DAMAGE, avg_damage: 600, min_damage: 400, max_damage: 800, avg_casts: 2 }],
+};
+
 const benchFixture: BurstBench = {
   spec: 'SubtletyRogue', encounter_id: 1, encounter_name: 'Test', sample_count: 5,
   cd_spell_ids: { 'Shadow Blades': SHADOW_BLADES },
   ability_icons: { [SHADOW_BLADES]: { icon: 'sb', name: 'Shadow Blades' }, [SHADOW_BLADES_DAMAGE]: { icon: 'evis', name: 'Eviscerate' } },
-  windows: [{
-    time_s: 10, window_length_s: 20, dmg_avg: 1000, dmg_min: 800, dmg_max: 1200, dmg_stddev: 100,
-    common_cds: ['Shadow Blades'],
-    ability_breakdown: [{ spell_id: SHADOW_BLADES_DAMAGE, avg_damage: 600, min_damage: 400, max_damage: 800, avg_casts: 2 }],
-  }],
+  windows: [benchWindow],
 };
 
 describe('BurstFeatureService', () => {
@@ -227,5 +272,49 @@ describe('BurstFeatureService', () => {
     const onFailure = await service.loadPlayerView('SubtletyRogue', 1, FAILING_CODE, 1, 10);
     expect(onFailure.ok).toBe(false);
     if (!onFailure.ok) expect(onFailure.error).toMatchObject({ kind: 'permanent', id: 'burst.player-view' });
+  });
+
+  it('compare mode: fetches the player\'s own buff presence and pairs it with the supplied peer presence', async () => {
+    // benchFixture's one window recommends "Shadow Blades" (resolved to SHADOW_BLADES via cd_spell_ids).
+    const peerBuffs: WindowBuffPresence[] = [{ potion: true, powerInfusion: false, bloodlust: false, cooldowns: { [SHADOW_BLADES]: true } }];
+    const result = await withBench(Results.ok(benchFixture)).loadPlayerViewFromBench(benchFixture, 'rep', 1, 10, peerBuffs);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(first(result.value.windows).buffs).toEqual({
+      player: { potion: false, powerInfusion: false, bloodlust: true, cooldowns: { [SHADOW_BLADES]: false } },
+      peer: peerBuffs[0],
+    });
+  });
+
+  it('compare mode: a cooldown recommended in only one window still gets a row in every window', async () => {
+    const twoWindowBench: BurstBench = {
+      ...benchFixture,
+      windows: [benchWindow, { ...benchWindow, time_s: 60, common_cds: [] }],
+    };
+    const peerBuffs: WindowBuffPresence[] = [
+      { potion: false, powerInfusion: false, bloodlust: false, cooldowns: { [SHADOW_BLADES]: true } },
+      { potion: false, powerInfusion: false, bloodlust: false, cooldowns: { [SHADOW_BLADES]: false } },
+    ];
+    const result = await withBench(Results.ok(twoWindowBench)).loadPlayerViewFromBench(twoWindowBench, 'rep', 1, 10, peerBuffs);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // Window 2's own common_cds is empty, but it still carries a (false) entry for Shadow Blades.
+    expect(result.value.windows[1]?.buffs?.player.cooldowns).toEqual({ [SHADOW_BLADES]: false });
+  });
+
+  it('non-compare mode: never fetches Buffs, and windows carry no buff comparison', async () => {
+    let sawBuffsFetch = false;
+    const wclNoBuffs = {
+      ...wclFake,
+      getAllEvents: async (code: string, fightId: number, dataType: string) => {
+        if (dataType === 'Buffs') sawBuffsFetch = true;
+        return wclFake.getAllEvents(code, fightId, dataType);
+      },
+    };
+    const result = await withBench(Results.ok(benchFixture), wclNoBuffs).loadPlayerViewFromBench(benchFixture, 'rep', 1, 10);
+    expect(sawBuffsFetch).toBe(false);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(first(result.value.windows).buffs).toBeUndefined();
   });
 });

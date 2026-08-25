@@ -1,4 +1,5 @@
 import { TalentDiff } from '../gear/talent.models';
+import { SecondaryStats } from '../../core/wcl/wcl.models';
 
 export interface SpecEntry {
   spec: string;
@@ -65,4 +66,7 @@ export interface EncounterGearStats {
   talent_builds: { key: string; pct: number; report_code: string; fight_id: number; player_name: string; source_id: number; diff?: TalentDiff[] }[];
   trinkets: Record<number, { id: number; name: string; icon: string; pct: number }[]>;
   enchants: Record<number, { id: number; name: string; pct: number }[]>;
+  /** Averaged across the bench's parses - for a compare-page 1-parse bench this equals that peer's raw numbers. */
+  avg_stats?: SecondaryStats;
+  avg_item_level?: number;
 }

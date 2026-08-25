@@ -29,6 +29,8 @@ export interface AnalysisFinding {
   details?: {
     cd_name?: string;
     remedy?: string;
+    /** Short context line rendered under the event cell (e.g. when Bloodlust started for a BL-alignment finding). */
+    context_note?: string;
   };
   occurrences: FindingOccurrence[];
   occurrenceTarget?: string;

@@ -19,13 +19,14 @@ export function cast(
   };
 }
 
-/** A buff gained (`type: 'applybuff'`). A self-buff lands on its target, so `target` sets both actor fields. */
-export function applyBuff(spellId: number, atS: number, opts?: { target?: number }): WclEvent {
+/** A buff gained (`type: 'applybuff'`). A self-buff lands on its target, so `target` sets both actor fields; pass `source` to model one applied by someone else. */
+export function applyBuff(spellId: number, atS: number, opts?: { target?: number; source?: number }): WclEvent {
   return {
     type: 'applybuff',
     timestamp: atS * MS_PER_SECOND,
     abilityGameID: spellId,
-    ...(opts?.target !== undefined && { sourceID: opts.target, targetID: opts.target }),
+    ...(opts?.target !== undefined && { targetID: opts.target }),
+    ...(opts?.source !== undefined ? { sourceID: opts.source } : opts?.target !== undefined && { sourceID: opts.target }),
   };
 }
 

@@ -2,8 +2,11 @@ import { ChangeDetectionStrategy, Component, computed, inject, input, output } f
 import { WindowComparison } from '../../../../shared/components/window-comparison/window-comparison';
 import { LoadState } from '../../../../shared/components/load-state/load-state';
 import { ClipAnchor } from '../../../../domain/capture/capture.models';
-import { BurstFeatureService, BurstMapAnchor } from '../facade/burst-feature-service';
+import { BurstFeatureService, BurstMapAnchor, BurstView } from '../facade/burst-feature-service';
+import { BurstBench } from '../data-access/burst-data-source';
 import { LoadResourceService } from '../../../../shared/state/load-resource-service';
+import { Result } from '../../../../core/http/result';
+import { WindowBuffPresence } from '../../../../domain/analysis/buff-presence-service';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -22,6 +25,19 @@ export class BurstWindows {
   readonly player = input<number>(0);
   readonly showMap = input<boolean>(false);
   readonly showClip = input<boolean>(false);
+  /** Set only by the compare page: a bench synthesized from the other log's single parse, in place of the top-parse bench. */
+  readonly compareBench = input<Result<BurstBench> | null>(null);
+  /** Set only by the compare page: the other log's player name, in place of "top parses" in the card copy. */
+  readonly peerLabel = input<string | null>(null);
+  /** Set only by the compare page: the analyzed player's own name, in place of the generic "You". */
+  readonly youLabel = input<string | null>(null);
+  /** Set only by the compare page: the peer's per-window buff/consumable presence, index-aligned with the bench's windows. */
+  readonly peerBuffs = input<WindowBuffPresence[] | null>(null);
+
+  protected readonly subtitle = computed(() => {
+    const peer = this.peerLabel();
+    return peer ? `Damage in each burst window vs ${peer}.` : 'Damage in each burst window vs top parses.';
+  });
 
   readonly openMap = output<BurstMapAnchor>();
   readonly openClip = output<ClipAnchor>();
@@ -35,10 +51,16 @@ export class BurstWindows {
       report: this.report(),
       fight: this.fight(),
       player: this.player(),
+      compareBench: this.compareBench(),
+      peerBuffs: this.peerBuffs(),
     }),
-    load: p => p.report && p.fight && p.player
-      ? this.burst.loadPlayerView(p.spec, p.encounterId, p.report, p.fight, p.player)
-      : this.burst.loadBenchView(p.spec, p.encounterId),
+    load: (p): Promise<Result<BurstView>> => p.compareBench
+      ? p.compareBench.ok
+        ? this.burst.loadPlayerViewFromBench(p.compareBench.value, p.report, p.fight, p.player, p.peerBuffs)
+        : Promise.resolve(p.compareBench)
+      : p.report && p.fight && p.player
+        ? this.burst.loadPlayerView(p.spec, p.encounterId, p.report, p.fight, p.player)
+        : this.burst.loadBenchView(p.spec, p.encounterId),
     context: 'burst.loadPlayerView',
     initialAvailable: true,
     busyChange: this.busyChange,

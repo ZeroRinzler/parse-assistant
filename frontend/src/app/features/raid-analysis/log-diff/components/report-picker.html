@@ -1,0 +1,43 @@
+<div class="bg-[var(--surface)] border border-[var(--border)] rounded-[10px] p-4">
+  <div class="text-[13px] font-semibold uppercase tracking-widest text-[var(--muted)] mb-3">{{ label() }}</div>
+
+  <mat-form-field appearance="outline" class="w-full">
+    <mat-label>Warcraft Logs Report URL or Code</mat-label>
+    <input matInput [formControl]="urlControl" placeholder="https://www.warcraftlogs.com/reports/AbCdEfGh…"
+           (keydown.enter)="submit()" />
+    <button matSuffix mat-icon-button type="button" [disabled]="loading()" (click)="submit()" aria-label="Load report">
+      <mat-icon>arrow_forward</mat-icon>
+    </button>
+  </mat-form-field>
+
+  @if (notice()) {
+    <div class="text-xs text-[var(--muted)] mt-1">{{ notice() }}</div>
+  }
+  @if (error(); as e) {
+    <wl-load-state class="block mt-2" [error]="e" caption="" />
+  }
+
+  @if (fights().length) {
+    <div class="flex flex-wrap gap-3 mt-4">
+      <mat-form-field appearance="outline" class="flex-[1_1_180px]">
+        <mat-label>Pull</mat-label>
+        <mat-select [value]="selectedFightId()" (selectionChange)="onFightChange($event.value)">
+          @for (f of fights(); track f.id) {
+            <mat-option [value]="f.id">
+              {{ f.name }} - {{ f.kill ? 'Kill' : 'Wipe #' + f.attempt }} - {{ f.duration_s | formatDuration }}
+            </mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="flex-[1_1_160px]">
+        <mat-label>Player</mat-label>
+        <mat-select [value]="selectedPlayerId()" (selectionChange)="onPlayerChange($event.value)">
+          @for (p of players(); track p.id) {
+            <mat-option [value]="p.id">{{ p.name }} ({{ p.spec }})</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+    </div>
+  }
+</div>

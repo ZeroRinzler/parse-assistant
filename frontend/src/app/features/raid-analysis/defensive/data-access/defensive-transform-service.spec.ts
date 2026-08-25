@@ -236,6 +236,22 @@ describe('aggregateDefensiveBenchmarks', () => {
   });
 });
 
+describe('windowsFromOneParse', () => {
+  it('collapses avg/min/max to the parse\'s own damage and zeroes stddev, with no clustering gate', () => {
+    const parseWindows: ParseDefWindow[] = [{
+      time_s: 10, window_length_s: 5, window_damage: 700, parse_index: 0,
+      defensive_name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS, ref_game_id: BOSS_GAME_ID,
+      ability_breakdown: [{ spell_id: BOSS_HIT, damage: 500 }],
+    }];
+    expect(svc['windowsFromOneParse'](parseWindows)).toEqual([{
+      time_s: 10, dmg_avg: 700, dmg_min: 700, dmg_max: 700, dmg_stddev: 0,
+      common_cds: ['Cloak of Shadows'], window_length_s: 5,
+      defensive_name: 'Cloak of Shadows', spell_id: CLOAK_OF_SHADOWS, ref_game_id: BOSS_GAME_ID,
+      ability_breakdown: [{ spell_id: BOSS_HIT, avg_damage: 500, min_damage: 500, max_damage: 500 }],
+    }]);
+  });
+});
+
 const reportShape = {
   enemies: [{ id: 9, name: 'Boss', gameID: 6666 }],
   abilities: [{ gameID: 700, name: 'Boss Hit', icon: 'hit.jpg' }, { gameID: CLOAK_OF_SHADOWS, name: 'Cloak of Shadows', icon: 'cloak' }],
@@ -278,5 +294,21 @@ describe('DefensiveTransformService (live, in-browser)', () => {
     const bench = await TestBed.inject(DefensiveTransformService).getBench('SubtletyRogue', 1);
     expect(bench.ok).toBe(false);
     if (!bench.ok) expect(bench.error.kind).toBe('missing');
+  });
+
+  it('getBenchFromParse benches the one given parse directly, with no ranking lookup and no clustering', async () => {
+    const wcl = { ...wclFake, getRankings: async () => { throw new Error('rankings must not be asked'); } };
+    TestBed.configureTestingModule({ providers: provideApiFakes({ wcl, files: filesFake }) });
+    const fight = { id: 1, name: 'Boss', startTime: 0, endTime: 300_000, kill: true, encounterID: 1, attempt: 1, duration_s: 300, friendlyPlayers: [], fightPercentage: 0 };
+    const player = { id: 10, name: 'P1', subType: 'Rogue', server: 'eu' };
+    const report = { title: 't', startTime: 0, fights: [fight], masterData: { actors: [player], ...reportShape } };
+    const benchParse = { ranking: { player: 'P1', server: 'eu', report_code: 'rOne', fight_id: 1 }, report, fight, player };
+    const bench = await TestBed.inject(DefensiveTransformService).getBenchFromParse('SubtletyRogue', 1, benchParse);
+    expect(bench.ok).toBe(true);
+    if (!bench.ok) return;
+    expect(bench.value.sample_count).toBe(1);
+    expect(bench.value.defensive_windows).toHaveLength(1);
+    assert.exists(bench.value.defensive_windows[0]);
+    expect(bench.value.defensive_windows[0]).toMatchObject({ defensive_name: 'Cloak of Shadows', dmg_avg: 1000, dmg_stddev: 0 });
   });
 });

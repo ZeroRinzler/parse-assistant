@@ -226,9 +226,12 @@ describe('withTalentDiffs', () => {
 
 const combatantInfo = (playerId: number): WclCombatantInfo => {
   const gear = Array<WclGearItem>(16).fill({});
-  gear[12] = { id: 100, name: 'A', icon: 't.jpg' };
-  gear[15] = { id: 1, name: 'Wep', permanentEnchant: '8041' };
-  return { sourceID: playerId, gear, talentTree: [{ nodeID: 65, id: 650, rank: 1 }] };
+  gear[12] = { id: 100, name: 'A', icon: 't.jpg', itemLevel: 320 };
+  gear[15] = { id: 1, name: 'Wep', permanentEnchant: '8041', itemLevel: 340 };
+  return {
+    sourceID: playerId, gear, talentTree: [{ nodeID: 65, id: 650, rank: 1 }],
+    agility: 2000, mastery: 700,
+  };
 };
 
 const wclFake = {
@@ -255,6 +258,9 @@ describe('GearTransformService (live, in-browser)', () => {
     });
     expect(bench.value.trinkets[12]).toEqual([{ id: 100, name: 'A', icon: 't', pct: 100 }]);
     expect(bench.value.enchants[15]).toEqual([{ id: 8041, name: 'Soph', pct: 100 }]);
+    // Both parses (fetched from the same fixture) carry the same stats/itemLevel, so the average equals the single value.
+    expect(bench.value.avg_stats).toMatchObject({ primary: 2000, mastery: 700 });
+    expect(bench.value.avg_item_level).toBe(330);
   });
 
   it('bakes talent diffs into the bench when the dump carries the spec', async () => {
@@ -316,5 +322,20 @@ describe('GearTransformService (live, in-browser)', () => {
     expect(bench.ok).toBe(true);
     if (!bench.ok) return;
     expect(bench.value.talent_builds[0]).toMatchObject({ key: `v3:${RANKED_TALENT_ENTRY}.1`, source_id: RANKED_ID });
+  });
+
+  it('getBenchFromParse benches the one given parse directly, with no ranking lookup ("100%" is that one build)', async () => {
+    const wcl = { ...wclFake, getRankings: async () => { throw new Error('rankings must not be asked'); } };
+    TestBed.configureTestingModule({ providers: provideApiFakes({ wcl, talents: talentDataFake }) });
+    const player = { id: 10, name: 'P1', subType: 'Rogue', server: '' };
+    const fight = { id: 1, name: 'Boss', startTime: 0, endTime: 300_000, kill: true, encounterID: 1, attempt: 1, duration_s: 300, friendlyPlayers: [], fightPercentage: 0 };
+    const report = wclReport({ fights: [fight], actors: [player] });
+    const benchParse = { ranking: { player: 'P1', server: '', report_code: 'r1', fight_id: 1 }, report, fight, player };
+    const bench = await TestBed.inject(GearTransformService).getBenchFromParse('SubtletyRogue', 1, benchParse);
+    expect(bench.ok).toBe(true);
+    if (!bench.ok) return;
+    expect(bench.value.sample_count).toBe(1);
+    expect(bench.value.talent_builds[0]).toMatchObject({ key: 'v3:650.1', pct: 100, report_code: 'r1', fight_id: 1, source_id: 10 });
+    expect(bench.value.trinkets[12]).toEqual([{ id: 100, name: 'A', icon: 't', pct: 100 }]);
   });
 });

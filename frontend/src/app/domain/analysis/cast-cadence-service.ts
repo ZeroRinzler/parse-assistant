@@ -37,17 +37,25 @@ export class CastCadenceService {
 
   checkLostUses(
     voice: CadenceVoice, name: string, actual: number, expected: number, floor: number, fightDurS: number,
+    castTimesS: number[], bench: CadenceBenchmark,
   ): AnalysisFinding | null {
     if (actual === 0 && expected >= 1) return {
       severity: 'critical', category: 'lost_cooldown', cd_name: name,
+      timestamp_s: bench.avg_first_cast_s,
       measured: { value: `0 / ${expected}`, unit: voice.unit },
       message: `${name} was never used. Top raiders get ${expected} on a ${fmtClock(fightDurS)} fight.`,
       details: { remedy: `Use ${name} ${expected}x this fight.` }, occurrences: [] };
-    if (actual > 0 && actual < floor) return {
-      severity: 'critical', category: 'lost_cooldown', cd_name: name,
-      measured: { value: `${actual} / ${expected}`, unit: voice.unit },
-      message: `${name} was used ${actual} times. Top raiders get ${expected}.`,
-      details: { remedy: voice.underuseRemedy(name, floor - actual) }, occurrences: [] };
+    if (actual > 0 && actual < floor) {
+      const lastCastS = castTimesS[actual - 1];
+      // The last real cast plus the typical gap: roughly when the next one should have landed.
+      const predictedS = lastCastS != null && bench.avg_gap_s != null ? lastCastS + bench.avg_gap_s : undefined;
+      return {
+        severity: 'critical', category: 'lost_cooldown', cd_name: name,
+        timestamp_s: predictedS,
+        measured: { value: `${actual} / ${expected}`, unit: voice.unit },
+        message: `${name} was used ${actual} times. Top raiders get ${expected}.`,
+        details: { remedy: voice.underuseRemedy(name, floor - actual) }, occurrences: [] };
+    }
     return null;
   }
 
@@ -56,8 +64,11 @@ export class CastCadenceService {
   ): AnalysisFinding | null {
     const firstS = castTimesS[0];
     if (firstS == null) return null;
-    if (!isOutlierAbove(firstS, bench.avg_first_cast_s, bench.stddev_first_cast_s)) return null;
-    const lateS = (firstS - bench.avg_first_cast_s).toFixed(0);
+    const delayS = firstS - bench.avg_first_cast_s;
+    if (delayS <= MIN_HELD_DELAY_S) return null;
+    // A 1-parse bench has no real variance to test (stddev degenerates toward 0), so the floor above is its only gate.
+    if (bench.sample_count >= 2 && !isOutlierAbove(firstS, bench.avg_first_cast_s, bench.stddev_first_cast_s)) return null;
+    const lateS = delayS.toFixed(0);
     return {
       severity: 'warning', category: 'cooldown_delay', cd_name: name,
       timestamp_s: firstS,
@@ -77,7 +88,10 @@ export class CastCadenceService {
       const gap = prevS != null ? timeS - prevS : null;
       prevS = timeS;
       if (gap == null) continue;
-      if (isOutlierAbove(gap, avgGapS, bench.stddev_gap_s)) findings.push({
+      if (gap - avgGapS <= MIN_HELD_DELAY_S) continue;
+      // Unlike first-cast timing, one parse contributes a gap sample per cast pair, so stddev stays meaningful at sample_count 1.
+      if (!isOutlierAbove(gap, avgGapS, bench.stddev_gap_s)) continue;
+      findings.push({
         severity: 'warning', category: 'cooldown_delay', cd_name: name,
         timestamp_s: timeS,
         measured: { value: `${gap.toFixed(0)}s`, unit: `avg ${avgGapS.toFixed(0)}s` },
@@ -126,6 +140,9 @@ export interface CadenceVoice {
 
 /** A situational ability most top parses skip has a noisy expected count, so flagging against it would be a false positive. */
 const MIN_USE_SHARE_FRAC = 0.5;
+
+/** Below this delay, "held"/"cooldown_delay" never fires - a statistically significant sliver is still not a real delay. */
+const MIN_HELD_DELAY_S = 5;
 
 export interface CadencePlanUsage {
   typicalUses: number | null;

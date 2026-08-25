@@ -135,6 +135,25 @@ describe('rowsFromEntries', () => {
     expect(rowBuilder.rowsFromEntries([onPlanEntry])).toHaveLength(0);
   });
 
+  it('carries details.context_note through as subNote', () => {
+    const entry: FindingEntry = {
+      name: 'Shadow Blades', spellId: SHADOW_BLADES, icon: '', hasIssue: true,
+      findings: [{
+        severity: 'critical', category: 'cooldown_alignment', message: 'missed', occurrences: [],
+        details: { remedy: 'align it', context_note: 'BL at 02:00' },
+      }],
+    };
+    const rows = rowBuilder.rowsFromEntries([entry]);
+    assert.exists(rows[0]);
+    expect(rows[0].subNote).toBe('BL at 02:00');
+  });
+
+  it('leaves subNote undefined when the finding carries no context note', () => {
+    const rows = rowBuilder.rowsFromEntries([issueEntry]);
+    assert.exists(rows[0]);
+    expect(rows[0].subNote).toBeUndefined();
+  });
+
   it('uses a dash placeholder when finding.measured is absent', () => {
     const entry: FindingEntry = {
       name: 'Shadow Blades', spellId: null, icon: '', hasIssue: true,

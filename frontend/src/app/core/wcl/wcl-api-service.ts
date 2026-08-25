@@ -9,7 +9,7 @@ import {
 } from './wcl.models';
 import {
   REPORT_Q, REPORT_FIGHTS_Q, PLAYER_DETAILS_Q, EVENTS_Q,
-  COMBATANT_INFO_Q, RANKINGS_Q, TABLE_Q, RESURRECTS_Q,
+  COMBATANT_INFO_Q, RANKINGS_Q, TABLE_Q, TABLE_FOR_SOURCE_Q, RESURRECTS_Q,
   RATE_LIMIT_Q, CLASSES_Q, ENCOUNTERS_Q,
 } from './wcl-queries';
 import type {
@@ -22,7 +22,7 @@ import type {
   RateLimitQuery,
   ReportFightsQuery, ReportQuery, ReportQueryVariables,
   ResurrectsQuery, ResurrectsQueryVariables,
-  TableQuery, TableQueryVariables,
+  TableQuery, TableQueryVariables, TableForSourceQuery, TableForSourceQueryVariables,
 } from './wcl-operations.generated';
 import { SpecMetaService } from '../data-files/spec-meta-service';
 
@@ -127,6 +127,24 @@ export class WclApiService {
   async getDamageDoneTable(code: string, fightId: number): Promise<WclTableBlob | null> {
     const vars: TableQueryVariables = { code, fightIDs: [fightId], dataType: 'DamageDone' };
     const result = await this.query<TableQuery>(TABLE_Q, vars);
+    return result.reportData?.report?.table ?? null;
+  }
+
+  // Scoped to one source: `data.entries` carries one row per ability (`guid` the ability id, `total` its summed damage) instead of one row per actor.
+  async getDamageDoneTableForSource(code: string, fightId: number, sourceId: number): Promise<WclTableBlob | null> {
+    const vars: TableForSourceQueryVariables = { code, fightIDs: [fightId], dataType: 'DamageDone', sourceID: sourceId };
+    const result = await this.query<TableForSourceQuery>(TABLE_FOR_SOURCE_Q, vars);
+    return result.reportData?.report?.table ?? null;
+  }
+
+  // `viewBy:Target` gives one row per target actor in one call; pass `startTime`/`endTime` to scope it to a sub-span (e.g. a burst window).
+  async getDamageByTargetForSource(
+    code: string, fightId: number, sourceId: number, startTime?: number, endTime?: number,
+  ): Promise<WclTableBlob | null> {
+    const vars: TableForSourceQueryVariables = { code, fightIDs: [fightId], dataType: 'DamageDone', sourceID: sourceId, viewBy: 'Target' };
+    if (startTime != null) vars.startTime = startTime;
+    if (endTime != null) vars.endTime = endTime;
+    const result = await this.query<TableForSourceQuery>(TABLE_FOR_SOURCE_Q, vars);
     return result.reportData?.report?.table ?? null;
   }
 

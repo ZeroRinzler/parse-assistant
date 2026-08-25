@@ -20,6 +20,7 @@ export class FindingRowsService {
           chip: CAT_LABEL[f.category],
           measured: f.measured ?? { value: '-' },
           fix: f.details?.remedy,
+          subNote: f.details?.context_note,
           occurrences: f.occurrences,
         });
       }
@@ -102,6 +103,8 @@ export interface FindingRow {
   what?: string;
   measured: FindingMeasure;
   fix?: string;
+  /** Rendered under the chip (e.g. "BL at 02:00"). */
+  subNote?: string;
   /** Empty renders the row with no expand chevron. */
   occurrences: FindingOccurrence[];
   occurrenceTarget?: string;

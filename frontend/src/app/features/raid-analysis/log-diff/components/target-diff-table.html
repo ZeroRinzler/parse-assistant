@@ -1,0 +1,37 @@
+@if (view(); as v) {
+  <div class="bg-[var(--surface)] border border-[var(--border)] rounded-[10px] overflow-hidden mt-4">
+
+    <div class="px-4 pt-3 pb-2">
+      <div class="text-[13px] font-semibold text-[var(--text)]">Damage by target</div>
+      <div class="text-xs text-[var(--muted)] mt-0.5">Share of each player's own damage that landed on each target.</div>
+    </div>
+
+    <div class="hidden md:grid grid-cols-[minmax(0,1fr)_90px_90px_90px_150px] gap-x-[14px] items-center px-4 pb-1">
+      <span class="text-[10px] uppercase tracking-widest text-[var(--muted)]">target</span>
+      <span class="text-right text-[10px] uppercase tracking-widest text-[var(--muted)]">% a</span>
+      <span class="text-right text-[10px] uppercase tracking-widest text-[var(--muted)]">% b</span>
+      <span class="text-right text-[10px] uppercase tracking-widest text-[var(--muted)]">delta</span>
+      <span></span>
+    </div>
+
+    @for (row of v.targetRows; track row.key) {
+      @let deltaColor = row.deltaPct > 0 ? 'text-[var(--accent)]' : row.deltaPct < 0 ? 'text-[var(--warning)]' : 'text-[var(--muted)]';
+      <div class="grid grid-cols-2 md:grid-cols-[minmax(0,1fr)_90px_90px_90px_150px] gap-x-[14px] items-center px-4 py-2 border-t border-[var(--border)]">
+        <span class="col-span-2 md:col-span-1 text-[13px] text-[var(--text)] truncate">{{ row.name }}</span>
+        <span class="text-right font-mono text-[13px] text-[var(--text)] tabular-nums">{{ row.pctA | number:'1.0-1' }}%</span>
+        <span class="text-right font-mono text-[13px] text-[var(--text)] tabular-nums">{{ row.pctB | number:'1.0-1' }}%</span>
+        <span [class]="'text-right font-mono text-[13px] tabular-nums ' + deltaColor">{{ row.deltaPct >= 0 ? '+' : '' }}{{ row.deltaPct | number:'1.0-1' }}%</span>
+        <div class="relative h-3 rounded bg-[var(--bg)]" aria-hidden="true">
+          <div class="absolute inset-y-0 left-1/2 w-px bg-[var(--border)]"></div>
+          @if (row.deltaPct > 0) {
+            <div class="absolute inset-y-0 right-1/2 rounded-l bg-[var(--accent)]" [style.width.%]="barPct(row.deltaPct) / 2"></div>
+          } @else if (row.deltaPct < 0) {
+            <div class="absolute inset-y-0 left-1/2 rounded-r bg-[var(--warning)]" [style.width.%]="barPct(row.deltaPct) / 2"></div>
+          }
+        </div>
+      </div>
+    } @empty {
+      <div class="px-4 py-6 text-center text-[13px] text-[var(--muted)]">No target breakdown available for this pull.</div>
+    }
+  </div>
+}

@@ -41,6 +41,10 @@ html {
   @include mat.toolbar-overrides((
     container-background-color: var(--surface),
   ));
+  // Material's default placeholder color reads as low-contrast filled text, not an empty-field hint; darken it toward --muted.
+  @include mat.form-field-overrides((
+    outlined-input-text-placeholder-color: var(--muted),
+  ));
   // Roomier drawer rows with a fully rounded active indicator: a pill when expanded, a circle on the square collapsed rail.
   @include mat.list-overrides((
     active-indicator-shape: 9999px,
@@ -108,16 +112,16 @@ mat-icon.icon-seg { font-size: 22px; width: 22px; height: 22px; line-height: 1; 
 .badge-info     { color: var(--info); }
 .badge-muted    { color: var(--muted); }
 
-/* "On plan" markers: deliberately understated (muted surface tag, no green fill or check glyph) so a clean result reads calm, not celebratory. */
+/* "On point" markers: a clear positive signal (green outline, tinted fill, success-colored text) so a clean result reads as a deliberate pass. */
 .chip-onplan {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   padding: 2px 8px;
   border-radius: 4px;
-  border: 1px solid var(--border);
-  background-color: var(--surface-alt);
-  color: var(--muted);
+  border: 1px solid var(--success);
+  background-color: rgb(from var(--success) r g b / 12%);
+  color: var(--success);
   font-size: 13px;
 }
 

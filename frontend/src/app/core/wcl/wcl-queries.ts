@@ -37,6 +37,12 @@ query Table($code:String!,$fightIDs:[Int]!,$dataType:TableDataType){
   reportData{report(code:$code){table(fightIDs:$fightIDs,dataType:$dataType)}}
 }`;
 
+// Same table, scoped to one source: `$viewBy` picks the grouping - default is by ability, `Target` gives one row per target instead.
+export const TABLE_FOR_SOURCE_Q = gql`
+query TableForSource($code:String!,$fightIDs:[Int]!,$dataType:TableDataType,$sourceID:Int,$viewBy:ViewType,$startTime:Float,$endTime:Float){
+  reportData{report(code:$code){table(fightIDs:$fightIDs,dataType:$dataType,sourceID:$sourceID,viewBy:$viewBy,startTime:$startTime,endTime:$endTime)}}
+}`;
+
 // WCL has no `Resurrects` data type, so this scans `All` with a server-side `filterExpression` (only the matching events come back).
 export const RESURRECTS_Q = gql`
 query Resurrects($code:String!,$fightIDs:[Int]!,$filter:String,$startTime:Float,$endTime:Float){

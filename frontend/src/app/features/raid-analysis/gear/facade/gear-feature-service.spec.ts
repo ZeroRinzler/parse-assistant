@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { CharacterGear, WclCombatantInfo, WclGearItem } from '../../../../core/wcl/wcl.models';
-import { GEAR_DATA_SOURCE, GearBench } from '../data-access/gear-data-source';
+import { GEAR_DATA_SOURCE, GearBench } from '../../../../domain/gear/gear-bench';
 import { sliceService } from '../../../../../testing/service-harness';
 import { Result, Results } from '../../../../core/http/result';
 import { GearFeatureService } from './gear-feature-service';
@@ -68,7 +68,10 @@ describe('buildCharacterGear', () => {
     const result = svc['buildCharacterGear'](event, {});
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value).toMatchObject({ talent_key: STANDARD_KEY });
+    expect(result.value).toMatchObject({
+      trinkets: [{ slot: 12, id: 100, name: 'A' }],
+      enchants: [{ slot: 15, id: 8041, name: 'Sophic' }],
+    });
   });
 });
 
@@ -80,7 +83,6 @@ describe('buildBenchGearView', () => {
     expect(view.comparison).toBe(false);
     expect(view.benchTrinketRows).toEqual([{ slotLabel: 'Trinket 1', id: 100, name: 'A', icon: 'inv_a', pct: 70 }]);
     expect(view.benchEnchantRows).toEqual([{ slotName: 'Main Hand', name: 'Sophic', pct: 90 }]);
-    expect(view.talentBuilds[0]).toMatchObject({ pct: 80, label: 'Most common build' });
     // The comparison rows stay empty in bench-only mode (no player to compare).
     expect(view.enchantRows).toEqual([]);
     expect(view.trinketRows).toEqual([]);
@@ -98,7 +100,6 @@ describe('buildGearView', () => {
     };
     const view = svc['buildGearView'](player, stats);
     expect(view.comparison).toBe(true);
-    expect(view.talentStatus.status).toBe('ok');
     expect(view.trinketStatus).toBe('ok');
     expect(view.enchantStatus).toBe('ok');
   });
@@ -119,7 +120,6 @@ describe('emptyGearView', () => {
   it('is a bench-off placeholder with no rows', () => {
     expect(svc.emptyGearView()).toEqual({
       comparison: false,
-      talentBuilds: [], talentStatus: { status: 'unknown', note: 'No talent data.' },
       trinketRows: [], trinketStatus: 'ok', benchTrinketRows: [],
       enchantRows: [], enchantStatus: 'ok', benchEnchantRows: [],
     });
@@ -158,7 +158,6 @@ describe('GearFeatureService', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.comparison).toBe(true);
-    expect(result.value.talentStatus.status).toBe('ok');
   });
 
   it('loadComparisonView surfaces a permanent error when the player has no combatant info', async () => {

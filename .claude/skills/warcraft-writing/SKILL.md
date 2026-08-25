@@ -1,16 +1,16 @@
 ---
 name: warcraft-writing
-description: warcraft-learner user-facing writing and branding rules. Covers the plain-spoken coaching UI copy voice for all finding messages, remedies, card subtitles, empty states and microcopy, plus the product branding/naming rules (the warcraft-learner wordmark, never conflating it with Warcraft Logs/WCL) and the logo/favicon source of truth. Load this before writing or editing any string a user sees - findings, remedies, labels, empty states, page titles, nav wordmark, CLI banners, READMEs - or before touching the logo/favicon.
+description: Parse Assistant user-facing writing and branding rules. Covers the plain-spoken coaching UI copy voice for all finding messages, remedies, card subtitles, empty states and microcopy, plus the product branding/naming rules (the Parse Assistant wordmark, never conflating it with Warcraft Logs/WCL) and the logo/favicon source of truth. Load this before writing or editing any string a user sees - findings, remedies, labels, empty states, page titles, nav wordmark, CLI banners, READMEs - or before touching the logo/favicon.
 ---
 
-# warcraft-learner writing and branding
+# Parse Assistant writing and branding
 
-**Deliverable:** every string a user sees follows the voice rules below - count then target, plain words, one actionable number, quiet success states - and the product name stays exactly `warcraft-learner`.
+**Deliverable:** every string a user sees follows the voice rules below - count then target, plain words, one actionable number, quiet success states - and the product name stays exactly `Parse Assistant`.
 
 ## Branding & naming
 
-- **The product name is always `warcraft-learner`** - lowercase, hyphenated, exactly that casing. Never "Warcraft Learner", "WarcraftLearner", or any other variant. This applies to the page `<title>`, nav wordmark, CLI banners, READMEs, and any new user-facing copy.
-- **Do not confuse it with "Warcraft Logs"** (a.k.a. WCL) - that is the external data provider, a separate product. Leave "Warcraft Logs" / "WCL" strings as-is; only our own app name is normalized to `warcraft-learner`.
+- **The product name is always `Parse Assistant`** - title case, two words, exactly that casing. Never "parse-assistant", "ParseAssistant", or any other variant. This applies to the page `<title>`, nav wordmark, CLI banners, READMEs, and any new user-facing copy.
+- **Do not confuse it with "Warcraft Logs"** (a.k.a. WCL) - that is the external data provider, a separate product. Leave "Warcraft Logs" / "WCL" strings as-is; only our own app name is normalized to `Parse Assistant`.
 - **Logo / favicon** - gold shield with an ascending bar chart. Single source of truth: `frontend/public/favicon.svg`, which drives the `.ico` (regenerated at 16/32/48px via `sharp` + `png-to-ico`, never hand-edited) and the nav-bar mark. `index.html` references the SVG first (`type="image/svg+xml"`) with the `.ico` as legacy fallback. The nav-bar logo (`shared/components/page-nav`) is the same artwork inlined as SVG so it themes with CSS vars - set its fills via Tailwind classes (`fill-[var(--gold)]` / `fill-[var(--surface)]`), **not** `fill="var(--…)"` attributes (browsers don't reliably honor them). Brand gold `--gold` (`#e5cc80`) is the WCL 100-parse "Astounding" gold; the favicon's literal hex must track the `styles.scss` tokens.
 - **Share card** - `frontend/public/og-image.png` (1200x630): the shield over the wordmark, a tagline, and one gold call to action, a favicon derivative to regenerate with the logo. Backs `og:image` in `frontend/src/index.html` and `.github/pages-root/index.html`, which carry identical tags. The GitHub repo card is the same artwork at 1280x640, uploaded in repo settings rather than tracked here.
 

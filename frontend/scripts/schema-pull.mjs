@@ -19,10 +19,10 @@ const CONFIG = {
   scalars: {
     // `never` makes selecting a still-shared JSON field a compile error at the read site.
     JSON: 'never',
-    PlayerDetailsJson: '../models/wcl.models#PlayerDetailsBlob',
-    TableJson: '../models/wcl.models#WclTableBlob',
-    RankingsJson: '../models/wcl.models#WclRankingsBlob',
-    EventDataJson: '../models/wcl.models#WclEventData',
+    PlayerDetailsJson: './wcl.models#PlayerDetailsBlob',
+    TableJson: './wcl.models#WclTableBlob',
+    RankingsJson: './wcl.models#WclRankingsBlob',
+    EventDataJson: './wcl.models#WclEventData',
   },
 };
 

@@ -22,15 +22,19 @@ import { RotationCdPlan } from '../../rotation/components/rotation-cd-plan';
 import { DefensivePlan } from '../../defensive/components/defensive-plan';
 import { BurstWindows } from '../../burst-windows/components/burst-windows';
 import { Gear } from '../../gear/components/gear';
+import { Talents } from '../../talents/components/talents';
+import { Stats } from '../../stats/components/stats';
 import { MapPanel } from '../../map/components/map-panel';
 import { MapFeatureService, MapAnchor } from '../../map/facade/map-feature-service';
 import { NorthernSkyExport } from '../../northern-sky/components/northern-sky-export';
 import { LoggerService } from '../../../../core/observability/logger-service';
 
-export type PreFightCardId = 'northernSky' | 'gear' | 'cdPlan' | 'defensivePlan' | 'burst';
+export type PreFightCardId = 'northernSky' | 'talents' | 'stats' | 'gear' | 'cdPlan' | 'defensivePlan' | 'burst';
 
 export const PRE_FIGHT_CARDS: readonly CardEntry<PreFightCardId>[] = [
   { id: 'northernSky', hasBench: true },
+  { id: 'talents', hasBench: true },
+  { id: 'stats', hasBench: true },
   { id: 'gear', hasBench: true },
   { id: 'cdPlan', hasBench: true },
   { id: 'defensivePlan', hasBench: true },
@@ -46,7 +50,7 @@ export const PRE_FIGHT_CARDS: readonly CardEntry<PreFightCardId>[] = [
     LoadingSpinner, BenchEmptyBanner, LoadState, ArtIcon,
     FormatSpecPipe, ClassIconPipe, SpecIconPipe, BossIconPipe,
     RotationCdPlan, DefensivePlan, BurstWindows,
-    Gear, MapPanel, NorthernSkyExport,
+    Talents, Stats, Gear, MapPanel, NorthernSkyExport,
   ],
   // Provided per lazy page so form-field stays out of the initial bundle.
   providers: [{ provide: MAT_FORM_FIELD_DEFAULT_OPTIONS, useValue: { subscriptSizing: 'dynamic' } }],

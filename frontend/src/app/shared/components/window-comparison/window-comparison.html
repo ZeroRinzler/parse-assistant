@@ -90,7 +90,7 @@
         </div>
         @if (!activeIsMuted() && overviewDelta() !== null) {
           <div class="flex flex-col shrink-0">
-            <span class="text-[9px] uppercase tracking-[1px] text-[var(--muted)]">vs top average</span>
+            <span class="text-[9px] uppercase tracking-[1px] text-[var(--muted)]">{{ vsAverageLabel() }}</span>
             <span class="text-[13px] font-semibold tabular-nums"
               [class.badge-muted]="overviewDeltaStatus() === 'muted'"
               [class.badge-success]="overviewDeltaStatus() === 'better'"
@@ -110,7 +110,7 @@
           }
         </div>
       </div>
-      @if (w.spells.length || w.labels.length) {
+      @if (showRecommendedCooldowns() && (w.spells.length || w.labels.length)) {
         <div class="mt-2.5">
           <span class="block text-[10px] uppercase tracking-widest text-[var(--muted)] mb-1.5">Recommended cooldowns</span>
           <div class="flex flex-wrap items-center gap-2">
@@ -127,24 +127,88 @@
           </div>
         </div>
       }
+      @if (buffRows().length) {
+        <div class="mt-2.5">
+          <!-- No 1fr track: the label column keeps a fixed width so the row packs left instead of stretching the status columns to the card's edge. -->
+          <div class="grid grid-cols-[minmax(0,180px)_96px_96px] gap-x-4 items-center px-2 -mx-2">
+            <span></span>
+            <span class="text-[10px] uppercase tracking-widest text-[var(--muted)] truncate">{{ youDisplayLabel() }}</span>
+            <span class="text-[10px] uppercase tracking-widest text-[var(--muted)] truncate">{{ peerLabel() }}</span>
+          </div>
+          @for (row of buffRows(); track row.label) {
+            <!-- One grid per row (not shared with the header) so the whole row - label + both status cells - is one element to zebra-stripe and hover. -->
+            <div class="grid grid-cols-[minmax(0,180px)_96px_96px] gap-x-4 items-center px-2 -mx-2 py-1 rounded-sm hover:bg-[var(--surface-alt)]"
+              [class.bg-[var(--surface-alt)]/30]="$odd">
+              <span class="flex items-center gap-1.5 text-[13px] text-[var(--muted)] truncate">
+                @if (row.spellId; as spellId) {
+                  <wl-game-icon [id]="spellId" [icon]="row.icon ?? ''" [name]="row.label"></wl-game-icon>
+                } @else {
+                  {{ row.label }}
+                }
+              </span>
+              <span [class]="'flex items-center gap-1 text-[12px] ' + (row.you ? 'text-[var(--success)]' : 'text-[var(--muted)]')">
+                <mat-icon class="icon-18">{{ row.you ? 'check_circle' : 'close' }}</mat-icon>
+                {{ row.you ? 'Active' : 'Missing' }}
+              </span>
+              <span [class]="'flex items-center gap-1 text-[12px] ' + (row.peer ? 'text-[var(--success)]' : 'text-[var(--muted)]')">
+                <mat-icon class="icon-18">{{ row.peer ? 'check_circle' : 'close' }}</mat-icon>
+                {{ row.peer ? 'Active' : 'Missing' }}
+              </span>
+            </div>
+          }
+        </div>
+      }
     </div>
 
     <!-- Damage-spread bar, hidden for bench-only (pre-fight) windows that have no player to compare against. -->
     @if (!activeIsBenchOnly()) {
       <div class="px-4 pb-2">
-        <span class="block text-[10px] uppercase tracking-widest text-[var(--muted)] mb-1.5">Damage vs top range</span>
-        <div class="relative h-5 rounded bg-[var(--bg)]" aria-hidden="true">
-          @if (overviewPlayerWidthPct() !== null) {
-            <div [class]="'absolute inset-y-0 left-0 rounded opacity-[0.65] ' + fillBg"
-              [style.width.%]="overviewPlayerWidthPct()"></div>
-          }
-          @if (overviewRangeLeftPct() !== null) {
-            <div class="absolute inset-y-0 rounded bg-[var(--info)]/30 border border-[var(--info)]" [style.left.%]="overviewRangeLeftPct()" [style.width.%]="overviewRangeWidthPct()"></div>
-          }
-          @if (overviewAvgLeftPct() !== null) {
-            <div class="absolute inset-y-0 w-[2px] bg-[var(--info)]" [style.left.%]="overviewAvgLeftPct()"></div>
-          }
-        </div>
+        <span class="block text-[10px] uppercase tracking-widest text-[var(--muted)] mb-1.5">{{ rangeHeading() }}</span>
+        @if (peerLabel(); as peer) {
+          <!-- Compare mode: a bullet chart of two explicit values (peer is a single parse, not a range). -->
+          <div class="flex flex-col gap-1">
+            <div class="flex items-center gap-2">
+              <span class="w-20 shrink-0 truncate text-[11px] text-[var(--muted)]">{{ youDisplayLabel() }}</span>
+              <div class="relative h-4 flex-1 rounded bg-[var(--bg)]" aria-hidden="true">
+                @if (overviewPlayerWidthPct() !== null) {
+                  <div [class]="'absolute inset-y-0 left-0 rounded opacity-[0.65] ' + fillBg"
+                    [style.width.%]="overviewPlayerWidthPct()"></div>
+                }
+              </div>
+              <span class="w-16 shrink-0 text-right text-[11px] tabular-nums text-[var(--text)]">{{ w.overview.playerPct | formatDamage }}</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="w-20 shrink-0 truncate text-[11px] text-[var(--muted)]" [title]="peer">{{ peer }}</span>
+              <div class="relative h-4 flex-1 rounded bg-[var(--bg)]" aria-hidden="true">
+                @if (overviewAvgLeftPct() !== null) {
+                  <div class="absolute inset-y-0 left-0 rounded opacity-[0.65] bg-[var(--info)]" [style.width.%]="overviewAvgLeftPct()"></div>
+                }
+              </div>
+              <span class="w-16 shrink-0 text-right text-[11px] tabular-nums text-[var(--text)]">{{ w.overview.topAvg | formatDamage }}</span>
+            </div>
+            @if (overviewDeltaAbs() !== null) {
+              <div class="text-right text-[11px] font-semibold tabular-nums"
+                [class.badge-muted]="overviewDeltaStatus() === 'muted'"
+                [class.badge-success]="overviewDeltaStatus() === 'better'"
+                [class.badge-critical]="overviewDeltaStatus() === 'worse'">
+                {{ overviewDeltaAbs() | formatDamage }} ({{ overviewDelta() | signedPercent }})
+              </div>
+            }
+          </div>
+        } @else {
+          <div class="relative h-5 rounded bg-[var(--bg)]" aria-hidden="true">
+            @if (overviewPlayerWidthPct() !== null) {
+              <div [class]="'absolute inset-y-0 left-0 rounded opacity-[0.65] ' + fillBg"
+                [style.width.%]="overviewPlayerWidthPct()"></div>
+            }
+            @if (overviewRangeLeftPct() !== null) {
+              <div class="absolute inset-y-0 rounded bg-[var(--info)]/30 border border-[var(--info)]" [style.left.%]="overviewRangeLeftPct()" [style.width.%]="overviewRangeWidthPct()"></div>
+            }
+            @if (overviewAvgLeftPct() !== null) {
+              <div class="absolute inset-y-0 w-[2px] bg-[var(--info)]" [style.left.%]="overviewAvgLeftPct()"></div>
+            }
+          </div>
+        }
       </div>
     }
 
@@ -157,7 +221,7 @@
           @if (showCasts() && !activeIsMuted()) {
             <span class="col-start-2 text-right text-[10px] uppercase tracking-widest text-[var(--muted)]">casts</span>
           }
-          <span class="col-start-3 text-left text-[10px] uppercase tracking-widest text-[var(--muted)]">top avg</span>
+          <span class="col-start-3 text-left text-[10px] uppercase tracking-widest text-[var(--muted)]">{{ avgColumnLabel() }}</span>
           @if (!activeIsMuted()) {
             <span class="col-start-4 text-right text-[10px] uppercase tracking-widest text-[var(--muted)]">gap</span>
           }
@@ -167,7 +231,8 @@
             [row]="row"
             [higherIsBetter]="higherIsBetter()"
             [showCasts]="showCasts()"
-            [hidePlayer]="activeIsMuted()">
+            [hidePlayer]="activeIsMuted()"
+            [peerLabel]="peerLabel()">
           </wl-compact-ability-row>
         }
       </div>

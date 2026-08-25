@@ -1,13 +1,16 @@
 @if (error() || !available()) {
-  <wl-load-state heading="Burst Windows" subtitle="Damage in each burst window vs top parses." [error]="error()"></wl-load-state>
+  <wl-load-state heading="Burst Windows" [subtitle]="subtitle()" [error]="error()"></wl-load-state>
 } @else {
   <wl-window-comparison
     [windows]="windows()"
     [higherIsBetter]="true"
     [showMap]="showMap()"
     [showClip]="showClip()"
+    [showRecommendedCooldowns]="false"
+    [peerLabel]="peerLabel()"
+    [youLabel]="youLabel()"
     heading="Burst Windows"
-    subtitle="Damage in each burst window vs top parses."
+    [subtitle]="subtitle()"
     (openMap)="onOpenMap($event)"
     (openClip)="onOpenClip($event)">
   </wl-window-comparison>

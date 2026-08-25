@@ -64,6 +64,9 @@
               }
             }
           </div>
+          @if (row.subNote) {
+            <div class="text-[11px] text-[var(--muted)] mt-0.5">{{ row.subNote }}</div>
+          }
         </div>
 
         <div class="col-start-2 md:col-auto flex items-baseline gap-2 md:block text-left md:text-right leading-[1.1]"
@@ -113,7 +116,7 @@
 
   @if (onPlan().length) {
     <div class="flex items-center gap-2 flex-wrap border-t border-[var(--border)] px-4 py-[10px]">
-      <span class="text-[10px] uppercase tracking-widest text-[var(--muted)] mr-0.5">On plan</span>
+      <span class="text-[10px] uppercase tracking-widest text-[var(--muted)] mr-0.5">On point</span>
       @for (c of onPlan(); track c.name) {
         <span class="chip-onplan">
           @if (c.spellId; as spellId) {

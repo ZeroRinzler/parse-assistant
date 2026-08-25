@@ -261,4 +261,28 @@ describe('RotationTransformService (live, in-browser)', () => {
     expect(await TestBed.inject(RotationTransformService).getBench('SubtletyRogue', 1))
       .toEqual(Results.missing('No rulebook cooldowns for this spec.'));
   });
+
+  // Below MIN_MEASURED_PARSES, so a rule's band comes back null instead of a crash - the same shape a thin top-parse pool already produces.
+  it('getBenchFromParse benches the one given parse directly, with no ranking lookup and no rule band', async () => {
+    const wcl = { ...wclFake, getRankings: async () => { throw new Error('rankings must not be asked'); } };
+    const oneRule: RulebookRule = {
+      type: 'rotation', severity: 'warning', description: 'Keep Rupture up on the boss',
+      condition: { kind: 'aura_uptime_below', aura_spell_id: RUPTURE, aura_spell_name: 'Rupture', on: 'target' },
+      action: 'Refresh it inside its pandemic window.',
+    };
+    const files = { getRulebook: async () => Results.ok(rulebook({ cooldowns: [{ name: 'Shadow Blades', spell_id: SHADOW_BLADES, cooldown: 90 }], rules: [oneRule] })) };
+    TestBed.configureTestingModule({ providers: provideApiFakes({ wcl, files }) });
+    const fight = { id: 1, name: 'Boss', startTime: 0, endTime: 120_000, kill: true, encounterID: 1, attempt: 1, duration_s: 120, friendlyPlayers: [], fightPercentage: 0 };
+    const player = { id: 10, name: 'P1', subType: 'Rogue', server: 'eu' };
+    const report = { title: 't', startTime: 0, fights: [fight], masterData: { actors: [player], enemies: [], abilities: reportShape.abilities } };
+    const benchParse = { ranking: { player: 'P1', server: 'eu', report_code: 'rOne', fight_id: 1 }, report, fight, player };
+    const bench = await TestBed.inject(RotationTransformService).getBenchFromParse('SubtletyRogue', 1, benchParse);
+    expect(bench.ok).toBe(true);
+    if (!bench.ok) return;
+    expect(bench.value.sample_count).toBe(1);
+    assert.exists(bench.value.per_cd_benchmarks['Shadow Blades']);
+    expect(bench.value.per_cd_benchmarks['Shadow Blades'].sample_count).toBe(1);
+    expect(bench.value.rules).toHaveLength(1);
+    expect(bench.value.rules.every(rule => rule.band === null)).toBe(true);
+  });
 });

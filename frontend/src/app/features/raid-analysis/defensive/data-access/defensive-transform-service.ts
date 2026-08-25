@@ -85,6 +85,50 @@ export class DefensiveTransformService implements DataSource<DefensiveBench> {
     });
   }
 
+  // A 1-parse "bench" skips clustering (its own floor needs >=2 parses) - that parse's own windows ARE the bench, shown directly.
+  async getBenchFromParse(spec: string, encounterId: number, parse: BenchParse): Promise<Result<DefensiveBench>> {
+    return this.benchPipeline.benchFromOneParse(this.wclApi, { spec, encounterId }, parse, {
+      logSource: 'DefensiveTransformService',
+      errorId: 'defensive.bench',
+      noRankingsMessage: NO_DEFENSIVE_BENCH_MESSAGE,
+      rulebook: {
+        dataFiles: this.dataFiles,
+        plan: (rulebook): RulebookDefensive[] | null => rulebook.defensives.length ? rulebook.defensives : null,
+        missingMessage: NO_DEFENSIVE_BENCH_MESSAGE,
+      },
+      iconSpellIds: bench => [
+        ...Object.values(bench.cd_spell_ids),
+        ...bench.defensive_windows.flatMap(window => window.ability_breakdown.map(ability => ability.spell_id)),
+      ],
+      parse: (parse, defensives) => this.parseDefensives(parse, defensives),
+      bench: ({ parses }, defensives) => ({
+        per_defensive_benchmarks: this.aggregateDefensiveBenchmarks(parses.map(parse => parse.summaries), defensives),
+        defensive_windows: this.windowsFromOneParse(parses[0]?.windows ?? []),
+        defensives: this.defensivePlanMeta(defensives),
+        cd_spell_ids: this.benchPipeline.spellIdsByName(defensives),
+      }),
+    });
+  }
+
+  // With a single reference parse there is no consensus to compute, so avg/min/max collapse to that parse's own value.
+  protected windowsFromOneParse(windows: ParseDefWindow[]): BurstWindow[] {
+    return windows.map(window => ({
+      time_s: window.time_s,
+      dmg_avg: window.window_damage,
+      dmg_min: window.window_damage,
+      dmg_max: window.window_damage,
+      dmg_stddev: 0,
+      common_cds: [window.defensive_name],
+      window_length_s: window.window_length_s,
+      defensive_name: window.defensive_name,
+      spell_id: window.spell_id,
+      ref_game_id: window.ref_game_id,
+      ability_breakdown: window.ability_breakdown.map(ability => ({
+        spell_id: ability.spell_id, avg_damage: ability.damage, min_damage: ability.damage, max_damage: ability.damage,
+      })),
+    }));
+  }
+
   private async parseDefensives(
     { ranking, report, fight, player }: BenchParse, defensives: RulebookDefensive[],
   ): Promise<{ windows: ParseDefWindow[]; summaries: ParseDefensiveSummary[] }> {

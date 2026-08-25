@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../../core/wcl/wcl-api-service';
 import { BurstWindow, PlayerBurstWindow } from '../../../../domain/analysis/analysis.models';
-import { WindowStatus } from '../../../../domain/analysis/window-comparison.models';
+import { ComparisonWindow, WindowStatus } from '../../../../domain/analysis/window-comparison.models';
 import { ClipAnchor } from '../../../../domain/capture/capture.models';
 import { Result, Results } from '../../../../core/http/result';
 import { WclProjectionsService, AbilityIcons, TimedEvent } from '../../../../domain/analysis/wcl-projections-service';
@@ -9,6 +9,7 @@ import { WindowView, WindowViewAdapter } from '../../../../domain/analysis/windo
 import { PullContextService, PullContext, PullRef } from '../../../../domain/analysis/pull-context-service';
 import { BURST_DATA_SOURCE, BurstBench } from '../data-access/burst-data-source';
 import { WindowViewService } from '../../../../domain/analysis/window-view-service';
+import { BuffPresenceService, WindowBuffPresence } from '../../../../domain/analysis/buff-presence-service';
 
 export interface BurstMapAnchor {
   timeS: number;
@@ -22,6 +23,7 @@ export class BurstFeatureService {
   private readonly windowView = inject(WindowViewService);
   private readonly pullContext = inject(PullContextService);
   private readonly wclProjections = inject(WclProjectionsService);
+  private readonly buffPresence = inject(BuffPresenceService);
   private readonly source = inject(BURST_DATA_SOURCE);
   private readonly wclApi = inject(WclApiService);
 
@@ -36,12 +38,32 @@ export class BurstFeatureService {
       logSource: 'BurstFeatureService.loadPlayerView',
       errorId: 'burst.player-view',
       emptyView: () => this.benchOnlyView(bench.value),
-      analyze: context => this.playerView(bench.value, pull, playerId, context),
+      analyze: context => this.playerView(bench.value, pull, playerId, context, null),
     });
   }
 
+  // The same cooldown ids for every window (recommended anywhere in the fight), so the comparison rows stay identical across windows.
+  protected fightCooldownIds(windows: BurstWindow[], cdSpellIds: Record<string, number>): number[] {
+    const ids = new Set<number>();
+    for (const w of windows) for (const id of this.splitCommonCds(w.common_cds, cdSpellIds).spellIds) ids.add(id);
+    return [...ids];
+  }
+
+  private async playerBuffPresence(
+    reportCode: string, fightId: number, playerId: number, context: PullContext, abilityNames: Map<number, string>,
+    windows: BurstWindow[], cdSpellIds: Record<string, number>,
+  ): Promise<WindowBuffPresence[]> {
+    const { fight } = context;
+    const buffs = await this.wclApi.getAllEvents(reportCode, fightId, 'Buffs', fight.startTime, fight.endTime, playerId);
+    const cooldownIds = this.fightCooldownIds(windows, cdSpellIds);
+    return this.buffPresence.windowsPresence(
+      this.wclProjections.withRelativeS(buffs, fight.startTime), playerId, abilityNames,
+      windows.map(w => ({ startS: w.time_s, endS: w.time_s + w.window_length_s, cooldownIds })),
+    );
+  }
+
   private async playerView(
-    bench: BurstBench, pull: PullRef, playerId: number, context: PullContext,
+    bench: BurstBench, pull: PullRef, playerId: number, context: PullContext, peerBuffs: WindowBuffPresence[] | null,
   ): Promise<BurstView> {
     const { reportCode, fightId } = pull;
     const { report, fight, fightDurationS } = context;
@@ -49,14 +71,42 @@ export class BurstFeatureService {
     const abilityNames = new Map<number, string>();
     for (const ability of report.masterData?.abilities ?? []) abilityNames.set(ability.gameID, ability.name);
 
-    const [casts, damage] = await Promise.all([
+    const [casts, damage, playerBuffs] = await Promise.all([
       this.wclApi.getAllEvents(reportCode, fightId, 'Casts', fight.startTime, fight.endTime, playerId),
       this.wclApi.getAllEvents(reportCode, fightId, 'DamageDone', fight.startTime, fight.endTime, playerId),
+      // Only fetched in compare mode: it costs an extra query, and nothing renders it without a peer to compare against.
+      peerBuffs
+        ? this.playerBuffPresence(reportCode, fightId, playerId, context, abilityNames, bench.windows, bench.cd_spell_ids)
+        : Promise.resolve(null),
     ]);
     const playerWindows = this.findPlayerBurstWindows(
       bench.windows, this.wclProjections.withRelativeS(damage, fight.startTime), this.wclProjections.withRelativeS(casts, fight.startTime), abilityNames,
     );
-    return this.buildBurstView(bench.windows, playerWindows, fightDurationS, bench.cd_spell_ids, bench.ability_icons);
+    const view = this.buildBurstView(bench.windows, playerWindows, fightDurationS, bench.cd_spell_ids, bench.ability_icons);
+    return playerBuffs && peerBuffs ? { ...view, windows: this.attachBuffPresence(view.windows, playerBuffs, peerBuffs) } : view;
+  }
+
+  protected attachBuffPresence(
+    windows: ComparisonWindow[], player: WindowBuffPresence[], peer: WindowBuffPresence[],
+  ): ComparisonWindow[] {
+    return windows.map((window, i) => {
+      const playerPresence = player[i];
+      const peerPresence = peer[i];
+      return playerPresence && peerPresence ? { ...window, buffs: { player: playerPresence, peer: peerPresence } } : window;
+    });
+  }
+
+  // `bench` is caller-supplied (a compare view's synthesized 1-parse bench), not looked up from the DataSource.
+  async loadPlayerViewFromBench(
+    bench: BurstBench, reportCode: string, fightId: number, playerId: number, peerBuffs: WindowBuffPresence[] | null = null,
+  ): Promise<Result<BurstView>> {
+    const pull: PullRef = { reportCode, fightId };
+    return this.pullContext.analyzePull(this.wclApi, pull, {
+      logSource: 'BurstFeatureService.loadPlayerViewFromBench',
+      errorId: 'burst.compare-view',
+      emptyView: () => this.benchOnlyView(bench),
+      analyze: context => this.playerView(bench, pull, playerId, context, peerBuffs),
+    });
   }
 
   async loadBenchView(spec: string, encounterId: number): Promise<Result<BurstView>> {

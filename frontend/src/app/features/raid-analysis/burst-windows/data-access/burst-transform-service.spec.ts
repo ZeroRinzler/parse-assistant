@@ -395,6 +395,25 @@ describe('clusterParseWindows', () => {
   });
 });
 
+describe('windowsFromOneParse', () => {
+  it('collapses avg/min/max to the parse\'s own damage and zeroes stddev, with no clustering gate', () => {
+    const parseWindows: ParseWindow[] = [{
+      time_s: 10, window_length_s: 4, window_damage: 4 * BIN_DAMAGE, active_cds: ['Shadow Blades'],
+      ability_breakdown: [{ spell_id: SHADOW_BLADES_DAMAGE, damage: 4 * BIN_DAMAGE, casts: 1, is_passive: false }],
+      parse_index: 0,
+    }];
+    expect(svc['windowsFromOneParse'](parseWindows)).toEqual([{
+      time_s: 10, dmg_avg: 4 * BIN_DAMAGE, dmg_min: 4 * BIN_DAMAGE, dmg_max: 4 * BIN_DAMAGE, dmg_stddev: 0,
+      common_cds: ['Shadow Blades'], window_length_s: 4,
+      ability_breakdown: [{ spell_id: SHADOW_BLADES_DAMAGE, avg_damage: 4 * BIN_DAMAGE, min_damage: 4 * BIN_DAMAGE, max_damage: 4 * BIN_DAMAGE, avg_casts: 1, is_passive: false }],
+    }]);
+  });
+
+  it('maps an empty parse to an empty bench, not dropped by any consensus floor', () => {
+    expect(svc['windowsFromOneParse']([])).toEqual([]);
+  });
+});
+
 const reportAbilities = [{ gameID: SHADOW_BLADES_DAMAGE, name: 'Eviscerate', icon: 'x' }];
 
 // A damage-density burst at 10,11,12s overlaps the Shadow Blades cast at 10s, attributing it inside the measured window.
@@ -437,5 +456,24 @@ describe('BurstTransformService (live, in-browser)', () => {
     });
     expect(await TestBed.inject(BurstTransformService).getBench('SubtletyRogue', 1))
       .toEqual(Results.missing('Not yet ingested.'));
+  });
+
+  it('getBenchFromParse benches the one given parse directly, with no ranking lookup and no clustering', async () => {
+    const wcl = { ...wclFake, getRankings: async () => { throw new Error('rankings must not be asked'); } };
+    TestBed.configureTestingModule({ providers: provideApiFakes({ wcl, files: filesFake }) });
+    const fight = {
+      id: 1, name: 'Boss', startTime: 0, endTime: 300_000, kill: true, encounterID: 1, attempt: 1, duration_s: 300,
+      friendlyPlayers: [], fightPercentage: 0,
+    };
+    const player = { id: 10, name: 'P1', subType: 'Rogue', server: 'eu' };
+    const report = { title: 't', startTime: 0, fights: [fight], masterData: { actors: [player], enemies: [], abilities: reportAbilities } };
+    const benchParse = { ranking: { player: 'P1', server: 'eu', report_code: 'rOne', fight_id: 1 }, report, fight, player };
+    const bench = await TestBed.inject(BurstTransformService).getBenchFromParse('SubtletyRogue', 1, benchParse);
+    expect(bench.ok).toBe(true);
+    if (!bench.ok) return;
+    expect(bench.value.sample_count).toBe(1);
+    expect(bench.value.windows).toHaveLength(1);
+    assert.exists(bench.value.windows[0]);
+    expect(bench.value.windows[0]).toMatchObject({ dmg_avg: bench.value.windows[0].dmg_max, dmg_stddev: 0 });
   });
 });

@@ -156,10 +156,9 @@ test('defensives flag the mistimed cooldowns and benchmark the damage taken', as
   await shows(defensives, PERCENT);
 });
 
-test('gear lists the top-parse talent builds and how the alt build differs, plus trinkets and enchants', async () => {
-  const gear = page.locator('wl-gear');
-  await shows(gear, 'Gear vs top parses.');
-  const talents = gear.locator('div.border-t').filter({ hasText: 'Talents' }).first();
+test('talents lists the top-parse builds and how the alt build differs', async () => {
+  const talents = page.locator('wl-talents');
+  await shows(talents, 'Top-parse talent builds.');
   await shows(talents, 'Your build');
   await shows(talents, /Most common build/);
   await shows(talents, PERCENT);
@@ -171,6 +170,18 @@ test('gear lists the top-parse talent builds and how the alt build differs, plus
     await shows(talents, 'Dropped');
     await showsEntity(talents);
   }
+});
+
+test('stats reports the signed rating/item-level delta against the top-parse average', async () => {
+  const stats = page.locator('wl-stats');
+  await shows(stats, 'Stats vs top parses.');
+  await shows(stats, 'Item level');
+  await shows(stats, 'Measured');
+});
+
+test('gear lists trinkets and enchants against the top-parse consensus', async () => {
+  const gear = page.locator('wl-gear');
+  await shows(gear, 'Gear vs top parses.');
   const trinkets = gear.locator('div.border-t').filter({ hasText: 'Trinkets' }).first();
   await expect(trinkets.locator('a[href*="wowhead.com/item="]').first()).toBeVisible();
   const enchants = gear.locator('div.border-t').filter({ hasText: 'Enchants' }).first();

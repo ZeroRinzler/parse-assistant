@@ -148,6 +148,19 @@ export class DefensiveFeatureService {
     return { findings, spellIdsByName: bench.cd_spell_ids, iconByName, windows, anchors, clipAnchors };
   }
 
+  // `bench` is caller-supplied (a compare view's synthesized 1-parse bench), not looked up from the DataSource.
+  async loadAnalysisViewFromBench(
+    bench: DefensiveBench, reportCode: string, fightId: number, playerId: number,
+  ): Promise<Result<DefensiveView>> {
+    const pull: PullRef = { reportCode, fightId };
+    return this.pullContext.analyzePull(this.wclApi, pull, {
+      logSource: 'DefensiveFeatureService.loadAnalysisViewFromBench',
+      errorId: 'defensive.compare-view',
+      emptyView: () => ({ findings: [], spellIdsByName: bench.cd_spell_ids, iconByName: {}, windows: [], anchors: [], clipAnchors: [] }),
+      analyze: context => this.analysisView(bench, pull, playerId, context),
+    });
+  }
+
   async loadPlan(spec: string, encounterId: number): Promise<Result<DefensivePlanView>> {
     const bench = await this.source.getBench(spec, encounterId);
     if (!bench.ok) return bench;
@@ -221,7 +234,7 @@ export class DefensiveFeatureService {
 
     const issues: AnalysisFinding[] = [];
     if (this.castCadence.usedByMajority(defBench)) {
-      const lost = this.castCadence.checkLostUses(DEFENSIVE_VOICE, name, uses, expected, floor, fightDurS);
+      const lost = this.castCadence.checkLostUses(DEFENSIVE_VOICE, name, uses, expected, floor, fightDurS, castTimesS, defBench);
       if (lost) issues.push(lost);
       const lateFirst = this.castCadence.checkFirstCastDelay(DEFENSIVE_VOICE, name, castTimesS, defBench);
       if (lateFirst) issues.push(lateFirst);

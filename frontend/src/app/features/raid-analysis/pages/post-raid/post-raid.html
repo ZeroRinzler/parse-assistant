@@ -140,6 +140,26 @@
             (availableChange)="cards.setAvailable('defensive', $event)">
           </wl-defensive>
 
+          <wl-talents
+            [spec]="spec()"
+            [encounterId]="selectedEncounterId()"
+            [report]="reportCode()"
+            [fight]="selectedFightId()!"
+            [player]="selectedPlayerId()!"
+            (busyChange)="cards.setBusy('talents', $event)"
+            (availableChange)="cards.setAvailable('talents', $event)">
+          </wl-talents>
+
+          <wl-stats
+            [spec]="spec()"
+            [encounterId]="selectedEncounterId()"
+            [report]="reportCode()"
+            [fight]="selectedFightId()!"
+            [player]="selectedPlayerId()!"
+            (busyChange)="cards.setBusy('stats', $event)"
+            (availableChange)="cards.setAvailable('stats', $event)">
+          </wl-stats>
+
           <wl-gear
             [spec]="spec()"
             [encounterId]="selectedEncounterId()"

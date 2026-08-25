@@ -48,10 +48,9 @@ test('the northern sky export offers the top log\'s cooldown timings as a note',
   await page.getByRole('button', { name: 'Close export' }).click();
 });
 
-test('gear shows the top-parse talent, trinket, and enchant consensus, and how the alt build differs', async () => {
-  const gear = page.locator('wl-gear');
-  await shows(gear, 'Top-parse gear consensus.');
-  const talents = gear.locator('div.border-t').filter({ hasText: 'Talents' }).first();
+test('talents shows the top-parse build consensus and how the alt build differs', async () => {
+  const talents = page.locator('wl-talents');
+  await shows(talents, 'Top-parse talent builds.');
   await shows(talents, 'Most common build');
   await shows(talents, PERCENT);
   await shows(talents, 'of top parsers');
@@ -59,6 +58,18 @@ test('gear shows the top-parse talent, trinket, and enchant consensus, and how t
   await shows(talents, 'Added');
   await shows(talents, 'Dropped');
   await showsEntity(talents);
+});
+
+test('stats shows the top-parse average rating and item level (bench-only, no player to diff)', async () => {
+  const stats = page.locator('wl-stats');
+  await shows(stats, 'Stats vs top parses.');
+  await shows(stats, 'Item level');
+  await shows(stats, 'Measured');
+});
+
+test('gear shows the top-parse trinket and enchant consensus', async () => {
+  const gear = page.locator('wl-gear');
+  await shows(gear, 'Top-parse gear consensus.');
   const trinkets = gear.locator('div.border-t').filter({ hasText: 'Trinkets' }).first();
   await expect(trinkets.locator('a[href*="wowhead.com/item="]').first()).toBeVisible();
   await shows(trinkets, 'Trinket 1');

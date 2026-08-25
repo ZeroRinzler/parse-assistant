@@ -1,0 +1,56 @@
+<div class="mx-auto max-w-[1040px] px-3 md:px-4 pt-6 pb-12">
+  <h1 class="text-[22px] font-semibold text-[var(--text)] mb-1">Compare 2 logs</h1>
+  <p class="text-[13px] text-[var(--muted)] mb-5">
+    Paste two Warcraft Logs report links, one pull each, to compare damage by ability and find the biggest DPS gaps.
+  </p>
+
+  <wl-log-diff (compared)="onCompared()"></wl-log-diff>
+
+  @if (detailed.attempted()) {
+    @if (detailed.loading()) {
+      <div class="flex justify-center py-8 text-[13px] text-[var(--muted)]">Loading the full breakdown...</div>
+    } @else if (!detailed.sameSpec()) {
+      <div class="px-4 py-6 text-center text-[13px] text-[var(--muted)]">
+        Log A and Log B are different specs, so the full breakdown does not apply - only the damage-by-ability table above compares them.
+      </div>
+    } @else if (fightA(); as fA) {
+      @let encounterId = fA.encounterID;
+      @let spec = detailed.specA();
+      @let reportA = sideA().code;
+      @let playerA = sideA().selectedPlayerId ?? 0;
+
+      <div class="grid md:grid-cols-2 gap-4 mt-5">
+        <wl-pull-overview [report]="reportA" [player]="playerA" [fight]="fA"></wl-pull-overview>
+        @if (fightB(); as fB) {
+          <wl-pull-overview [report]="sideB().code" [player]="sideB().selectedPlayerId ?? 0" [fight]="fB"></wl-pull-overview>
+        }
+      </div>
+
+      <div class="mt-5">
+        <wl-rotation [spec]="spec" [encounterId]="encounterId" [reportCode]="reportA" [fightId]="fA.id" [playerId]="playerA"
+          [compareBench]="detailed.rotationBench()" [peerLabel]="peerLabel()"></wl-rotation>
+      </div>
+      <div class="mt-5">
+        <wl-burst-windows [spec]="spec" [encounterId]="encounterId" [report]="reportA" [fight]="fA.id" [player]="playerA"
+          [compareBench]="detailed.burstBench()" [peerLabel]="peerLabel()" [youLabel]="youLabel()"
+          [peerBuffs]="detailed.burstPeerBuffs()"></wl-burst-windows>
+      </div>
+      <div class="mt-5">
+        <wl-defensive [spec]="spec" [encounterId]="encounterId" [report]="reportA" [fight]="fA.id" [player]="playerA"
+          [compareBench]="detailed.defensiveBench()" [peerLabel]="peerLabel()"></wl-defensive>
+      </div>
+      <div class="mt-5">
+        <wl-talents [spec]="spec" [encounterId]="encounterId" [report]="reportA" [fight]="fA.id" [player]="playerA"
+          [compareBench]="detailed.gearBench()" [peerLabel]="peerLabel()"></wl-talents>
+      </div>
+      <div class="mt-5">
+        <wl-stats [spec]="spec" [encounterId]="encounterId" [report]="reportA" [fight]="fA.id" [player]="playerA"
+          [compareBench]="detailed.gearBench()" [peerLabel]="peerLabel()" [youLabel]="youLabel()"></wl-stats>
+      </div>
+      <div class="mt-5">
+        <wl-gear [spec]="spec" [encounterId]="encounterId" [report]="reportA" [fight]="fA.id" [player]="playerA"
+          [compareBench]="detailed.gearBench()" [peerLabel]="peerLabel()"></wl-gear>
+      </div>
+    }
+  }
+</div>

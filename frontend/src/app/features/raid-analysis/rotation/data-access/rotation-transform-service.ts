@@ -10,7 +10,7 @@ import {
 } from '../../../../domain/analysis/analysis-math';
 import { HoldWindow } from '../../../../domain/analysis/hold-targets-service';
 import { WclProjectionsService, TimedEvent } from '../../../../domain/analysis/wcl-projections-service';
-import { BenchPipelineService, BenchParse } from '../../../../domain/analysis/bench-pipeline-service';
+import { BenchPipelineService, BenchParse, BenchSlice } from '../../../../domain/analysis/bench-pipeline-service';
 import { DataSource } from '../../../../core/data-source/data-source';
 import { Result } from '../../../../core/http/result';
 import { RotationRuleEngineService, BenchedRule, RuleSample, MIN_MEASURED_PARSES } from '../domain/rotation-rule-engine-service';
@@ -71,12 +71,23 @@ export class RotationTransformService implements DataSource<RotationBench> {
 
   async getBench(spec: string, encounterId: number, selection?: TopParseSelection): Promise<Result<RotationBench>> {
     return this.benchPipeline.benchFromTopParses(this.wclApi, { spec, encounterId, selection }, {
-      logSource: 'RotationTransformService',
-      errorId: 'rotation.bench',
+      ...this.sliceConfig(),
       minSamples: MIN_PARSE_COUNT,
-      noRankingsMessage: 'No top parses for this encounter.',
       tooFewParsesMessage: usable =>
         `Only ${usable} usable top parse(s) for this encounter; ${MIN_PARSE_COUNT} are needed to bench it.`,
+    });
+  }
+
+  // A 1-parse "bench": cadence stats degrade to that parse's own numbers; every rule's band comes back null (ruleBand needs MIN_MEASURED_PARSES), the same shape the runtime already renders as no rule findings.
+  async getBenchFromParse(spec: string, encounterId: number, parse: BenchParse): Promise<Result<RotationBench>> {
+    return this.benchPipeline.benchFromOneParse(this.wclApi, { spec, encounterId }, parse, this.sliceConfig());
+  }
+
+  private sliceConfig(): BenchSlice<ParseRotation, RotationBench, RotationPlan> {
+    return {
+      logSource: 'RotationTransformService',
+      errorId: 'rotation.bench',
+      noRankingsMessage: 'No top parses for this encounter.',
       rulebook: {
         dataFiles: this.dataFiles,
         plan: (rulebook): RotationPlan | null => rulebook.major_cooldowns.length
@@ -102,7 +113,7 @@ export class RotationTransformService implements DataSource<RotationBench> {
           cd_spell_ids: this.benchPipeline.spellIdsByName([...plan.cooldowns, ...plan.defensives]),
         };
       },
-    });
+    };
   }
 
   protected benchRules(rules: RulebookRule[], perParse: ParseRuleSamples[]): BenchedRule[] {

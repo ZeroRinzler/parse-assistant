@@ -1,7 +1,7 @@
 <div class="flex flex-col gap-6">
   @if (error() || !available()) {
     <!-- Offensive cooldowns are bench-driven; the load-state stands in until a bench exists, or shows the error. -->
-    <wl-load-state heading="Offensives" subtitle="Offensive cooldowns vs top parses." [error]="error()"></wl-load-state>
+    <wl-load-state heading="Offensives" [subtitle]="offensiveSubtitle()" [error]="error()"></wl-load-state>
   } @else {
     @if (ruleRows().length || ruleOnPlanChips().length) {
       <wl-finding-table
@@ -14,7 +14,7 @@
 
     <wl-finding-table
       heading="Offensives"
-      subtitle="Offensive cooldowns vs top parses."
+      [subtitle]="offensiveSubtitle()"
       [rows]="offensiveRows()"
       [onPlan]="onPlan()">
     </wl-finding-table>

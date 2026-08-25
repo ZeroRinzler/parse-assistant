@@ -104,34 +104,74 @@ describe('usedByMajority', () => {
 
 describe('checkLostUses', () => {
   it('flags a critical when the ability is never used but expected', () => {
-    const finding = castCadence.checkLostUses(VOICE, 'Cloak', 0, 2, 2, FIGHT_DUR_S);
+    const finding = castCadence.checkLostUses(VOICE, 'Cloak', 0, 2, 2, FIGHT_DUR_S, [], bench());
     expect(finding).toMatchObject({ severity: 'critical', category: 'lost_cooldown', measured: { value: '0 / 2', unit: 'press(es)' } });
+  });
+
+  it('stamps a never-used ability with the bench\'s typical opener time', () => {
+    const finding = castCadence.checkLostUses(VOICE, 'Cloak', 0, 2, 2, FIGHT_DUR_S, [], bench({ avg_first_cast_s: 12 }));
+    expect(finding?.timestamp_s).toBe(12);
   });
 
   it('flags a critical below the floor, with the voice remedy', () => {
     // 1 use, floor 3 -> 2 missing.
-    const finding = castCadence.checkLostUses(VOICE, 'Cloak', 1, 3, 3, FIGHT_DUR_S);
+    const finding = castCadence.checkLostUses(VOICE, 'Cloak', 1, 3, 3, FIGHT_DUR_S, [10], bench());
     expect(finding?.category).toBe('lost_cooldown');
     expect(finding?.details?.remedy).toBe('Cloak +2');
   });
 
+  it('stamps an under-floor ability with the last real cast plus the bench\'s typical gap', () => {
+    const LAST_CAST_S = 50;
+    const AVG_GAP_S = 40;
+    const finding = castCadence.checkLostUses(
+      VOICE, 'Cloak', 2, 4, 3, FIGHT_DUR_S, [10, LAST_CAST_S], bench({ avg_gap_s: AVG_GAP_S }));
+    expect(finding?.timestamp_s).toBe(LAST_CAST_S + AVG_GAP_S);
+  });
+
+  it('leaves the timestamp unset when the bench has no gap stat to project from', () => {
+    const finding = castCadence.checkLostUses(VOICE, 'Cloak', 1, 3, 3, FIGHT_DUR_S, [10], bench({ avg_gap_s: null }));
+    expect(finding?.timestamp_s).toBeUndefined();
+  });
+
   it('does not flag a use count exactly at the floor (strict)', () => {
-    expect(castCadence.checkLostUses(VOICE, 'Cloak', 2, 2, 2, FIGHT_DUR_S)).toBeNull();
+    expect(castCadence.checkLostUses(VOICE, 'Cloak', 2, 2, 2, FIGHT_DUR_S, [10, 50], bench())).toBeNull();
   });
 });
 
 describe('checkFirstCastDelay', () => {
-  // bench: avg_first_cast_s 5, stddev 2 -> outlier above 5 + 2*2 = 9s.
+  // bench: avg_first_cast_s 5, stddev 2 -> outlier above 5 + 2*2 = 9s; delay = firstS - 5.
 
-  it('flags a first cast more than 2 sigma past the top open, voicing the remedy', () => {
-    const finding = castCadence.checkFirstCastDelay(VOICE, 'Cloak', [10], bench());
+  it('flags a first cast past both the absolute floor and 2 sigma, voicing the remedy', () => {
+    // firstS 11 -> delay 6: clears the 5s floor and the 9s (delay 4s) sigma threshold.
+    const finding = castCadence.checkFirstCastDelay(VOICE, 'Cloak', [11], bench());
     expect(finding?.category).toBe('cooldown_delay');
     expect(finding?.message).toContain('opened at');
     expect(finding?.details?.remedy).toBe('Cloak earlier');
   });
 
-  it('does not flag a first cast exactly at the 2-sigma boundary (strict)', () => {
-    expect(castCadence.checkFirstCastDelay(VOICE, 'Cloak', [9], bench())).toBeNull();
+  it('does not flag a delay exactly at the absolute floor (boundary)', () => {
+    // firstS 10 -> delay exactly 5s.
+    expect(castCadence.checkFirstCastDelay(VOICE, 'Cloak', [10], bench())).toBeNull();
+  });
+
+  it('does not flag a delay that clears the floor but sits exactly at the 2-sigma boundary (strict)', () => {
+    // stddev 3 -> sigma threshold delay 6s, same as the floor is not the binding constraint here.
+    const tight = bench({ stddev_first_cast_s: 3 });
+    expect(castCadence.checkFirstCastDelay(VOICE, 'Cloak', [11], tight)).toBeNull(); // delay 6 == boundary, strict
+    expect(castCadence.checkFirstCastDelay(VOICE, 'Cloak', [12], tight)?.category).toBe('cooldown_delay'); // delay 7, one past
+  });
+
+  it('does not flag a delay below the floor even against a near-zero-variance bench (would otherwise be a sigma outlier)', () => {
+    // stddev 0.1 -> sigma threshold delay 0.2s; a 4s delay clears that easily but the floor still blocks it.
+    const nearZeroVariance = bench({ stddev_first_cast_s: 0.1 });
+    expect(castCadence.checkFirstCastDelay(VOICE, 'Cloak', [9], nearZeroVariance)).toBeNull();
+  });
+
+  it('in a 1-parse (compare) bench, flags purely on the absolute floor - the sigma test never applies', () => {
+    // sample_count 1: stddev is not a real population estimate, so a huge stddev must not suppress the flag.
+    const onePeer = bench({ sample_count: 1, stddev_first_cast_s: 10 });
+    expect(castCadence.checkFirstCastDelay(VOICE, 'Cloak', [11], onePeer)?.category).toBe('cooldown_delay'); // delay 6
+    expect(castCadence.checkFirstCastDelay(VOICE, 'Cloak', [9], onePeer)).toBeNull(); // delay 4, below the floor
   });
 
   it('returns null with no casts', () => {
@@ -140,9 +180,9 @@ describe('checkFirstCastDelay', () => {
 });
 
 describe('checkGaps', () => {
-  // bench: avg_gap_s 90, stddev 5 -> outlier above 90 + 2*5 = 100s.
+  // bench: avg_gap_s 90, stddev 5 -> outlier above 90 + 2*5 = 100s; delta = gap - 90.
 
-  it('flags a gap more than 2 sigma above the top gap, voicing noun and remedy', () => {
+  it('flags a gap past both the absolute floor and 2 sigma, voicing noun and remedy', () => {
     const out = castCadence.checkGaps(VOICE, 'Cloak', [0, 110], bench());
     expect(out).toHaveLength(1);
     expect(out[0]?.message).toContain('between presses');
@@ -151,6 +191,25 @@ describe('checkGaps', () => {
 
   it('does not flag a gap exactly at the 2-sigma boundary (strict)', () => {
     expect(castCadence.checkGaps(VOICE, 'Cloak', [0, 100], bench())).toEqual([]);
+  });
+
+  it('does not flag a gap delta exactly at the absolute floor (boundary)', () => {
+    // stddev 2 -> sigma threshold delta 4s, so the floor (5s) is the binding constraint here.
+    const tight = bench({ stddev_gap_s: 2 });
+    expect(castCadence.checkGaps(VOICE, 'Cloak', [0, 95], tight)).toEqual([]); // delta exactly 5
+    expect(castCadence.checkGaps(VOICE, 'Cloak', [0, 96], tight)).toHaveLength(1); // delta 6, one past
+  });
+
+  it('does not flag a gap delta below the floor even against a near-zero-variance bench', () => {
+    const nearZeroVariance = bench({ stddev_gap_s: 0.1 });
+    expect(castCadence.checkGaps(VOICE, 'Cloak', [0, 93], nearZeroVariance)).toEqual([]); // delta 3
+  });
+
+  it('still applies the sigma test at sample_count 1 - a gap stddev is not degenerate there like first-cast is', () => {
+    // stddev 20 -> sigma threshold delta 40s. A real high-variance ability (procs, resources) must not flood every gap.
+    const onePeer = bench({ sample_count: 1, stddev_gap_s: 20 });
+    expect(castCadence.checkGaps(VOICE, 'Cloak', [0, 97], onePeer)).toEqual([]); // delta 7: clears the floor, not 2 sigma
+    expect(castCadence.checkGaps(VOICE, 'Cloak', [0, 131], onePeer)).toHaveLength(1); // delta 41: clears both
   });
 
   it('returns nothing when the bench has no gap stats', () => {

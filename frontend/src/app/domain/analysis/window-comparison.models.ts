@@ -1,4 +1,6 @@
 // Kept in core/models (not in the component files) so feature/transform services can import them as plain models without reaching into a UI component.
+import type { WindowBuffPresence } from './buff-presence-service';
+
 export interface RangeRow {
   spellId?: number;
   label: string;
@@ -34,4 +36,6 @@ export interface ComparisonWindow {
   statusIcon: string;
   overview: RangeRow;
   detailRows: RangeRow[];
+  /** Set only by the compare page: Player A vs the peer's buff/consumable presence in this window. */
+  buffs?: { player: WindowBuffPresence; peer: WindowBuffPresence } | null;
 }

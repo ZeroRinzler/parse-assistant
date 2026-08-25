@@ -31,6 +31,8 @@ export interface RotationFindingRow {
   what?: string;
   measured: { value: string; unit?: string };
   fix?: string;
+  /** Rendered under the chip (e.g. "BL at 02:00"). */
+  subNote?: string;
   occurrences: FindingOccurrence[];
   occurrenceTarget?: string;
   timeline?: FindingTimeline;
@@ -180,6 +182,19 @@ export class RotationFeatureService {
     return { ruleRows, ruleOnPlan, offensiveRows, onPlan };
   }
 
+  // `bench` is caller-supplied (a compare view's synthesized 1-parse bench), not looked up from the DataSource.
+  async loadPlayerViewFromBench(
+    bench: RotationBench, reportCode: string, fightId: number, playerId: number,
+  ): Promise<Result<RotationPlayerView>> {
+    const pull: PullRef = { reportCode, fightId };
+    return this.pullContext.analyzePull(this.wclApi, pull, {
+      logSource: 'RotationFeatureService.loadPlayerViewFromBench',
+      errorId: 'rotation.compare-view',
+      emptyView: () => ({ ruleRows: [], ruleOnPlan: [], offensiveRows: [], onPlan: [] }),
+      analyze: context => this.playerView(bench, pull, playerId, context),
+    });
+  }
+
   async loadPlanView(spec: string, encounterId: number): Promise<Result<RotationPlanView>> {
     const bench = await this.source.getBench(spec, encounterId);
     if (!bench.ok) return bench;
@@ -200,7 +215,7 @@ export class RotationFeatureService {
         timestamp_s: firstCastS,
         measured: { value: 'missed', unit: 'BL' },
         message: `${cdName} missed Bloodlust. Bloodlust started at ${fmtClock(blTimeS)}, ${cdName} at ${fmtClock(firstCastS)}.`,
-        details: { remedy: `Align ${cdName} with Bloodlust.` }, occurrences: [] });
+        details: { remedy: `Align ${cdName} with Bloodlust.`, context_note: `BL at ${fmtClock(blTimeS)}` }, occurrences: [] });
     } else if (blAligned && cdBench.avg_bl_offset_s != null && cdBench.stddev_bl_offset_s != null) {
       const offsets = inWindow.map(timeS => timeS - blTimeS);
       const playerOffset = closestToZero(offsets);
@@ -212,7 +227,7 @@ export class RotationFeatureService {
           timestamp_s: judgedCastS,
           measured: { value: dir, unit: 'in BL' },
           message: `${cdName} was ${dir} inside the Bloodlust window.`,
-          details: { remedy: `Tighten ${cdName} to the Bloodlust window.` }, occurrences: [] });
+          details: { remedy: `Tighten ${cdName} to the Bloodlust window.`, context_note: `BL at ${fmtClock(blTimeS)}` }, occurrences: [] });
       }
     }
     return { blAligned, findings };
@@ -271,7 +286,7 @@ export class RotationFeatureService {
 
     const issues: AnalysisFinding[] = [];
     if (this.castCadence.usedByMajority(cdBench)) {
-      const lost = this.castCadence.checkLostUses(ROTATION_VOICE, cdName, actual, expected, floor, fightDurS);
+      const lost = this.castCadence.checkLostUses(ROTATION_VOICE, cdName, actual, expected, floor, fightDurS, castTimesS, cdBench);
       if (lost) issues.push(lost);
       const lateOpener = this.castCadence.checkFirstCastDelay(ROTATION_VOICE, cdName, castTimesS, cdBench);
       if (lateOpener) issues.push(lateOpener);
@@ -354,6 +369,7 @@ export class RotationFeatureService {
       measured: finding.measured ?? { value: '-' },
       timestampS: finding.timestamp_s ?? null,
       fix: finding.details?.remedy,
+      subNote: finding.details?.context_note,
       occurrences: finding.occurrences,
       occurrenceTarget: finding.occurrenceTarget,
       timeline: finding.timeline,
@@ -377,6 +393,7 @@ export class RotationFeatureService {
           chip: CAT_LABEL[finding.category],
           measured: finding.measured ?? { value: '-' },
           fix: finding.details?.remedy,
+          subNote: finding.details?.context_note,
           occurrences: finding.occurrences,
         });
       }

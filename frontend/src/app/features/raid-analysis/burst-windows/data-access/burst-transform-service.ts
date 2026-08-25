@@ -118,6 +118,52 @@ export class BurstTransformService implements DataSource<BurstBench> {
     });
   }
 
+  // A 1-parse "bench" skips clustering (its own floor needs >=2 parses) - that parse's own windows ARE the bench, shown directly.
+  async getBenchFromParse(spec: string, encounterId: number, parse: BenchParse): Promise<Result<BurstBench>> {
+    return this.benchPipeline.benchFromOneParse(this.wclApi, { spec, encounterId }, parse, {
+      logSource: 'BurstTransformService',
+      errorId: 'burst.bench',
+      noRankingsMessage: 'No damage windows in this pull.',
+      rulebook: {
+        dataFiles: this.dataFiles,
+        plan: (rulebook): BurstPlan | null => rulebook.major_cooldowns.length
+          ? { cooldowns: rulebook.major_cooldowns, defensives: rulebook.defensives }
+          : null,
+        missingMessage: 'Not yet ingested.',
+      },
+      iconSpellIds: bench => [
+        ...Object.values(bench.cd_spell_ids),
+        ...bench.windows.flatMap(window => window.ability_breakdown.map(ability => ability.spell_id)),
+      ],
+      parse: (parse, plan) => this.parseWindows(parse, plan.cooldowns),
+      bench: ({ parses }, plan) => ({
+        windows: this.windowsFromOneParse(parses[0] ?? []),
+        cd_spell_ids: this.benchPipeline.spellIdsByName([...plan.cooldowns, ...plan.defensives]),
+      }),
+    });
+  }
+
+  // With a single reference parse there is no consensus to compute, so avg/min/max collapse to that parse's own value.
+  protected windowsFromOneParse(windows: ParseWindow[]): BurstWindow[] {
+    return windows.map(window => ({
+      time_s: window.time_s,
+      dmg_avg: window.window_damage,
+      dmg_min: window.window_damage,
+      dmg_max: window.window_damage,
+      dmg_stddev: 0,
+      common_cds: window.active_cds,
+      window_length_s: window.window_length_s,
+      ability_breakdown: window.ability_breakdown.map(ability => ({
+        spell_id: ability.spell_id,
+        avg_damage: ability.damage,
+        min_damage: ability.damage,
+        max_damage: ability.damage,
+        avg_casts: ability.casts,
+        is_passive: ability.is_passive,
+      })),
+    }));
+  }
+
   private async parseWindows({ ranking, report, fight, player }: BenchParse, cooldowns: RulebookCooldown[]): Promise<ParseWindow[]> {
     // Names only, to attribute casts by ability name inside a parse window.
     const abilityNames = new Map<number, string>(

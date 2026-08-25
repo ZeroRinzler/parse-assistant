@@ -47,6 +47,27 @@ export class BenchPipelineService {
     }
   }
 
+  // For a caller that already knows exactly which one parse to bench (a 1v1 compare): no ranking resolution, no minSamples floor.
+  async benchFromOneParse<TParse, TBench, TPlan = undefined>(
+    wclApi: WclApiService,
+    query: { spec: string; encounterId: number },
+    benchParse: BenchParse,
+    slice: BenchSlice<TParse, TBench, TPlan>,
+  ): Promise<Result<TBench>> {
+    const { spec, encounterId } = query;
+    const planned = await this.benchPlan(slice.rulebook, spec);
+    if (!planned.ok) return planned;
+    try {
+      const parse = await slice.parse(benchParse, planned.value);
+      if (parse === null) return Results.missing(slice.noRankingsMessage);
+      const payload: BenchPayload<TParse> = { encounterName: benchParse.fight.name, parses: [parse] };
+      return Results.ok(await this.benchEnvelope(wclApi, slice, planned.value, { spec, encounterId }, payload));
+    } catch (cause) {
+      this.logger.logWarn(`${slice.logSource}.getBenchFromParse ${spec}:${encounterId}`, cause);
+      return HttpLoadErrors.toLoadError(cause, slice.errorId);
+    }
+  }
+
   private async benchPlan<TPlan>(step: BenchRulebookStep<TPlan> | undefined, spec: string): Promise<Result<TPlan>> {
     if (!step) return Results.ok(undefined as TPlan);
     const rulebook = await step.dataFiles.getRulebook(spec);

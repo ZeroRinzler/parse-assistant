@@ -27,7 +27,7 @@
 
   <div class="flex items-baseline flex-wrap gap-x-1.5 gap-y-1 mt-1.5 md:mt-0 md:contents">
     <span class="shrink-0 mr-2 md:mr-0 md:col-start-3 md:row-start-1 md:text-left tabular-nums text-xs text-[var(--muted)]">
-      <span class="md:hidden font-mono text-[10px] uppercase tracking-wider">Top avg </span>{{ row().topAvg | formatDamage }}
+      <span class="md:hidden font-mono text-[10px] uppercase tracking-wider">{{ peerLabel() ?? 'Top' }} avg </span>{{ row().topAvg | formatDamage }}
     </span>
 
     @if (showCasts() && !hidePlayer()) {

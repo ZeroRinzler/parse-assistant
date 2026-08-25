@@ -1,1 +1,1 @@
-export const INGEST_VERSION = 27;
+export const INGEST_VERSION = 28;

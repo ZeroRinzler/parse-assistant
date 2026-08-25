@@ -152,6 +152,7 @@ describe('checkBloodlustAlignment', () => {
     const out = svc['checkBloodlustAlignment']('Shadow Blades', [100], cdBench(), BL_AT_S, true);
     expect(out.blAligned).toBe(false);
     expect(out.findings[0]?.measured).toEqual({ value: 'missed', unit: 'BL' });
+    expect(out.findings[0]?.details?.context_note).toBe('BL at 00:10');
   });
 
   it('does not flag a miss when parsers do not align it', () => {
@@ -165,6 +166,7 @@ describe('checkBloodlustAlignment', () => {
     const out = svc['checkBloodlustAlignment']('Shadow Blades', [(BL_AT_S + 5)], cdBench(), BL_AT_S, true);
     expect(out.blAligned).toBe(true);
     expect(out.findings[0]?.measured).toEqual({ value: 'late', unit: 'in BL' });
+    expect(out.findings[0]?.details?.context_note).toBe('BL at 00:10');
   });
 
   it('does not flag an in-window offset exactly at the 2-sigma boundary (strict)', () => {

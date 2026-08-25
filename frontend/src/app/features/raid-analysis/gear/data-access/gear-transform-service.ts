@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { WclApiService } from '../../../../core/wcl/wcl-api-service';
-import { CharacterGear, ParseRanking, TopParseSelection } from '../../../../core/wcl/wcl.models';
+import { CharacterGear, ParseRanking, SecondaryStats, TopParseSelection } from '../../../../core/wcl/wcl.models';
 import { EncounterGearStats } from '../../../../domain/encounter/encounter.models';
 import { Result } from '../../../../core/http/result';
 import { GearExtractService, GameNames, TRINKET_SLOTS } from '../domain/gear-extract-service';
@@ -8,21 +8,25 @@ import { TalentKeyService } from '../../../../domain/gear/talent-key-service';
 import { TalentDataService } from '../../../../core/http/talent-data-service';
 import { SpecTalents } from '../../../../domain/gear/talent.models';
 import { getOrInsert } from '../../../../domain/analysis/analysis-math';
-import { BenchPipelineService, BenchParse } from '../../../../domain/analysis/bench-pipeline-service';
+import { BenchPipelineService, BenchParse, BenchSlice } from '../../../../domain/analysis/bench-pipeline-service';
 import { DataSource } from '../../../../core/data-source/data-source';
-import { GearBench } from './gear-data-source';
+import { GearBench } from '../../../../domain/gear/gear-bench';
 import { LoggerService } from '../../../../core/observability/logger-service';
 import { GearComparisonService } from '../../../../domain/gear/gear-comparison-service';
+import { StatsExtractService } from '../../../../domain/gear/stats-extract-service';
 
 const MAX_TALENT_BUILDS = 3;
 const MAX_TRINKETS_PER_SLOT = 5;
 const MAX_ENCHANTS_PER_SLOT = 3;
+const STAT_KEYS: (keyof SecondaryStats)[] = ['primary', 'stamina', 'crit', 'haste', 'mastery', 'versatility', 'avoidance', 'leech', 'speed'];
 
 // The parse identity rides along so each bench talent build can link back to an example parse running it.
 export interface ParseGear {
   talent_key: string;
   trinkets: { slot: number; id: number; name: string; icon: string }[];
   enchants: { slot: number; id: number; name: string }[];
+  stats?: SecondaryStats;
+  avg_item_level?: number;
   report_code: string;
   fight_id: number;
   player_name: string;
@@ -42,13 +46,23 @@ export class GearTransformService implements DataSource<GearBench> {
   private readonly logger = inject(LoggerService);
   private readonly gearComparison = inject(GearComparisonService);
   private readonly gearExtract = inject(GearExtractService);
+  private readonly statsExtract = inject(StatsExtractService);
   private readonly benchPipeline = inject(BenchPipelineService);
   private readonly talentKey = inject(TalentKeyService);
   private readonly wclApi = inject(WclApiService);
   private readonly talentData = inject(TalentDataService);
 
   async getBench(spec: string, encounterId: number, selection?: TopParseSelection): Promise<Result<GearBench>> {
-    return this.benchPipeline.benchFromTopParses(this.wclApi, { spec, encounterId, selection }, {
+    return this.benchPipeline.benchFromTopParses(this.wclApi, { spec, encounterId, selection }, this.sliceConfig(spec));
+  }
+
+  // The aggregate builders are plain percentages of the parse count, so a 1-parse array degrades to "100% of the field runs this build".
+  async getBenchFromParse(spec: string, encounterId: number, parse: BenchParse): Promise<Result<GearBench>> {
+    return this.benchPipeline.benchFromOneParse(this.wclApi, { spec, encounterId }, parse, this.sliceConfig(spec));
+  }
+
+  private sliceConfig(spec: string): BenchSlice<ParseGear, GearBench> {
+    return {
       logSource: 'GearTransformService',
       errorId: 'gear.bench',
       noRankingsMessage: 'Not yet ingested.',
@@ -59,9 +73,11 @@ export class GearTransformService implements DataSource<GearBench> {
           talent_builds: this.withTalentDiffs(stats.talent_builds, await this.talentData.getTalents(spec)),
           trinkets: stats.trinkets,
           enchants: stats.enchants,
+          avg_stats: stats.avg_stats,
+          avg_item_level: stats.avg_item_level,
         };
       },
-    });
+    };
   }
 
   private async fetchParseGear({ ranking, fight, player }: BenchParse): Promise<ParseGear | null> {
@@ -75,6 +91,7 @@ export class GearTransformService implements DataSource<GearBench> {
 
     const characterGear: CharacterGear = {
       talent_key: this.talentKey.talentKeyFromTree(event.talentTree), trinkets, enchants,
+      stats: this.statsExtract.extractStats(event), avgItemLevel: this.statsExtract.averageItemLevel(event.gear),
     };
     return this.toParseGear(characterGear, ranking, player.id);
   }
@@ -102,6 +119,8 @@ export class GearTransformService implements DataSource<GearBench> {
       talent_key: gear.talent_key ?? '',
       trinkets: (gear.trinkets ?? []).map(trinket => ({ slot: trinket.slot, id: trinket.id, name: trinket.name, icon: trinket.icon ?? '' })),
       enchants: (gear.enchants ?? []).map(enchant => ({ slot: enchant.slot, id: enchant.id, name: enchant.name })),
+      stats: gear.stats,
+      avg_item_level: gear.avgItemLevel,
       report_code: ranking.report_code,
       fight_id: ranking.fight_id,
       player_name: ranking.player,
@@ -184,11 +203,28 @@ export class GearTransformService implements DataSource<GearBench> {
   }
 
   protected aggregateParseGear(parses: ParseGear[]): EncounterGearStats {
+    const itemLevels = parses.map(parse => parse.avg_item_level).filter((level): level is number => level != null);
     return {
       talent_builds: this.aggregateTalents(parses),
       trinkets: this.aggregateTrinkets(parses),
       enchants: this.aggregateEnchants(parses),
+      avg_stats: this.aggregateStats(parses),
+      avg_item_level: itemLevels.length ? this.average(itemLevels) : undefined,
     };
+  }
+
+  // Averages only the parses that actually carried stats, so one failed extraction doesn't skew the rest.
+  protected aggregateStats(parses: ParseGear[]): SecondaryStats | undefined {
+    const withStats = parses.map(parse => parse.stats).filter((stats): stats is SecondaryStats => stats != null);
+    if (!withStats.length) return undefined;
+    return STAT_KEYS.reduce((acc, key) => {
+      acc[key] = this.average(withStats.map(stats => stats[key]));
+      return acc;
+    }, {} as SecondaryStats);
+  }
+
+  private average(values: number[]): number {
+    return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
   }
 
   protected withTalentDiffs(

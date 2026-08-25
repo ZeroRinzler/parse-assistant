@@ -1,0 +1,38 @@
+<div class="grid md:grid-cols-2 gap-4">
+  <wl-report-picker
+    label="Log A"
+    [fights]="sideA().fights"
+    [players]="playersA()"
+    [selectedFightId]="sideA().selectedFightId"
+    [selectedPlayerId]="sideA().selectedPlayerId"
+    [loading]="sideA().loading"
+    [error]="sideA().error"
+    [notice]="sideA().notice"
+    (urlSubmit)="onUrlSubmit('A', $event)"
+    (fightChange)="onFightChange('A', $event)"
+    (playerChange)="onPlayerChange('A', $event)">
+  </wl-report-picker>
+
+  <wl-report-picker
+    label="Log B"
+    [fights]="sideB().fights"
+    [players]="playersB()"
+    [selectedFightId]="sideB().selectedFightId"
+    [selectedPlayerId]="sideB().selectedPlayerId"
+    [loading]="sideB().loading"
+    [error]="sideB().error"
+    [notice]="sideB().notice"
+    (urlSubmit)="onUrlSubmit('B', $event)"
+    (fightChange)="onFightChange('B', $event)"
+    (playerChange)="onPlayerChange('B', $event)">
+  </wl-report-picker>
+</div>
+
+<div class="flex justify-center my-5">
+  <button mat-flat-button color="primary" [disabled]="!canCompare() || comparing()" (click)="onCompare()">
+    Compare
+  </button>
+</div>
+
+<wl-ability-diff-table [view]="comparisonValue()" [loading]="comparing()" [error]="comparisonError()"></wl-ability-diff-table>
+<wl-target-diff-table [view]="comparisonValue()"></wl-target-diff-table>

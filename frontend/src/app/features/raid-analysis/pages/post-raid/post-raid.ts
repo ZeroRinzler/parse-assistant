@@ -23,6 +23,8 @@ import { BurstWindows } from '../../burst-windows/components/burst-windows';
 import { Defensive } from '../../defensive/components/defensive';
 import { DefensiveMapAnchor } from '../../defensive/facade/defensive-feature-service';
 import { Gear } from '../../gear/components/gear';
+import { Talents } from '../../talents/components/talents';
+import { Stats } from '../../stats/components/stats';
 import { MapPanel } from '../../map/components/map-panel';
 import { MapFeatureService, MapAnchor } from '../../map/facade/map-feature-service';
 import { LiveCaptureFeatureService } from '../../live/facade/live-capture-feature-service';
@@ -47,7 +49,7 @@ const RAID_DIFFICULTY_NAMES: Record<number, string> = { 3: 'Normal', 4: 'Heroic'
 
 export type LivePollAction = 'none' | 'skip' | 'analyze';
 
-type PostRaidCardId = 'pullOverview' | 'rotation' | 'burst' | 'defensive' | 'gear';
+type PostRaidCardId = 'pullOverview' | 'rotation' | 'burst' | 'defensive' | 'talents' | 'stats' | 'gear';
 
 // Pull overview describes the pull itself instead of measuring it against top parses, so it has no bench and never keeps the empty-bench banner away.
 const POST_RAID_CARDS: readonly CardEntry<PostRaidCardId>[] = [
@@ -55,6 +57,8 @@ const POST_RAID_CARDS: readonly CardEntry<PostRaidCardId>[] = [
   { id: 'rotation', hasBench: true },
   { id: 'burst', hasBench: true },
   { id: 'defensive', hasBench: true },
+  { id: 'talents', hasBench: true },
+  { id: 'stats', hasBench: true },
   { id: 'gear', hasBench: true },
 ];
 
@@ -66,7 +70,7 @@ const POST_RAID_CARDS: readonly CardEntry<PostRaidCardId>[] = [
     ReactiveFormsModule, MatFormFieldModule, MatInputModule, MatSelectModule,
     MatButtonModule, MatCardModule,
     LoadingSpinner, BenchEmptyBanner, LoadState, ArtIcon, PullOverview, Rotation, BurstWindows,
-    Defensive, Gear, MapPanel, LiveControls, ClipPanel,
+    Defensive, Talents, Stats, Gear, MapPanel, LiveControls, ClipPanel,
     FormatDurationPipe, FormatSpecPipe, SpecIconPipe, ClassIconPipe, BossIconPipe,
   ],
   // Provided here, not app.config: only this page's form fields want dynamic subscript sizing.

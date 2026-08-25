@@ -6,7 +6,17 @@ import { CompactAbilityRow } from '../compact-ability-row/compact-ability-row';
 import { FormatDurationPipe } from '../../pipes/format-duration-pipe';
 import { FormatDamagePipe } from '../../pipes/format-damage-pipe';
 import { SignedPercentPipe } from '../../pipes/signed-percent-pipe';
-import type { RangeRow, ComparisonWindow } from '../../../domain/analysis/window-comparison.models';
+import type { RangeRow, ComparisonWindow, WindowSpell } from '../../../domain/analysis/window-comparison.models';
+
+/** One row of the buff/consumable comparison block: a label plus whether each side had it up. */
+interface BuffRow {
+  label: string;
+  /** Set only for a recommended major cooldown row, to render its game icon like the chips above. */
+  spellId?: number;
+  icon?: string;
+  you: boolean;
+  peer: boolean;
+}
 
 type TimelineCell =
   | { readonly kind: 'window'; readonly index: number; readonly window: ComparisonWindow }
@@ -30,10 +40,21 @@ export class WindowComparison {
   readonly showClip = input<boolean>(false);
   // Casts column is meaningful for burst (offensive) windows only; hidden for defensives.
   readonly showCasts = input<boolean>(true);
+  // Burst hides this: its own buff/cooldown comparison block below replaces it with a clearer per-side view.
+  readonly showRecommendedCooldowns = input<boolean>(true);
   readonly heading = input<string>('');
   readonly subtitle = input<string>('');
+  /** Set only by the compare page: the other log's player name, in place of "top" everywhere this card names the comparison side. */
+  readonly peerLabel = input<string | null>(null);
+  /** Set only by the compare page: the analyzed player's own name, in place of the generic "You". */
+  readonly youLabel = input<string | null>(null);
   readonly openMap = output<number>();
   readonly openClip = output<number>();
+
+  protected readonly vsAverageLabel = computed(() => this.peerLabel() ? `vs ${this.peerLabel()}` : 'vs top average');
+  protected readonly rangeHeading = computed(() => this.peerLabel() ? `Damage vs ${this.peerLabel()}` : 'Damage vs top range');
+  protected readonly avgColumnLabel = computed(() => this.peerLabel() ?? 'top avg');
+  protected readonly youDisplayLabel = computed(() => this.youLabel() ?? 'You');
 
   // Each dashed pacing slot stands for this many seconds of pause; a sub-slot pause is 0 slots and longer lulls add proportionally more.
   private static readonly GAP_SLOT_SECONDS = 20;
@@ -154,6 +175,15 @@ export class WindowComparison {
     return Number.isFinite(delta) ? delta : null;
   });
 
+  // The raw (non-percent) gap behind overviewDelta, for the peer bullet chart's "-2.2M" readout.
+  protected readonly overviewDeltaAbs = computed<number | null>(() => {
+    const w = this.activeWindow();
+    if (!w) return null;
+    const { playerPct, topAvg } = w.overview;
+    if (playerPct == null || topAvg == null) return null;
+    return playerPct - topAvg;
+  });
+
   protected readonly overviewDeltaStatus = computed<'muted' | 'better' | 'worse'>(() => {
     const delta = this.overviewDelta();
     if (delta == null) return 'muted';
@@ -185,5 +215,30 @@ export class WindowComparison {
     const w = this.activeWindow();
     if (w?.overview.topAvg == null) return null;
     return this.barPct(w.overview.topAvg, this.overviewMax());
+  });
+
+  // The full-fight set (deduped), so the same cooldown rows appear under every window, not just the ones it recommends itself.
+  protected readonly fightCooldowns = computed<WindowSpell[]>(() => {
+    const seen = new Map<number, WindowSpell>();
+    for (const w of this.windows()) for (const spell of w.spells) if (!seen.has(spell.id)) seen.set(spell.id, spell);
+    return [...seen.values()];
+  });
+
+  protected readonly buffRows = computed<BuffRow[]>(() => {
+    const buffs = this.activeWindow()?.buffs;
+    if (!buffs) return [];
+    const { player, peer } = buffs;
+    const rows: BuffRow[] = [
+      { label: 'Potion', you: player.potion, peer: peer.potion },
+      { label: 'Power Infusion', you: player.powerInfusion, peer: peer.powerInfusion },
+      { label: 'Bloodlust', you: player.bloodlust, peer: peer.bloodlust },
+    ];
+    for (const spell of this.fightCooldowns()) {
+      rows.push({
+        label: spell.name, spellId: spell.id, icon: spell.icon,
+        you: player.cooldowns[spell.id] ?? false, peer: peer.cooldowns[spell.id] ?? false,
+      });
+    }
+    return rows;
   });
 }

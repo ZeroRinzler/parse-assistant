@@ -67,6 +67,20 @@ describe('rotation finding partition and row builders', () => {
     expect(rows[0]).toMatchObject({ name: 'Shadow Blades', spellId: SHADOW_BLADES, icon: 'sb', chip: 'held', severity: 'warning' });
   });
 
+  it('carries a BL-alignment context note as the row subNote', () => {
+    const blMiss: AnalysisFinding = {
+      severity: 'critical', category: 'cooldown_alignment', cd_name: 'Shadow Blades', message: '',
+      measured: { value: 'missed', unit: 'BL' }, details: { remedy: 'align it', context_note: 'BL at 02:00' }, occurrences: [],
+    };
+    const rows = svc['buildOffensiveRows']({ 'Shadow Blades': { issues: [blMiss], holds: [] } }, { 'Shadow Blades': SHADOW_BLADES }, abilities);
+    expect(rows[0]?.subNote).toBe('BL at 02:00');
+  });
+
+  it('leaves subNote undefined for a finding with no context note', () => {
+    const rows = svc['buildOffensiveRows']({ 'Shadow Blades': { issues: [issueFinding], holds: [] } }, { 'Shadow Blades': SHADOW_BLADES }, abilities);
+    expect(rows[0]?.subNote).toBeUndefined();
+  });
+
   it('keeps a critical issue finding critical in the offensive row', () => {
     const criticalFinding: AnalysisFinding = { ...issueFinding, severity: 'critical', category: 'lost_cooldown' };
     const rows = svc['buildOffensiveRows']({ 'Shadow Blades': { issues: [criticalFinding], holds: [] } }, { 'Shadow Blades': SHADOW_BLADES }, abilities);

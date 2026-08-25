@@ -9,7 +9,7 @@ import { SHADOW_BLADES, CLOAK_OF_SHADOWS } from '../../../testing/spell-ids';
 import { rulebook } from '../../../testing/builders/rulebook';
 import { FixtureRanking, abilityLookup, parseRankings, wclReport, reportsByCode } from '../../../testing/builders/wcl-fixtures';
 import { AbilityIcons, WclProjectionsService } from './wcl-projections-service';
-import { BenchHeader, BenchSlice, BenchPipelineService } from './bench-pipeline-service';
+import { BenchHeader, BenchSlice, BenchPipelineService, BenchParse } from './bench-pipeline-service';
 import { TestBed } from '@angular/core/testing';
 
 const wclProjections = TestBed.inject(WclProjectionsService);
@@ -157,6 +157,63 @@ describe('benchFromTopParses', () => {
   it('tags a WCL failure with the slice\'s repro id instead of a silent empty bench', async () => {
     const wcl = wclFake({ getRankings: async () => { throw new Error('WCL exploded'); } });
     const result = await benchPipeline.benchFromTopParses(wcl, QUERY, codeSlice());
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatchObject({ kind: 'permanent', id: BENCH_ERROR_ID });
+  });
+});
+
+const ONE_FIGHT = { id: 1, name: 'Boss', startTime: 0, endTime: 100_000, kill: true, encounterID: 1, attempt: 1, duration_s: 100, friendlyPlayers: [], fightPercentage: 0 };
+const ONE_PLAYER = { id: 10, name: 'P1', subType: 'Rogue', server: 'eu' };
+const ONE_PARSE: BenchParse = {
+  ranking: { player: 'P1', server: 'eu', report_code: 'rOne', fight_id: ONE_FIGHT.id },
+  report: wclReport({ fights: [ONE_FIGHT], actors: [ONE_PLAYER] }),
+  fight: ONE_FIGHT,
+  player: ONE_PLAYER,
+};
+
+describe('benchFromOneParse', () => {
+  it('benches the single parse it was handed, with no ranking lookup and sample_count 1', async () => {
+    const wcl = wclFake({ getRankings: async () => { throw new Error('rankings must not be asked'); } });
+    const result = await benchPipeline.benchFromOneParse(wcl, QUERY, ONE_PARSE, codeSlice());
+    expect(result).toEqual(Results.ok(benched(['rOne'])));
+  });
+
+  it('reports a rejected parse as missing, the same as an unusable top-parse candidate', async () => {
+    const slice = codeSlice({ parse: () => Promise.resolve(null) });
+    const result = await benchPipeline.benchFromOneParse(wclFake(), QUERY, ONE_PARSE, slice);
+    expect(result).toEqual(Results.missing(NO_RANKINGS_MESSAGE));
+  });
+
+  it('runs the rulebook step first, stopping on a missing plan before parsing anything', async () => {
+    const slice = planSlice(filesFake(Results.ok(rulebook())));
+    const result = await benchPipeline.benchFromOneParse(wclFake(), QUERY, ONE_PARSE, slice);
+    expect(result).toEqual(Results.missing(NO_PLAN_MESSAGE));
+  });
+
+  it('hands the plan to both parse and bench, same as the top-parse path', async () => {
+    const slice = planSlice(filesFake(Results.ok(PLANNED_RULEBOOK)));
+    const result = await benchPipeline.benchFromOneParse(wclFake(), QUERY, ONE_PARSE, slice);
+    expect(result).toEqual(Results.ok({
+      spec: SPEC, encounter_id: ENCOUNTER_ID, encounter_name: ONE_PARSE.fight.name, sample_count: 1,
+      codes: [`${PLANNED_COOLDOWN}/${ONE_PARSE.ranking.report_code}`, `bench/${PLANNED_COOLDOWN}`],
+    }));
+  });
+
+  it('bakes an icon for every spell id the slice reads off its own bench', async () => {
+    const result = await benchPipeline.benchFromOneParse(wclFake(), QUERY, ONE_PARSE, iconSlice());
+    expect(result).toEqual(Results.ok({
+      spec: SPEC, encounter_id: ENCOUNTER_ID, encounter_name: ONE_PARSE.fight.name, sample_count: 1,
+      spell_ids: [SHADOW_BLADES, CLOAK_OF_SHADOWS],
+      ability_icons: {
+        [SHADOW_BLADES]: { icon: `icon_${SHADOW_BLADES}`, name: `name_${SHADOW_BLADES}` },
+        [CLOAK_OF_SHADOWS]: { icon: `icon_${CLOAK_OF_SHADOWS}`, name: `name_${CLOAK_OF_SHADOWS}` },
+      },
+    }));
+  });
+
+  it('tags a parse failure with the slice\'s repro id instead of a silent empty bench', async () => {
+    const slice = codeSlice({ parse: () => { throw new Error('boom'); } });
+    const result = await benchPipeline.benchFromOneParse(wclFake(), QUERY, ONE_PARSE, slice);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toMatchObject({ kind: 'permanent', id: BENCH_ERROR_ID });
   });

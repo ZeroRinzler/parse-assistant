@@ -97,6 +97,10 @@
 
       <wl-northern-sky-export [spec]="selectedSpec()" [encounterId]="selectedEncId()" (busyChange)="cards.setBusy('northernSky', $event)" (availableChange)="cards.setAvailable('northernSky', $event)"></wl-northern-sky-export>
 
+      <wl-talents [spec]="selectedSpec()" [encounterId]="selectedEncId()" (busyChange)="cards.setBusy('talents', $event)" (availableChange)="cards.setAvailable('talents', $event)"></wl-talents>
+
+      <wl-stats [spec]="selectedSpec()" [encounterId]="selectedEncId()" (busyChange)="cards.setBusy('stats', $event)" (availableChange)="cards.setAvailable('stats', $event)"></wl-stats>
+
       <wl-gear [spec]="selectedSpec()" [encounterId]="selectedEncId()" (busyChange)="cards.setBusy('gear', $event)" (availableChange)="cards.setAvailable('gear', $event)"></wl-gear>
 
       <wl-rotation-cd-plan [spec]="selectedSpec()" [encounterId]="selectedEncId()" (busyChange)="cards.setBusy('cdPlan', $event)" (availableChange)="cards.setAvailable('cdPlan', $event)"></wl-rotation-cd-plan>
