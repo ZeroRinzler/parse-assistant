@@ -1,8 +1,17 @@
-# warcraft-learner
+# Parse Assistant
 
-A web-based diagnostic tool for Mythic WoW raiders. It fetches your combat data from Warcraft Logs, evaluates it against spec-specific rulebooks, and delivers prescriptive, coaching-style feedback benchmarked against top-parse players.
+A web-based diagnostic tool for Mythic WoW raiders. It fetches your combat data
+from Warcraft Logs, evaluates it against spec-specific rulebooks, and delivers
+prescriptive, coaching-style feedback — either benchmarked against top-parse
+players, or head-to-head against a specific log of your choice.
 
-**Live site: https://warcraft-learner.com/**
+## About
+
+Parse-Assistant is derived from [warcraft-learner](https://github.com/gpolcode/warcraft-learner)
+by gpolcode, licensed under AGPLv3 (see [LICENSE](./LICENSE)).
+
+Changes from the original include a new log-comparison
+feature (`/compare`), and additional gear/stats & burst details.
 
 ## What it does
 
