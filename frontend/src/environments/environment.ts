@@ -8,8 +8,10 @@ import { GEAR_DATA_SOURCE } from '../app/features/raid-analysis/gear/data-access
 import { MAP_DATA_SOURCE } from '../app/features/raid-analysis/map/data-access/map-data-source';
 import { NORTHERN_SKY_DATA_SOURCE } from '../app/features/raid-analysis/northern-sky/data-access/northern-sky-data-source';
 
-/** `dataBaseHref` must stay a sibling of every environment folder (`main/`, `pr-N/`), which `.github/workflows/deploy-pages.yml` derives each build's `--base-href` from. */
-export const environment = withEnvironment({ dataBaseHref: '/data/specs/' });
+/** The app domain (GitHub Pages, "GitHub Actions" source) serves only the built shell, not the `gh-pages` branch `ingest-parses.yml` publishes data to - so data reads go straight to the branch's raw content instead. */
+export const environment = withEnvironment({
+  dataBaseHref: 'https://raw.githubusercontent.com/ZeroRinzler/parse-assistant/gh-pages/data/specs/',
+});
 
 /** Never import a `*TransformService` here or it joins the eager production bundle. */
 export const environmentProviders: Provider[] = [
