@@ -18,17 +18,10 @@ jobs:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
-      - name: Mint GitHub App token
-        id: app-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          client-id: ${{ secrets.INGEST_APP_CLIENT_ID }}
-          private-key: ${{ secrets.INGEST_APP_PRIVATE_KEY }}
-
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
-          token: ${{ steps.app-token.outputs.token }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           # Keeps origin/gh-pages when the overlay's fetch fails; without it the publish wipes the gh-pages-only data.
           fetch-depth: 0
 
@@ -88,11 +81,11 @@ jobs:
             git archive origin/gh-pages 'data/specs/*/rulebook.json' | tar -x -C frontend/public
           fi
 
-      # clean:true is scoped to target-folder, so it replaces data/specs/ only and never touches main/ or pr-* previews.
+      # clean:true is scoped to target-folder, so it replaces data/specs/ only and never touches anything else on gh-pages.
       - name: Publish data to gh-pages
         uses: JamesIves/github-pages-deploy-action@fa24774553152dd7873cd16ebd8d959b010c5445 # v4.9.0
         with:
-          token: ${{ steps.app-token.outputs.token }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           branch: gh-pages
           single-commit: true
           folder: frontend/public/data/specs
