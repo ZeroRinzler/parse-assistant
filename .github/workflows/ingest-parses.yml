@@ -1,7 +1,9 @@
 name: Ingest Parse Samples
 
 on:
-  # Fired hourly by an external scheduler (cron-job.org): GitHub's own cron drops fires and ignores the set minute.
+  # GitHub's own cron can delay or drop a fire under load and ignores the exact minute - acceptable for an hourly job with no external scheduler to maintain.
+  schedule:
+    - cron: '0 * * * *'
   workflow_dispatch:
 
 # Serializing every gh-pages writer keeps their single-commit force-pushes from reverting each other's folder.
