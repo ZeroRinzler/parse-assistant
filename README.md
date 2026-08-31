@@ -5,6 +5,8 @@ from Warcraft Logs, evaluates it against spec-specific rulebooks, and delivers
 prescriptive, coaching-style feedback — either benchmarked against top-parse
 players, or head-to-head against a specific log of your choice.
 
+https://zerorinzler.github.io/parse-assistant/
+
 ## About
 
 Parse-Assistant is derived from [warcraft-learner](https://github.com/gpolcode/warcraft-learner)
