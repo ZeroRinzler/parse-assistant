@@ -18,5 +18,48 @@
       [rows]="offensiveRows()"
       [onPlan]="onPlan()">
     </wl-finding-table>
+
+    <div class="bg-[var(--surface)] border border-[var(--border)] rounded-[10px] overflow-hidden">
+      <div class="px-4 pt-3 pb-2">
+        <div class="text-[17px] font-semibold text-[var(--text)]">Combat potions</div>
+        <div class="text-xs text-[var(--muted)] mt-0.5">{{ potionsSubtitle() }}</div>
+      </div>
+      <div [class]="'grid gap-4 px-4 pb-4' + (peerLabel() ? ' md:grid-cols-2' : '')">
+        <div>
+          @if (peerLabel()) {
+            <div class="text-[10px] uppercase tracking-widest text-[var(--muted)] mb-1">You</div>
+          }
+          @if (potions().length) {
+            <ul class="flex flex-col gap-1">
+              @for (use of potions(); track use.atS + '-' + use.spellId) {
+                <li class="flex items-center gap-2 text-sm text-[var(--text)]">
+                  <span class="text-[13px] text-[var(--accent)] tabular-nums">{{ use.atS | formatDuration }}</span>
+                  <span>{{ use.name }}</span>
+                </li>
+              }
+            </ul>
+          } @else {
+            <div class="text-[13px] text-[var(--muted)]">No potion used.</div>
+          }
+        </div>
+        @if (peerLabel(); as peer) {
+          <div>
+            <div class="text-[10px] uppercase tracking-widest text-[var(--muted)] mb-1">{{ peer }}</div>
+            @if (peerPotions()?.length) {
+              <ul class="flex flex-col gap-1">
+                @for (use of peerPotions(); track use.atS + '-' + use.spellId) {
+                  <li class="flex items-center gap-2 text-sm text-[var(--text)]">
+                    <span class="text-[13px] text-[var(--accent)] tabular-nums">{{ use.atS | formatDuration }}</span>
+                    <span>{{ use.name }}</span>
+                  </li>
+                }
+              </ul>
+            } @else {
+              <div class="text-[13px] text-[var(--muted)]">No potion used.</div>
+            }
+          </div>
+        }
+      </div>
+    </div>
   }
 </div>

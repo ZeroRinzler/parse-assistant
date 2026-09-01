@@ -128,6 +128,41 @@ describe('DetailedCompareFeatureService.benchParseFor', () => {
   });
 });
 
+describe('DetailedCompareFeatureService.peerPotions', () => {
+  const POTION_ID = 900001;
+
+  const peer: BenchParse = {
+    ranking: { player: 'Bo', server: 'EU', report_code: CODE_B, fight_id: FIGHT_ID },
+    report: wclReport({
+      playerId: PLAYER_B_ID, playerName: 'Bo',
+      abilities: [{ gameID: POTION_ID, name: 'Potion of Unbridled Fury', icon: '' }],
+    }),
+    fight: { id: FIGHT_ID, name: 'Boss', startTime: 0, endTime: 100_000, kill: true, encounterID: ENCOUNTER_ID, attempt: 1, duration_s: 100, friendlyPlayers: [], fightPercentage: 0 },
+    player: { id: PLAYER_B_ID, name: 'Bo', subType: 'Rogue', server: 'EU' },
+  };
+
+  it('lists the peer\'s own self-cast potions with their timing', async () => {
+    const { service } = await readySides();
+    TestBed.inject(WclApiService).getAllEvents = async () => [applyBuff(POTION_ID, 12, { target: PLAYER_B_ID })];
+    const out = await service['peerPotions'](peer);
+    expect(out).toEqual([{ spellId: POTION_ID, name: 'Potion of Unbridled Fury', atS: 12 }]);
+  });
+
+  describe('on a fetch failure', () => {
+    let warnSpy: MockInstance<typeof console.warn>;
+    beforeEach(() => { warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined); });
+    afterEach(() => { warnSpy.mockRestore(); });
+
+    it('logs a warning and returns null instead of throwing', async () => {
+      const { service } = await readySides();
+      TestBed.inject(WclApiService).getAllEvents = async () => { throw new Error('WCL down'); };
+      const out = await service['peerPotions'](peer);
+      expect(out).toBeNull();
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('peerPotions'), expect.any(Error));
+    });
+  });
+});
+
 describe('DetailedCompareFeatureService.loadBurstPeerBuffs', () => {
   // Not tracked in testing/spell-ids.ts: this test only needs a stand-in "major cooldown" id, matched by name via cd_spell_ids.
   const TRUESHOT = 288613;

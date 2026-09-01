@@ -38,4 +38,15 @@ describe('ReportPicker', () => {
     expect(fightEmitted).toEqual([7]);
     expect(playerEmitted).toEqual([42]);
   });
+
+  it('resolves the selected player from the roster by id', () => {
+    const players = [{ id: 1, name: 'Ana', spec: 'Rogue', server: '' }, { id: 2, name: 'Bo', spec: 'Mage', server: '' }];
+    const { vm } = mountVm(ReportPicker, { label: 'Log A', players, selectedPlayerId: 2 });
+    expect(vm['selectedPlayer']()).toEqual(players[1]);
+  });
+
+  it('has no selected player when the id matches nothing in the roster', () => {
+    const { vm } = mountVm(ReportPicker, { label: 'Log A', players: [], selectedPlayerId: 2 });
+    expect(vm['selectedPlayer']()).toBeNull();
+  });
 });

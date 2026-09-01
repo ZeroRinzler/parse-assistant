@@ -79,3 +79,24 @@ describe('windowsPresence', () => {
     expect(out[0]?.cooldowns).toEqual({ [TRUESHOT_ID]: false });
   });
 });
+
+describe('potionUses', () => {
+  it('lists a self-cast potion with its timing', () => {
+    const events = timed([applyBuff(POTION_ID, 5, { target: PLAYER_ID })]);
+    const names = new Map([[POTION_ID, 'Potion of Unbridled Fury']]);
+    const out = buffPresence.potionUses(events, PLAYER_ID, names);
+    expect(out).toEqual([{ spellId: POTION_ID, name: 'Potion of Unbridled Fury', atS: 5 }]);
+  });
+
+  it('excludes the same buff applied by someone else', () => {
+    const events = timed([applyBuff(POTION_ID, 5, { target: PLAYER_ID, source: CASTER_ID })]);
+    const names = new Map([[POTION_ID, 'Potion of Unbridled Fury']]);
+    expect(buffPresence.potionUses(events, PLAYER_ID, names)).toEqual([]);
+  });
+
+  it('excludes a buff whose name does not match "potion"', () => {
+    const events = timed([applyBuff(POWER_INFUSION_ID, 5, { target: PLAYER_ID })]);
+    const names = new Map([[POWER_INFUSION_ID, 'Power Infusion']]);
+    expect(buffPresence.potionUses(events, PLAYER_ID, names)).toEqual([]);
+  });
+});

@@ -21,7 +21,7 @@ describe('AbilityDiffService.buildRows', () => {
       [entry(EVISCERATE, 'Eviscerate', 10_000)], DURATION_A_S,
       [entry(EVISCERATE, 'Eviscerate', 10_000)], DURATION_B_S,
     );
-    expect(rows).toEqual([{ key: 'Eviscerate', abilityId: EVISCERATE, name: 'Eviscerate', dpsA: 100, dpsB: 50, deltaDps: 50 }]);
+    expect(rows).toEqual([{ key: 'Eviscerate', abilityId: EVISCERATE, name: 'Eviscerate', dpsA: 100, dpsB: 50, deltaDps: 50, castsA: 0, castsB: 0 }]);
   });
 
   it('sorts the biggest absolute gap first, regardless of direction', () => {
@@ -39,7 +39,7 @@ describe('AbilityDiffService.buildRows', () => {
       [entry(SHADOW_BLADES_DAMAGE, 'Shadow Blades', 5_000)], DURATION_A_S,
       [], DURATION_B_S,
     );
-    expect(rows).toEqual([{ key: 'Shadow Blades', abilityId: SHADOW_BLADES_DAMAGE, name: 'Shadow Blades', dpsA: 50, dpsB: 0, deltaDps: 50 }]);
+    expect(rows).toEqual([{ key: 'Shadow Blades', abilityId: SHADOW_BLADES_DAMAGE, name: 'Shadow Blades', dpsA: 50, dpsB: 0, deltaDps: 50, castsA: 0, castsB: 0 }]);
   });
 
   it('scores 0 dps for a zero-length pull rather than dividing by zero', () => {
@@ -53,5 +53,23 @@ describe('AbilityDiffService.buildRows', () => {
       [], DURATION_A_S,
     );
     expect(rows.map(r => r.name)).toEqual(['Eviscerate', 'Rupture']);
+  });
+
+  it('attaches each side\'s cast count to the row for the same ability', () => {
+    const rows = diffService.buildRows(
+      [entry(EVISCERATE, 'Eviscerate', 1_000)], DURATION_A_S,
+      [entry(EVISCERATE, 'Eviscerate', 1_000)], DURATION_A_S,
+      [entry(EVISCERATE, 'Eviscerate', 8)], [entry(EVISCERATE, 'Eviscerate', 5)],
+    );
+    expect(rows[0]).toMatchObject({ castsA: 8, castsB: 5 });
+  });
+
+  it('defaults a side\'s casts to 0 when its casts table carries no row for that ability', () => {
+    const rows = diffService.buildRows(
+      [entry(EVISCERATE, 'Eviscerate', 1_000)], DURATION_A_S,
+      [entry(EVISCERATE, 'Eviscerate', 1_000)], DURATION_A_S,
+      [entry(EVISCERATE, 'Eviscerate', 8)], [],
+    );
+    expect(rows[0]).toMatchObject({ castsA: 8, castsB: 0 });
   });
 });

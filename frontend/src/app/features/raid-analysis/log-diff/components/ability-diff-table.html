@@ -17,21 +17,25 @@
       </div>
     </div>
 
-    <div class="hidden md:grid grid-cols-[minmax(0,1fr)_90px_90px_90px_150px] gap-x-[14px] items-center px-4 pb-1 pt-3">
+    <div class="hidden md:grid grid-cols-[minmax(0,1fr)_90px_90px_90px_70px_70px_150px] gap-x-[14px] items-center px-4 pb-1 pt-3">
       <span class="text-[10px] uppercase tracking-widest text-[var(--muted)]">ability</span>
-      <span class="text-right text-[10px] uppercase tracking-widest text-[var(--muted)]">dps a</span>
-      <span class="text-right text-[10px] uppercase tracking-widest text-[var(--muted)]">dps b</span>
+      <span class="text-right text-[10px] uppercase tracking-widest text-[var(--muted)] truncate">{{ v.playerA }} dps</span>
+      <span class="text-right text-[10px] uppercase tracking-widest text-[var(--muted)] truncate">{{ v.playerB }} dps</span>
       <span class="text-right text-[10px] uppercase tracking-widest text-[var(--muted)]">delta</span>
+      <span class="text-right text-[10px] uppercase tracking-widest text-[var(--muted)] truncate">{{ v.playerA }} casts</span>
+      <span class="text-right text-[10px] uppercase tracking-widest text-[var(--muted)] truncate">{{ v.playerB }} casts</span>
       <span></span>
     </div>
 
     @for (row of v.rows; track row.key) {
       @let deltaColor = row.deltaDps > 0 ? 'text-[var(--accent)]' : row.deltaDps < 0 ? 'text-[var(--warning)]' : 'text-[var(--muted)]';
-      <div class="grid grid-cols-2 md:grid-cols-[minmax(0,1fr)_90px_90px_90px_150px] gap-x-[14px] items-center px-4 py-2 border-t border-[var(--border)]">
+      <div class="grid grid-cols-2 md:grid-cols-[minmax(0,1fr)_90px_90px_90px_70px_70px_150px] gap-x-[14px] items-center px-4 py-2 border-t border-[var(--border)]">
         <span class="col-span-2 md:col-span-1 text-[13px] text-[var(--text)] truncate">{{ row.name }}</span>
         <span class="text-right font-mono text-[13px] text-[var(--text)] tabular-nums">{{ row.dpsA | formatDamage }}</span>
         <span class="text-right font-mono text-[13px] text-[var(--text)] tabular-nums">{{ row.dpsB | formatDamage }}</span>
         <span [class]="'text-right font-mono text-[13px] tabular-nums ' + deltaColor">{{ row.deltaDps >= 0 ? '+' : '' }}{{ row.deltaDps | formatDamage }}</span>
+        <span class="hidden md:block text-right font-mono text-[13px] text-[var(--muted)] tabular-nums">{{ row.castsA }}</span>
+        <span class="hidden md:block text-right font-mono text-[13px] text-[var(--muted)] tabular-nums">{{ row.castsB }}</span>
         <div class="relative h-3 rounded bg-[var(--bg)]" aria-hidden="true">
           <div class="absolute inset-y-0 left-1/2 w-px bg-[var(--border)]"></div>
           @if (row.deltaDps > 0) {

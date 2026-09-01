@@ -11,8 +11,8 @@ describe('AbilityDiffTable', () => {
   it('scales every bar against the row with the biggest |delta|', () => {
     const { vm } = mountVm(AbilityDiffTable, {
       view: view([
-        { key: 'a', abilityId: 1, name: 'A', dpsA: 100, dpsB: 0, deltaDps: 100 },
-        { key: 'b', abilityId: 2, name: 'B', dpsA: 25, dpsB: 0, deltaDps: 25 },
+        { key: 'a', abilityId: 1, name: 'A', dpsA: 100, dpsB: 0, deltaDps: 100, castsA: 0, castsB: 0 },
+        { key: 'b', abilityId: 2, name: 'B', dpsA: 25, dpsB: 0, deltaDps: 25, castsA: 0, castsB: 0 },
       ]),
     });
     expect(vm['barPct'](100)).toBe(100);
@@ -20,12 +20,12 @@ describe('AbilityDiffTable', () => {
   });
 
   it('caps a bar at 100%, even past the recorded max (defensive floor)', () => {
-    const { vm } = mountVm(AbilityDiffTable, { view: view([{ key: 'a', abilityId: 1, name: 'A', dpsA: 10, dpsB: 0, deltaDps: 10 }]) });
+    const { vm } = mountVm(AbilityDiffTable, { view: view([{ key: 'a', abilityId: 1, name: 'A', dpsA: 10, dpsB: 0, deltaDps: 10, castsA: 0, castsB: 0 }]) });
     expect(vm['barPct'](999)).toBe(100);
   });
 
   it('never divides by zero when every row ties at 0 delta', () => {
-    const { vm } = mountVm(AbilityDiffTable, { view: view([{ key: 'a', abilityId: 1, name: 'A', dpsA: 5, dpsB: 5, deltaDps: 0 }]) });
+    const { vm } = mountVm(AbilityDiffTable, { view: view([{ key: 'a', abilityId: 1, name: 'A', dpsA: 5, dpsB: 5, deltaDps: 0, castsA: 0, castsB: 0 }]) });
     expect(vm['barPct'](0)).toBe(0);
   });
 });

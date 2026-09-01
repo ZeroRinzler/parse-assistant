@@ -18,23 +18,36 @@
   }
 
   @if (fights().length) {
-    <div class="flex flex-wrap gap-3 mt-4">
-      <mat-form-field appearance="outline" class="flex-[1_1_180px]">
+    <div class="flex flex-col gap-3 mt-4">
+      <mat-form-field appearance="outline" class="w-full">
         <mat-label>Pull</mat-label>
         <mat-select [value]="selectedFightId()" (selectionChange)="onFightChange($event.value)">
           @for (f of fights(); track f.id) {
-            <mat-option [value]="f.id">
+            <mat-option [value]="f.id" [class]="f.kill ? 'text-[var(--success)]' : 'text-[var(--critical)]'">
               {{ f.name }} - {{ f.kill ? 'Kill' : 'Wipe #' + f.attempt }} - {{ f.duration_s | formatDuration }}
             </mat-option>
           }
         </mat-select>
       </mat-form-field>
 
-      <mat-form-field appearance="outline" class="flex-[1_1_160px]">
+      <mat-form-field appearance="outline" class="w-full">
         <mat-label>Player</mat-label>
         <mat-select [value]="selectedPlayerId()" (selectionChange)="onPlayerChange($event.value)">
+          <mat-select-trigger>
+            @if (selectedPlayer(); as sp) {
+              <span class="flex items-center gap-2">
+                <wl-art-icon [src]="sp.spec | classIcon" [alt]="sp.spec"></wl-art-icon>
+                <span class="truncate">{{ sp.name }} ({{ sp.spec }})</span>
+              </span>
+            }
+          </mat-select-trigger>
           @for (p of players(); track p.id) {
-            <mat-option [value]="p.id">{{ p.name }} ({{ p.spec }})</mat-option>
+            <mat-option [value]="p.id">
+              <span class="flex items-center gap-2">
+                <wl-art-icon [src]="p.spec | classIcon" [alt]="p.spec"></wl-art-icon>
+                <span>{{ p.name }} ({{ p.spec }})</span>
+              </span>
+            </mat-option>
           }
         </mat-select>
       </mat-form-field>

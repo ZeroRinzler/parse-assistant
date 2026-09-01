@@ -11,6 +11,13 @@ export interface WindowBuffPresence {
   cooldowns: Record<number, boolean>;
 }
 
+/** One self-applied combat potion, for the "Combat potions" timeline. */
+export interface PotionUse {
+  spellId: number;
+  name: string;
+  atS: number;
+}
+
 /** Power Infusion - stable across expansions, unlike consumable ids which change every tier. */
 const POWER_INFUSION_ID = 10060;
 /** Bloodlust / Heroism / Time Warp and equivalents - mirrors `RotationBloodlustService`'s list. */
@@ -29,14 +36,20 @@ export class BuffPresenceService {
   // `sourceID` is the real caster even on a `Buffs` fetch filtered to the target player, so it tells self- from external buffs apart.
   private buildContext(buffEvents: TimedEvent[], playerId: number, abilityNames: Map<number, string>): BuffContext {
     const windows = this.auraWindows.buildAuraWindows(buffEvents);
-    const selfPotionIds = new Set<number>();
+    const selfPotionIds = new Set(this.potionUses(buffEvents, playerId, abilityNames).map(use => use.spellId));
+    return { windows, selfPotionIds };
+  }
+
+  /** Every self-applied combat potion in `buffEvents`, in event order, for the "Combat potions" timeline. */
+  potionUses(buffEvents: TimedEvent[], playerId: number, abilityNames: Map<number, string>): PotionUse[] {
+    const uses: PotionUse[] = [];
     for (const event of buffEvents) {
       if (event.type !== 'applybuff' && event.type !== 'refreshbuff') continue;
       if (event.sourceID != null && event.sourceID !== playerId) continue;
       const name = abilityNames.get(event.abilityGameID);
-      if (name && /potion/i.test(name)) selfPotionIds.add(event.abilityGameID);
+      if (name && /potion/i.test(name)) uses.push({ spellId: event.abilityGameID, name, atS: event.atS });
     }
-    return { windows, selfPotionIds };
+    return uses;
   }
 
   private overlaps(windows: AuraWindows, spellId: number, startS: number, endS: number): boolean {

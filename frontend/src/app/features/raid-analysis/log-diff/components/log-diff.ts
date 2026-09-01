@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, output } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { LogDiffFeatureService } from '../facade/log-diff-feature-service';
 import { ReportPicker } from './report-picker';
@@ -24,6 +24,18 @@ export class LogDiff {
   protected readonly canCompare = this.service.canCompare;
   protected readonly comparisonValue = this.service.comparisonValue;
   protected readonly comparisonError = this.service.comparisonError;
+
+  // Once compared, the labels call out which side actually pulled the higher DPS.
+  protected readonly labelA = computed(() => 'Log A' + this.dpsSuffix('A'));
+  protected readonly labelB = computed(() => 'Log B' + this.dpsSuffix('B'));
+
+  private dpsSuffix(side: 'A' | 'B'): string {
+    const c = this.comparisonValue();
+    if (!c || c.totalDpsA === c.totalDpsB) return '';
+    const aIsTop = c.totalDpsA > c.totalDpsB;
+    const isTop = side === 'A' ? aIsTop : !aIsTop;
+    return isTop ? ' - Top DPS' : ' - Bottom DPS';
+  }
 
   /** Fires on every Compare click, so a page hosting this slice can react (e.g. load a cross-slice detailed view). */
   readonly compared = output();

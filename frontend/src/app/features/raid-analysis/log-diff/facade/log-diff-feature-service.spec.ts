@@ -49,6 +49,7 @@ function makeService(over: {
   tables?: Record<string, WclTableBlob | null>;
   wholeTables?: Record<string, WclTableBlob | null>;
   targetTables?: Record<string, WclTableBlob | null>;
+  castsTables?: Record<string, WclTableBlob | null>;
 } = {}): { service: LogDiffFeatureService; calls: FakeCalls } {
   const calls: FakeCalls = { reportCodes: [], tableCalls: [], wholeTableCalls: [], targetTableCalls: [] };
   const wcl = {
@@ -71,6 +72,8 @@ function makeService(over: {
       calls.targetTableCalls.push({ code, fightId, sourceId, startTime, endTime });
       return over.targetTables?.[`${code}:${sourceId}`] ?? null;
     },
+    getCastsTableForSource: async (code: string, fightId: number, sourceId: number) =>
+      over.castsTables?.[`${code}:${sourceId}`] ?? null,
   };
   TestBed.resetTestingModule();
   TestBed.configureTestingModule({ providers: [{ provide: WclApiService, useValue: wcl as unknown as WclApiService }] });
@@ -156,11 +159,11 @@ describe('LogDiffFeatureService selection', () => {
 describe('LogDiffFeatureService.compare', () => {
   async function readySides(
     tables: Record<string, WclTableBlob | null>, wholeTables: Record<string, WclTableBlob | null> = {},
-    targetTables: Record<string, WclTableBlob | null> = {},
+    targetTables: Record<string, WclTableBlob | null> = {}, castsTables: Record<string, WclTableBlob | null> = {},
   ): Promise<{ service: LogDiffFeatureService; calls: FakeCalls }> {
     const { service, calls } = makeService({
       reports: { [CODE_A]: reportWithTwoFightsTwoPlayers(), [CODE_B]: reportWithTwoFightsTwoPlayers() },
-      tables, wholeTables, targetTables,
+      tables, wholeTables, targetTables, castsTables,
     });
     await service.loadSide('A', CODE_A);
     await service.loadSide('B', CODE_B);
@@ -224,12 +227,31 @@ describe('LogDiffFeatureService.compare', () => {
     // WCL's own per-player total (200/80), not the sum of the per-ability rows (100/50) - they intentionally diverge here.
     expect(result.value.totalDpsA).toBe(200);
     expect(result.value.totalDpsB).toBe(80);
-    expect(result.value.rows).toEqual([{ key: 'Eviscerate', abilityId: EVISCERATE, name: 'Eviscerate', dpsA: 100, dpsB: 50, deltaDps: 50 }]);
+    expect(result.value.rows).toEqual([{ key: 'Eviscerate', abilityId: EVISCERATE, name: 'Eviscerate', dpsA: 100, dpsB: 50, deltaDps: 50, castsA: 0, castsB: 0 }]);
     // Both sides hit only "Boss": 100% share for each, so no priority gap.
     expect(result.value.targetRows).toEqual([{ key: 'Boss', targetId: 200, name: 'Boss', pctA: 100, pctB: 100, deltaPct: 0 }]);
     expect(service.comparing()).toBe(false);
     expect(service.comparisonValue()).toEqual(result.value);
     expect(service.comparisonError()).toBeNull();
+  });
+
+  it('attaches each side\'s cast count from its own casts table to the merged row', async () => {
+    const { service } = await readySides(
+      {
+        [`${CODE_A}:${PLAYER_1_ID}`]: { data: { entries: [{ id: 1, guid: EVISCERATE, name: 'Eviscerate', total: 10_000 }] } },
+        [`${CODE_B}:${PLAYER_1_ID}`]: { data: { entries: [{ id: 1, guid: EVISCERATE, name: 'Eviscerate', total: 5_000 }] } },
+      },
+      wholeTablesFor(20_000, 8_000), targetTablesFor(8_000, 4_000),
+      {
+        [`${CODE_A}:${PLAYER_1_ID}`]: { data: { entries: [{ id: 1, guid: EVISCERATE, name: 'Eviscerate', total: 12 }] } },
+        [`${CODE_B}:${PLAYER_1_ID}`]: { data: { entries: [{ id: 1, guid: EVISCERATE, name: 'Eviscerate', total: 7 }] } },
+      },
+    );
+    await service.compare();
+    const result = service.comparisonResult();
+    expect(result?.ok).toBe(true);
+    if (!result?.ok) return;
+    expect(result.value.rows[0]).toMatchObject({ castsA: 12, castsB: 7 });
   });
 
   it('still succeeds, with an empty target breakdown, when the by-target table is missing (non-fatal)', async () => {

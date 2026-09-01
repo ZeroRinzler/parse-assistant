@@ -159,19 +159,35 @@ export class LogDiffFeatureService {
     }
   }
 
-  private async buildComparison(a: SideState, b: SideState): Promise<Result<ComparisonView>> {
-    const target = this.comparisonTarget(a, b);
-    if (!target) return Results.permanent('Selected pull not found.', 'log-diff.compare');
+  private async fetchComparisonTables(
+    a: SideState, b: SideState, target: { fightA: WclFight; fightB: WclFight; playerIdA: number; playerIdB: number },
+  ): Promise<{
+    tableA: WclTableBlob | null; tableB: WclTableBlob | null;
+    wholeTableA: WclTableBlob | null; wholeTableB: WclTableBlob | null;
+    targetTableA: WclTableBlob | null; targetTableB: WclTableBlob | null;
+    castsTableA: WclTableBlob | null; castsTableB: WclTableBlob | null;
+  }> {
     const { fightA, fightB, playerIdA, playerIdB } = target;
-
-    const [tableA, tableB, wholeTableA, wholeTableB, targetTableA, targetTableB] = await Promise.all([
+    const [tableA, tableB, wholeTableA, wholeTableB, targetTableA, targetTableB, castsTableA, castsTableB] = await Promise.all([
       this.wclApi.getDamageDoneTableForSource(a.code, fightA.id, playerIdA),
       this.wclApi.getDamageDoneTableForSource(b.code, fightB.id, playerIdB),
       this.wclApi.getDamageDoneTable(a.code, fightA.id),
       this.wclApi.getDamageDoneTable(b.code, fightB.id),
       this.wclApi.getDamageByTargetForSource(a.code, fightA.id, playerIdA, fightA.startTime, fightA.endTime),
       this.wclApi.getDamageByTargetForSource(b.code, fightB.id, playerIdB, fightB.startTime, fightB.endTime),
+      this.wclApi.getCastsTableForSource(a.code, fightA.id, playerIdA),
+      this.wclApi.getCastsTableForSource(b.code, fightB.id, playerIdB),
     ]);
+    return { tableA, tableB, wholeTableA, wholeTableB, targetTableA, targetTableB, castsTableA, castsTableB };
+  }
+
+  private async buildComparison(a: SideState, b: SideState): Promise<Result<ComparisonView>> {
+    const target = this.comparisonTarget(a, b);
+    if (!target) return Results.permanent('Selected pull not found.', 'log-diff.compare');
+    const { fightA, fightB, playerIdA, playerIdB } = target;
+
+    const { tableA, tableB, wholeTableA, wholeTableB, targetTableA, targetTableB, castsTableA, castsTableB } =
+      await this.fetchComparisonTables(a, b, target);
     const entriesA = this.tableEntries(tableA);
     const entriesB = this.tableEntries(tableB);
     if (!entriesA || !entriesB) return Results.permanent('Damage table missing for one of the pulls.', 'log-diff.damage-table');
@@ -180,7 +196,11 @@ export class LogDiffFeatureService {
     const totalDpsB = this.playerTotalDps(wholeTableB, playerIdB, this.durationS(fightB));
     if (totalDpsA == null || totalDpsB == null) return Results.permanent('Damage table missing for one of the pulls.', 'log-diff.damage-table');
 
-    const rows = this.abilityDiff.buildRows(entriesA, this.durationS(fightA), entriesB, this.durationS(fightB));
+    // Casts are supplementary (like the by-target breakdown): a missing casts table just leaves every row's count at 0.
+    const rows = this.abilityDiff.buildRows(
+      entriesA, this.durationS(fightA), entriesB, this.durationS(fightB),
+      this.castsEntries(castsTableA), this.castsEntries(castsTableB),
+    );
     const targetRows = this.buildTargetRows(targetTableA, a.report, targetTableB, b.report);
     return Results.ok({
       playerA: a.players.find(p => p.id === playerIdA)?.name ?? '',
@@ -246,6 +266,11 @@ export class LogDiffFeatureService {
 
   protected durationS(fight: WclFight): number {
     return (fight.endTime - fight.startTime) / 1000;
+  }
+
+  // Casts are supplementary: unlike tableEntries(), a missing/unusable casts table is never fatal - it just yields an empty list.
+  protected castsEntries(blob: WclTableBlob | null): AbilityTableEntry[] {
+    return this.tableEntries(blob) ?? [];
   }
 
   // null means an unusable table (absent/unparseable/no entries array); a valid table can still have an empty entry list.

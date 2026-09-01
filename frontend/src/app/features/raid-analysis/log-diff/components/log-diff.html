@@ -1,6 +1,6 @@
 <div class="grid md:grid-cols-2 gap-4">
   <wl-report-picker
-    label="Log A"
+    [label]="labelA()"
     [fights]="sideA().fights"
     [players]="playersA()"
     [selectedFightId]="sideA().selectedFightId"
@@ -14,7 +14,7 @@
   </wl-report-picker>
 
   <wl-report-picker
-    label="Log B"
+    [label]="labelB()"
     [fights]="sideB().fights"
     [players]="playersB()"
     [selectedFightId]="sideB().selectedFightId"

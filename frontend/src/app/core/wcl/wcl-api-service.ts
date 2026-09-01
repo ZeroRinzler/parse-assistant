@@ -137,6 +137,13 @@ export class WclApiService {
     return result.reportData?.report?.table ?? null;
   }
 
+  // Same shape as getDamageDoneTableForSource, but `total` is a cast count per ability rather than summed damage.
+  async getCastsTableForSource(code: string, fightId: number, sourceId: number): Promise<WclTableBlob | null> {
+    const vars: TableForSourceQueryVariables = { code, fightIDs: [fightId], dataType: 'Casts', sourceID: sourceId };
+    const result = await this.query<TableForSourceQuery>(TABLE_FOR_SOURCE_Q, vars);
+    return result.reportData?.report?.table ?? null;
+  }
+
   // `viewBy:Target` gives one row per target actor in one call; pass `startTime`/`endTime` to scope it to a sub-span (e.g. a burst window).
   async getDamageByTargetForSource(
     code: string, fightId: number, sourceId: number, startTime?: number, endTime?: number,

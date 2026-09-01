@@ -5,7 +5,7 @@ import { LoggerService } from '../../../../core/observability/logger-service';
 import { Result } from '../../../../core/http/result';
 import { BenchParse } from '../../../../domain/analysis/bench-pipeline-service';
 import { WclProjectionsService } from '../../../../domain/analysis/wcl-projections-service';
-import { BuffPresenceService, WindowBuffPresence } from '../../../../domain/analysis/buff-presence-service';
+import { BuffPresenceService, PotionUse, WindowBuffPresence } from '../../../../domain/analysis/buff-presence-service';
 import { RotationTransformService } from '../../rotation/data-access/rotation-transform-service';
 import { RotationBench } from '../../rotation/data-access/rotation-data-source';
 import { BurstTransformService } from '../../burst-windows/data-access/burst-transform-service';
@@ -52,6 +52,8 @@ export class DetailedCompareFeatureService {
   readonly gearBench = signal<Result<GearBench> | null>(null);
   /** The peer's per-window buff/consumable presence, index-aligned with `burstBench`'s windows; null until that bench resolves ok. */
   readonly burstPeerBuffs = signal<WindowBuffPresence[] | null>(null);
+  /** The peer's own combat potions, for the rotation card's "Combat potions" timeline; null until resolved. */
+  readonly rotationPeerPotions = signal<PotionUse[] | null>(null);
 
   async loadDetailed(): Promise<void> {
     this.loading.set(true);
@@ -70,6 +72,7 @@ export class DetailedCompareFeatureService {
       if (!target) return;
       await Promise.all([
         this.loadRotationBench(target), this.loadBurstBench(target), this.loadDefensiveBench(target), this.loadGearBench(target),
+        this.loadRotationPeerPotions(target),
       ]);
     } finally {
       this.loading.set(false);
@@ -84,6 +87,7 @@ export class DetailedCompareFeatureService {
     this.defensiveBench.set(null);
     this.gearBench.set(null);
     this.burstPeerBuffs.set(null);
+    this.rotationPeerPotions.set(null);
   }
 
   private detailTarget(spec: string, a: SideState, b: SideState): DetailTarget | null {
@@ -95,6 +99,24 @@ export class DetailedCompareFeatureService {
 
   private async loadRotationBench(target: DetailTarget): Promise<void> {
     this.rotationBench.set(await this.rotationTransform.getBenchFromParse(target.spec, target.encounterId, target.benchParseFromB));
+  }
+
+  // Log B's own potion casts, fetched straight from its Buffs stream - the rotation card's bench comparison never carries raw events.
+  private async loadRotationPeerPotions(target: DetailTarget): Promise<void> {
+    this.rotationPeerPotions.set(await this.peerPotions(target.benchParseFromB));
+  }
+
+  protected async peerPotions(peer: BenchParse): Promise<PotionUse[] | null> {
+    try {
+      const { report, fight, player } = peer;
+      const abilityNames = new Map<number, string>();
+      for (const ability of report.masterData?.abilities ?? []) abilityNames.set(ability.gameID, ability.name);
+      const buffs = await this.wclApi.getAllEvents(peer.ranking.report_code, fight.id, 'Buffs', fight.startTime, fight.endTime, player.id);
+      return this.buffPresence.potionUses(this.wclProjections.withRelativeS(buffs, fight.startTime), player.id, abilityNames);
+    } catch (cause) {
+      this.logger.logWarn('DetailedCompareFeatureService.peerPotions', cause);
+      return null;
+    }
   }
 
   private async loadBurstBench(target: DetailTarget): Promise<void> {

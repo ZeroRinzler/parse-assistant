@@ -19,6 +19,7 @@ import { LoggerService } from '../../../../core/observability/logger-service';
 import { HoldTargetsService } from '../../../../domain/analysis/hold-targets-service';
 import { CastCadenceService } from '../../../../domain/analysis/cast-cadence-service';
 import { RotationBloodlustService } from '../domain/rotation-bloodlust-service';
+import { BuffPresenceService, PotionUse } from '../../../../domain/analysis/buff-presence-service';
 
 export interface RotationFindingRow {
   severity: 'critical' | 'warning' | 'info';
@@ -66,6 +67,7 @@ export interface RotationPlayerView {
   ruleOnPlan: string[];
   offensiveRows: RotationFindingRow[];
   onPlan: RotationOnPlanChip[];
+  potions: PotionUse[];
 }
 
 /** Bench-only cooldown plan; an `ok` result implies the top-parse bench exists. */
@@ -123,6 +125,7 @@ export class RotationFeatureService {
   private readonly ruleContexts = inject(RuleContextService);
   private readonly pullContext = inject(PullContextService);
   private readonly wclProjections = inject(WclProjectionsService);
+  private readonly buffPresence = inject(BuffPresenceService);
   private readonly source = inject(ROTATION_DATA_SOURCE);
   private readonly wclApi = inject(WclApiService);
 
@@ -136,7 +139,7 @@ export class RotationFeatureService {
     return this.pullContext.analyzePull(this.wclApi, pull, {
       logSource: 'RotationFeatureService.loadPlayerView',
       errorId: 'rotation.player-view',
-      emptyView: () => ({ ruleRows: [], ruleOnPlan: [], offensiveRows: [], onPlan: [] }),
+      emptyView: () => ({ ruleRows: [], ruleOnPlan: [], offensiveRows: [], onPlan: [], potions: [] }),
       analyze: context => this.playerView(bench.value, pull, playerId, context),
     });
   }
@@ -179,7 +182,9 @@ export class RotationFeatureService {
     const { ruleRows, offensiveRows, onPlan } =
       this.bucketRotationFindings(findings, bench.cd_spell_ids, bench.ability_icons);
     const ruleOnPlan = this.ruleEngine.rulesFollowed(rules, ruleCtx);
-    return { ruleRows, ruleOnPlan, offensiveRows, onPlan };
+    const abilityNames = new Map(context.report.masterData?.abilities.map(ability => [ability.gameID, ability.name]));
+    const potions = this.buffPresence.potionUses(buffsTimed, playerId, abilityNames);
+    return { ruleRows, ruleOnPlan, offensiveRows, onPlan, potions };
   }
 
   // `bench` is caller-supplied (a compare view's synthesized 1-parse bench), not looked up from the DataSource.
@@ -190,7 +195,7 @@ export class RotationFeatureService {
     return this.pullContext.analyzePull(this.wclApi, pull, {
       logSource: 'RotationFeatureService.loadPlayerViewFromBench',
       errorId: 'rotation.compare-view',
-      emptyView: () => ({ ruleRows: [], ruleOnPlan: [], offensiveRows: [], onPlan: [] }),
+      emptyView: () => ({ ruleRows: [], ruleOnPlan: [], offensiveRows: [], onPlan: [], potions: [] }),
       analyze: context => this.playerView(bench, pull, playerId, context),
     });
   }
