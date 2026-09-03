@@ -23,8 +23,11 @@
         <mat-label>Pull</mat-label>
         <mat-select [value]="selectedFightId()" (selectionChange)="onFightChange($event.value)">
           @for (f of fights(); track f.id) {
-            <mat-option [value]="f.id" [class]="f.kill ? 'text-[var(--success)]' : 'text-[var(--critical)]'">
-              {{ f.name }} - {{ f.kill ? 'Kill' : 'Wipe #' + f.attempt }} - {{ f.duration_s | formatDuration }}
+            <mat-option [value]="f.id">
+              <!-- Material colors mat-option's own wrapper span; only a color set on this nested span survives it. -->
+              <span [class]="f.kill ? 'text-[var(--success)]' : 'text-[var(--critical)]'">
+                {{ f.name }} - {{ f.kill ? 'Kill' : 'Wipe #' + f.attempt }} - {{ f.duration_s | formatDuration }}
+              </span>
             </mat-option>
           }
         </mat-select>

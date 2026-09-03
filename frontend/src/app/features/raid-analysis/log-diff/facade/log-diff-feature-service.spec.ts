@@ -130,9 +130,27 @@ describe('LogDiffFeatureService.loadSide', () => {
 });
 
 describe('LogDiffFeatureService selection', () => {
-  it('selectFight resets the player to the first player visible on the newly selected pull', async () => {
+  it('selectFight keeps the current player selected when they are visible on the newly selected pull', async () => {
     const report = reportWithTwoFightsTwoPlayers();
-    // A later boss pull with only player 2 visible - buildFights defaults to the latest pull, so this one loads first.
+    // A later boss pull with both players visible - buildFights defaults to the latest pull, so this one loads first.
+    report.fights.push({
+      id: 3, name: 'Boss 2', startTime: FIGHT_DURATION_MS * 2, endTime: FIGHT_DURATION_MS * 3, kill: true,
+      encounterID: 3184, attempt: 1, duration_s: 100, friendlyPlayers: [PLAYER_1_ID, PLAYER_2_ID], fightPercentage: 0,
+    });
+    const { service } = makeService({ reports: { [CODE_A]: report } });
+    await service.loadSide('A', CODE_A);
+    service.selectPlayer('A', PLAYER_2_ID);
+
+    service.selectFight('A', FIGHT_2_ID);
+    expect(service.sideA().selectedFightId).toBe(FIGHT_2_ID);
+    expect(service.sideA().selectedPlayerId).toBe(PLAYER_2_ID); // Bo stays selected: still on fight 2's roster
+  });
+
+  it('selectFight falls back to the first visible player when the current one is not on the newly selected pull', async () => {
+    const report = reportWithTwoFightsTwoPlayers();
+    // Fight 2's own roster only ever has player 1; a later boss pull with only player 2 visible.
+    const boss1 = report.fights.find(f => f.id === FIGHT_2_ID);
+    if (boss1) boss1.friendlyPlayers = [PLAYER_1_ID];
     report.fights.push({
       id: 3, name: 'Boss 2', startTime: FIGHT_DURATION_MS * 2, endTime: FIGHT_DURATION_MS * 3, kill: true,
       encounterID: 3184, attempt: 1, duration_s: 100, friendlyPlayers: [PLAYER_2_ID], fightPercentage: 0,
@@ -144,7 +162,7 @@ describe('LogDiffFeatureService selection', () => {
 
     service.selectFight('A', FIGHT_2_ID);
     expect(service.sideA().selectedFightId).toBe(FIGHT_2_ID);
-    expect(service.sideA().selectedPlayerId).toBe(PLAYER_1_ID); // fight 2's first visible player (Ana, sorted first)
+    expect(service.sideA().selectedPlayerId).toBe(PLAYER_1_ID); // fight 2's only visible player, player 2 is not on this roster
   });
 
   it('selectPlayer only changes the player, and clears a stale comparison result', async () => {

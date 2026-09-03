@@ -129,7 +129,9 @@ export class LogDiffFeatureService {
     this.sideSignal(side).update(s => {
       const fight = s.fights.find(f => f.id === fightId);
       const visible = this.sideSelection.visiblePlayers(s.players, fight);
-      return { ...s, selectedFightId: fightId, selectedPlayerId: visible[0]?.id ?? null };
+      // Keeps the current player selected when the new pull's roster still has them; falls back to the first visible player otherwise.
+      const selectedPlayerId = this.sideSelection.targetPlayerId(visible, s.selectedPlayerId);
+      return { ...s, selectedFightId: fightId, selectedPlayerId };
     });
   }
 
