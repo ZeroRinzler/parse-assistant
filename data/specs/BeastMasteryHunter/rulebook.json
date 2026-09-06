@@ -1,0 +1,59 @@
+{
+  "spec": "BeastMasteryHunter",
+  "spec_icon": "ability_hunter_bestialdiscipline",
+  "major_cooldowns": [
+    {
+      "name": "Bestial Wrath",
+      "spell_id": 19574,
+      "cooldown": 30,
+      "opener_priority": 1,
+      "usage_rule": "Cast it on cooldown as your only cooldown, and time your first Kill Command right after it to trigger its hero-talent proc (a Stampede for Pack Leader, or a Black Arrow proc that later becomes Wailing Arrow for Dark Ranger)."
+    }
+  ],
+  "defensives": [
+    {
+      "name": "Aspect of the Turtle",
+      "spell_id": 186265,
+      "cooldown": 180,
+      "usage_rule": "Save it for a hit that would otherwise kill you or a heavy unavoidable raid mechanic."
+    },
+    {
+      "name": "Survival of the Fittest",
+      "spell_id": 264735,
+      "cooldown": 90,
+      "usage_rule": "Press it into telegraphed raid damage; its shorter cooldown means you can use it more freely than Aspect of the Turtle."
+    },
+    {
+      "name": "Exhilaration",
+      "spell_id": 109304,
+      "cooldown": 120,
+      "usage_rule": "Use it after taking a chunk of damage to top yourself and your pet back up."
+    }
+  ],
+  "rules": [
+    {
+      "type": "opener",
+      "severity": "warning",
+      "description": "Open with Barbed Shot into Bestial Wrath",
+      "condition": {
+        "kind": "opening_sequence",
+        "spell_ids": [217200, 19574, 34026],
+        "spell_names": ["Barbed Shot", "Bestial Wrath", "Kill Command"]
+      },
+      "action": "Fire a Barbed Shot first, follow with Bestial Wrath, then spend Kill Command."
+    },
+    {
+      "type": "cd_hold",
+      "severity": "warning",
+      "description": "Bank a Kill Command charge for Bestial Wrath",
+      "condition": {
+        "kind": "hold_cooldown_for_anchor",
+        "spell_ids": [34026],
+        "spell_names": ["Kill Command"],
+        "anchor_spell_id": 19574,
+        "anchor_spell_name": "Bestial Wrath"
+      },
+      "action": "Hold a Kill Command charge rather than spending it when Bestial Wrath is about to come off cooldown, so you can weave it in right after the cooldown lands."
+    }
+  ]
+}

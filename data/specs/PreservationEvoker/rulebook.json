@@ -1,0 +1,133 @@
+{
+  "spec": "PreservationEvoker",
+  "spec_icon": "classicon_evoker_preservation",
+  "major_cooldowns": [
+    {
+      "name": "Dream Breath",
+      "spell_id": 355936,
+      "cooldown": 30,
+      "usage_rule": "Cast rank 1 on cooldown for steady damage, swap to rank 3 to answer a burst window, and as Flameshaper keep one charge always on cooldown while saving the second for danger."
+    },
+    {
+      "name": "Fire Breath",
+      "spell_id": 357208,
+      "cooldown": 30,
+      "usage_rule": "Cast it at rank 3 for its big AoE damage and party heal, and time it with a known raid damage window."
+    },
+    {
+      "name": "Emerald Blossom",
+      "spell_id": 355913,
+      "cooldown": 30,
+      "usage_rule": "Cast it whenever you have an Essence Burst, unless you are already at two stacks of Twin Echoes, in which case press Echo instead."
+    },
+    {
+      "name": "Stasis (Store)",
+      "spell_id": 370537,
+      "cooldown": 90,
+      "usage_rule": "Store a Temporal Anomaly and at least one Dream Breath ahead of time, then release the set together over a planned damage window; store three Temporal Anomaly casts pre-pull if there is an early key damage event."
+    },
+    {
+      "name": "Tip the Scales",
+      "spell_id": 370553,
+      "cooldown": 120,
+      "usage_rule": "As Chronowarden, combine it with your Stasis release so the Temporal Burst haste it grants covers the burst; otherwise use it to instantly empower a Dream Breath or Fire Breath when you need the value immediately."
+    },
+    {
+      "name": "Rewind",
+      "spell_id": 363534,
+      "cooldown": 240,
+      "usage_rule": "Line it up with the fight's most dangerous damage moment and press it right as the damage lands, since it heals from the prior five seconds taken."
+    }
+  ],
+  "defensives": [
+    {
+      "name": "Temporal Anomaly",
+      "spell_id": 373861,
+      "cooldown": 15,
+      "usage_rule": "Cast it the moment it comes off cooldown for its Echo buffs and absorb, and bank a cast a few seconds before the pull to start the fight with Echo buffs already out."
+    },
+    {
+      "name": "Time Dilation",
+      "spell_id": 357170,
+      "cooldown": 60,
+      "usage_rule": "Put it on the target about to take heavy single-target damage; its short cooldown means you can use it regularly rather than holding it."
+    },
+    {
+      "name": "Zephyr",
+      "spell_id": 374227,
+      "cooldown": 120,
+      "usage_rule": "Cast it just before a known AoE damage burst to reduce how much of it lands."
+    }
+  ],
+  "rules": [
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Emerald Blossom filler during Essence Burst",
+      "condition": {
+        "kind": "filler_in_buff",
+        "spell_id": 355913,
+        "spell_name": "Emerald Blossom",
+        "alternative_spell_ids": [364343],
+        "alternative_spell_names": ["Echo"],
+        "buff_spell_id": 369299,
+        "buff_spell_name": "Essence Burst",
+        "except_buff_spell_ids": [1242759],
+        "except_buff_spell_names": ["Twin Echoes"]
+      },
+      "action": "Press Emerald Blossom while Essence Burst is up, but switch to Echo once Twin Echoes is at two stacks."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Don't overcap Twin Echoes with Emerald Blossom",
+      "condition": {
+        "kind": "spend_at_stacks",
+        "spell_id": 355913,
+        "spell_name": "Emerald Blossom",
+        "buff_spell_id": 1242759,
+        "buff_spell_name": "Twin Echoes",
+        "bound": "max",
+        "max_stacks": 2
+      },
+      "action": "Spend Echo to bring Twin Echoes down before pressing another Emerald Blossom."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Consume Merithra's Blessing procs promptly",
+      "condition": {
+        "kind": "proc_wasted",
+        "buff_spell_id": 1256579,
+        "buff_spell_name": "Merithra's Blessing",
+        "spend_spell_ids": [1256581],
+        "spend_spell_names": ["Merithra's Blessing"]
+      },
+      "action": "Consume your Echo buffs with Merithra's Blessing as soon as it procs instead of letting it expire."
+    },
+    {
+      "type": "cd_hold",
+      "severity": "info",
+      "description": "Hold Tip the Scales for Stasis (Store) release",
+      "condition": {
+        "kind": "hold_cooldown_for_anchor",
+        "spell_ids": [370553],
+        "spell_names": ["Tip the Scales"],
+        "anchor_spell_id": 370537,
+        "anchor_spell_name": "Stasis (Store)"
+      },
+      "action": "Save Tip the Scales for your Stasis (Store) release so its Haste burst covers the payoff."
+    },
+    {
+      "type": "opener",
+      "severity": "info",
+      "description": "Buff the raid, then pre-pull Temporal Anomaly",
+      "condition": {
+        "kind": "opening_sequence",
+        "spell_ids": [364342, 373861],
+        "spell_names": ["Blessing of the Bronze", "Temporal Anomaly"]
+      },
+      "action": "Cast Blessing of the Bronze first, then pre-cast Temporal Anomaly a few seconds before pulling so you start the fight with Echo buffs out."
+    }
+  ]
+}

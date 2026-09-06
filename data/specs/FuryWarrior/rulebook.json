@@ -1,0 +1,195 @@
+{
+  "spec": "FuryWarrior",
+  "spec_icon": "ability_warrior_innerrage",
+  "major_cooldowns": [
+    {
+      "name": "Recklessness",
+      "spell_id": 1719,
+      "cooldown": 90,
+      "opener_priority": 1,
+      "usage_rule": "Open with it right after Charge and use it on cooldown, then let rage build past 80 during its window instead of spending Rampage the instant it is available."
+    },
+    {
+      "name": "Avatar",
+      "spell_id": 107574,
+      "cooldown": 90,
+      "opener_priority": 2,
+      "usage_rule": "Use it on cooldown alongside Recklessness, since they share the same cooldown and can be macroed together, and lean on Thunder Blast while it is active for the extra duration and Lightning Strike.",
+      "id_note": "Choice node with Bladestorm, played on the Mountain Thane build; zero casts in the sampled (Slayer) parses. Cooldown taken from the guide's statement that it shares Recklessness's cooldown, since the table gives no base_cd_s for this id. Verify 107574 on Wowhead.",
+      "talent_gated": true
+    },
+    {
+      "name": "Bladestorm",
+      "spell_id": 446035,
+      "cooldown": 90,
+      "opener_priority": 3,
+      "usage_rule": "Use it early in Recklessness while Enraged, ideally right after a fresh Rampage, and press it on cooldown or time it with groups of adds rather than waiting for the Imminent Demise glow.",
+      "id_note": "Choice node with Avatar, played on the Slayer build. Guide text names ids 46924/227847; the table's observed cast id is 446035 (SAME NAME as 46924,227847).",
+      "talent_gated": true
+    },
+    {
+      "name": "Odyn's Fury",
+      "spell_id": 385060,
+      "cooldown": 90,
+      "usage_rule": "Use it to instantly trigger Enrage and land burst damage when your other cooldowns are down, and open multitarget pulls with it before Recklessness.",
+      "id_note": "Table has no base_cd_s for this id and no source states a numeric cooldown; 90s is used as a conservative estimate. Guide text and the table both prefer 385060 over the SAME NAME variant 385059."
+    },
+    {
+      "name": "Wrecking Throw",
+      "spell_id": 384110,
+      "cooldown": 45,
+      "usage_rule": "Use it as a high-damage ranged filler, and against targets with absorb shields fire it right after applying Enrage so its 500% damage bonus strips the shield quickly."
+    }
+  ],
+  "defensives": [
+    {
+      "name": "Enraged Regeneration",
+      "spell_id": 184364,
+      "cooldown": 120,
+      "usage_rule": "Use it preemptively before a heavy incoming damage window, and keep casting Bloodthirst through its duration since Bloodthirst's healing is boosted while it is up.",
+      "id_note": "SAME NAME as id 55694; the table's observed cast/aura id is 184364."
+    },
+    {
+      "name": "Spell Reflection",
+      "spell_id": 23920,
+      "cooldown": 25,
+      "usage_rule": "Cast it right before a known enemy spell hits you to reflect or avoid magic damage, timed off a cast-tracking addon since it cannot be identified purely on sight.",
+      "id_note": "SAME NAME as id 385391; the table's observed cast/aura id is 23920."
+    },
+    {
+      "name": "Impending Victory",
+      "spell_id": 202168,
+      "cooldown": 25,
+      "usage_rule": "Spend it to heal yourself back up when your health dips low and you can safely spare the GCD."
+    },
+    {
+      "name": "Rallying Cry",
+      "spell_id": 97462,
+      "cooldown": 180,
+      "usage_rule": "Use it to help the raid survive a known damage mechanic rather than as a personal cooldown, and remember it is on the GCD so time it early.",
+      "id_note": "SAME NAME as id 97463; the table's observed cast id is 97462."
+    }
+  ],
+  "rules": [
+    {
+      "type": "opener",
+      "severity": "warning",
+      "description": "Open with Charge, Recklessness, Rampage, Bladestorm",
+      "condition": {
+        "kind": "opening_sequence",
+        "spell_ids": [
+          100,
+          1719,
+          184367,
+          446035
+        ],
+        "spell_names": [
+          "Charge",
+          "Recklessness",
+          "Rampage",
+          "Bladestorm"
+        ]
+      },
+      "action": "Charge in first, pop Recklessness, get a Rampage off to apply Enrage, then fire Bladestorm before doing anything else."
+    },
+    {
+      "type": "cooldown_pairing",
+      "severity": "warning",
+      "description": "Bladestorm only while Enraged",
+      "condition": {
+        "kind": "cast_outside_buff",
+        "spell_id": 446035,
+        "spell_name": "Bladestorm",
+        "buff_spell_id": 184362,
+        "buff_spell_name": "Enrage",
+        "require": "inside"
+      },
+      "action": "Get Enrage up with Rampage before you press Bladestorm rather than channeling it without the buff active."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Raging Blow with Hack and Slash, else Bloodthirst",
+      "condition": {
+        "kind": "filler_in_buff",
+        "spell_id": 85288,
+        "spell_name": "Raging Blow",
+        "alternative_spell_ids": [
+          23881
+        ],
+        "alternative_spell_names": [
+          "Bloodthirst"
+        ],
+        "buff_spell_id": 383873,
+        "buff_spell_name": "Hack and Slash",
+        "except_buff_spell_ids": [],
+        "except_buff_spell_names": []
+      },
+      "action": "Outside Recklessness, press Raging Blow whenever Hack and Slash is up and fall back to Bloodthirst when it is not."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Crushing Blow with Hack and Slash, else Bloodbath",
+      "condition": {
+        "kind": "filler_in_buff",
+        "spell_id": 335097,
+        "spell_name": "Crushing Blow",
+        "alternative_spell_ids": [
+          335096
+        ],
+        "alternative_spell_names": [
+          "Bloodbath"
+        ],
+        "buff_spell_id": 383873,
+        "buff_spell_name": "Hack and Slash",
+        "except_buff_spell_ids": [],
+        "except_buff_spell_names": []
+      },
+      "action": "During Recklessness, press Crushing Blow whenever Hack and Slash is up and fall back to Bloodbath when it is not."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Delay Rampage to avoid capping Rage",
+      "condition": {
+        "kind": "resource_at_cast",
+        "spell_id": 184367,
+        "spell_name": "Rampage",
+        "resource_type": 1,
+        "resource_name": "rage",
+        "bound": "min"
+      },
+      "action": "Let Rage pool above its 80 cost before spending Rampage, unless Enrage is about to fall off and needs an immediate refresh."
+    },
+    {
+      "type": "rotation",
+      "severity": "critical",
+      "description": "Keep Enrage up",
+      "condition": {
+        "kind": "aura_uptime_below",
+        "aura_spell_id": 184362,
+        "aura_spell_name": "Enrage",
+        "on": "self"
+      },
+      "action": "Weave Bloodthirst and Raging Blow to feed Rage into Rampage so Enrage never falls off between casts."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Spend Sudden Death promptly",
+      "condition": {
+        "kind": "proc_wasted",
+        "buff_spell_id": 52437,
+        "buff_spell_name": "Sudden Death",
+        "spend_spell_ids": [
+          5308
+        ],
+        "spend_spell_names": [
+          "Execute"
+        ]
+      },
+      "action": "Cast Execute once Sudden Death procs; it can stack twice but should not be left stacking, or you risk overcapping and wasting a proc."
+    }
+  ]
+}
