@@ -1,0 +1,163 @@
+{
+  "spec": "WindwalkerMonk",
+  "spec_icon": "spell_monk_windwalker_spec",
+  "major_cooldowns": [
+    {
+      "name": "Zenith",
+      "spell_id": 1249625,
+      "cooldown": 90,
+      "usage_rule": "It has two charges, so you don't have to spend it the moment it's ready; time it around a burst window like Bloodlust, a trinket proc, or a heavy-damage phase.",
+      "id_note": "1249625 is both the cast and the self buff row in the ability table; talents can turn the listed 90s base into 60, 70 or 80 seconds."
+    },
+    {
+      "name": "Celestial Conduit",
+      "spell_id": 443028,
+      "cooldown": 90,
+      "usage_rule": "Stagger it away from Strike of the Windlord and Whirling Dragon Punch so their Heart of the Jade Serpent buff instances don't overlap with its own, and hold it if you'd overlap the Zenith-triggered instance.",
+      "id_note": "Only observed in 2/5 sampled parses; requires the Conduit of the Celestials hero talent.",
+      "talent_gated": true
+    },
+    {
+      "name": "Invoke Xuen, the White Tiger",
+      "spell_id": 123904,
+      "cooldown": 120,
+      "usage_rule": "Press it a few globals ahead of when you want to channel Celestial Conduit so you aren't wasting a GCD on the summon during your burst window.",
+      "id_note": "Only observed in 2/5 sampled parses; requires the Invoke Xuen talent choice.",
+      "talent_gated": true
+    },
+    {
+      "name": "Touch of Death",
+      "spell_id": 322109,
+      "cooldown": 180,
+      "usage_rule": "Use it as soon as it's available without delaying a higher-priority cast; only hold it briefly if the target is about to drop under 15% health so you get the higher, health-based damage instead."
+    },
+    {
+      "name": "Whirling Dragon Punch",
+      "spell_id": 152175,
+      "cooldown": 35,
+      "usage_rule": "Send it once Rising Sun Kick has enabled it; with Conduit of the Celestials, only use it when your next Invoke Xuen is at least 10 seconds away.",
+      "id_note": "Build-dependent finisher choice among the Shado-pan and Conduit of the Celestials hero talent options.",
+      "talent_gated": true
+    },
+    {
+      "name": "Strike of the Windlord",
+      "spell_id": 392983,
+      "cooldown": 35,
+      "usage_rule": "With Conduit of the Celestials, only use it when your next Invoke Xuen is at least 10 seconds away, and stagger it from Celestial Conduit so their Heart of the Jade Serpent buffs don't overlap.",
+      "id_note": "Build-dependent finisher choice among the Shado-pan and Conduit of the Celestials hero talent options.",
+      "talent_gated": true
+    }
+  ],
+  "defensives": [
+    {
+      "name": "Touch of Karma",
+      "spell_id": 122470,
+      "cooldown": 90,
+      "duration": 10,
+      "usage_rule": "Use it first and foremost to absorb incoming damage; if you don't need the defensive value, cast it on a target you're fighting to redirect the absorbed damage back offensively."
+    },
+    {
+      "name": "Fortifying Brew",
+      "spell_id": 115203,
+      "cooldown": 360,
+      "usage_rule": "Cast it before Touch of Death or Touch of Karma when you can, since both snapshot your max health on cast, so this increases their damage and absorb along with your survivability."
+    },
+    {
+      "name": "Dampen Harm",
+      "spell_id": 122278,
+      "cooldown": 120,
+      "usage_rule": "Press it ahead of a large incoming hit to reduce the damage it deals.",
+      "id_note": "Not pressed in the sampled parses but castable per its tooltip."
+    },
+    {
+      "name": "Diffuse Magic",
+      "spell_id": 122783,
+      "cooldown": 90,
+      "usage_rule": "Press it to cut incoming magic damage and send a portion of it back at the caster.",
+      "id_note": "Not pressed in the sampled parses but castable per its tooltip."
+    }
+  ],
+  "rules": [
+    {
+      "type": "opener",
+      "severity": "warning",
+      "description": "Open Tiger Palm into Zenith, Fists of Fury, Rising Sun Kick",
+      "condition": {
+        "kind": "opening_sequence",
+        "spell_ids": [100780, 1249625, 113656, 107428],
+        "spell_names": ["Tiger Palm", "Zenith", "Fists of Fury", "Rising Sun Kick"]
+      },
+      "action": "Open with Tiger Palm, then send Zenith with your potion and trinkets, then Fists of Fury into Rising Sun Kick."
+    },
+    {
+      "type": "cooldown_pairing",
+      "severity": "warning",
+      "description": "Whirling Dragon Punch needs a recent Rising Sun Kick",
+      "condition": {
+        "kind": "cast_without_prior",
+        "spell_id": 152175,
+        "spell_name": "Whirling Dragon Punch",
+        "required_spell_id": 107428,
+        "required_spell_name": "Rising Sun Kick",
+        "position": "before"
+      },
+      "action": "Land Rising Sun Kick first; it enables Whirling Dragon Punch, so pressing it without a recent Rising Sun Kick wastes the cast."
+    },
+    {
+      "type": "cd_hold",
+      "severity": "warning",
+      "description": "Hold Whirling Dragon Punch and Strike of Windlord for Xuen",
+      "condition": {
+        "kind": "hold_cooldown_for_anchor",
+        "spell_ids": [152175, 392983],
+        "spell_names": ["Whirling Dragon Punch", "Strike of the Windlord"],
+        "anchor_spell_id": 123904,
+        "anchor_spell_name": "Invoke Xuen, the White Tiger"
+      },
+      "action": "Delay these until Invoke Xuen is at least 10 seconds from being ready so you don't burn them right before your Xuen and Celestial Conduit window."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Blackout Kick is your filler inside Zenith",
+      "condition": {
+        "kind": "filler_in_buff",
+        "spell_id": 100784,
+        "spell_name": "Blackout Kick",
+        "alternative_spell_ids": [100780],
+        "alternative_spell_names": ["Tiger Palm"],
+        "buff_spell_id": 1249625,
+        "buff_spell_name": "Zenith",
+        "except_buff_spell_ids": [],
+        "except_buff_spell_names": []
+      },
+      "action": "Fill with Blackout Kick while Zenith is up to pull Rising Sun Kick and Fists of Fury back faster, and only weave in Tiger Palm when you need the Chi."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Don't overcap Chi with Tiger Palm",
+      "condition": {
+        "kind": "resource_at_cast",
+        "spell_id": 100780,
+        "spell_name": "Tiger Palm",
+        "resource_type": 12,
+        "resource_name": "chi",
+        "bound": "max"
+      },
+      "action": "Skip Tiger Palm when you're already sitting on plenty of Chi and spend a builder or filler instead."
+    },
+    {
+      "type": "aoe_switch",
+      "severity": "info",
+      "description": "Spinning Crane Kick only pays off on several targets",
+      "condition": {
+        "kind": "cast_at_target_count",
+        "spell_id": 101546,
+        "spell_name": "Spinning Crane Kick",
+        "bound": "min"
+      },
+      "action": "Shift into Spinning Crane Kick once you have several targets up; on a single target press Blackout Kick or Tiger Palm instead."
+    }
+  ]
+}
