@@ -1,0 +1,1 @@
+{"spec":"BeastMasteryHunter","encounter_id":3470,"encounter_name":"Nek'zali the Soulcoiler","abilities":[{"spell_id":19574,"name":"Bestial Wrath","icon":"ability_druid_ferociousbite","kind":"cooldown","cast_times_s":[2.9,35,66.2,96.6,126.6,156.8,188.4,218.4,249,279.5,310.6,340.6,370.6,400.6]}],"source_signature":"a08dc22a457fe957","ingest_version":29,"ingested_at_s":1789687956}

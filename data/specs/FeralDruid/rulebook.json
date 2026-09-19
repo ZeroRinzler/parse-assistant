@@ -1,0 +1,280 @@
+{
+  "spec": "FeralDruid",
+  "spec_icon": "ability_druid_catform",
+  "major_cooldowns": [
+    {
+      "name": "Tiger's Fury",
+      "spell_id": 5217,
+      "cooldown": 30,
+      "opener_priority": 4,
+      "usage_rule": "Use this on cooldown, syncing it with Berserk and Convoke the Spirits so their windows overlap, and avoid capping energy by holding it too long."
+    },
+    {
+      "name": "Berserk",
+      "spell_id": 106951,
+      "cooldown": 180,
+      "opener_priority": 3,
+      "usage_rule": "Cast this together with Tiger's Fury so the whole window is buffed, and bring Convoke the Spirits into the same window when it is up.",
+      "id_note": "Ids 1269349 and 343216 share the name; those are talent-variant rows with no observed casts, 106951 is the confirmed cast id."
+    },
+    {
+      "name": "Convoke the Spirits",
+      "spell_id": 391528,
+      "cooldown": 120,
+      "opener_priority": 6,
+      "usage_rule": "Use this once your dots are already applied and sync it with Tiger's Fury and Berserk for the same burst window.",
+      "id_note": "Chose 391528 (5/5 parses) over 323764, which shares the name but had no observed casts."
+    },
+    {
+      "name": "Feral Frenzy",
+      "spell_id": 274837,
+      "cooldown": 45,
+      "opener_priority": 7,
+      "usage_rule": "Use this on cooldown, ideally while Tiger's Fury is active, and prioritize it at 2 or fewer combo points (4 or fewer during Berserk).",
+      "id_note": "274838 shares the name but had no observed casts; 274837 is the confirmed cast id."
+    }
+  ],
+  "defensives": [
+    {
+      "name": "Barkskin",
+      "spell_id": 22812,
+      "cooldown": 60,
+      "duration": 8,
+      "usage_rule": "Use this to soften incoming damage without leaving Cat Form, since it does not interrupt your rotation."
+    },
+    {
+      "name": "Survival Instincts",
+      "spell_id": 61336,
+      "cooldown": 180,
+      "duration": 6,
+      "usage_rule": "Save this for the biggest incoming hits, since it is your strongest personal damage reduction cooldown."
+    }
+  ],
+  "rules": [
+    {
+      "type": "opener",
+      "severity": "warning",
+      "description": "Open Rake, Moonfire, Berserk, Tiger's Fury, Rip, Convoke",
+      "condition": {
+        "kind": "opening_sequence",
+        "spell_ids": [
+          1822,
+          155625,
+          106951,
+          5217,
+          1079,
+          391528,
+          274837
+        ],
+        "spell_names": [
+          "Rake",
+          "Moonfire",
+          "Berserk",
+          "Tiger's Fury",
+          "Rip",
+          "Convoke the Spirits",
+          "Feral Frenzy"
+        ]
+      },
+      "action": "Open with a stealth Rake, then Moonfire, build to 5 combo points and drop below 30% energy, send Berserk with Tiger's Fury, apply Rip, then Convoke the Spirits and Feral Frenzy."
+    },
+    {
+      "type": "cooldown_pairing",
+      "severity": "warning",
+      "description": "Sync Berserk with Tiger's Fury",
+      "condition": {
+        "kind": "cast_without_prior",
+        "spell_id": 106951,
+        "spell_name": "Berserk",
+        "required_spell_id": 5217,
+        "required_spell_name": "Tiger's Fury",
+        "position": "either"
+      },
+      "action": "Line Berserk up with Tiger's Fury so both windows overlap, whichever you press first."
+    },
+    {
+      "type": "cooldown_pairing",
+      "severity": "warning",
+      "description": "Sync Convoke the Spirits with Tiger's Fury",
+      "condition": {
+        "kind": "cast_without_prior",
+        "spell_id": 391528,
+        "spell_name": "Convoke the Spirits",
+        "required_spell_id": 5217,
+        "required_spell_name": "Tiger's Fury",
+        "position": "either"
+      },
+      "action": "Line Convoke the Spirits up with Tiger's Fury so both windows overlap, whichever you press first."
+    },
+    {
+      "type": "rotation",
+      "severity": "critical",
+      "description": "Rip only at 5 combo points",
+      "condition": {
+        "kind": "resource_at_cast",
+        "spell_id": 1079,
+        "spell_name": "Rip",
+        "resource_type": 4,
+        "resource_name": "combo points",
+        "bound": "min"
+      },
+      "action": "Build to full combo points before refreshing Rip so it is missing or in pandemic when you cast it."
+    },
+    {
+      "type": "rotation",
+      "severity": "critical",
+      "description": "Ferocious Bite only at 5 combo points",
+      "condition": {
+        "kind": "resource_at_cast",
+        "spell_id": 22568,
+        "spell_name": "Ferocious Bite",
+        "resource_type": 4,
+        "resource_name": "combo points",
+        "bound": "min"
+      },
+      "action": "Build to full combo points before biting so nothing goes to waste."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Pool energy before Ferocious Bite",
+      "condition": {
+        "kind": "resource_at_cast",
+        "spell_id": 22568,
+        "spell_name": "Ferocious Bite",
+        "resource_type": 3,
+        "resource_name": "energy",
+        "bound": "min"
+      },
+      "action": "Pool to 50 energy before biting so it spends the extra energy for the bonus damage."
+    },
+    {
+      "type": "aoe_switch",
+      "severity": "warning",
+      "description": "Primal Wrath only at 5 combo points",
+      "condition": {
+        "kind": "resource_at_cast",
+        "spell_id": 285381,
+        "spell_name": "Primal Wrath",
+        "resource_type": 4,
+        "resource_name": "combo points",
+        "bound": "min"
+      },
+      "action": "Build to full combo points before spending Primal Wrath so it lands when Rip is missing or in pandemic."
+    },
+    {
+      "type": "rotation",
+      "severity": "critical",
+      "description": "Keep Rip up on the target",
+      "condition": {
+        "kind": "aura_uptime_below",
+        "aura_spell_id": 1079,
+        "aura_spell_name": "Rip",
+        "on": "target"
+      },
+      "action": "Refresh Rip before it falls off, since it is one of your most energy-efficient sources of damage."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Keep Rake up on the target",
+      "condition": {
+        "kind": "aura_uptime_below",
+        "aura_spell_id": 1822,
+        "aura_spell_name": "Rake",
+        "on": "target"
+      },
+      "action": "Refresh Rake before it falls off, since it is one of your most energy-efficient sources of damage."
+    },
+    {
+      "type": "rotation",
+      "severity": "info",
+      "description": "Do not clip Rip outside snapshot windows",
+      "condition": {
+        "kind": "aura_clipped",
+        "aura_spell_id": 1079,
+        "aura_spell_name": "Rip",
+        "cast_spell_id": 1079,
+        "cast_spell_name": "Rip",
+        "on": "target",
+        "except_buff_spell_ids": [
+          5217,
+          390772
+        ],
+        "except_buff_spell_names": [
+          "Tiger's Fury",
+          "Pouncing Strikes"
+        ]
+      },
+      "action": "Wait until Rip is missing or in pandemic before refreshing it, unless Tiger's Fury or Pouncing Strikes is up and worth re-snapshotting for."
+    },
+    {
+      "type": "rotation",
+      "severity": "info",
+      "description": "Do not clip Rake outside snapshot windows",
+      "condition": {
+        "kind": "aura_clipped",
+        "aura_spell_id": 1822,
+        "aura_spell_name": "Rake",
+        "cast_spell_id": 1822,
+        "cast_spell_name": "Rake",
+        "on": "target",
+        "except_buff_spell_ids": [
+          5217,
+          390772
+        ],
+        "except_buff_spell_names": [
+          "Tiger's Fury",
+          "Pouncing Strikes"
+        ]
+      },
+      "action": "Wait until Rake is missing or in pandemic before refreshing it, unless Tiger's Fury or Pouncing Strikes is up and worth re-snapshotting for."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Bite on every Apex Predator's Craving proc",
+      "condition": {
+        "kind": "proc_wasted",
+        "buff_spell_id": 391881,
+        "buff_spell_name": "Apex Predator's Craving",
+        "spend_spell_ids": [
+          22568
+        ],
+        "spend_spell_names": [
+          "Ferocious Bite"
+        ]
+      },
+      "action": "Spend Ferocious Bite the moment this proc is up, ahead of everything else in the priority."
+    },
+    {
+      "type": "rotation",
+      "severity": "info",
+      "description": "Spend Clearcasting on Swipe",
+      "condition": {
+        "kind": "proc_wasted",
+        "buff_spell_id": 135700,
+        "buff_spell_name": "Clearcasting",
+        "spend_spell_ids": [
+          213764
+        ],
+        "spend_spell_names": [
+          "Swipe"
+        ]
+      },
+      "action": "Spend Swipe on sight of a Clearcasting proc while fighting multiple targets."
+    },
+    {
+      "type": "aoe_switch",
+      "severity": "info",
+      "description": "Swipe as your builder on several targets",
+      "condition": {
+        "kind": "cast_at_target_count",
+        "spell_id": 213764,
+        "spell_name": "Swipe",
+        "bound": "min"
+      },
+      "action": "Swap your builder from Shred to Swipe once multiple targets are up."
+    }
+  ]
+}

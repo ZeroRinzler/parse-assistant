@@ -1,0 +1,92 @@
+{
+  "spec": "DisciplinePriest",
+  "spec_icon": "spell_holy_powerwordshield",
+  "major_cooldowns": [
+    {
+      "name": "Ultimate Penitence",
+      "spell_id": 421453,
+      "cooldown": 240,
+      "usage_rule": "Use it as a major healing and defensive cooldown separate from Evangelism, timed for a heavy damage window; as Voidweaver open the cast with Mind Blast to deploy your Rift first, and spell-queue Void Shield just before the cast finishes so it does not interrupt the channel."
+    },
+    {
+      "name": "Evangelism",
+      "spell_id": 472433,
+      "cooldown": 90,
+      "usage_rule": "Use it to ramp Atonement fast: it casts a free Power Word: Radiance and makes your next two Power Word: Radiance casts instant, so time it separately from Ultimate Penitence."
+    }
+  ],
+  "defensives": [
+    {
+      "name": "Pain Suppression",
+      "spell_id": 33206,
+      "cooldown": 180,
+      "duration": 8,
+      "usage_rule": "Cast it on the ally about to take heavy damage when you cannot out-heal it through Atonement alone."
+    }
+  ],
+  "rules": [
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Keep Shadow Word: Pain up on your target",
+      "condition": {
+        "kind": "aura_uptime_below",
+        "aura_spell_id": 589,
+        "aura_spell_name": "Shadow Word: Pain",
+        "on": "target"
+      },
+      "action": "Refresh Shadow Word: Pain before it drops under 20 seconds remaining."
+    },
+    {
+      "type": "cd_hold",
+      "severity": "warning",
+      "description": "Hold Power Word: Radiance charges for Evangelism",
+      "condition": {
+        "kind": "hold_cooldown_for_anchor",
+        "spell_ids": [194509],
+        "spell_names": ["Power Word: Radiance"],
+        "anchor_spell_id": 472433,
+        "anchor_spell_name": "Evangelism"
+      },
+      "action": "Spend Power Word: Radiance on mini-ramps as it comes up, but bank two charges ahead of your Evangelism ramp."
+    },
+    {
+      "type": "cd_hold",
+      "severity": "warning",
+      "description": "Hold Power Word: Radiance charges for Ultimate Penitence",
+      "condition": {
+        "kind": "hold_cooldown_for_anchor",
+        "spell_ids": [194509],
+        "spell_names": ["Power Word: Radiance"],
+        "anchor_spell_id": 421453,
+        "anchor_spell_name": "Ultimate Penitence"
+      },
+      "action": "Spend Power Word: Radiance on mini-ramps as it comes up, but bank two charges ahead of your Ultimate Penitence cast."
+    },
+    {
+      "type": "opener",
+      "severity": "info",
+      "description": "Mind Blast into Ultimate Penitence into Void Shield",
+      "condition": {
+        "kind": "opening_sequence",
+        "spell_ids": [8092, 421453, 1253593],
+        "spell_names": ["Mind Blast", "Ultimate Penitence", "Void Shield"]
+      },
+      "action": "As Voidweaver, deploy your Rift with Mind Blast, then cast Ultimate Penitence, then spell-queue Void Shield right before the cast finishes."
+    },
+    {
+      "type": "rotation",
+      "severity": "info",
+      "description": "Shadow Word: Death replaces Smite in execute",
+      "condition": {
+        "kind": "filler_below_health",
+        "spell_id": 32379,
+        "spell_name": "Shadow Word: Death",
+        "alternative_spell_ids": [585],
+        "alternative_spell_names": ["Smite"],
+        "health_pct": 20
+      },
+      "action": "Swap your Smite filler to Shadow Word: Death once the target is in execute range."
+    }
+  ]
+}
