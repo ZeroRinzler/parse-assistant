@@ -1,0 +1,163 @@
+{
+  "spec": "DestructionWarlock",
+  "spec_icon": "spell_shadow_rainoffire",
+  "major_cooldowns": [
+    {
+      "name": "Summon Infernal",
+      "spell_id": 1122,
+      "cooldown": 120,
+      "opener_priority": 2,
+      "usage_rule": "Use it on cooldown right after Cataclysm; it stuns and hits everything in the area, passively generates shards, and empowers your spenders for the rest of its duration."
+    },
+    {
+      "name": "Malevolence",
+      "spell_id": 442726,
+      "cooldown": 60,
+      "opener_priority": 3,
+      "usage_rule": "Line it up with Wither on as many targets as possible and cast it after Summon Infernal in the opener, then dump Shadowburn and Chaos Bolt casts while it is active.",
+      "id_note": "442726 is the observed current cast id; the guide's own 430014 shares the name and is not the one seen in parses."
+    },
+    {
+      "name": "Havoc",
+      "spell_id": 80240,
+      "cooldown": 30,
+      "usage_rule": "Put it on the secondary target as soon as one is present, ideally when you have several Soul Shards and Conflagrate charges banked so you can dump spenders through it for double value."
+    },
+    {
+      "name": "Soul Fire",
+      "spell_id": 6353,
+      "cooldown": 45,
+      "usage_rule": "Pre-cast it before the pull, then press it whenever it is off cooldown and you are below 4 Soul Shards so its large shard generation does not overflow the cap."
+    },
+    {
+      "name": "Cataclysm",
+      "spell_id": 152108,
+      "cooldown": 30,
+      "opener_priority": 1,
+      "usage_rule": "In AoE keep it on cooldown, delaying a few seconds only if that catches more targets; in single target it is not a DPS gain on its own, so save it to refresh Immolate or Wither just before they expire.",
+      "id_note": "NOT observed in the sampled parses (talent node), but the guide and the APL both build the opener and multitarget priority around it; keep 152108.",
+      "talent_gated": true
+    }
+  ],
+  "defensives": [
+    {
+      "name": "Unending Resolve",
+      "spell_id": 104773,
+      "cooldown": 180,
+      "usage_rule": "Pop it into a heavy magic damage window; it is your strongest raw damage reduction cooldown."
+    },
+    {
+      "name": "Dark Pact",
+      "spell_id": 108416,
+      "cooldown": 60,
+      "usage_rule": "Cast it for a self-shield when you need to soak a hit; it costs your pet's health, so use it when your demon can spare it."
+    },
+    {
+      "name": "Mortal Coil",
+      "spell_id": 6789,
+      "cooldown": 45,
+      "usage_rule": "Use it to fear a threat off you or as an emergency heal when you need the self-healing more than the crowd control."
+    }
+  ],
+  "rules": [
+    {
+      "type": "opener",
+      "severity": "info",
+      "description": "Open with Wither, Cataclysm, Infernal, Malevolence",
+      "condition": {
+        "kind": "opening_sequence",
+        "spell_ids": [
+          445468,
+          152108,
+          1122,
+          442726,
+          116858
+        ],
+        "spell_names": [
+          "Wither",
+          "Cataclysm",
+          "Summon Infernal",
+          "Malevolence",
+          "Chaos Bolt"
+        ]
+      },
+      "action": "Get Wither rolling, blanket the area with Cataclysm, send Summon Infernal with your trinkets and racials, follow with Malevolence, then dump into Chaos Bolt."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Keep Wither up on your target",
+      "condition": {
+        "kind": "aura_uptime_below",
+        "aura_spell_id": 445468,
+        "aura_spell_name": "Wither",
+        "on": "target"
+      },
+      "action": "Refresh Wither before it falls off; only clip it early with Cataclysm when a refresh from Cataclysm or Chaos Bolt's Internal Combustion is due."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Only dump Chaos Bolt at high Soul Shards",
+      "condition": {
+        "kind": "resource_at_cast",
+        "spell_id": 116858,
+        "spell_name": "Chaos Bolt",
+        "resource_type": 7,
+        "resource_name": "soul shards",
+        "bound": "min"
+      },
+      "action": "Hold Chaos Bolt until you are about to cap Soul Shards, then spend it instead of letting shards overflow."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Cast Soul Fire before it caps your shards",
+      "condition": {
+        "kind": "resource_at_cast",
+        "spell_id": 6353,
+        "spell_name": "Soul Fire",
+        "resource_type": 7,
+        "resource_name": "soul shards",
+        "bound": "max"
+      },
+      "action": "Only press Soul Fire while you are below 4 Soul Shards, since its large generation overcaps you from higher."
+    },
+    {
+      "type": "aoe_switch",
+      "severity": "info",
+      "description": "Rain of Fire only on bigger packs",
+      "condition": {
+        "kind": "cast_at_target_count",
+        "spell_id": 5740,
+        "spell_name": "Rain of Fire",
+        "bound": "min"
+      },
+      "action": "Spend shards on single-target spenders below the pack-size threshold and switch to Rain of Fire once enough targets are up."
+    },
+    {
+      "type": "aoe_switch",
+      "severity": "info",
+      "description": "Havoc a second target when one is up",
+      "condition": {
+        "kind": "cast_at_target_count",
+        "spell_id": 80240,
+        "spell_name": "Havoc",
+        "bound": "min"
+      },
+      "action": "Apply Havoc to the secondary target instead of holding it for single target."
+    },
+    {
+      "type": "aoe_switch",
+      "severity": "info",
+      "description": "Chaos Bolt gives way to Rain of Fire in AoE",
+      "condition": {
+        "kind": "cast_at_target_count",
+        "spell_id": 116858,
+        "spell_name": "Chaos Bolt",
+        "bound": "max"
+      },
+      "action": "Stop dumping shards into Chaos Bolt once the pack is large enough for Rain of Fire to take over."
+    }
+  ]
+}

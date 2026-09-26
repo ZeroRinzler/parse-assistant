@@ -1,0 +1,1 @@
+{"spec":"DevourerDemonHunter","encounter_id":3379,"encounter_name":"Nymrissa Wavecaller","abilities":[{"spell_id":1241937,"name":"Soul Immolation","icon":"inv_12_dh_void_ability_voidpurge","kind":"cooldown","cast_times_s":[4,54.4,66.2,124.4,135.1,187.6,194.1,261,269.3,332.7,337.3,413.4]}],"source_signature":"ffe70379ddca9fad","ingest_version":29,"ingested_at_s":1790287646}
