@@ -1,0 +1,117 @@
+{
+  "spec": "ArcaneMage",
+  "spec_icon": "spell_holy_magicalsentry",
+  "major_cooldowns": [
+    {
+      "name": "Arcane Surge",
+      "spell_id": 365350,
+      "cooldown": 90,
+      "opener_priority": 1,
+      "usage_rule": "Pre-cast it right before the pull, then use it again the instant it comes off cooldown, only delaying it briefly to line up with an incoming raid cooldown like Time Warp or an add wave.",
+      "id_note": "365350 is the cast id; 365362 is the matching self buff aura."
+    },
+    {
+      "name": "Touch of the Magi",
+      "spell_id": 321507,
+      "cooldown": 45,
+      "opener_priority": 4,
+      "usage_rule": "Cast it the moment it is ready, right before your Arcane Barrage lands on the opener, since its cooldown is exactly half of Arcane Surge and delaying it forces you to delay your next Arcane Surge too.",
+      "id_note": "321507 is the observed cast; 210824 and 210833 share the name and were not observed."
+    },
+    {
+      "name": "Time Warp",
+      "spell_id": 80353,
+      "cooldown": 300,
+      "usage_rule": "Let your raid or party leader assign its timing; without an assignment, use it right after combat starts so it covers everyone's opening cooldowns, only if the pull will have live enemies for its full duration."
+    },
+    {
+      "name": "Mirror Image",
+      "spell_id": 55342,
+      "cooldown": 120,
+      "usage_rule": "Cast it during your precombat setup before the pull so its full duration lands inside the fight.",
+      "id_note": "55342 is the observed cast; 321686 shares the name and was not observed."
+    }
+  ],
+  "defensives": [
+    {
+      "name": "Ice Cold",
+      "spell_id": 414658,
+      "cooldown": 240,
+      "duration": 6,
+      "usage_rule": "Save it for the biggest hit you expect, since its cooldown is long and it only protects you for a few seconds.",
+      "id_note": "Its exact mechanic is not covered by the rotation guide; cooldown and duration are taken from the ability table."
+    }
+  ],
+  "rules": [
+    {
+      "type": "opener",
+      "severity": "critical",
+      "description": "Open Arcane Surge into Missiles, Barrage, Touch",
+      "condition": {
+        "kind": "opening_sequence",
+        "spell_ids": [365350, 5143, 44425, 321507],
+        "spell_names": ["Arcane Surge", "Arcane Missiles", "Arcane Barrage", "Touch of the Magi"]
+      },
+      "action": "Pre-cast Arcane Surge before the pull, then open with Arcane Missiles into Arcane Barrage, and land Touch of the Magi before the Barrage hits."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Arcane Barrage only at 4 Arcane Charges",
+      "condition": {
+        "kind": "spend_at_stacks",
+        "spell_id": 44425,
+        "spell_name": "Arcane Barrage",
+        "buff_spell_id": 36032,
+        "buff_spell_name": "Arcane Charge",
+        "bound": "min",
+        "max_stacks": 4
+      },
+      "action": "Hold Arcane Barrage until you are at maximum Arcane Charges so you get its full damage and the mana benefit of the reset."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Arcane Barrage only at capped Arcane Salvo",
+      "condition": {
+        "kind": "spend_at_stacks",
+        "spell_id": 44425,
+        "spell_name": "Arcane Barrage",
+        "buff_spell_id": 384452,
+        "buff_spell_name": "Arcane Salvo",
+        "bound": "min",
+        "max_stacks": 25
+      },
+      "action": "Don't dump Arcane Barrage until Arcane Salvo is capped, otherwise you waste stacks and lose Barrage damage."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Arcane Missiles filler during Clearcasting",
+      "condition": {
+        "kind": "filler_in_buff",
+        "spell_id": 5143,
+        "spell_name": "Arcane Missiles",
+        "alternative_spell_ids": [30451],
+        "alternative_spell_names": ["Arcane Blast"],
+        "buff_spell_id": 79684,
+        "buff_spell_name": "Clearcasting",
+        "except_buff_spell_ids": [365362, 321507],
+        "except_buff_spell_names": ["Arcane Surge", "Touch of the Magi"]
+      },
+      "action": "Fire Arcane Missiles while Clearcasting is up instead of Arcane Blast, and fall back to Arcane Blast as your default filler otherwise."
+    },
+    {
+      "type": "aoe_switch",
+      "severity": "info",
+      "description": "Arcane Pulse ramps up with more targets",
+      "condition": {
+        "kind": "cast_at_target_count",
+        "spell_id": 1241462,
+        "spell_name": "Arcane Pulse",
+        "bound": "min"
+      },
+      "action": "Favor Arcane Pulse over Arcane Blast for building Arcane Charges once enough enemies are in range."
+    }
+  ]
+}

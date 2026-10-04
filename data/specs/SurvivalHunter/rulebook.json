@@ -1,0 +1,115 @@
+{
+  "spec": "SurvivalHunter",
+  "spec_icon": "ability_hunter_camouflage",
+  "major_cooldowns": [
+    {
+      "name": "Takedown",
+      "spell_id": 1250646,
+      "cooldown": 90,
+      "opener_priority": 3,
+      "usage_rule": "Cast it with at least 2 Tip of the Spear stacks up and line it up with your potion, on-use trinket, and racials, since its 20% damage buff and doubled attack speed only last 8 seconds.",
+      "id_note": "Table shows a self aura on the same id alongside the cast."
+    },
+    {
+      "name": "Boomstick",
+      "spell_id": 1261193,
+      "cooldown": 60,
+      "opener_priority": 4,
+      "usage_rule": "Press it on cooldown with a Tip of the Spear stack up, and prefer it on a target that has not yet been hit by Sentinel's Mark.",
+      "id_note": "Table shows a self aura on the same id alongside the cast."
+    },
+    {
+      "name": "Moonlight Chakram",
+      "spell_id": 1264949,
+      "cooldown": 90,
+      "usage_rule": "This is Takedown's button once the Sentinel hero tree is chosen; cast it early inside the Takedown window rather than saving it for the end, since it takes a long time to land, and dump your Wildfire Bomb charges first if Stalk and Strike is talented.",
+      "id_note": "Cast id 1264949 seen once in the sampled parses; the guide's id 1264902 was not found in the table. It replaces Takedown so it shares Takedown's 90s cooldown rather than having one of its own.",
+      "talent_gated": true
+    }
+  ],
+  "defensives": [
+    {
+      "name": "Survival of the Fittest",
+      "spell_id": 264735,
+      "cooldown": 90,
+      "usage_rule": "Press it to cut incoming damage or shake a movement-impairing effect before a dangerous hit lands.",
+      "id_note": "Table shows a self aura on the same id alongside the cast."
+    },
+    {
+      "name": "Exhilaration",
+      "spell_id": 109304,
+      "cooldown": 120,
+      "usage_rule": "Press it to heal yourself when your health drops and no external healing is coming."
+    }
+  ],
+  "rules": [
+    {
+      "type": "opener",
+      "severity": "warning",
+      "description": "Open with pre-pull Bomb, Kill Command, Takedown, Boomstick",
+      "condition": {
+        "kind": "opening_sequence",
+        "spell_ids": [259495, 259489, 1250646, 1261193],
+        "spell_names": ["Wildfire Bomb", "Kill Command", "Takedown", "Boomstick"]
+      },
+      "action": "Throw Wildfire Bomb about a second before the pull, open with Kill Command, send Takedown alongside your potion and trinket, then follow up with Boomstick."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Boomstick only with Tip of the Spear up",
+      "condition": {
+        "kind": "cast_outside_buff",
+        "spell_id": 1261193,
+        "spell_name": "Boomstick",
+        "buff_spell_id": 260286,
+        "buff_spell_name": "Tip of the Spear",
+        "require": "inside"
+      },
+      "action": "Wait for Kill Command to grant Tip of the Spear before you press Boomstick so it gets the damage buff."
+    },
+    {
+      "type": "rotation",
+      "severity": "critical",
+      "description": "Spend every Tip of the Spear stack before it expires",
+      "condition": {
+        "kind": "proc_wasted",
+        "buff_spell_id": 260286,
+        "buff_spell_name": "Tip of the Spear",
+        "spend_spell_ids": [186270, 259495, 1261193, 1250646],
+        "spend_spell_names": ["Raptor Strike", "Wildfire Bomb", "Boomstick", "Takedown"]
+      },
+      "action": "Follow every Kill Command with two Tipped abilities from your priority list before it falls off."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Don't recast Kill Command while Tip of the Spear is capped",
+      "condition": {
+        "kind": "spend_at_stacks",
+        "spell_id": 259489,
+        "spell_name": "Kill Command",
+        "buff_spell_id": 260286,
+        "buff_spell_name": "Tip of the Spear",
+        "bound": "max",
+        "max_stacks": 2
+      },
+      "action": "Only recast Kill Command once your Tip of the Spear stacks have dropped, not while you are still capped."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Cast Takedown only with 2 Tip of the Spear stacks",
+      "condition": {
+        "kind": "spend_at_stacks",
+        "spell_id": 1250646,
+        "spell_name": "Takedown",
+        "buff_spell_id": 260286,
+        "buff_spell_name": "Tip of the Spear",
+        "bound": "min",
+        "max_stacks": 2
+      },
+      "action": "Build a full Tip of the Spear stack with Kill Command before you press Takedown, since its pet hit lands a second late and needs the buff already up."
+    }
+  ]
+}

@@ -1,0 +1,138 @@
+{
+  "spec": "HavocDemonHunter",
+  "spec_icon": "ability_demonhunter_specdps",
+  "major_cooldowns": [
+    {
+      "name": "Immolation Aura",
+      "spell_id": 258920,
+      "cooldown": 30,
+      "opener_priority": 1,
+      "usage_rule": "Cast it about a second before the pull, then keep leaning on it as a Fury generator and AoE tool, dumping charges before Metamorphosis so Demonic Intensity can refund them.",
+      "id_note": "Base cooldown per table is 30s; A Fire Inside grants a second charge and cuts the cooldown by 6s."
+    },
+    {
+      "name": "The Hunt",
+      "spell_id": 370965,
+      "cooldown": 60,
+      "opener_priority": 2,
+      "usage_rule": "Use it to engage on pull and again on its cycle to empower your next Eye Beam through Eternal Hunt; when playing Fel-Scarred, hold it until right after Metamorphosis instead of using it just before.",
+      "id_note": "Table base cooldown is 90s; the Eternal Hunt apex talent reduces it to a 60s effective cooldown, per the guide."
+    },
+    {
+      "name": "Eye Beam",
+      "spell_id": 198013,
+      "cooldown": 20,
+      "opener_priority": 3,
+      "usage_rule": "Cast it as close to on cooldown as possible to trigger Demonic and ramp Cycle of Hatred, holding only in single target when adds are about to spawn before it comes back up.",
+      "id_note": "Table base cooldown is 30s; Cycle of Hatred stacking reduces the effective cycle to 20s once fully stacked, per the guide."
+    },
+    {
+      "name": "Essence Break",
+      "spell_id": 258860,
+      "cooldown": 30,
+      "opener_priority": 4,
+      "usage_rule": "Cast it for its burst debuff, ideally landing it inside Metamorphosis or right after Eye Beam so you can pack in as many Death Sweep and Annihilation casts as possible, without forcing an unnatural delay against Eye Beam.",
+      "id_note": "Table base cooldown is 40s; the guide states it reaches an effective 30s cooldown at 4 stacks of Cycle of Hatred synergy."
+    },
+    {
+      "name": "Metamorphosis",
+      "spell_id": 200166,
+      "cooldown": 120,
+      "opener_priority": 5,
+      "usage_rule": "Enter Demon Form once Eye Beam and Blade Dance are both on cooldown so Chaotic Transformation resets them, aiming to enter with high Fury and to spend it down during the window.",
+      "id_note": "200166 is the confirmed cast id in the sampled parses; the guide's own text cites 191427, which the table lists as sharing this name."
+    }
+  ],
+  "defensives": [
+    {
+      "name": "Blur",
+      "spell_id": 198589,
+      "cooldown": 60,
+      "usage_rule": "Press Blur when you need a burst of survivability against incoming damage, since it reduces damage taken for its duration."
+    },
+    {
+      "name": "Darkness",
+      "spell_id": 196718,
+      "cooldown": 300,
+      "usage_rule": "Use Darkness before a heavy raid-damage window, since it reduces damage taken for you and nearby allies while it is active."
+    }
+  ],
+  "rules": [
+    {
+      "type": "opener",
+      "severity": "critical",
+      "description": "Open with The Hunt into Eye Beam then Essence Break",
+      "condition": {
+        "kind": "opening_sequence",
+        "spell_ids": [370965, 198013, 258860, 200166],
+        "spell_names": ["The Hunt", "Eye Beam", "Essence Break", "Metamorphosis"]
+      },
+      "action": "Engage with The Hunt, then get Eye Beam and Essence Break on cooldown before you press Metamorphosis."
+    },
+    {
+      "type": "cooldown_pairing",
+      "severity": "critical",
+      "description": "Metamorphosis after Eye Beam is on cooldown",
+      "condition": {
+        "kind": "cast_without_prior",
+        "spell_id": 200166,
+        "spell_name": "Metamorphosis",
+        "required_spell_id": 198013,
+        "required_spell_name": "Eye Beam",
+        "position": "before"
+      },
+      "action": "Cast Eye Beam before you press Metamorphosis so Chaotic Transformation gets a fresh reset."
+    },
+    {
+      "type": "cooldown_pairing",
+      "severity": "critical",
+      "description": "Metamorphosis after Blade Dance is on cooldown",
+      "condition": {
+        "kind": "cast_without_prior",
+        "spell_id": 200166,
+        "spell_name": "Metamorphosis",
+        "required_spell_id": 188499,
+        "required_spell_name": "Blade Dance",
+        "position": "before"
+      },
+      "action": "Cast Blade Dance before you press Metamorphosis so Chaotic Transformation resets it for a double window."
+    },
+    {
+      "type": "rotation",
+      "severity": "critical",
+      "description": "Consume Demonsurge with Death Sweep or Annihilation",
+      "condition": {
+        "kind": "proc_wasted",
+        "buff_spell_id": 452416,
+        "buff_spell_name": "Demonsurge",
+        "spend_spell_ids": [210152, 201427],
+        "spend_spell_names": ["Death Sweep", "Annihilation"]
+      },
+      "action": "Spend Demonsurge procs right away with Death Sweep or Annihilation before the buff falls off."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Keep Exergy active by retreating on cooldown",
+      "condition": {
+        "kind": "aura_uptime_below",
+        "aura_spell_id": 208628,
+        "aura_spell_name": "Exergy",
+        "on": "self"
+      },
+      "action": "Cast Vengeful Retreat on cooldown to refresh Exergy and keep its damage buff at full uptime."
+    },
+    {
+      "type": "aoe_switch",
+      "severity": "info",
+      "description": "Immolation Aura ramps up in AoE",
+      "condition": {
+        "kind": "cast_at_target_count",
+        "spell_id": 258920,
+        "spell_name": "Immolation Aura",
+        "bound": "min"
+      },
+      "action": "Lean on Immolation Aura more as more targets are in range, since its Ragefire and cleave scale with target count."
+    }
+  ]
+}
