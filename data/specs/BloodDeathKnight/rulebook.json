@@ -1,0 +1,174 @@
+{
+  "spec": "BloodDeathKnight",
+  "spec_icon": "spell_deathknight_bloodpresence",
+  "major_cooldowns": [
+    {
+      "name": "Dancing Rune Weapon",
+      "spell_id": 49028,
+      "cooldown": 120,
+      "opener_priority": 1,
+      "usage_rule": "Cast it on cooldown, but delay it if you are already holding an Exterminate charge so the buff window is not wasted."
+    },
+    {
+      "name": "Consumption",
+      "spell_id": 1263824,
+      "cooldown": 45,
+      "usage_rule": "Empower it to rank 1 whenever the hard-cast Dancing Rune Weapon is not active, and as San'layn outside Gift of the San'layn hold it to empower to rank 3 and fire it the instant Dancing Rune Weapon ends.",
+      "id_note": "Not observed in the sampled parses; it is a talent choice named explicitly in both hero-tree priorities, so treated as a real button.",
+      "talent_gated": true
+    },
+    {
+      "name": "Death and Decay",
+      "spell_id": 43265,
+      "cooldown": 30,
+      "usage_rule": "Recast and stand in it whenever its buff is not currently active or you get a Crimson Scourge proc."
+    },
+    {
+      "name": "Raise Dead",
+      "spell_id": 46585,
+      "cooldown": 120,
+      "usage_rule": "Cast it off the global cooldown as soon as it is available, ideally in the opener, to keep your permanent ghoul out."
+    }
+  ],
+  "defensives": [
+    {
+      "name": "Vampiric Blood",
+      "spell_id": 55233,
+      "cooldown": 90,
+      "duration": 10,
+      "usage_rule": "Use it as close to on cooldown as you can, either ahead of incoming damage or to top off your health, since it boosts healing and adds a stacking absorb."
+    },
+    {
+      "name": "Icebound Fortitude",
+      "spell_id": 48792,
+      "cooldown": 120,
+      "duration": 8,
+      "usage_rule": "Save it for a heavy physical or unavoidable damage spike, since it also clears loss-of-control effects."
+    },
+    {
+      "name": "Anti-Magic Shell",
+      "spell_id": 48707,
+      "cooldown": 60,
+      "duration": 5,
+      "usage_rule": "Pop it into a burst of magic damage to absorb the hit and convert the absorbed amount into Runic Power."
+    },
+    {
+      "name": "Anti-Magic Zone",
+      "spell_id": 51052,
+      "cooldown": 240,
+      "duration": 6,
+      "usage_rule": "Drop it on a heavy magic damage phase to reduce incoming magic damage for yourself and anyone standing in it."
+    },
+    {
+      "name": "Lichborne",
+      "spell_id": 49039,
+      "cooldown": 120,
+      "duration": 10,
+      "usage_rule": "Use it for the self-healing it grants through your life-drain effects, or to break out of a fear or charm."
+    }
+  ],
+  "rules": [
+    {
+      "type": "opener",
+      "severity": "warning",
+      "description": "San'layn opener: Death's Caress into Dancing Rune Weapon",
+      "condition": {
+        "kind": "opening_sequence",
+        "spell_ids": [195292, 49028, 50842, 433895, 49998],
+        "spell_names": ["Death's Caress", "Dancing Rune Weapon", "Blood Boil", "Vampiric Strike", "Death Strike"]
+      },
+      "action": "Pre-place Death and Decay while Death's Caress is in flight, then open with Dancing Rune Weapon, Blood Boil, and two Vampiric Strikes before your first Death Strike."
+    },
+    {
+      "type": "cd_hold",
+      "severity": "warning",
+      "description": "Hold Dancing Rune Weapon while Exterminate is up",
+      "condition": {
+        "kind": "cast_outside_buff",
+        "spell_id": 49028,
+        "spell_name": "Dancing Rune Weapon",
+        "buff_spell_id": 441378,
+        "buff_spell_name": "Exterminate",
+        "require": "outside"
+      },
+      "action": "Delay Dancing Rune Weapon until you have spent your Exterminate charges so their Bone Shield refresh is not wasted."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Keep Bone Shield stacked up",
+      "condition": {
+        "kind": "aura_uptime_below",
+        "aura_spell_id": 195181,
+        "aura_spell_name": "Bone Shield",
+        "on": "self"
+      },
+      "action": "Press Marrowrend, or another Bone Shield generator, before it is about to expire or drop below its charge floor."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Keep Blood Plague active on your target",
+      "condition": {
+        "kind": "aura_uptime_below",
+        "aura_spell_id": 55078,
+        "aura_spell_name": "Blood Plague",
+        "on": "target"
+      },
+      "action": "Cast Blood Boil whenever your target does not have Blood Plague on it."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Spend Crimson Scourge into Death and Decay",
+      "condition": {
+        "kind": "proc_wasted",
+        "buff_spell_id": 81136,
+        "buff_spell_name": "Crimson Scourge",
+        "spend_spell_ids": [43265],
+        "spend_spell_names": ["Death and Decay"]
+      },
+      "action": "Recast Death and Decay and stand in it as soon as you get a Crimson Scourge proc."
+    },
+    {
+      "type": "rotation",
+      "severity": "info",
+      "description": "Spend Boiling Point into Blood Boil",
+      "condition": {
+        "kind": "proc_wasted",
+        "buff_spell_id": 1265790,
+        "buff_spell_name": "Boiling Point",
+        "spend_spell_ids": [50842],
+        "spend_spell_names": ["Blood Boil"]
+      },
+      "action": "Cast Blood Boil as soon as you get a Boiling Point proc."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Spend Exterminate charges into Marrowrend",
+      "condition": {
+        "kind": "proc_wasted",
+        "buff_spell_id": 441378,
+        "buff_spell_name": "Exterminate",
+        "spend_spell_ids": [195182],
+        "spend_spell_names": ["Marrowrend"]
+      },
+      "action": "Spend your Exterminate charges with Marrowrend before Reaper's Mark detonates so you do not waste the guaranteed Bone Shield refresh."
+    },
+    {
+      "type": "rotation",
+      "severity": "info",
+      "description": "Spend Death Strike at high Runic Power",
+      "condition": {
+        "kind": "resource_at_cast",
+        "spell_id": 49998,
+        "spell_name": "Death Strike",
+        "resource_type": 6,
+        "resource_name": "runic power",
+        "bound": "min"
+      },
+      "action": "Hold Death Strike until Runic Power is high unless you need the heal right now, so you never overcap Runic Power."
+    }
+  ]
+}

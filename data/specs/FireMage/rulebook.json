@@ -1,0 +1,108 @@
+{
+  "spec": "FireMage",
+  "spec_icon": "spell_fire_firebolt02",
+  "major_cooldowns": [
+    {
+      "name": "Combustion",
+      "spell_id": 190319,
+      "cooldown": 120,
+      "usage_rule": "Use it as close to off cooldown as possible, timing the cast so it lands right as your current hardcast Fireball, Scorch, or Pyroblast finishes so you lose no cast time to it; if you run Firestarter, hold the very first cast until the target drops below 90 percent health.",
+      "id_note": "Guide describes it as a roughly one-minute cooldown when talented into Kindling, but the ability table's observed cast cooldown is 120s; using the table value."
+    },
+    {
+      "name": "Meteor",
+      "spell_id": 153561,
+      "cooldown": 30,
+      "usage_rule": "Cast it the instant it comes off cooldown outside Combustion, and skip that usage entirely if you delayed it more than 10 seconds so you can save it for the next Combustion instead; inside Combustion, delay it to the last 8 seconds if you have Burnout talented, otherwise land it any time before Combustion expires.",
+      "id_note": "Table base_cd_s is 45s (untalented). Guide states the cooldown becomes 30s when talented into Blast Zone, which is the build the guide assumes; using the talented value per the source."
+    },
+    {
+      "name": "Time Warp",
+      "spell_id": 80353,
+      "cooldown": 300,
+      "usage_rule": "Coordinate this raid-wide haste cooldown with your raid or party lead rather than using it on personal timing; if nobody has assigned a timing, use it right after combat starts so it is up while everyone's other cooldowns are ready, as long as the pull will stay active for its full duration.",
+      "id_note": "Only 1 sampled parse backs this id; treat the exact usage window as guide guidance rather than parse-verified timing."
+    }
+  ],
+  "defensives": [
+    {
+      "name": "Blazing Barrier",
+      "spell_id": 235313,
+      "cooldown": 30,
+      "duration": 60,
+      "usage_rule": "Keep this absorb shield up ahead of incoming damage and reapply it as soon as it breaks or its duration runs low."
+    },
+    {
+      "name": "Ice Cold",
+      "spell_id": 414658,
+      "cooldown": 240,
+      "duration": 6,
+      "usage_rule": "Save this short damage reduction for the biggest expected hit rather than routine damage, since it only returns every 4 minutes.",
+      "id_note": "Only 1 sampled parse backs this id and the guide text supplied does not discuss it directly; it is a real castable cooldown per the ability table."
+    }
+  ],
+  "rules": [
+    {
+      "type": "rotation",
+      "severity": "critical",
+      "description": "Convert Heating Up into Hot Streak with Fire Blast",
+      "condition": {
+        "kind": "proc_wasted",
+        "buff_spell_id": 48107,
+        "buff_spell_name": "Heating Up",
+        "spend_spell_ids": [
+          108853
+        ],
+        "spend_spell_names": [
+          "Fire Blast"
+        ]
+      },
+      "action": "The instant Heating Up procs, hit Fire Blast to lock it into Hot Streak before it can fall off."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Hardcast Pyroblast or Flamestrike on Pyroclasm",
+      "condition": {
+        "kind": "proc_wasted",
+        "buff_spell_id": 269650,
+        "buff_spell_name": "Pyroclasm",
+        "spend_spell_ids": [
+          11366,
+          2120
+        ],
+        "spend_spell_names": [
+          "Pyroblast",
+          "Flamestrike"
+        ]
+      },
+      "action": "The moment Pyroclasm procs, hardcast Pyroblast (or Flamestrike against several targets) to consume the buff before it expires, unless doing so would overcap your Fire Blast charges."
+    },
+    {
+      "type": "aoe_switch",
+      "severity": "warning",
+      "description": "Flamestrike replaces Pyroblast at several targets",
+      "condition": {
+        "kind": "cast_at_target_count",
+        "spell_id": 2120,
+        "spell_name": "Flamestrike",
+        "bound": "min"
+      },
+      "action": "Only swap Hot Streak and Pyroclasm spends from Pyroblast to Flamestrike once several enemies are up, and swap back to Pyroblast when the pack thins out or you need to prioritize one target."
+    },
+    {
+      "type": "rotation",
+      "severity": "info",
+      "description": "Time Combustion inside a hardcast Fireball",
+      "condition": {
+        "kind": "cast_without_prior",
+        "spell_id": 190319,
+        "spell_name": "Combustion",
+        "required_spell_id": 133,
+        "required_spell_name": "Fireball",
+        "position": "before"
+      },
+      "action": "Start a hardcast Fireball and weave Combustion in right before it lands instead of firing Combustion on an otherwise empty global cooldown, so you lose no cast time going into the burst window."
+    }
+  ]
+}

@@ -1,0 +1,113 @@
+{
+  "spec": "MarksmanshipHunter",
+  "spec_icon": "ability_hunter_focusedaim",
+  "major_cooldowns": [
+    {
+      "name": "Explosive Shot",
+      "spell_id": 212431,
+      "cooldown": 30,
+      "opener_priority": 1,
+      "usage_rule": "Cast it on cooldown, and fire both charges back to back thanks to Unstable Trigger, unless Lock and Load is already up."
+    },
+    {
+      "name": "Volley",
+      "spell_id": 260243,
+      "cooldown": 45,
+      "opener_priority": 2,
+      "usage_rule": "Cast it on cooldown for the free Trick Shots; on single target it rarely changes your priority since Aimed Shot and Rapid Fire already keep Precise Shots flowing."
+    },
+    {
+      "name": "Trueshot",
+      "spell_id": 288613,
+      "cooldown": 120,
+      "opener_priority": 3,
+      "usage_rule": "Press it on cooldown and time it to land right before a Rapid Fire so more of the channel benefits from its crit bonus. Swap onto an unmarked target first since pressing it applies your mark to whatever you have targeted.",
+      "id_note": "The guide states the effective cooldown is 90s with Calling the Shots or 2min with Unerring Vision; base_cd_s in the table is 120."
+    }
+  ],
+  "defensives": [
+    {
+      "name": "Aspect of the Turtle",
+      "spell_id": 186265,
+      "cooldown": 180,
+      "usage_rule": "Use it to survive unavoidable burst damage; it stops nearly all incoming damage but you cannot use most other abilities while it is active."
+    },
+    {
+      "name": "Survival of the Fittest",
+      "spell_id": 264735,
+      "cooldown": 90,
+      "usage_rule": "Use it as a damage-reduction cooldown for high raid damage windows or dangerous mechanics."
+    },
+    {
+      "name": "Exhilaration",
+      "spell_id": 109304,
+      "cooldown": 120,
+      "usage_rule": "Use it to heal yourself for a chunk of your health when you take heavy damage."
+    }
+  ],
+  "rules": [
+    {
+      "type": "opener",
+      "severity": "warning",
+      "description": "Open with Aimed Shot, Explosive Shot, Volley, Trueshot",
+      "condition": {
+        "kind": "opening_sequence",
+        "spell_ids": [19434, 212431, 260243, 288613],
+        "spell_names": ["Aimed Shot", "Explosive Shot", "Volley", "Trueshot"]
+      },
+      "action": "Open with an early Aimed Shot, then Explosive Shot before Volley and Trueshot."
+    },
+    {
+      "type": "cooldown_pairing",
+      "severity": "warning",
+      "description": "Cast Trueshot right before Rapid Fire",
+      "condition": {
+        "kind": "cast_without_prior",
+        "spell_id": 288613,
+        "spell_name": "Trueshot",
+        "required_spell_id": 257044,
+        "required_spell_name": "Rapid Fire",
+        "position": "after"
+      },
+      "action": "Time Trueshot so a Rapid Fire channel starts right after it, so more of the channel gets the crit buff."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Spend Precise Shots before your next Aimed Shot",
+      "condition": {
+        "kind": "proc_wasted",
+        "buff_spell_id": 260242,
+        "buff_spell_name": "Precise Shots",
+        "spend_spell_ids": [185358, 257620, 53351, 466932, 257044],
+        "spend_spell_names": ["Arcane Shot", "Multi-Shot", "Kill Shot", "Black Arrow", "Rapid Fire"]
+      },
+      "action": "Follow every Aimed Shot with a Precise Shots spender like Arcane Shot, Multi-Shot, or Kill Shot before your next Aimed Shot lands."
+    },
+    {
+      "type": "aoe_switch",
+      "severity": "info",
+      "description": "Multi-Shot spends Precise Shots on multiple targets",
+      "condition": {
+        "kind": "cast_at_target_count",
+        "spell_id": 257620,
+        "spell_name": "Multi-Shot",
+        "bound": "min"
+      },
+      "action": "Switch your Precise Shots spender to Multi-Shot once you pick up a second target, since it hits everything for full damage."
+    },
+    {
+      "type": "aoe_switch",
+      "severity": "info",
+      "description": "Arcane Shot stays a single-target spender",
+      "condition": {
+        "kind": "cast_at_target_count",
+        "spell_id": 185358,
+        "spell_name": "Arcane Shot",
+        "bound": "max"
+      },
+      "action": "Stop spending Precise Shots on Arcane Shot once you have multiple targets; use Multi-Shot there instead."
+    }
+  ]
+}
+

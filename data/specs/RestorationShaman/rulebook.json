@@ -1,0 +1,112 @@
+{
+  "spec": "RestorationShaman",
+  "spec_icon": "spell_nature_magicimmunity",
+  "major_cooldowns": [
+    {
+      "name": "Ascendance",
+      "spell_id": 114052,
+      "cooldown": 180,
+      "usage_rule": "Bank two stacks of Tidal Waves with your Riptides and cast Unleash Life plus Healing Rain or Surging Totem right before you press it, then spend the window on Chain Heal for group damage or Healing Wave when you need cheap single-target healing."
+    },
+    {
+      "name": "Spirit Link Totem",
+      "spell_id": 98008,
+      "cooldown": 180,
+      "usage_rule": "Drop it right before the group takes a big hit rather than reactively, since it only redistributes health and generates no healing of its own; it also works as a single-target emergency save."
+    },
+    {
+      "name": "Healing Tide Totem",
+      "spell_id": 108280,
+      "cooldown": 180,
+      "usage_rule": "Use it whenever the whole group needs a large burst of healing, pre-planning the timing around the fight's heaviest raid damage windows.",
+      "id_note": "Not observed in the sampled parses (0/5); the guide describes it in depth as one of the three major cooldowns, so it is a real button just not taken in these logs.",
+      "talent_gated": true
+    },
+    {
+      "name": "Nature's Swiftness",
+      "spell_id": 378081,
+      "cooldown": 60,
+      "usage_rule": "Use it on cooldown and cast a spell immediately after, generally Chain Heal, since the cooldown does not start until the buff is consumed and every use guarantees a Stormstream Totem proc.",
+      "talent_gated": true
+    },
+    {
+      "name": "Ancestral Swiftness",
+      "spell_id": 443454,
+      "cooldown": 30,
+      "usage_rule": "As Farseer, use it on cooldown and consume it with Chain Heal in most cases, since it also guarantees a Stormstream Totem proc and spawns an ancestor that mimics your cast.",
+      "id_note": "Table lists base_cd_s 60 and 0/5 sampled parses (Farseer variant not represented); the guide states the effective cooldown is 30s once talented.",
+      "talent_gated": true
+    },
+    {
+      "name": "Stormstream Totem",
+      "spell_id": 1267068,
+      "cooldown": 30,
+      "usage_rule": "Spend procs as soon as convenient; you can hold the buff for a while to line the cast up with incoming damage, but the longer you sit on it the more Healing Stream Totem casts you lose."
+    },
+    {
+      "name": "Healing Stream Totem",
+      "spell_id": 5394,
+      "cooldown": 30,
+      "usage_rule": "Keep it on cooldown as your default, only delaying a cast when you are intentionally holding a Stormstream Totem stack to align with incoming damage."
+    }
+  ],
+  "defensives": [
+    {
+      "name": "Astral Shift",
+      "spell_id": 108271,
+      "cooldown": 120,
+      "usage_rule": "Press it when you expect to take a big personal hit so the damage reduction is active before it lands."
+    }
+  ],
+  "rules": [
+    {
+      "type": "aoe_switch",
+      "severity": "warning",
+      "description": "Chain Heal on 3+ injured, Healing Wave for spot heals",
+      "condition": {
+        "kind": "cast_at_target_count",
+        "spell_id": 1064,
+        "spell_name": "Chain Heal",
+        "bound": "min"
+      },
+      "action": "Cast Chain Heal once several players need healing and switch to Healing Wave for single-target spot healing or when mana is running low."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Spend Stormstream Totem procs promptly",
+      "condition": {
+        "kind": "proc_wasted",
+        "buff_spell_id": 1267089,
+        "buff_spell_name": "Stormstream Totem",
+        "spend_spell_ids": [1267068],
+        "spend_spell_names": ["Stormstream Totem"]
+      },
+      "action": "Cast Stormstream Totem soon after it procs instead of letting stacks sit unused; it never costs you a Healing Stream Totem charge."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Keep Surging Totem active and repositioned",
+      "condition": {
+        "kind": "aura_uptime_below",
+        "aura_spell_id": 444995,
+        "aura_spell_name": "Surging Totem",
+        "on": "self"
+      },
+      "action": "Recast Surging Totem before it expires and use Totemic Projection to keep it under the group."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Keep Earthliving Weapon active on yourself",
+      "condition": {
+        "kind": "aura_uptime_below",
+        "aura_spell_id": 382024,
+        "aura_spell_name": "Earthliving Weapon",
+        "on": "self"
+      },
+      "action": "Reapply Earthliving Weapon before pulling and refresh it whenever it falls off."
+    }
+  ]
+}

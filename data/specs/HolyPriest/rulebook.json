@@ -1,0 +1,133 @@
+{
+  "spec": "HolyPriest",
+  "spec_icon": "spell_holy_guardianspirit",
+  "major_cooldowns": [
+    {
+      "name": "Apotheosis",
+      "spell_id": 200183,
+      "cooldown": 120,
+      "opener_priority": 2,
+      "usage_rule": "Activate it after Halo is already out, with one Holy Word: Serenity charge banked for the cost discount, then spend every global on a Holy Word or on a heal that shortens one."
+    },
+    {
+      "name": "Halo",
+      "spell_id": 120517,
+      "cooldown": 60,
+      "opener_priority": 1,
+      "usage_rule": "Cast it as raid damage begins so it keeps expanding and contracting through the damage window, and pair it with Apotheosis for the bonus healing both spells get from Archon.",
+      "id_note": "Base spell id shared by name with several hero-talent variants (120644, 120692, 120696, 390964, 390971, 449840, 453094), none observed as a cast in the sampled parses; 120517 is the plain version the guide links inline."
+    },
+    {
+      "name": "Divine Hymn",
+      "spell_id": 64843,
+      "cooldown": 180,
+      "usage_rule": "Use it as your primary raid-damage cooldown; you can channel it through line of sight to hide from a mechanic, and it now grants you Guardian Spirit while channeling so ground effects will not kill you."
+    },
+    {
+      "name": "Holy Word: Serenity",
+      "spell_id": 2050,
+      "cooldown": 60,
+      "opener_priority": 3,
+      "usage_rule": "Cast it on cooldown for single-target healing, pooling a charge ahead of known incoming spike damage but never sitting on two stacks."
+    },
+    {
+      "name": "Holy Word: Sanctify",
+      "spell_id": 34861,
+      "cooldown": 60,
+      "usage_rule": "Cast it on cooldown for area healing alongside Serenity; it is one of your two most powerful abilities, so never let it sit on two stacks.",
+      "id_note": "Not observed as a cast in the sampled parses (castable per its tooltip); the guide names it directly alongside Holy Word: Serenity as a core Holy Word."
+    },
+    {
+      "name": "Guardian Spirit",
+      "spell_id": 47788,
+      "cooldown": 180,
+      "usage_rule": "Give it to a tank about to take lethal damage as a cheat death that restores them to 40 percent health, or self-cast it when no tank needs it since Priest has few other defensives."
+    }
+  ],
+  "defensives": [
+    {
+      "name": "Desperate Prayer",
+      "spell_id": 19236,
+      "cooldown": 90,
+      "usage_rule": "Press this as one of your two primary personal defensives when your own health drops."
+    },
+    {
+      "name": "Fade",
+      "spell_id": 586,
+      "cooldown": 30,
+      "usage_rule": "Press this as one of your two primary personal defensives, or to shed threat when something turns onto you."
+    }
+  ],
+  "rules": [
+    {
+      "type": "cooldown_pairing",
+      "severity": "warning",
+      "description": "Apotheosis paired with Halo",
+      "condition": {
+        "kind": "cast_without_prior",
+        "spell_id": 200183,
+        "spell_name": "Apotheosis",
+        "required_spell_id": 120517,
+        "required_spell_name": "Halo",
+        "position": "before"
+      },
+      "action": "Send Halo first as raid damage starts, then activate Apotheosis while Halo is still out so both get the Archon bonus healing."
+    },
+    {
+      "type": "cd_hold",
+      "severity": "warning",
+      "description": "Hold a Serenity charge for Apotheosis",
+      "condition": {
+        "kind": "hold_cooldown_for_anchor",
+        "spell_ids": [2050],
+        "spell_names": ["Holy Word: Serenity"],
+        "anchor_spell_id": 200183,
+        "anchor_spell_name": "Apotheosis"
+      },
+      "action": "Do not dump your last Holy Word: Serenity charge right before Apotheosis; bank one so you get its cost discount and bonus healing."
+    },
+    {
+      "type": "rotation",
+      "severity": "info",
+      "description": "Surge of Light consumed on Prayer of Healing",
+      "condition": {
+        "kind": "proc_wasted",
+        "buff_spell_id": 114255,
+        "buff_spell_name": "Surge of Light",
+        "spend_spell_ids": [596],
+        "spend_spell_names": ["Prayer of Healing"]
+      },
+      "action": "Spend the proc on Prayer of Healing before it expires; you can hold up to two stacks, so do not let one fall off unused."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Do not overcap Prayer of Mending stacks",
+      "condition": {
+        "kind": "spend_at_stacks",
+        "spell_id": 33076,
+        "spell_name": "Prayer of Mending",
+        "buff_spell_id": 41635,
+        "buff_spell_name": "Prayer of Mending",
+        "bound": "max",
+        "max_stacks": 14
+      },
+      "action": "Recast on an ally without stacks, or only refresh a stacked target if the leftover waste is small or the buff is about to expire."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Do not overcap Benediction stacks",
+      "condition": {
+        "kind": "spend_at_stacks",
+        "spell_id": 2061,
+        "spell_name": "Flash Heal",
+        "buff_spell_id": 1262766,
+        "buff_spell_name": "Benediction",
+        "bound": "max",
+        "max_stacks": 2
+      },
+      "action": "Watch your Benediction stacks while spot-healing with Flash Heal and hold off once you are at the cap."
+    }
+  ]
+}
