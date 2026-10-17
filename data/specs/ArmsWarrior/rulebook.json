@@ -1,0 +1,198 @@
+{
+  "spec": "ArmsWarrior",
+  "spec_icon": "ability_warrior_savageblow",
+  "major_cooldowns": [
+    {
+      "name": "Colossus Smash",
+      "spell_id": 167105,
+      "cooldown": 45,
+      "opener_priority": 3,
+      "usage_rule": "Use it strictly on cooldown as your main burst window and dump every other cooldown into its debuff; its real cooldown is shorter than the tooltip thanks to Anger Management, so track the actual timer."
+    },
+    {
+      "name": "Avatar",
+      "spell_id": 107574,
+      "cooldown": 90,
+      "opener_priority": 2,
+      "usage_rule": "Press it shortly before or together with Colossus Smash; it has lost its follow-on talents so lining it up with Colossus Smash is its only real consideration."
+    },
+    {
+      "name": "Bladestorm",
+      "spell_id": 446035,
+      "cooldown": 90,
+      "opener_priority": 4,
+      "usage_rule": "Use it early inside the Colossus Smash debuff, either on cooldown or timed to a group of adds, rather than waiting for three stacks of Imminent Demise.",
+      "talent_gated": true
+    },
+    {
+      "name": "Ravager",
+      "spell_id": 228920,
+      "cooldown": 90,
+      "opener_priority": 1,
+      "usage_rule": "Drop it just before Colossus Smash so its Cleave buff and other triggered effects line up with the burst window.",
+      "id_note": "Neither 152277 nor 228920 was observed in the sampled parses. 228920 is the cast id the SimC APL and the guide's opener prose both use; 152277 is the talent name row. Cooldown (90s) confirmed via WCL gameData + Wowhead tooltip during orchestrator validation.",
+      "talent_gated": true
+    },
+    {
+      "name": "Demolish",
+      "spell_id": 436358,
+      "cooldown": 30,
+      "usage_rule": "Use it during Colossus Smash once Colossal Might is stacked, prioritizing alignment with Colossus Smash over using it strictly on cooldown.",
+      "id_note": "Not observed in the sampled parses (Colossus hero-talent only); cooldown taken from the table's base_cd_s.",
+      "talent_gated": true
+    },
+    {
+      "name": "Wrecking Throw",
+      "spell_id": 384110,
+      "cooldown": 45,
+      "usage_rule": "Use it as a ranged filler when you cannot reach the target, and fire it immediately, second only to Colossus Smash, against absorb shields for its massive bonus damage."
+    },
+    {
+      "name": "Sweeping Strikes",
+      "spell_id": 260708,
+      "cooldown": 30,
+      "usage_rule": "Precast it before combat or use it on cooldown whenever multiple targets are up so the rest of your kit cleaves."
+    }
+  ],
+  "defensives": [
+    {
+      "name": "Die by the Sword",
+      "spell_id": 118038,
+      "cooldown": 120,
+      "usage_rule": "Use it to immune incoming physical damage spikes; it can even briefly tank a raid boss in a pinch."
+    },
+    {
+      "name": "Rallying Cry",
+      "spell_id": 97462,
+      "cooldown": 180,
+      "usage_rule": "Call it for a known group-wide damage spike rather than as a personal cooldown, and remember it shares the global cooldown.",
+      "id_note": "97462 is the cast id; 97463 shares the name."
+    },
+    {
+      "name": "Spell Reflection",
+      "spell_id": 23920,
+      "cooldown": 25,
+      "usage_rule": "Press it right before a targeted magic cast lands to reflect or immune it.",
+      "id_note": "23920 is the cast id; 385391 shares the name."
+    },
+    {
+      "name": "Impending Victory",
+      "spell_id": 202168,
+      "cooldown": 25,
+      "usage_rule": "Press it for a quick self-heal when you need to top up between damage events."
+    }
+  ],
+  "rules": [
+    {
+      "type": "opener",
+      "severity": "warning",
+      "description": "Open with Charge into Avatar and Colossus Smash",
+      "condition": {
+        "kind": "opening_sequence",
+        "spell_ids": [
+          100,
+          12294,
+          107574,
+          167105
+        ],
+        "spell_names": [
+          "Charge",
+          "Mortal Strike",
+          "Avatar",
+          "Colossus Smash"
+        ]
+      },
+      "action": "Charge in at the pull, land an opening Mortal Strike, then press Avatar just before Colossus Smash."
+    },
+    {
+      "type": "cooldown_pairing",
+      "severity": "warning",
+      "description": "Bladestorm cast inside Colossus Smash",
+      "condition": {
+        "kind": "cast_without_prior",
+        "spell_id": 446035,
+        "spell_name": "Bladestorm",
+        "required_spell_id": 167105,
+        "required_spell_name": "Colossus Smash",
+        "position": "before"
+      },
+      "action": "Start Bladestorm early inside the Colossus Smash window, not after it has fallen off."
+    },
+    {
+      "type": "cooldown_pairing",
+      "severity": "warning",
+      "description": "Demolish cast inside Colossus Smash",
+      "condition": {
+        "kind": "cast_without_prior",
+        "spell_id": 436358,
+        "spell_name": "Demolish",
+        "required_spell_id": 167105,
+        "required_spell_name": "Colossus Smash",
+        "position": "before"
+      },
+      "action": "Channel Demolish while Colossus Smash is active rather than on its own separate timer."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Spend Sudden Death procs with Execute",
+      "condition": {
+        "kind": "proc_wasted",
+        "buff_spell_id": 52437,
+        "buff_spell_name": "Sudden Death",
+        "spend_spell_ids": [
+          281000
+        ],
+        "spend_spell_names": [
+          "Execute"
+        ]
+      },
+      "action": "Fire Execute while Sudden Death is up rather than delaying it into overcapping the second stack."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Overpower at two stacks of Opportunist",
+      "condition": {
+        "kind": "spend_at_stacks",
+        "spell_id": 7384,
+        "spell_name": "Overpower",
+        "buff_spell_id": 456120,
+        "buff_spell_name": "Opportunist",
+        "bound": "min",
+        "max_stacks": 2
+      },
+      "action": "Hold Overpower for two stacks of Opportunist rather than spending it early."
+    },
+    {
+      "type": "aoe_switch",
+      "severity": "warning",
+      "description": "Cleave becomes the main filler on several targets",
+      "condition": {
+        "kind": "cast_at_target_count",
+        "spell_id": 845,
+        "spell_name": "Cleave",
+        "bound": "min"
+      },
+      "action": "Switch your filler to Cleave once several targets are up; it also triggers your Slam and Heroic Strike effects automatically."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Execute replaces Slam in execute range",
+      "condition": {
+        "kind": "filler_below_health",
+        "spell_id": 281000,
+        "spell_name": "Execute",
+        "alternative_spell_ids": [
+          1464
+        ],
+        "alternative_spell_names": [
+          "Slam"
+        ],
+        "health_pct": 35
+      },
+      "action": "Drop Slam and pour rage into Execute once the target reaches execute range."
+    }
+  ]
+}
