@@ -1,0 +1,126 @@
+{
+  "spec": "UnholyDeathKnight",
+  "spec_icon": "spell_deathknight_unholypresence",
+  "major_cooldowns": [
+    {
+      "name": "Army of the Dead",
+      "spell_id": 42650,
+      "cooldown": 90,
+      "opener_priority": 2,
+      "usage_rule": "Cast it as your biggest cooldown as soon as it is up, and keep it synced with Dark Transformation for Commander of the Dead."
+    },
+    {
+      "name": "Dark Transformation",
+      "spell_id": 1233448,
+      "cooldown": 45,
+      "opener_priority": 3,
+      "usage_rule": "Cast this off-global button alongside Army of the Dead so their cooldowns line up, and time it with add spawns if you run Outnumber."
+    },
+    {
+      "name": "Putrefy",
+      "spell_id": 1247378,
+      "cooldown": 30,
+      "opener_priority": 4,
+      "usage_rule": "Cast it whenever Dark Transformation is active, and on cooldown outside that window once Forbidden Knowledge is up."
+    },
+    {
+      "name": "Death and Decay",
+      "spell_id": 43265,
+      "cooldown": 30,
+      "usage_rule": "Drop it only when you expect the enemies to stay standing in it, refreshing as its charges come back for sustained AoE.",
+      "id_note": "Cast id not observed in the sampled parses (talent choice); guide names it explicitly as an AoE button, base_cd_s 30 from the table.",
+      "talent_gated": true
+    }
+  ],
+  "defensives": [
+    {
+      "name": "Anti-Magic Shell",
+      "spell_id": 48707,
+      "cooldown": 60,
+      "duration": 5,
+      "usage_rule": "Pop it into a big magic damage hit or spell burst to absorb it and convert the damage into runic power."
+    },
+    {
+      "name": "Icebound Fortitude",
+      "spell_id": 48792,
+      "cooldown": 120,
+      "duration": 8,
+      "usage_rule": "Use it for a heavy physical hit or a dangerous mechanic, it is your strongest personal damage reduction."
+    },
+    {
+      "name": "Lichborne",
+      "spell_id": 49039,
+      "cooldown": 120,
+      "duration": 10,
+      "usage_rule": "Turn it on to shrug off a fear, charm, or sleep effect, and to heal yourself off Death Coil casts while it is up."
+    },
+    {
+      "name": "Anti-Magic Zone",
+      "spell_id": 51052,
+      "cooldown": 240,
+      "duration": 6,
+      "usage_rule": "Drop it under the group ahead of a big raid-wide magic damage hit for a group-wide soak."
+    },
+    {
+      "name": "Death Pact",
+      "spell_id": 48743,
+      "cooldown": 120,
+      "duration": 15,
+      "usage_rule": "Cast it to cleanse your diseases and heal for a burst of health when you need emergency self-healing."
+    }
+  ],
+  "rules": [
+    {
+      "type": "opener",
+      "severity": "warning",
+      "description": "Open with Outbreak, Army, Dark Transformation, Putrefy",
+      "condition": {
+        "kind": "opening_sequence",
+        "spell_ids": [77575, 42650, 1233448, 1247378],
+        "spell_names": ["Outbreak", "Army of the Dead", "Dark Transformation", "Putrefy"]
+      },
+      "action": "Open with Outbreak, then send Army of the Dead into Dark Transformation, then follow with Putrefy."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Keep Virulent Plague up with Outbreak",
+      "condition": {
+        "kind": "aura_uptime_below",
+        "aura_spell_id": 77575,
+        "aura_spell_name": "Outbreak",
+        "on": "target"
+      },
+      "action": "Recast Outbreak the moment the disease falls off the target."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Scourge Strike while Lesser Ghoul stacks are up",
+      "condition": {
+        "kind": "filler_in_buff",
+        "spell_id": 55090,
+        "spell_name": "Scourge Strike",
+        "alternative_spell_ids": [85948],
+        "alternative_spell_names": ["Festering Strike"],
+        "buff_spell_id": 1254252,
+        "buff_spell_name": "Lesser Ghoul",
+        "except_buff_spell_ids": [],
+        "except_buff_spell_names": []
+      },
+      "action": "Press Scourge Strike while you hold Lesser Ghoul stacks, and go back to Festering Strike only once you have none."
+    },
+    {
+      "type": "aoe_switch",
+      "severity": "warning",
+      "description": "Epidemic over Death Coil at high target counts",
+      "condition": {
+        "kind": "cast_at_target_count",
+        "spell_id": 207317,
+        "spell_name": "Epidemic",
+        "bound": "min"
+      },
+      "action": "Switch your runic power spender to Epidemic once enough targets are up, and go back to Death Coil below that count."
+    }
+  ]
+}

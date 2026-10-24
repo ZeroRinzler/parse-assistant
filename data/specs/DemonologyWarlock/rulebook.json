@@ -1,0 +1,198 @@
+{
+  "spec": "DemonologyWarlock",
+  "spec_icon": "spell_shadow_metamorphosis",
+  "major_cooldowns": [
+    {
+      "name": "Summon Demonic Tyrant",
+      "spell_id": 265187,
+      "cooldown": 60,
+      "opener_priority": 3,
+      "usage_rule": "Summon it with Call Dreadstalkers already out and on cooldown so the Tyrant extends them, and maximize the number of demons summoned before you press it since it gains a damage modifier per demon."
+    },
+    {
+      "name": "Grimoire: Imp Lord",
+      "spell_id": 1276452,
+      "cooldown": 120,
+      "opener_priority": 1,
+      "usage_rule": "Send it into your Demonic Tyrant window for the damage, and use the Singe Magic it grants while it is down to dispel yourself or a party member.",
+      "talent_gated": true
+    },
+    {
+      "name": "Grimoire: Fel Ravager",
+      "spell_id": 1276467,
+      "cooldown": 120,
+      "usage_rule": "Take it over Grimoire: Imp Lord when you need the on-demand interrupt, and send it into your Demonic Tyrant window for the damage.",
+      "id_note": "Not observed in the sampled parses (all five played Grimoire: Imp Lord); the guide names it as the more common choice for its on-demand interrupt, and gives access to Spell Lock while it is down. base_cd_s from the table.",
+      "talent_gated": true
+    },
+    {
+      "name": "Summon Doomguard",
+      "spell_id": 1276672,
+      "cooldown": 120,
+      "usage_rule": "Use it whenever multiple targets are up, and remember it only hits five enemies at once so it does not scale past that cap.",
+      "id_note": "Not observed in the sampled parses; both the guide's AoE priority and the simc APL list it as a real button in every build sampled. base_cd_s from the table.",
+      "talent_gated": true
+    },
+    {
+      "name": "Power Siphon",
+      "spell_id": 264130,
+      "cooldown": 30,
+      "usage_rule": "Pre-cast it a few seconds before the pull with two Wild Imps out, and press it again once your Demonic Core stacks drop to one or fewer.",
+      "id_note": "Not observed in the sampled parses; the guide lists it as the top single-target priority item and the simc APL casts it precombat and on cooldown at low Demonic Core stacks, so it is a real button for its build. base_cd_s from the table.",
+      "talent_gated": true
+    }
+  ],
+  "defensives": [
+    {
+      "name": "Unending Resolve",
+      "spell_id": 104773,
+      "cooldown": 180,
+      "usage_rule": "Press it into a heavy raid hit for the damage reduction."
+    },
+    {
+      "name": "Dark Pact",
+      "spell_id": 108416,
+      "cooldown": 60,
+      "usage_rule": "Shield yourself ahead of predictable incoming damage."
+    },
+    {
+      "name": "Mortal Coil",
+      "spell_id": 6789,
+      "cooldown": 45,
+      "usage_rule": "Coil a nearby enemy to heal yourself and briefly disable it when you need the breathing room.",
+      "talent_gated": true
+    },
+    {
+      "name": "Singe Magic",
+      "spell_id": 132411,
+      "cooldown": 15,
+      "usage_rule": "Use it to dispel a harmful magic effect from yourself or a party member while your Grimoire is on cooldown.",
+      "talent_gated": true
+    }
+  ],
+  "rules": [
+    {
+      "type": "opener",
+      "severity": "warning",
+      "description": "Open Imp Lord into Dreadstalkers, Tyrant, Hand of Gul'dan",
+      "condition": {
+        "kind": "opening_sequence",
+        "spell_ids": [1276452, 104316, 265187, 105174],
+        "spell_names": ["Grimoire: Imp Lord", "Call Dreadstalkers", "Summon Demonic Tyrant", "Hand of Gul'dan"]
+      },
+      "action": "Send your Grimoire and Call Dreadstalkers before Summon Demonic Tyrant, then spend Hand of Gul'dan inside the window."
+    },
+    {
+      "type": "cooldown_pairing",
+      "severity": "critical",
+      "description": "Call Dreadstalkers out before Summon Demonic Tyrant",
+      "condition": {
+        "kind": "cast_without_prior",
+        "spell_id": 265187,
+        "spell_name": "Summon Demonic Tyrant",
+        "required_spell_id": 104316,
+        "required_spell_name": "Call Dreadstalkers",
+        "position": "before"
+      },
+      "action": "Send Call Dreadstalkers out and on cooldown before you summon the Tyrant so it extends them."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Spend Hand of Gul'dan only at 3+ Soul Shards",
+      "condition": {
+        "kind": "resource_at_cast",
+        "spell_id": 105174,
+        "spell_name": "Hand of Gul'dan",
+        "resource_type": 7,
+        "resource_name": "soul shards",
+        "bound": "min"
+      },
+      "action": "Hold Hand of Gul'dan until you have banked enough Soul Shards rather than spending them low."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Do not overcap Soul Shards with Demonbolt",
+      "condition": {
+        "kind": "resource_at_cast",
+        "spell_id": 264178,
+        "spell_name": "Demonbolt",
+        "resource_type": 7,
+        "resource_name": "soul shards",
+        "bound": "max"
+      },
+      "action": "Spend into Call Dreadstalkers or Hand of Gul'dan before pressing Demonbolt again if it would overcap your shards."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Do not overcap Soul Shards with Shadow Bolt",
+      "condition": {
+        "kind": "resource_at_cast",
+        "spell_id": 686,
+        "spell_name": "Shadow Bolt",
+        "resource_type": 7,
+        "resource_name": "soul shards",
+        "bound": "max"
+      },
+      "action": "Spend your Soul Shards before Shadow Bolt would push you to the cap."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Demonbolt is the filler on Demonic Core, not Shadow Bolt",
+      "condition": {
+        "kind": "filler_in_buff",
+        "spell_id": 264178,
+        "spell_name": "Demonbolt",
+        "alternative_spell_ids": [686],
+        "alternative_spell_names": ["Shadow Bolt"],
+        "buff_spell_id": 264173,
+        "buff_spell_name": "Demonic Core",
+        "except_buff_spell_ids": [],
+        "except_buff_spell_names": []
+      },
+      "action": "Press Demonbolt whenever Demonic Core is up and save Shadow Bolt for when it is down."
+    },
+    {
+      "type": "rotation",
+      "severity": "info",
+      "description": "Do not overcap Demonic Core with Power Siphon",
+      "condition": {
+        "kind": "spend_at_stacks",
+        "spell_id": 264130,
+        "spell_name": "Power Siphon",
+        "buff_spell_id": 264173,
+        "buff_spell_name": "Demonic Core",
+        "bound": "max",
+        "max_stacks": 4
+      },
+      "action": "Hold Power Siphon while you already have Demonic Core stacks banked, and press it once you are down to one or none."
+    },
+    {
+      "type": "aoe_switch",
+      "severity": "warning",
+      "description": "Implosion only with several targets up",
+      "condition": {
+        "kind": "cast_at_target_count",
+        "spell_id": 196277,
+        "spell_name": "Implosion",
+        "bound": "min"
+      },
+      "action": "Save your Wild Imps and implode with the full six only once several enemies are up."
+    },
+    {
+      "type": "aoe_switch",
+      "severity": "info",
+      "description": "Summon Doomguard only with several targets up",
+      "condition": {
+        "kind": "cast_at_target_count",
+        "spell_id": 1276672,
+        "spell_name": "Summon Doomguard",
+        "bound": "min"
+      },
+      "action": "Save Summon Doomguard for packs, since it caps its damage at five targets."
+    }
+  ]
+}

@@ -1,0 +1,124 @@
+{
+  "spec": "AugmentationEvoker",
+  "spec_icon": "classicon_evoker_augmentation",
+  "major_cooldowns": [
+    {
+      "name": "Ebon Might",
+      "spell_id": 395152,
+      "cooldown": 30,
+      "usage_rule": "Recast it whenever only a few seconds remain so the pandemic window adds the leftover duration onto the new cast, and hold your resource-spenders until it is active.",
+      "id_note": "395152 is the cast id (5/5 parses); the matching self aura for uptime tracking is 395296."
+    },
+    {
+      "name": "Breath of Eons",
+      "spell_id": 403631,
+      "cooldown": 120,
+      "usage_rule": "Send it on a short, safe flight path roughly on cooldown, but shift the timing to land its 10 second window on your buffed allies' own burst.",
+      "id_note": "403631 is the cast id (5/5 parses)."
+    },
+    {
+      "name": "Tip the Scales",
+      "spell_id": 370553,
+      "cooldown": 120,
+      "usage_rule": "Use it essentially on cooldown, pairing it with a Max Rank Fire Breath by default, or with Upheaval when the extra radius matters; cancel the buff with a macro if no empower is ready so its own cooldown can start.",
+      "id_note": "370553 is the cast id (5/5 parses)."
+    },
+    {
+      "name": "Fire Breath",
+      "spell_id": 357208,
+      "cooldown": 30,
+      "usage_rule": "Cast it at Max Rank when that will not delay Upheaval or let Ebon Might or Duplicate expire early, otherwise drop to Rank 1 and keep spending resources.",
+      "id_note": "357208 is the cast id (5/5 parses)."
+    },
+    {
+      "name": "Upheaval",
+      "spell_id": 396286,
+      "cooldown": 40,
+      "usage_rule": "Cast it at Rank 1 in single target, and only raise its rank when the wider radius is needed to hit more enemies.",
+      "id_note": "396286 is the cast id observed in top parses (5/5); the guide's text also cites 408092 for this ability, which was not observed casting in the sampled parses."
+    },
+    {
+      "name": "Time Skip",
+      "spell_id": 404977,
+      "cooldown": 180,
+      "usage_rule": "Channel it first in the opener right after your initial Fire Breath and Upheaval, then roughly on cooldown, timed so it takes the full cooldown reduction off Fire Breath, Upheaval, Prescience, and Breath of Eons.",
+      "id_note": "404977 is the cast id (5/5 parses); only taken over Interwoven Threads.",
+      "talent_gated": true
+    }
+  ],
+  "defensives": [
+    {
+      "name": "Hover",
+      "spell_id": 358267,
+      "cooldown": 35,
+      "usage_rule": "Cast it to reposition out of incoming mechanics or move to a safer spot without stopping your cast, keeping your rotation and buffs running while you relocate.",
+      "id_note": "358267 is the cast id (5/5 parses). The prepared ability table contains no dedicated personal damage-reduction or shield ability for this spec in the sampled parses (no Obsidian Scales, Renewing Blaze, or similar entry); Hover is the closest cooldown-gated survivability tool the sources and table both support."
+    }
+  ],
+  "rules": [
+    {
+      "type": "rotation",
+      "severity": "critical",
+      "description": "Keep Ebon Might up on yourself",
+      "condition": {
+        "kind": "aura_uptime_below",
+        "aura_spell_id": 395296,
+        "aura_spell_name": "Ebon Might",
+        "on": "self"
+      },
+      "action": "Recast Ebon Might before it falls off, ideally with only a few seconds left, so the group buff never lapses."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Fire Breath only while Ebon Might is up",
+      "condition": {
+        "kind": "cast_outside_buff",
+        "spell_id": 357208,
+        "spell_name": "Fire Breath",
+        "buff_spell_id": 395296,
+        "buff_spell_name": "Ebon Might",
+        "require": "inside"
+      },
+      "action": "Hold Fire Breath until Ebon Might is active so the cast extends its duration; spend the downtime rebuilding resources instead."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Upheaval only while Ebon Might is up",
+      "condition": {
+        "kind": "cast_outside_buff",
+        "spell_id": 396286,
+        "spell_name": "Upheaval",
+        "buff_spell_id": 395296,
+        "buff_spell_name": "Ebon Might",
+        "require": "inside"
+      },
+      "action": "Wait for Ebon Might to be active before empowering Upheaval, and build resources while the buff is down."
+    },
+    {
+      "type": "rotation",
+      "severity": "info",
+      "description": "Spend Essence Burst before it caps",
+      "condition": {
+        "kind": "proc_wasted",
+        "buff_spell_id": 392268,
+        "buff_spell_name": "Essence Burst",
+        "spend_spell_ids": [395160],
+        "spend_spell_names": ["Eruption"]
+      },
+      "action": "Fire off an Eruption to spend Essence Burst before casting another generator like Prescience or Living Flame caps it at 2 stacks."
+    },
+    {
+      "type": "opener",
+      "severity": "info",
+      "description": "Open with Prescience, Tip the Scales, empowers",
+      "condition": {
+        "kind": "opening_sequence",
+        "spell_ids": [409311, 370553, 357208, 396286],
+        "spell_names": ["Prescience", "Tip the Scales", "Fire Breath", "Upheaval"]
+      },
+      "action": "Apply Prescience to your buff targets before pressing Tip the Scales into a Max Rank Fire Breath and then Upheaval."
+    }
+  ]
+}

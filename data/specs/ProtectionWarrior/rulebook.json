@@ -1,0 +1,196 @@
+{
+  "spec": "ProtectionWarrior",
+  "spec_icon": "ability_warrior_defensivestance",
+  "major_cooldowns": [
+    {
+      "name": "Avatar",
+      "spell_id": 107574,
+      "cooldown": 90,
+      "usage_rule": "Cast Avatar on cooldown and line up your other burst cooldowns and empowered casts inside its window for the full damage amplification.",
+      "opener_priority": 3
+    },
+    {
+      "name": "Ravager",
+      "spell_id": 228920,
+      "cooldown": 90,
+      "usage_rule": "Cast Ravager on cooldown, ideally while Avatar or Demoralizing Shout is active so its Rage generation and damage line up with your amplified window.",
+      "talent_gated": true,
+      "opener_priority": 1
+    },
+    {
+      "name": "Demolish",
+      "spell_id": 436358,
+      "cooldown": 30,
+      "usage_rule": "As Colossus, cast Demolish on cooldown once Colossal Might is stacked and do not delay it for Avatar or Demoralizing Shout unless the target would die before you get another cast in.",
+      "talent_gated": true,
+      "opener_priority": 8
+    },
+    {
+      "name": "Demoralizing Shout",
+      "spell_id": 1160,
+      "cooldown": 45,
+      "usage_rule": "With Booming Voice talented, cast Demoralizing Shout on cooldown for the Rage and damage, syncing it with Avatar when it lines up, but delay it if you know a bigger incoming damage window is coming and you have nothing else up.",
+      "opener_priority": 7
+    }
+  ],
+  "defensives": [
+    {
+      "name": "Shield Block",
+      "spell_id": 2565,
+      "cooldown": 16,
+      "duration": 6,
+      "usage_rule": "Keep Shield Block up whenever you are actively tanking melee damage, timing casts against the enemy's swing timer and any known blockable burst so the window covers the hit rather than the gap after it."
+    },
+    {
+      "name": "Shield Wall",
+      "spell_id": 871,
+      "cooldown": 180,
+      "usage_rule": "Use Shield Wall to prepare for a known incoming damage spike or a sustained heavy-damage window rather than reactively after your health has already dropped."
+    },
+    {
+      "name": "Demoralizing Shout",
+      "spell_id": 1160,
+      "cooldown": 45,
+      "usage_rule": "Without Booming Voice, use Demoralizing Shout as a normal defensive cooldown to smooth out damage, delaying it if you know a bigger spike is coming and you have nothing else available."
+    },
+    {
+      "name": "Spell Reflection",
+      "spell_id": 23920,
+      "cooldown": 25,
+      "usage_rule": "Use Spell Reflection as a magic damage reduction cooldown by default, and save it to reflect a specific dangerous cast back at the enemy when one is actually reflectable."
+    },
+    {
+      "name": "Last Stand",
+      "spell_id": 12975,
+      "cooldown": 180,
+      "usage_rule": "Use Last Stand as a mitigation tool ahead of a known spike, not as a reactive heal after your health has already dropped; only lean on the Shield Wall heal-up combo if there is no other way to survive.",
+      "talent_gated": true,
+      "id_note": "Only 1 of 4 sampled parses shows aura uptime; talent-gated, so low usage is expected when it is not taken."
+    },
+    {
+      "name": "Rallying Cry",
+      "spell_id": 97462,
+      "cooldown": 180,
+      "usage_rule": "Time Rallying Cry for a known heavy raid damage window instead of using it reactively once the group is already low."
+    },
+    {
+      "name": "Berserker Rage",
+      "spell_id": 18499,
+      "cooldown": 60,
+      "usage_rule": "Use Berserker Rage to remove or prevent an incoming fear so you keep control of your character through that mechanic.",
+      "id_note": "Only 1 of 4 sampled parses casts it; situational against fear mechanics rather than a routine cooldown."
+    }
+  ],
+  "rules": [
+    {
+      "type": "opener",
+      "severity": "warning",
+      "description": "Ravager into Charge, Avatar, Thunder Clap, Shield Block",
+      "condition": {
+        "kind": "opening_sequence",
+        "spell_ids": [
+          228920,
+          100,
+          107574,
+          6343,
+          2565,
+          23922,
+          1160,
+          436358,
+          385954
+        ],
+        "spell_names": [
+          "Ravager",
+          "Charge",
+          "Avatar",
+          "Thunder Clap",
+          "Shield Block",
+          "Shield Slam",
+          "Demoralizing Shout",
+          "Demolish",
+          "Shield Charge"
+        ]
+      },
+      "action": "Open with Ravager, Charge in, pop Avatar as you charge, then Thunder Clap, Shield Block, Shield Slam, Demoralizing Shout, Demolish, and Shield Charge in that order."
+    },
+    {
+      "type": "cd_hold",
+      "severity": "warning",
+      "description": "Save Ravager, Demolish, Shield Charge for Avatar",
+      "condition": {
+        "kind": "hold_cooldown_for_anchor",
+        "spell_ids": [
+          228920,
+          436358,
+          385954
+        ],
+        "spell_names": [
+          "Ravager",
+          "Demolish",
+          "Shield Charge"
+        ],
+        "anchor_spell_id": 107574,
+        "anchor_spell_name": "Avatar"
+      },
+      "action": "Line up Ravager, Demolish, and Shield Charge with Avatar or Demoralizing Shout instead of firing them the instant they come off cooldown, unless the fight will not let you sync them again."
+    },
+    {
+      "type": "aoe_switch",
+      "severity": "info",
+      "description": "Execute yields to Revenge past 4 targets",
+      "condition": {
+        "kind": "cast_at_target_count",
+        "spell_id": 163201,
+        "spell_name": "Execute",
+        "bound": "max"
+      },
+      "action": "With Heavy Handed talented, use Execute over Revenge against 1 to 4 enemies, but switch to Revenge once more than 4 enemies are up."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Spend Sudden Death on Execute immediately",
+      "condition": {
+        "kind": "proc_wasted",
+        "buff_spell_id": 52437,
+        "buff_spell_name": "Sudden Death",
+        "spend_spell_ids": [
+          163201
+        ],
+        "spend_spell_names": [
+          "Execute"
+        ]
+      },
+      "action": "Cast Execute as soon as Sudden Death procs instead of letting it time out."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Spend Burst of Power on Shield Slam immediately",
+      "condition": {
+        "kind": "proc_wasted",
+        "buff_spell_id": 437121,
+        "buff_spell_name": "Burst of Power",
+        "spend_spell_ids": [
+          23922
+        ],
+        "spend_spell_names": [
+          "Shield Slam"
+        ]
+      },
+      "action": "Cast your next two Shield Slams right away when Burst of Power procs since it removes their cooldown."
+    },
+    {
+      "type": "rotation",
+      "severity": "critical",
+      "description": "Keep Shield Block up while tanking",
+      "condition": {
+        "kind": "aura_uptime_below",
+        "aura_spell_id": 2565,
+        "aura_spell_name": "Shield Block",
+        "on": "self"
+      },
+      "action": "Recast Shield Block before it falls off whenever you are actively tanking melee damage; it is your primary mitigation tool."
+    }
+  ]
+}
