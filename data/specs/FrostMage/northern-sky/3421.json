@@ -1,0 +1,1 @@
+{"spec":"FrostMage","encounter_id":3421,"encounter_name":"The Twin Fangs","abilities":[{"spell_id":84714,"name":"Frozen Orb","icon":"spell_frost_frozenorb","kind":"cooldown","cast_times_s":[0.8,62.3,122.3,182.3,242.3,311.5]}],"source_signature":"4df683fcbd95674e","ingest_version":29,"ingested_at_s":1793470668}
