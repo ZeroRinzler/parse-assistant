@@ -1,0 +1,167 @@
+{
+  "spec": "HolyPaladin",
+  "spec_icon": "spell_holy_holybolt",
+  "major_cooldowns": [
+    {
+      "name": "Avenging Wrath",
+      "spell_id": 31884,
+      "cooldown": 120,
+      "usage_rule": "Use it close to on cooldown for the healing, damage, and crit boost rather than saving it for later.",
+      "id_note": "31884 is the observed cast and self-aura id (5/5 parses). 384376 shares the name and was not observed; it is not used."
+    },
+    {
+      "name": "Aura Mastery",
+      "spell_id": 31821,
+      "cooldown": 180,
+      "usage_rule": "Take the time your raid leader assigns; otherwise fire it once people are actually injured rather than pre-emptively, and line it up with an active Beacon of Virtue window in raids."
+    },
+    {
+      "name": "Divine Toll",
+      "spell_id": 375576,
+      "cooldown": 60,
+      "usage_rule": "Use it close to on cooldown, on an ally when you need healing and on an enemy when you want damage, at 2 or fewer Holy Power so it does not overcap you."
+    },
+    {
+      "name": "Holy Prism",
+      "spell_id": 114165,
+      "cooldown": 45,
+      "usage_rule": "If talented instead of Divine Toll, cast it on an enemy for the most healing, or on a specific ally if needed, at 2 or fewer Holy Power.",
+      "id_note": "NOT observed in the sampled parses; the guide names it as the alternative talent to Divine Toll.",
+      "talent_gated": true
+    },
+    {
+      "name": "Lay on Hands",
+      "spell_id": 633,
+      "cooldown": 600,
+      "usage_rule": "Save it as a full emergency heal on yourself or an ally; it does not transfer through your Beacons, so it is direct spot healing only."
+    },
+    {
+      "name": "Holy Bulwark",
+      "spell_id": 432459,
+      "cooldown": 60,
+      "usage_rule": "As Lightsmith, press it close to on cooldown at 2 or fewer Holy Power; cast it on a squishy target, or on yourself to send the bonus copy from Solidarity to a tank.",
+      "id_note": "NOT observed in the sampled parses (no Lightsmith build represented). 432459 is the castable armament id; 432800 shares the name and is the applied buff.",
+      "talent_gated": true
+    },
+    {
+      "name": "Sacred Weapon",
+      "spell_id": 432472,
+      "cooldown": 60,
+      "usage_rule": "As Lightsmith, cast it on yourself close to on cooldown at 2 or fewer Holy Power; the bonus copy goes to another healer, or a DPS player if none is available.",
+      "id_note": "NOT observed in the sampled parses (no Lightsmith build represented).",
+      "talent_gated": true
+    },
+    {
+      "name": "Avenging Crusader",
+      "spell_id": 216331,
+      "cooldown": 60,
+      "usage_rule": "If talented, use it close to on cooldown; it lets you weave Hammer of Wrath and Crusader Strike into your normal priority for its duration.",
+      "id_note": "NOT observed in the sampled parses; class talent cooldown per the guide.",
+      "talent_gated": true
+    }
+  ],
+  "defensives": [
+    {
+      "name": "Divine Shield",
+      "spell_id": 642,
+      "cooldown": 300,
+      "duration": 8,
+      "usage_rule": "Use it to fully immune damage in an emergency, or proactively in Mythic+ to take yourself out of the healing pool entirely."
+    },
+    {
+      "name": "Blessing of Protection",
+      "spell_id": 1022,
+      "cooldown": 300,
+      "usage_rule": "Cast it on an ally to immune physical damage or strip a physical debuff; avoid using it on the tank unless they ask for it, since it drops their threat.",
+      "id_note": "Not pressed in the sampled parses but castable per its tooltip."
+    },
+    {
+      "name": "Blessing of Sacrifice",
+      "spell_id": 6940,
+      "cooldown": 120,
+      "usage_rule": "Use it often on whoever is taking heavy damage; it transfers their damage to you, so watch your own health, especially on tanks."
+    },
+    {
+      "name": "Divine Protection",
+      "spell_id": 498,
+      "cooldown": 60,
+      "duration": 8,
+      "usage_rule": "Press it into predictable incoming damage on yourself; it does not reduce damage transferred to you by your own Blessing of Sacrifice."
+    }
+  ],
+  "rules": [
+    {
+      "type": "rotation",
+      "severity": "critical",
+      "description": "Spend Infusion of Light before another Holy Shock",
+      "condition": {
+        "kind": "proc_wasted",
+        "buff_spell_id": 53576,
+        "buff_spell_name": "Infusion of Light",
+        "spend_spell_ids": [
+          19750
+        ],
+        "spend_spell_names": [
+          "Flash of Light"
+        ]
+      },
+      "action": "Cast Flash of Light on the proc before pressing Holy Shock again, since another Holy Shock can generate a new one and overwrite it."
+    },
+    {
+      "type": "rotation",
+      "severity": "critical",
+      "description": "Do not generate Holy Power while capped",
+      "condition": {
+        "kind": "resource_at_cast",
+        "spell_id": 20473,
+        "spell_name": "Holy Shock",
+        "resource_type": 9,
+        "resource_name": "holy power",
+        "bound": "max"
+      },
+      "action": "Spend your Holy Power on a spender before pressing a generator again; casting a generator while capped wastes the Holy Power it grants."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Divine Toll only at low Holy Power",
+      "condition": {
+        "kind": "resource_at_cast",
+        "spell_id": 375576,
+        "spell_name": "Divine Toll",
+        "resource_type": 9,
+        "resource_name": "holy power",
+        "bound": "max"
+      },
+      "action": "Save Divine Toll for when you are at low Holy Power so the Holy Power it grants does not overcap you."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Spend Holy Power before it overcaps",
+      "condition": {
+        "kind": "resource_at_cast",
+        "spell_id": 156322,
+        "spell_name": "Eternal Flame",
+        "resource_type": 9,
+        "resource_name": "holy power",
+        "bound": "min"
+      },
+      "action": "Cast Eternal Flame once you reach 5 Holy Power instead of holding it and risking a wasted generator cast."
+    },
+    {
+      "type": "cooldown_pairing",
+      "severity": "info",
+      "description": "Aura Mastery timed with Beacon of Virtue",
+      "condition": {
+        "kind": "cast_outside_buff",
+        "spell_id": 31821,
+        "spell_name": "Aura Mastery",
+        "buff_spell_id": 200025,
+        "buff_spell_name": "Beacon of Virtue",
+        "require": "inside"
+      },
+      "action": "In raids, hold Aura Mastery until Beacon of Virtue is active so the two cooldowns overlap; in Mythic+ it is fine to separate them."
+    }
+  ]
+}
