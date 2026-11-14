@@ -1,0 +1,133 @@
+{
+  "spec": "ProtectionPaladin",
+  "spec_icon": "ability_paladin_shieldofthetemplar",
+  "major_cooldowns": [
+    {
+      "name": "Avenging Wrath",
+      "spell_id": 31884,
+      "cooldown": 120,
+      "opener_priority": 2,
+      "usage_rule": "Use this on cooldown as often as you can to smooth your damage intake, and hold it only briefly to line up with an incoming damage spike.",
+      "id_note": "Table marks 31884 as NOT observed in the sampled casts, but it is the guide's named button for this cooldown, used repeatedly in the priority list and the opener; no alternate id is offered."
+    },
+    {
+      "name": "Divine Toll",
+      "spell_id": 375576,
+      "cooldown": 60,
+      "opener_priority": 3,
+      "usage_rule": "Use this on cooldown as much as possible, preferably while Avenging Wrath is active and while you are at or near 0 Holy Power."
+    },
+    {
+      "name": "Holy Bulwark",
+      "spell_id": 432459,
+      "cooldown": 60,
+      "usage_rule": "On the Lightsmith build, spend a charge whenever you have one available instead of banking it.",
+      "talent_gated": true
+    },
+    {
+      "name": "Sacred Weapon",
+      "spell_id": 432472,
+      "cooldown": 60,
+      "usage_rule": "On the Lightsmith build, cast this while you are not inside Avenging Wrath so the buff is ready before your next burst window.",
+      "id_note": "432472 is the cast id; 432502 is the same-named self-aura it applies.",
+      "talent_gated": true
+    }
+  ],
+  "defensives": [
+    {
+      "name": "Ardent Defender",
+      "spell_id": 31850,
+      "cooldown": 90,
+      "duration": 12,
+      "usage_rule": "Save this as your biggest damage reduction cooldown and use it during the most dangerous period of a pull or encounter."
+    },
+    {
+      "name": "Divine Shield",
+      "spell_id": 642,
+      "cooldown": 300,
+      "usage_rule": "Use this as your emergency immunity to survive a hit or shed a debuff that would otherwise kill you.",
+      "id_note": "Not pressed in the sampled parses but castable per its tooltip."
+    },
+    {
+      "name": "Guardian of Ancient Kings",
+      "spell_id": 86659,
+      "cooldown": 180,
+      "usage_rule": "Cycle this defensive actively during a high damage intake period instead of saving it only for the single worst moment.",
+      "id_note": "Not pressed in the sampled parses but castable per its tooltip."
+    },
+    {
+      "name": "Blessing of Protection",
+      "spell_id": 1022,
+      "cooldown": 300,
+      "usage_rule": "Cycle this defensive actively on yourself or an ally during a high damage intake period.",
+      "id_note": "Not pressed in the sampled parses but castable per its tooltip."
+    },
+    {
+      "name": "Blessing of Sacrifice",
+      "spell_id": 6940,
+      "cooldown": 120,
+      "usage_rule": "Cycle this defensive actively during a high damage intake period to share incoming damage with yourself.",
+      "id_note": "Not pressed in the sampled parses but castable per its tooltip."
+    },
+    {
+      "name": "Lay on Hands",
+      "spell_id": 633,
+      "cooldown": 600,
+      "usage_rule": "Use this as a large emergency heal during a high damage intake period when you need to survive right now.",
+      "id_note": "Not pressed in the sampled parses but castable per its tooltip."
+    }
+  ],
+  "rules": [
+    {
+      "type": "opener",
+      "severity": "warning",
+      "description": "Open Avenger's Shield into Avenging Wrath then Divine Toll",
+      "condition": {
+        "kind": "opening_sequence",
+        "spell_ids": [31935, 31884, 375576],
+        "spell_names": ["Avenger's Shield", "Avenging Wrath", "Divine Toll"]
+      },
+      "action": "Pull with Avenger's Shield, then Avenging Wrath, then Divine Toll before falling into your normal rotation."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Spend Shield of the Righteous at 3-5 Holy Power",
+      "condition": {
+        "kind": "resource_at_cast",
+        "spell_id": 53600,
+        "spell_name": "Shield of the Righteous",
+        "resource_type": 9,
+        "resource_name": "holy power",
+        "bound": "min"
+      },
+      "action": "Spend Holy Power on Shield of the Righteous once you are in its target range or the cast is free, rather than sitting on Holy Power."
+    },
+    {
+      "type": "rotation",
+      "severity": "info",
+      "description": "Keep Consecration on the ground",
+      "condition": {
+        "kind": "aura_uptime_below",
+        "aura_spell_id": 188370,
+        "aura_spell_name": "Consecration",
+        "on": "self"
+      },
+      "action": "Refresh Consecration as soon as it drops instead of letting the ground effect lapse."
+    },
+    {
+      "type": "rotation",
+      "severity": "info",
+      "description": "Sacred Weapon outside Avenging Wrath",
+      "condition": {
+        "kind": "cast_outside_buff",
+        "spell_id": 432472,
+        "spell_name": "Sacred Weapon",
+        "buff_spell_id": 31884,
+        "buff_spell_name": "Avenging Wrath",
+        "require": "outside"
+      },
+      "action": "On the Lightsmith build, cast Sacred Weapon while Avenging Wrath is down, not while it is active."
+    }
+  ]
+}

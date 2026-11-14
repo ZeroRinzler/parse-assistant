@@ -1,0 +1,1 @@
+{"spec":"BeastMasteryHunter","encounter_id":3497,"encounter_name":"The Lost Explorers","abilities":[{"spell_id":19574,"name":"Bestial Wrath","icon":"ability_druid_ferociousbite","kind":"cooldown","cast_times_s":[8.5,39,69,100.1,130.1,160.5,194.1,225.4]}],"source_signature":"e9da760bef0d03d5","ingest_version":29,"ingested_at_s":1794342228}

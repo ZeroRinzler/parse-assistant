@@ -1,0 +1,176 @@
+{
+  "spec": "GuardianDruid",
+  "spec_icon": "ability_racial_bearform",
+  "major_cooldowns": [
+    {
+      "name": "Incarnation: Guardian of Ursoc",
+      "spell_id": 102558,
+      "cooldown": 180,
+      "usage_rule": "Use this as your main offensive cooldown off cooldown as soon as it is up, unless you are holding it as a defensive for a known dangerous upcoming damage window.",
+      "id_note": "Guide names this talent as spell 394786; the abilities table verifies the current cast id as 102558 with the same name.",
+      "talent_gated": true
+    },
+    {
+      "name": "Berserk",
+      "spell_id": 50334,
+      "cooldown": 180,
+      "usage_rule": "Use this as your main offensive cooldown when your build does not take Incarnation, timing it the same way around Thrash and cat-form weaving windows.",
+      "id_note": "Not named directly in the guide text, but present in the APL as the alternative hero-talent main cooldown to Incarnation: Guardian of Ursoc.",
+      "talent_gated": true
+    },
+    {
+      "name": "Convoke the Spirits",
+      "spell_id": 391528,
+      "cooldown": 120,
+      "usage_rule": "Cast this while in Bear Form so it contributes to your tanking output; do not cast it while shifted into Cat Form.",
+      "talent_gated": true
+    },
+    {
+      "name": "Red Moon",
+      "spell_id": 1252871,
+      "cooldown": 30,
+      "usage_rule": "Cast this on cooldown in place of Moonfire to keep the dot maintained, ideally lining it up close to a Mangle cast.",
+      "talent_gated": true
+    },
+    {
+      "name": "Lunar Beam",
+      "spell_id": 204066,
+      "cooldown": 60,
+      "usage_rule": "Use this on cooldown, but hold it briefly when Incarnation or Berserk is about to come off cooldown so the two line up together.",
+      "id_note": "Guide gives an effective cooldown around 60s; table base_cd_s of 60 matches."
+    },
+    {
+      "name": "Heart of the Wild",
+      "spell_id": 1261867,
+      "cooldown": 120,
+      "usage_rule": "Shift into Cat Form roughly every two minutes to cast this when it is safe; skipping it or catweaving further beyond this single cast is a DPS loss.",
+      "id_note": "NOT observed in the sampled parses, but the guide explicitly names it as a button to press in Cat Form; talent-gated.",
+      "talent_gated": true
+    }
+  ],
+  "defensives": [
+    {
+      "name": "Frenzied Regeneration",
+      "spell_id": 22842,
+      "cooldown": 36,
+      "usage_rule": "Use this to heal yourself through bleed or magic damage, since Ironfur's armor does not mitigate those damage types.",
+      "id_note": "Table base_cd_s of 36 is used; guide does not state a different effective cooldown."
+    },
+    {
+      "name": "Barkskin",
+      "spell_id": 22812,
+      "cooldown": 60,
+      "usage_rule": "Use this on cooldown while in Bear Form to smooth incoming damage; with the Brambles talent it also deals damage back.",
+      "id_note": "Guide describes it as a 40-60s cooldown; table base_cd_s of 60 is used as the untalented value."
+    },
+    {
+      "name": "Survival Instincts",
+      "spell_id": 61336,
+      "cooldown": 180,
+      "usage_rule": "Save this for the most dangerous damage intake or the biggest hits rather than spending it reactively on cooldown.",
+      "id_note": "Guide notes two charges baseline; table base_cd_s of 180 is the per-charge cooldown."
+    },
+    {
+      "name": "Bristling Fur",
+      "spell_id": 155835,
+      "cooldown": 40,
+      "usage_rule": "Use this ahead of a burst of incoming damage so it converts that damage into rage while active.",
+      "talent_gated": true
+    }
+  ],
+  "rules": [
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Convoke the Spirits only in Bear Form",
+      "condition": {
+        "kind": "cast_outside_buff",
+        "spell_id": 391528,
+        "spell_name": "Convoke the Spirits",
+        "buff_spell_id": 5487,
+        "buff_spell_name": "Bear Form",
+        "require": "inside"
+      },
+      "action": "Only press Convoke the Spirits while shapeshifted into Bear Form."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Barkskin only in Bear Form",
+      "condition": {
+        "kind": "cast_outside_buff",
+        "spell_id": 22812,
+        "spell_name": "Barkskin",
+        "buff_spell_id": 5487,
+        "buff_spell_name": "Bear Form",
+        "require": "inside"
+      },
+      "action": "Shift back into Bear Form before pressing Barkskin so it applies to your tanking mitigation."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Heart of the Wild only in Cat Form",
+      "condition": {
+        "kind": "cast_outside_buff",
+        "spell_id": 1261867,
+        "spell_name": "Heart of the Wild",
+        "buff_spell_id": 768,
+        "buff_spell_name": "Cat Form",
+        "require": "inside"
+      },
+      "action": "Shift into Cat Form before casting Heart of the Wild so it applies the intended dot."
+    },
+    {
+      "type": "cd_hold",
+      "severity": "info",
+      "description": "Hold Lunar Beam for Incarnation or Berserk",
+      "condition": {
+        "kind": "hold_cooldown_for_anchor",
+        "spell_ids": [204066],
+        "spell_names": ["Lunar Beam"],
+        "anchor_spell_id": 102558,
+        "anchor_spell_name": "Incarnation: Guardian of Ursoc"
+      },
+      "action": "Delay Lunar Beam slightly when Incarnation or Berserk is about to come off cooldown so the two line up together."
+    },
+    {
+      "type": "rotation",
+      "severity": "warning",
+      "description": "Keep Thrash up on your target",
+      "condition": {
+        "kind": "aura_uptime_below",
+        "aura_spell_id": 77758,
+        "aura_spell_name": "Thrash",
+        "on": "target"
+      },
+      "action": "Refresh Thrash whenever it is missing or its stacks are dropping instead of letting it fall off."
+    },
+    {
+      "type": "aoe_switch",
+      "severity": "warning",
+      "description": "Swipe only with multiple targets",
+      "condition": {
+        "kind": "cast_at_target_count",
+        "spell_id": 213771,
+        "spell_name": "Swipe",
+        "bound": "min"
+      },
+      "action": "Only fill with Swipe when several enemies are up; use single-target filler otherwise."
+    },
+    {
+      "type": "rotation",
+      "severity": "info",
+      "description": "Pool rage before spending it on Ironfur",
+      "condition": {
+        "kind": "resource_at_cast",
+        "spell_id": 192081,
+        "spell_name": "Ironfur",
+        "resource_type": 1,
+        "resource_name": "rage",
+        "bound": "min"
+      },
+      "action": "Wait until your rage is high enough before pressing Ironfur instead of spending it as soon as it is available."
+    }
+  ]
+}
